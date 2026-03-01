@@ -10,8 +10,12 @@ use std::{rc::Rc, sync::Mutex};
 pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     let plugin_state = Rc::new(Mutex::new(state::PluginState::new()?));
 
-    Ok(Dictionary::from_iter([(
-        "connect",
-        api::create_lua_connect(plugin_state.clone()),
-    )]))
+    Ok(Dictionary::from_iter([
+        ("connect", api::create_lua_connect(plugin_state.clone())),
+        // (
+        //     "authenticate",
+        //     api::create_lua_authenticate(plugin_state.clone()),
+        // ),
+        // ("prompt", api::create_lua_prompt(plugin_state.clone())),
+    ]))
 }

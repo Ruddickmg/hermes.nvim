@@ -5,14 +5,15 @@ pub use manager::*;
 use crate::apc::error::Error;
 use agent_client_protocol::{
     AgentCapabilities, AuthenticateRequest, CancelNotification, ExtNotification, ExtRequest,
-    ForkSessionRequest, ListSessionsRequest, LoadSessionRequest, NewSessionRequest,
-    PromptRequest, ResumeSessionRequest, SetSessionConfigOptionRequest, SetSessionModeRequest,
-    SetSessionModelRequest,
+    ForkSessionRequest, InitializeRequest, ListSessionsRequest, LoadSessionRequest,
+    NewSessionRequest, PromptRequest, ResumeSessionRequest, SetSessionConfigOptionRequest,
+    SetSessionModeRequest, SetSessionModelRequest,
 };
 use std::sync::mpsc::Sender;
 
 #[derive(Debug, Clone)]
 pub enum UserRequest {
+    Initialize(InitializeRequest),
     Cancel(CancelNotification),
     CreateSession(NewSessionRequest),
     Prompt(PromptRequest),
@@ -41,8 +42,9 @@ impl Connection {
             capabilities: None,
         }
     }
-    pub fn set_capabilities(&mut self, capabilities: AgentCapabilities) {
-        self.capabilities = Some(capabilities);
+    pub fn initialize(&self, request: InitializeRequest) -> Result<(), Error> {
+        self.sender.send(UserRequest::Initialize(request))?;
+        Ok(())
     }
     pub fn create_session(&self, session: NewSessionRequest) -> Result<(), Error> {
         self.sender.send(UserRequest::CreateSession(session))?;
@@ -60,10 +62,7 @@ impl Connection {
         self.sender.send(UserRequest::Authenticate(request))?;
         Ok(())
     }
-    pub fn set_config_option(
-        &self,
-        request: SetSessionConfigOptionRequest,
-    ) -> Result<(), Error> {
+    pub fn set_config_option(&self, request: SetSessionConfigOptionRequest) -> Result<(), Error> {
         self.sender.send(UserRequest::SetConfigOption(request))?;
         Ok(())
     }
@@ -80,7 +79,8 @@ impl Connection {
         Ok(())
     }
     pub fn custom_notification(&self, notification: ExtNotification) -> Result<(), Error> {
-        self.sender.send(UserRequest::CustomNotification(notification))?;
+        self.sender
+            .send(UserRequest::CustomNotification(notification))?;
         Ok(())
     }
     pub fn list_sessions(&self, request: ListSessionsRequest) -> Result<(), Error> {

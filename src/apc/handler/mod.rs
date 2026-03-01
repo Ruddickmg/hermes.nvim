@@ -1,13 +1,7 @@
 pub mod client;
 pub mod response;
 
-use agent_client_protocol::{
-    Client, CreateTerminalRequest, CreateTerminalResponse, Error as AcpError, ReadTextFileRequest,
-    ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
-    RequestPermissionRequest, RequestPermissionResponse, Result, SessionNotification,
-    TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
-    WaitForTerminalExitResponse, WriteTextFileRequest, WriteTextFileResponse,
-};
+use agent_client_protocol::Client;
 
 #[derive(Debug, Clone)]
 pub struct ClientConfig {

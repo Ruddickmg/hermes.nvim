@@ -5,7 +5,7 @@ use crate::{
         error::Error,
     },
 };
-use agent_client_protocol::{Agent, Client, Implementation, InitializeRequest, ProtocolVersion};
+use agent_client_protocol::{Agent, Client};
 use std::sync::mpsc::Receiver;
 use std::{ffi::OsStr, process::Stdio, sync::Arc};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
@@ -48,8 +48,7 @@ where
         .compat();
 
     let _: Result<(), Error> = runtime.block_on(local_set.run_until(async {
-        println!("creating connection");
-        let (conn, handle_io) = agent_client_protocol::ClientSideConnection::new(
+        let (connetion, handle_io) = agent_client_protocol::ClientSideConnection::new(
             client.clone(),
             outgoing,
             incoming,
@@ -60,64 +59,61 @@ where
 
         tokio::task::spawn_local(handle_io);
 
-        let result = conn
-            .initialize(
-                InitializeRequest::new(ProtocolVersion::V1)
-                    .client_info(Implementation::new("neovim", "11.0.6")),
-            )
-            .await?;
-
         while let Ok(msg) = reciever.try_recv() {
             match msg {
+                UserRequest::Initialize(request) => {
+                    let response = connetion.initialize(request).await?;
+                    client.initialized(response).await?;
+                }
                 UserRequest::Cancel(config) => {
-                    conn.cancel(config).await?;
+                    connetion.cancel(config).await?;
                 }
                 UserRequest::Prompt(request) => {
-                    let response = conn.prompt(request).await?;
+                    let response = connetion.prompt(request).await?;
                     client.prompted(response).await?;
                 }
                 UserRequest::Authenticate(request) => {
-                    let response = conn.authenticate(request).await?;
+                    let response = connetion.authenticate(request).await?;
                     client.authenticated(response).await?;
                 }
                 UserRequest::SetConfigOption(request) => {
-                    let response = conn.set_session_config_option(request).await?;
+                    let response = connetion.set_session_config_option(request).await?;
                     client.config_option_set(response).await?;
                 }
                 UserRequest::SetMode(request) => {
-                    let response = conn.set_session_mode(request).await?;
+                    let response = connetion.set_session_mode(request).await?;
                     client.mode_set(response).await?;
                 }
                 UserRequest::CreateSession(config) => {
-                    let response = conn.new_session(config).await?;
+                    let response = connetion.new_session(config).await?;
                     client.session_created(response).await?;
                 }
                 UserRequest::LoadSession(request) => {
-                    let response = conn.load_session(request).await?;
+                    let response = connetion.load_session(request).await?;
                     client.session_loaded(response).await?;
                 }
                 UserRequest::ListSessions(request) => {
-                    let response = conn.list_sessions(request).await?;
+                    let response = connetion.list_sessions(request).await?;
                     client.sessions_listed(response).await?;
                 }
                 UserRequest::ForkSession(request) => {
-                    let response = conn.fork_session(request).await?;
+                    let response = connetion.fork_session(request).await?;
                     client.session_forked(response).await?;
                 }
                 UserRequest::ResumeSession(request) => {
-                    let response = conn.resume_session(request).await?;
+                    let response = connetion.resume_session(request).await?;
                     client.session_resumed(response).await?;
                 }
                 UserRequest::SetSessionModel(request) => {
-                    let response = conn.set_session_model(request).await?;
+                    let response = connetion.set_session_model(request).await?;
                     client.session_model_set(response).await?;
                 }
                 UserRequest::CustomCommand(request) => {
-                    let response = conn.ext_method(request).await?;
+                    let response = connetion.ext_method(request).await?;
                     client.custom_command_executed(response).await?;
                 }
                 UserRequest::CustomNotification(notification) => {
-                    conn.ext_notification(notification).await?;
+                    connetion.ext_notification(notification).await?;
                 }
             };
         }
