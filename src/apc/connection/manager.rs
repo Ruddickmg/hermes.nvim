@@ -1,5 +1,5 @@
 use crate::apc::connection::{Connection, stdio};
-use crate::{ApcClient, apc::error::Error};
+use crate::{Handler, apc::error::Error};
 use agent_client_protocol::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -93,11 +93,11 @@ pub struct ConnectionDetails {
 pub struct ConnectionManager<H: Client> {
     handles: Arc<Mutex<Vec<JoinHandle<Result<(), Error>>>>>,
     connection: HashMap<Assistant, Connection>,
-    handler: Arc<ApcClient<H>>,
+    handler: Arc<Handler<H>>,
 }
 
 impl<H: Client + Sync + Send + 'static> ConnectionManager<H> {
-    pub fn new(client: Arc<ApcClient<H>>) -> Result<Self, Error> {
+    pub fn new(client: Arc<Handler<H>>) -> Result<Self, Error> {
         Ok(Self {
             handler: client,
             handles: Arc::new(Mutex::new(Vec::new())),
