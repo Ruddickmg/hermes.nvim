@@ -1,13 +1,17 @@
 use agent_client_protocol::{
-    AuthenticateResponse, ExtResponse, ForkSessionResponse, ListSessionsResponse,
-    LoadSessionResponse, NewSessionResponse, PromptResponse, ResumeSessionResponse,
-    SetSessionConfigOptionResponse, SetSessionModeResponse, SetSessionModelResponse,
+    AuthenticateResponse, ExtResponse, ForkSessionResponse, InitializeResponse,
+    ListSessionsResponse, LoadSessionResponse, NewSessionResponse, PromptResponse,
+    ResumeSessionResponse, SetSessionConfigOptionResponse, SetSessionModeResponse,
+    SetSessionModelResponse,
 };
 
 use crate::Handler;
 use crate::apc::error::Error;
 
 impl<H: agent_client_protocol::Client> Handler<H> {
+    pub async fn initialized(&self, _response: InitializeResponse) -> Result<(), Error> {
+        Ok(())
+    }
     pub async fn session_created(&self, _response: NewSessionResponse) -> Result<(), Error> {
         Ok(())
     }

@@ -1,8 +1,9 @@
 use crate::apc::connection::{Connection, stdio};
 use crate::{Handler, apc::error::Error};
-use agent_client_protocol::Client;
+use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolVersion};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
@@ -92,38 +93,47 @@ pub struct ConnectionDetails {
 #[derive(Clone)]
 pub struct ConnectionManager<H: Client> {
     handles: Arc<Mutex<Vec<JoinHandle<Result<(), Error>>>>>,
-    connection: HashMap<Assistant, Connection>,
+    connection: HashMap<Assistant, Rc<Connection>>,
     handler: Arc<Handler<H>>,
+    agent: Assistant,
 }
 
 impl<H: Client + Sync + Send + 'static> ConnectionManager<H> {
     pub fn new(client: Arc<Handler<H>>) -> Result<Self, Error> {
         Ok(Self {
+            agent: Assistant::default(),
             handler: client,
             handles: Arc::new(Mutex::new(Vec::new())),
             connection: HashMap::new(),
         })
     }
 
-    fn add_connection(&mut self, agent: Assistant, connection: Connection) {
+    fn add_connection(&mut self, agent: Assistant, connection: Rc<Connection>) {
         self.connection.insert(agent, connection);
     }
 
-    pub fn get_connection(&self, agent: &Assistant) -> Option<Connection> {
+    pub fn get_connection(&self, agent: &Assistant) -> Option<Rc<Connection>> {
         self.connection.get(agent).cloned()
+    }
+
+    pub fn get_current_connection(&self) -> Option<Rc<Connection>> {
+        self.get_connection(&self.agent)
     }
 
     pub fn connect(
         &mut self,
         ConnectionDetails { agent, protocol }: ConnectionDetails,
-    ) -> Result<Connection, Error> {
+    ) -> Result<Rc<Connection>, Error> {
         Ok(match self.get_connection(&agent) {
             Some(connection) => connection,
             None => {
                 let (sender, receiver) = std::sync::mpsc::channel();
-                let connection = Connection::new(sender);
+                let connection = Rc::new(Connection::new(sender));
                 let handler = self.handler.clone();
                 let thread_agent = agent.clone();
+                let init_config = InitializeRequest::new(ProtocolVersion::LATEST).client_info(
+                    Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"),
+                );
                 self.handles
                     .lock()
                     .map_err(|e| Error::Internal(e.to_string()))?
@@ -133,6 +143,7 @@ impl<H: Client + Sync + Send + 'static> ConnectionManager<H> {
                         Protocol::Socket => unimplemented!(),
                     }));
                 self.add_connection(agent.clone(), connection.clone());
+                connection.initialize(init_config)?;
                 connection
             }
         })
