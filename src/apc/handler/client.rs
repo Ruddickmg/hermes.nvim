@@ -22,7 +22,7 @@ impl<H: Client> Client for Handler<H> {
     }
 
     async fn write_text_file(&self, args: WriteTextFileRequest) -> Result<WriteTextFileResponse> {
-        if self.config.fs_write_access {
+        if self.can_write() {
             self.handler.write_text_file(args).await?;
             Ok(WriteTextFileResponse::new())
         } else {
@@ -31,7 +31,7 @@ impl<H: Client> Client for Handler<H> {
     }
 
     async fn read_text_file(&self, _args: ReadTextFileRequest) -> Result<ReadTextFileResponse> {
-        if self.config.fs_read_access {
+        if self.can_read() {
             self.handler.read_text_file(_args).await
         } else {
             Err(Error::method_not_found())
@@ -39,7 +39,7 @@ impl<H: Client> Client for Handler<H> {
     }
 
     async fn create_terminal(&self, args: CreateTerminalRequest) -> Result<CreateTerminalResponse> {
-        if self.config.terminal_access {
+        if self.can_access_terminal() {
             self.create_terminal(args).await
         } else {
             Err(Error::method_not_found())
@@ -47,7 +47,7 @@ impl<H: Client> Client for Handler<H> {
     }
 
     async fn terminal_output(&self, args: TerminalOutputRequest) -> Result<TerminalOutputResponse> {
-        if self.config.terminal_access {
+        if self.can_access_terminal() {
             self.handler.terminal_output(args).await
         } else {
             Err(Error::method_not_found())
@@ -58,7 +58,7 @@ impl<H: Client> Client for Handler<H> {
         &self,
         args: WaitForTerminalExitRequest,
     ) -> Result<WaitForTerminalExitResponse> {
-        if self.config.terminal_access {
+        if self.can_access_terminal() {
             self.handler.wait_for_terminal_exit(args).await
         } else {
             Err(Error::method_not_found())
@@ -69,7 +69,7 @@ impl<H: Client> Client for Handler<H> {
         &self,
         args: ReleaseTerminalRequest,
     ) -> Result<ReleaseTerminalResponse> {
-        if self.config.terminal_access {
+        if self.can_access_terminal() {
             self.handler.release_terminal(args).await
         } else {
             Err(Error::method_not_found())
