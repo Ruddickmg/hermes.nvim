@@ -9,7 +9,11 @@ use crate::Handler;
 use crate::apc::error::Error;
 
 impl<H: agent_client_protocol::Client> Handler<H> {
-    pub async fn initialized(&self, _response: InitializeResponse) -> Result<(), Error> {
+    pub async fn initialized(&self, info: InitializeResponse) -> Result<(), Error> {
+        let mut config = self.state.lock()?;
+        let agent = config.agent.clone();
+        config.agent_info.insert(agent, info);
+        drop(config);
         Ok(())
     }
     pub async fn session_created(&self, _response: NewSessionResponse) -> Result<(), Error> {

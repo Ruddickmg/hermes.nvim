@@ -1,7 +1,11 @@
 pub mod client;
 pub mod response;
 
+use std::sync::{Arc, Mutex};
+
 use agent_client_protocol::Client;
+
+use crate::PluginState;
 
 #[derive(Debug, Clone)]
 pub struct ClientConfig {
@@ -22,17 +26,25 @@ impl Default for ClientConfig {
 
 #[derive(Clone)]
 pub struct Handler<H: Client> {
-    config: ClientConfig,
+    pub state: Arc<Mutex<PluginState>>,
     handler: H,
 }
 
 impl<H: Client> Handler<H> {
-    pub fn new(config: ClientConfig, handler: H) -> Self {
-        Self { config, handler }
+    pub fn new(state: Arc<Mutex<PluginState>>, handler: H) -> Self {
+        Self { state, handler }
     }
 
-    pub fn config(&self) -> &ClientConfig {
-        &self.config
+    pub fn can_write(&self) -> bool {
+        self.state.lock().unwrap().config.fs_write_access
+    }
+
+    pub fn can_read(&self) -> bool {
+        self.state.lock().unwrap().config.fs_read_access
+    }
+
+    pub fn can_access_terminal(&self) -> bool {
+        self.state.lock().unwrap().config.terminal_access
     }
 }
 

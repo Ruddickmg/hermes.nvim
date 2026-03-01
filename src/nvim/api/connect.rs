@@ -1,14 +1,12 @@
-use std::{rc::Rc, sync::Mutex};
-
+use crate::{
+    apc::connection::{Assistant, ConnectionDetails, ConnectionManager, Protocol},
+    nvim::producer::AutoCommands,
+};
 use nvim_oxi::{
-    Dictionary, Function,
+    Dictionary, Function, Object,
     lua::{Error, Poppable, Pushable, ffi::State},
 };
-
-use crate::{
-    apc::connection::{Assistant, ConnectionDetails, Protocol},
-    nvim::state::PluginState,
-};
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 pub struct ConnectionArgs {
@@ -82,17 +80,15 @@ impl Pushable for ConnectionArgs {
     }
 }
 
-pub fn create_lua_connect(
-    plugin_state: Rc<Mutex<PluginState>>,
-) -> Function<Option<ConnectionArgs>, Result<(), Error>> {
-    Function::from_fn(move |arg: Option<ConnectionArgs>| {
-        let details = arg.map(ConnectionDetails::from).unwrap_or_default();
-        plugin_state
-            .lock()
-            .map_err(|e| Error::RuntimeError(e.to_string()))?
-            .connection
-            .connect(details.clone())
-            .map_err(Error::from)?;
-        Ok(())
-    })
+pub fn create_lua_connect(connection: Arc<Mutex<ConnectionManager<AutoCommands>>>) -> Object {
+    let function: Function<Option<ConnectionArgs>, ()> =
+        Function::from_fn(move |arg: Option<ConnectionArgs>| -> Result<(), Error> {
+            let details = arg.map(ConnectionDetails::from).unwrap_or_default();
+            connection
+                .lock()
+                .map_err(|e| Error::RuntimeError(e.to_string()))?
+                .connect(details.clone())?;
+            Ok(())
+        });
+    function.into()
 }

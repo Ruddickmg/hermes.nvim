@@ -1,35 +1,29 @@
-use std::sync::Arc;
-
-use nvim_oxi::{api::opts::CreateAugroupOpts, lua::Error};
-
-use crate::{
-    ClientConfig, Handler, apc::connection::ConnectionManager, nvim::producer::EventHandler,
-};
-
-const GROUP: &str = "hermes";
+use crate::{ClientConfig, apc::connection::Assistant};
+use agent_client_protocol::InitializeResponse;
+use std::collections::HashMap;
 
 pub struct PluginState {
-    pub connection: ConnectionManager<EventHandler>,
+    pub config: ClientConfig,
+    pub agent_info: HashMap<Assistant, InitializeResponse>,
+    pub agent: Assistant,
 }
 
 impl PluginState {
-    pub fn new() -> Result<Self, Error> {
+    pub fn new() -> Self {
         Self::with_config(ClientConfig::default())
     }
 
-    pub fn with_config(config: ClientConfig) -> Result<Self, Error> {
-        let client = Arc::new(Handler::new(config, EventHandler::new(GROUP.to_string())));
-
-        nvim_oxi::api::create_augroup(GROUP, &CreateAugroupOpts::default()).unwrap();
-
-        Ok(Self {
-            connection: ConnectionManager::new(client).map_err(Error::from)?,
-        })
+    pub fn with_config(config: ClientConfig) -> Self {
+        Self {
+            config,
+            agent_info: HashMap::new(),
+            agent: Assistant::default(),
+        }
     }
 }
 
 impl Default for PluginState {
     fn default() -> Self {
-        Self::new().unwrap()
+        Self::new()
     }
 }

@@ -4,10 +4,10 @@ pub use manager::*;
 
 use crate::apc::error::Error;
 use agent_client_protocol::{
-    AgentCapabilities, AuthenticateRequest, CancelNotification, ExtNotification, ExtRequest,
-    ForkSessionRequest, InitializeRequest, ListSessionsRequest, LoadSessionRequest,
-    NewSessionRequest, PromptRequest, ResumeSessionRequest, SetSessionConfigOptionRequest,
-    SetSessionModeRequest, SetSessionModelRequest,
+    AuthenticateRequest, CancelNotification, ExtNotification, ExtRequest, ForkSessionRequest,
+    InitializeRequest, ListSessionsRequest, LoadSessionRequest, NewSessionRequest, PromptRequest,
+    ResumeSessionRequest, SetSessionConfigOptionRequest, SetSessionModeRequest,
+    SetSessionModelRequest,
 };
 use std::sync::mpsc::Sender;
 
@@ -32,15 +32,11 @@ pub enum UserRequest {
 #[derive(Debug, Clone)]
 pub struct Connection {
     sender: Sender<UserRequest>,
-    capabilities: Option<AgentCapabilities>,
 }
 
 impl Connection {
     pub fn new(sender: Sender<UserRequest>) -> Self {
-        Self {
-            sender,
-            capabilities: None,
-        }
+        Self { sender }
     }
     pub fn initialize(&self, request: InitializeRequest) -> Result<(), Error> {
         self.sender.send(UserRequest::Initialize(request))?;

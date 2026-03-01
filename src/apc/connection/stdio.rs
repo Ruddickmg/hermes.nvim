@@ -127,7 +127,7 @@ pub fn connect<H: Client + 'static>(
     agent: Assistant,
     receiver: Receiver<UserRequest>,
 ) -> Result<(), Error> {
-    match agent {
+    match agent.clone() {
         Assistant::Copilot => stdio_connection(
             receiver,
             client,

@@ -92,20 +92,20 @@ pub struct ConnectionDetails {
 
 #[derive(Clone)]
 pub struct ConnectionManager<H: Client> {
-    handles: Arc<Mutex<Vec<JoinHandle<Result<(), Error>>>>>,
+    handles: Arc<Mutex<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>,
     connection: HashMap<Assistant, Rc<Connection>>,
     handler: Arc<Handler<H>>,
     agent: Assistant,
 }
 
 impl<H: Client + Sync + Send + 'static> ConnectionManager<H> {
-    pub fn new(client: Arc<Handler<H>>) -> Result<Self, Error> {
-        Ok(Self {
+    pub fn new(client: Arc<Handler<H>>) -> Self {
+        Self {
             agent: Assistant::default(),
             handler: client,
-            handles: Arc::new(Mutex::new(Vec::new())),
+            handles: Arc::new(Mutex::new(HashMap::new())),
             connection: HashMap::new(),
-        })
+        }
     }
 
     fn add_connection(&mut self, agent: Assistant, connection: Rc<Connection>) {
@@ -137,11 +137,14 @@ impl<H: Client + Sync + Send + 'static> ConnectionManager<H> {
                 self.handles
                     .lock()
                     .map_err(|e| Error::Internal(e.to_string()))?
-                    .push(std::thread::spawn(move || match protocol {
-                        Protocol::Stdio => stdio::connect(handler, thread_agent, receiver),
-                        Protocol::Http => unimplemented!(),
-                        Protocol::Socket => unimplemented!(),
-                    }));
+                    .insert(
+                        agent.clone(),
+                        std::thread::spawn(move || match protocol {
+                            Protocol::Stdio => stdio::connect(handler, thread_agent, receiver),
+                            Protocol::Http => unimplemented!(),
+                            Protocol::Socket => unimplemented!(),
+                        }),
+                    );
                 self.add_connection(agent.clone(), connection.clone());
                 connection.initialize(init_config)?;
                 connection
@@ -153,7 +156,34 @@ impl<H: Client + Sync + Send + 'static> ConnectionManager<H> {
         let sender = self.connection.remove(assistant).ok_or_else(|| {
             Error::Connection(format!("No connection found for assistant {}", assistant))
         })?;
+        let handle = self
+            .handles
+            .lock()
+            .map_err(|e| {
+                Error::Internal(format!(
+                    "Couldn't get a lock on handle for assistant: {}. Error: {:#?}",
+                    assistant, e
+                ))
+            })?
+            .remove(assistant)
+            .ok_or_else(|| {
+                Error::Connection(format!("No handle found for assistant {}", assistant))
+            })?;
         drop(sender);
+        handle
+            .join()
+            .map_err(|e| {
+                Error::Internal(format!(
+                    "Failed to join thread for assistant {}: {:#?}",
+                    assistant, e
+                ))
+            })?
+            .map_err(|e| {
+                Error::Connection(format!(
+                    "Error in connection thread for assistant {}: {:#?}",
+                    assistant, e
+                ))
+            })?;
         Ok(())
     }
 }

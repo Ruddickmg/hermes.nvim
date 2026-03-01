@@ -4,4 +4,3 @@ pub mod prompt;
 
 pub use authenticate::*;
 pub use connect::*;
-pub use prompt::*;

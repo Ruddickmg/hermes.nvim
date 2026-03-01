@@ -6,29 +6,38 @@ use agent_client_protocol::{
     SessionUpdate, TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
     WaitForTerminalExitResponse, WriteTextFileRequest, WriteTextFileResponse,
 };
-use nvim_oxi::api::opts::ExecAutocmdsOpts;
+use nvim_oxi::{Object, api::opts::ExecAutocmdsOpts};
 
 #[derive(Clone)]
-pub struct EventHandler {
+pub struct AutoCommands {
     group: String,
 }
 
-impl EventHandler {
+impl AutoCommands {
     pub fn new(group: String) -> Self {
         Self { group }
     }
+
+    fn schedule_autocommand(&self, command: String, data: Object) {
+        let group = self.group.clone();
+        let opts = ExecAutocmdsOpts::builder().data(data).group(group).build();
+        nvim_oxi::schedule(move |_| {
+            nvim_oxi::api::exec_autocmds([command.as_str()], &opts)
+                .map_err(AcpError::into_internal_error)
+        });
+    }
 }
 
-impl Default for EventHandler {
+impl Default for AutoCommands {
     fn default() -> Self {
         Self {
-            group: "Hermes".to_string(),
+            group: "hermes".to_string(),
         }
     }
 }
 
 #[async_trait::async_trait(?Send)]
-impl Client for EventHandler {
+impl Client for AutoCommands {
     async fn request_permission(
         &self,
         _args: RequestPermissionRequest,
@@ -37,8 +46,6 @@ impl Client for EventHandler {
     }
 
     async fn session_notification(&self, args: SessionNotification) -> Result<()> {
-        let group = self.group.to_string();
-
         let (mut data, command) =
             match args.update {
                 SessionUpdate::UserMessageChunk(chunk) => parse::communication(chunk.content)
@@ -66,11 +73,8 @@ impl Client for EventHandler {
             }?;
 
         data.insert("sessionId", args.session_id.to_string());
-
-        let opts = ExecAutocmdsOpts::builder().data(data).group(group).build();
-
-        nvim_oxi::api::exec_autocmds([command.as_str()], &opts)
-            .map_err(AcpError::into_internal_error)
+        self.schedule_autocommand(command, data.into());
+        Ok(())
     }
 
     async fn write_text_file(&self, _args: WriteTextFileRequest) -> Result<WriteTextFileResponse> {

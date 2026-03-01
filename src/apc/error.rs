@@ -1,5 +1,5 @@
 use nvim_oxi::lua;
-use std::sync::mpsc::SendError;
+use std::sync::{PoisonError, mpsc::SendError};
 
 use crate::apc::connection::UserRequest;
 
@@ -36,6 +36,12 @@ impl From<Error> for lua::Error {
 
 impl From<agent_client_protocol::Error> for Error {
     fn from(e: agent_client_protocol::Error) -> Self {
+        Error::Internal(e.to_string())
+    }
+}
+
+impl<T> From<PoisonError<T>> for Error {
+    fn from(e: PoisonError<T>) -> Self {
         Error::Internal(e.to_string())
     }
 }
