@@ -1,21 +1,24 @@
 pub mod api;
+pub mod autocommands;
 pub mod parse;
-pub mod producer;
 pub mod state;
 
 use nvim_oxi::{Dictionary, api::opts::CreateAugroupOpts};
-use std::sync::{Arc, Mutex};
+use std::{
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 
-use crate::{Handler, apc::connection::ConnectionManager, nvim::producer::AutoCommands};
+use crate::{Handler, apc::connection::ConnectionManager};
 
 const GROUP: &str = "hermes";
 
 #[nvim_oxi::plugin]
 pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     let plugin_state = Arc::new(Mutex::new(state::PluginState::new()));
-    let auto_command_generator = AutoCommands::new(GROUP.to_string());
+    let auto_command_generator = autocommands::AutoCommands::new(GROUP.to_string());
     let event_handler = Arc::new(Handler::new(plugin_state.clone(), auto_command_generator));
-    let connection_manager = Arc::new(Mutex::new(ConnectionManager::new(event_handler.clone())));
+    let connection_manager = Rc::new(Mutex::new(ConnectionManager::new(event_handler.clone())));
 
     nvim_oxi::api::create_augroup(GROUP, &CreateAugroupOpts::default()).unwrap();
 

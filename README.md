@@ -20,7 +20,7 @@ Hermes focuses on:
   - [x] Via stdio
   - [ ] Via http
   - [ ] Via linux socket
-  - [ ] handle authentication
+  - [x] handle authentication
 - [ ] Allow mode selection
 - [ ] Allow model selection
 - [ ] Allow agent to write to files

@@ -1,12 +1,12 @@
 use crate::{
     apc::connection::{Assistant, ConnectionDetails, ConnectionManager, Protocol},
-    nvim::producer::AutoCommands,
+    nvim::autocommands::AutoCommands,
 };
 use nvim_oxi::{
     Dictionary, Function, Object,
     lua::{Error, Poppable, Pushable, ffi::State},
 };
-use std::sync::{Arc, Mutex};
+use std::{rc::Rc, sync::Mutex};
 
 #[derive(Clone)]
 pub struct ConnectionArgs {
@@ -80,8 +80,8 @@ impl Pushable for ConnectionArgs {
     }
 }
 
-pub fn create_lua_connect(connection: Arc<Mutex<ConnectionManager<AutoCommands>>>) -> Object {
-    let function: Function<Option<ConnectionArgs>, ()> =
+pub fn create_lua_connect(connection: Rc<Mutex<ConnectionManager<AutoCommands>>>) -> Object {
+    let function: Function<Option<ConnectionArgs>, Result<(), Error>> =
         Function::from_fn(move |arg: Option<ConnectionArgs>| -> Result<(), Error> {
             let details = arg.map(ConnectionDetails::from).unwrap_or_default();
             connection

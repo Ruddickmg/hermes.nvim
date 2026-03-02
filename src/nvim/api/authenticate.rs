@@ -1,13 +1,13 @@
 use agent_client_protocol::{AuthenticateRequest, Client};
 use nvim_oxi::{Function, Object, lua::Error};
-use std::sync::{Arc, Mutex};
+use std::{rc::Rc, sync::Mutex};
 
-use crate::{apc::connection::ConnectionManager, nvim::producer::AutoCommands};
+use crate::{apc::connection::ConnectionManager, nvim::autocommands::AutoCommands};
 
 pub fn create_lua_authenticate<H: Client>(
-    connection: Arc<Mutex<ConnectionManager<AutoCommands>>>,
+    connection: Rc<Mutex<ConnectionManager<AutoCommands>>>,
 ) -> Object {
-    let function: Function<String, ()> =
+    let function: Function<String, Result<(), Error>> =
         Function::from_fn(move |id: String| -> Result<(), Error> {
             let args: AuthenticateRequest = AuthenticateRequest::new(id);
             connection

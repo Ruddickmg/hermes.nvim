@@ -1,40 +1,12 @@
-use crate::nvim::parse;
 use agent_client_protocol::{
-    Client, CreateTerminalRequest, CreateTerminalResponse, Error as AcpError, ReadTextFileRequest,
+    Client, CreateTerminalRequest, CreateTerminalResponse, Error, ReadTextFileRequest,
     ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
     RequestPermissionRequest, RequestPermissionResponse, Result, SessionNotification,
     SessionUpdate, TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
     WaitForTerminalExitResponse, WriteTextFileRequest, WriteTextFileResponse,
 };
-use nvim_oxi::{Object, api::opts::ExecAutocmdsOpts};
 
-#[derive(Clone)]
-pub struct AutoCommands {
-    group: String,
-}
-
-impl AutoCommands {
-    pub fn new(group: String) -> Self {
-        Self { group }
-    }
-
-    fn schedule_autocommand(&self, command: String, data: Object) {
-        let group = self.group.clone();
-        let opts = ExecAutocmdsOpts::builder().data(data).group(group).build();
-        nvim_oxi::schedule(move |_| {
-            nvim_oxi::api::exec_autocmds([command.as_str()], &opts)
-                .map_err(AcpError::into_internal_error)
-        });
-    }
-}
-
-impl Default for AutoCommands {
-    fn default() -> Self {
-        Self {
-            group: "hermes".to_string(),
-        }
-    }
-}
+use crate::nvim::{autocommands::AutoCommands, parse};
 
 #[async_trait::async_trait(?Send)]
 impl Client for AutoCommands {
@@ -42,7 +14,7 @@ impl Client for AutoCommands {
         &self,
         _args: RequestPermissionRequest,
     ) -> Result<RequestPermissionResponse> {
-        Err(AcpError::method_not_found())
+        Err(Error::method_not_found())
     }
 
     async fn session_notification(&self, args: SessionNotification) -> Result<()> {
@@ -69,7 +41,7 @@ impl Client for AutoCommands {
                     .map(|dict| (dict, "AgentCurrentMode".to_string())),
                 SessionUpdate::ConfigOptionUpdate(update) => parse::config_option_event(update)
                     .map(|dict| (dict, "AgentConfigOption".to_string())),
-                _ => return Err(AcpError::method_not_found()),
+                _ => return Err(Error::method_not_found()),
             }?;
 
         data.insert("sessionId", args.session_id.to_string());
@@ -78,18 +50,18 @@ impl Client for AutoCommands {
     }
 
     async fn write_text_file(&self, _args: WriteTextFileRequest) -> Result<WriteTextFileResponse> {
-        Err(AcpError::method_not_found())
+        Err(Error::method_not_found())
     }
 
     async fn read_text_file(&self, _args: ReadTextFileRequest) -> Result<ReadTextFileResponse> {
-        Err(AcpError::method_not_found())
+        Err(Error::method_not_found())
     }
 
     async fn create_terminal(
         &self,
         _args: CreateTerminalRequest,
     ) -> Result<CreateTerminalResponse> {
-        Err(AcpError::method_not_found())
+        Err(Error::method_not_found())
     }
 
     /// Gets the terminal output and exit status
@@ -97,7 +69,7 @@ impl Client for AutoCommands {
         &self,
         _args: TerminalOutputRequest,
     ) -> Result<TerminalOutputResponse> {
-        Err(AcpError::method_not_found())
+        Err(Error::method_not_found())
     }
 
     /// Waits for a terminal command to exit
@@ -105,7 +77,7 @@ impl Client for AutoCommands {
         &self,
         _args: WaitForTerminalExitRequest,
     ) -> Result<WaitForTerminalExitResponse> {
-        Err(AcpError::method_not_found())
+        Err(Error::method_not_found())
     }
 
     /// Releases a terminal resource
@@ -113,6 +85,6 @@ impl Client for AutoCommands {
         &self,
         _args: ReleaseTerminalRequest,
     ) -> Result<ReleaseTerminalResponse> {
-        Err(AcpError::method_not_found())
+        Err(Error::method_not_found())
     }
 }
