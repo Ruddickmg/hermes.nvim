@@ -23,14 +23,8 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     nvim_oxi::api::create_augroup(GROUP, &CreateAugroupOpts::default()).unwrap();
 
     Ok(Dictionary::from_iter([
-        (
-            "connect",
-            api::create_lua_connect(connection_manager.clone()),
-        ),
-        // (
-        //     "authenticate",
-        //     api::create_lua_authenticate(plugin_state.clone()),
-        // ),
-        // ("prompt", api::create_lua_prompt(plugin_state.clone())),
+        ("connect", api::connect(connection_manager.clone())),
+        ("authenticate", api::authenticate(plugin_state.clone())),
+        ("prompt", api::disconnect(plugin_state.clone())),
     ]))
 }

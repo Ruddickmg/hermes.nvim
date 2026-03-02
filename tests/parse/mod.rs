@@ -7,6 +7,7 @@ pub mod communication_text;
 pub mod config_option;
 pub mod current_mode;
 pub mod plan;
+pub mod response;
 pub mod tool_call;
 pub mod tool_call_content;
 pub mod tool_call_update;

@@ -1,10 +1,12 @@
 use agent_client_protocol::{
     Client, CreateTerminalRequest, CreateTerminalResponse, Error, ReadTextFileRequest,
     ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
-    RequestPermissionRequest, RequestPermissionResponse, Result, SessionNotification,
-    SessionUpdate, TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
-    WaitForTerminalExitResponse, WriteTextFileRequest, WriteTextFileResponse,
+    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Result,
+    SessionNotification, SessionUpdate, TerminalOutputRequest, TerminalOutputResponse,
+    WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
+    WriteTextFileResponse,
 };
+use nvim_oxi::Dictionary;
 
 use crate::nvim::{autocommands::AutoCommands, parse};
 
@@ -12,37 +14,43 @@ use crate::nvim::{autocommands::AutoCommands, parse};
 impl Client for AutoCommands {
     async fn request_permission(
         &self,
-        _args: RequestPermissionRequest,
+        args: RequestPermissionRequest,
     ) -> Result<RequestPermissionResponse> {
-        Err(Error::method_not_found())
+        let mut dict = Dictionary::new();
+        // TODO: implement this functionality, provide a default if a user does not define behavior and a configuration to turn it off.
+        dict.insert("sessionId", args.session_id.to_string());
+        dict.insert("permission", parse::tool_call_update_event(args.tool_call)?);
+        self.schedule_autocommand("AgentPermissionRequest".to_string(), dict.into());
+        let outcome: RequestPermissionOutcome = RequestPermissionOutcome::Cancelled;
+        Ok(RequestPermissionResponse::new(outcome))
     }
 
     async fn session_notification(&self, args: SessionNotification) -> Result<()> {
-        let (mut data, command) =
-            match args.update {
-                SessionUpdate::UserMessageChunk(chunk) => parse::communication(chunk.content)
-                    .map(|(dict, t)| (dict, format!("User{}Message", t))),
-                SessionUpdate::AgentMessageChunk(chunk) => parse::communication(chunk.content)
-                    .map(|(dict, t)| (dict, format!("Agent{}Message", t))),
-                SessionUpdate::AgentThoughtChunk(chunk) => parse::communication(chunk.content)
-                    .map(|(dict, t)| (dict, format!("Agent{}Thought", t))),
-                SessionUpdate::ToolCall(tool_call) => parse::tool_call_event(tool_call)
-                    .map(|dict| (dict, "AgentToolCall".to_string())),
-                SessionUpdate::ToolCallUpdate(update) => parse::tool_call_update_event(update)
-                    .map(|dict| (dict, "AgentToolCallUpdate".to_string())),
-                SessionUpdate::Plan(plan) => {
-                    Ok(parse::plan_event(plan)).map(|dict| (dict, "AgentPlan".to_string()))
-                }
-                SessionUpdate::AvailableCommandsUpdate(update) => {
-                    Ok(parse::available_commands_event(update))
-                        .map(|dict| (dict, "AgentAvailableCommands".to_string()))
-                }
-                SessionUpdate::CurrentModeUpdate(update) => Ok(parse::current_mode_event(update))
-                    .map(|dict| (dict, "AgentCurrentMode".to_string())),
-                SessionUpdate::ConfigOptionUpdate(update) => Ok(parse::config_option_event(update))
-                    .map(|dict| (dict, "AgentConfigOption".to_string())),
-                _ => return Err(Error::method_not_found()),
-            }?;
+        let (mut data, command) = match args.update {
+            SessionUpdate::UserMessageChunk(chunk) => parse::communication(chunk.content)
+                .map(|(dict, t)| (dict, format!("User{}Message", t))),
+            SessionUpdate::AgentMessageChunk(chunk) => parse::communication(chunk.content)
+                .map(|(dict, t)| (dict, format!("Agent{}Message", t))),
+            SessionUpdate::AgentThoughtChunk(chunk) => parse::communication(chunk.content)
+                .map(|(dict, t)| (dict, format!("Agent{}Thought", t))),
+            SessionUpdate::ToolCall(tool_call) => {
+                parse::tool_call_event(tool_call).map(|dict| (dict, "AgentToolCall".to_string()))
+            }
+            SessionUpdate::ToolCallUpdate(update) => parse::tool_call_update_event(update)
+                .map(|dict| (dict, "AgentToolCallUpdate".to_string())),
+            SessionUpdate::Plan(plan) => {
+                Ok(parse::plan_event(plan)).map(|dict| (dict, "AgentPlan".to_string()))
+            }
+            SessionUpdate::AvailableCommandsUpdate(update) => {
+                Ok(parse::available_commands_event(update))
+                    .map(|dict| (dict, "AgentAvailableCommands".to_string()))
+            }
+            SessionUpdate::CurrentModeUpdate(update) => Ok(parse::current_mode_event(update))
+                .map(|dict| (dict, "AgentCurrentMode".to_string())),
+            SessionUpdate::ConfigOptionUpdate(update) => Ok(parse::config_option_event(update))
+                .map(|dict| (dict, "AgentConfigOption".to_string())),
+            _ => return Err(Error::method_not_found()),
+        }?;
 
         data.insert("sessionId", args.session_id.to_string());
         self.schedule_autocommand(command, data.into());

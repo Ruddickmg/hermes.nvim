@@ -80,7 +80,7 @@ impl Pushable for ConnectionArgs {
     }
 }
 
-pub fn create_lua_connect(connection: Rc<Mutex<ConnectionManager<AutoCommands>>>) -> Object {
+pub fn connect(connection: Rc<Mutex<ConnectionManager<AutoCommands>>>) -> Object {
     let function: Function<Option<ConnectionArgs>, Result<(), Error>> =
         Function::from_fn(move |arg: Option<ConnectionArgs>| -> Result<(), Error> {
             let details = arg.map(ConnectionDetails::from).unwrap_or_default();

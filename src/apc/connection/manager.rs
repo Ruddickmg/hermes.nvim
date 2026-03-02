@@ -152,7 +152,19 @@ impl<H: Client + Sync + Send + 'static> ConnectionManager<H> {
         })
     }
 
-    pub fn disconnect(&mut self, assistant: &Assistant) -> Result<(), Error> {
+    pub fn close_all(&mut self) -> Result<(), Error> {
+        self.disconnect(self.connection.keys().cloned().collect())
+    }
+
+    pub fn disconnect(&mut self, assistants: Vec<Assistant>) -> Result<(), Error> {
+        // TODO: store errors in an array and keep processing, then return any errors after
+        for assistant in assistants {
+            self.disconnect_assistant(&assistant)?;
+        }
+        Ok(())
+    }
+
+    fn disconnect_assistant(&mut self, assistant: &Assistant) -> Result<(), Error> {
         let sender = self.connection.remove(assistant).ok_or_else(|| {
             Error::Connection(format!("No connection found for assistant {}", assistant))
         })?;

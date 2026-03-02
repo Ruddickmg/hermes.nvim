@@ -1,0 +1,8 @@
+error: failed to select a version for `nvim-oxi`.
+    ... required by package `hermes v0.1.0 (/var/www/hermes)`
+versions that meet the requirements `^0.6.0` (locked to 0.6.0) are: 0.6.0
+
+package `hermes` depends on `nvim-oxi` with feature `mlua-module` but `nvim-oxi` does not have that feature.
+
+
+failed to select a version for `nvim-oxi` which could resolve this conflict

@@ -1,11 +1,10 @@
 pub mod client;
+pub mod message;
 pub mod response;
 
-use std::sync::{Arc, Mutex};
-
-use agent_client_protocol::Client;
-
 use crate::PluginState;
+use agent_client_protocol::Client;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub struct ClientConfig {
