@@ -116,32 +116,16 @@ impl Pushable for DisconnectArgs {
 pub fn disconnect<H: Client>(connection: Rc<Mutex<ConnectionManager<AutoCommands>>>) -> Object {
     let function: Function<DisconnectArgs, Result<(), Error>> =
         Function::from_fn(move |args: DisconnectArgs| -> Result<(), Error> {
+            let mut manager = connection
+                .lock()
+                .map_err(|e| Error::RuntimeError(e.to_string()))?;
             match args {
-                DisconnectArgs::Multiple(agents) => {
-                    let mut manager = connection
-                        .lock()
-                        .map_err(|e| Error::RuntimeError(e.to_string()))?;
-                    manager.disconnect(agents)?;
-                    drop(manager);
-                    Ok(())
-                }
-                DisconnectArgs::Single(agent) => {
-                    let mut manager = connection
-                        .lock()
-                        .map_err(|e| Error::RuntimeError(e.to_string()))?;
-                    manager.disconnect(vec![agent.clone()])?;
-                    drop(manager);
-                    Ok(())
-                }
-                DisconnectArgs::All => {
-                    let mut manager = connection
-                        .lock()
-                        .map_err(|e| Error::RuntimeError(e.to_string()))?;
-                    manager.close_all()?;
-                    drop(manager);
-                    Ok(())
-                }
-            }
+                DisconnectArgs::Multiple(agents) => manager.disconnect(agents),
+                DisconnectArgs::Single(agent) => manager.disconnect(vec![agent.clone()]),
+                DisconnectArgs::All => manager.close_all(),
+            }?;
+            drop(manager);
+            Ok(())
         });
     function.into()
 }
