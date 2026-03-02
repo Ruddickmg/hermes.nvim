@@ -1,8 +1,8 @@
 use crate::nvim::parse::annotations::parse_annotations;
-use agent_client_protocol::{ResourceLink, Result};
+use agent_client_protocol::ResourceLink;
 use nvim_oxi::Dictionary;
 
-pub fn resource_link_event(block: ResourceLink) -> Result<(Dictionary, String)> {
+pub fn resource_link_event(block: ResourceLink) -> (Dictionary, String) {
     let mut dict: Dictionary = Dictionary::new();
     dict.insert("name", block.name);
     dict.insert("uri", block.uri);
@@ -24,5 +24,5 @@ pub fn resource_link_event(block: ResourceLink) -> Result<(Dictionary, String)> 
     if let Some(meta) = block.meta {
         dict.insert("meta", format!("{:?}", meta));
     }
-    Ok((dict, "ResourceLink".to_string()))
+    (dict, "ResourceLink".to_string())
 }

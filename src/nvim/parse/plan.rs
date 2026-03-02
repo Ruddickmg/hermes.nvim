@@ -1,7 +1,7 @@
-use agent_client_protocol::{Plan, Result};
+use agent_client_protocol::Plan;
 use nvim_oxi::Dictionary;
 
-pub fn plan_event(plan: Plan) -> Result<Dictionary> {
+pub fn plan_event(plan: Plan) -> Dictionary {
     let mut data: nvim_oxi::Dictionary = nvim_oxi::Dictionary::new();
     let entries = plan.entries.into_iter().map(|entry| {
         let mut dict = nvim_oxi::Dictionary::new();
@@ -17,5 +17,5 @@ pub fn plan_event(plan: Plan) -> Result<Dictionary> {
         data.insert("meta", format!("{:?}", meta));
     }
 
-    Ok(data)
+    data
 }

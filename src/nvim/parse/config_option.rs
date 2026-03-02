@@ -1,7 +1,7 @@
-use agent_client_protocol::{ConfigOptionUpdate, Result, SessionConfigKind};
+use agent_client_protocol::{ConfigOptionUpdate, SessionConfigKind};
 use nvim_oxi::Dictionary;
 
-pub fn config_option_event(update: ConfigOptionUpdate) -> Result<Dictionary> {
+pub fn config_option_event(update: ConfigOptionUpdate) -> Dictionary {
     let mut data: nvim_oxi::Dictionary = nvim_oxi::Dictionary::new();
     let config_options = update.config_options.into_iter().map(|opt| {
         let mut dict = nvim_oxi::Dictionary::new();
@@ -63,5 +63,5 @@ pub fn config_option_event(update: ConfigOptionUpdate) -> Result<Dictionary> {
         data.insert("meta", format!("{:?}", meta));
     }
 
-    Ok(data)
+    data
 }

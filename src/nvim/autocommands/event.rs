@@ -31,15 +31,15 @@ impl Client for AutoCommands {
                 SessionUpdate::ToolCallUpdate(update) => parse::tool_call_update_event(update)
                     .map(|dict| (dict, "AgentToolCallUpdate".to_string())),
                 SessionUpdate::Plan(plan) => {
-                    parse::plan_event(plan).map(|dict| (dict, "AgentPlan".to_string()))
+                    Ok(parse::plan_event(plan)).map(|dict| (dict, "AgentPlan".to_string()))
                 }
                 SessionUpdate::AvailableCommandsUpdate(update) => {
-                    parse::available_commands_event(update)
+                    Ok(parse::available_commands_event(update))
                         .map(|dict| (dict, "AgentAvailableCommands".to_string()))
                 }
-                SessionUpdate::CurrentModeUpdate(update) => parse::current_mode_event(update)
+                SessionUpdate::CurrentModeUpdate(update) => Ok(parse::current_mode_event(update))
                     .map(|dict| (dict, "AgentCurrentMode".to_string())),
-                SessionUpdate::ConfigOptionUpdate(update) => parse::config_option_event(update)
+                SessionUpdate::ConfigOptionUpdate(update) => Ok(parse::config_option_event(update))
                     .map(|dict| (dict, "AgentConfigOption".to_string())),
                 _ => return Err(Error::method_not_found()),
             }?;

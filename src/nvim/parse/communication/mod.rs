@@ -13,10 +13,10 @@ use nvim_oxi::Dictionary;
 
 pub fn communication(content: ContentBlock) -> Result<(Dictionary, String)> {
     match content {
-        ContentBlock::Resource(block) => resource::resource_event(block),
-        ContentBlock::ResourceLink(block) => resource_link::resource_link_event(block),
-        ContentBlock::Image(image) => image::image_event(image),
-        ContentBlock::Text(text) => text::text_event(text),
+        ContentBlock::Resource(block) => Ok(resource::resource_event(block)),
+        ContentBlock::ResourceLink(block) => Ok(resource_link::resource_link_event(block)),
+        ContentBlock::Image(image) => Ok(image::image_event(image)),
+        ContentBlock::Text(text) => Ok(text::text_event(text)),
         ContentBlock::Audio(_) => Err(AcpError::method_not_found()),
         _ => Err(AcpError::method_not_found()),
     }

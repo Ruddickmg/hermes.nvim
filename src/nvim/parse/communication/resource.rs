@@ -1,8 +1,8 @@
 use crate::nvim::parse::annotations::parse_annotations;
-use agent_client_protocol::{EmbeddedResource, EmbeddedResourceResource, Result};
+use agent_client_protocol::{EmbeddedResource, EmbeddedResourceResource};
 use nvim_oxi::Dictionary;
 
-pub fn resource_event(block: EmbeddedResource) -> Result<(Dictionary, String)> {
+pub fn resource_event(block: EmbeddedResource) -> (Dictionary, String) {
     let mut dict: Dictionary = Dictionary::new();
 
     let resource_dict = match block.resource {
@@ -34,5 +34,5 @@ pub fn resource_event(block: EmbeddedResource) -> Result<(Dictionary, String)> {
     if let Some(meta) = block.meta {
         dict.insert("meta", format!("{:?}", meta));
     }
-    Ok((dict, "Resource".to_string()))
+    (dict, "Resource".to_string())
 }

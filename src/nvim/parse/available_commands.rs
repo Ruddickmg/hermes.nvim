@@ -1,7 +1,8 @@
-use agent_client_protocol::{AvailableCommandInput, AvailableCommandsUpdate, Result};
+use agent_client_protocol::AvailableCommandInput;
+use agent_client_protocol::AvailableCommandsUpdate;
 use nvim_oxi::Dictionary;
 
-pub fn available_commands_event(update: AvailableCommandsUpdate) -> Result<Dictionary> {
+pub fn available_commands_event(update: AvailableCommandsUpdate) -> Dictionary {
     let mut data: nvim_oxi::Dictionary = nvim_oxi::Dictionary::new();
     let commands = update.available_commands.into_iter().map(|command| {
         let mut dict = nvim_oxi::Dictionary::new();
@@ -25,5 +26,5 @@ pub fn available_commands_event(update: AvailableCommandsUpdate) -> Result<Dicti
         data.insert("meta", format!("{:?}", meta));
     }
 
-    Ok(data)
+    data
 }
