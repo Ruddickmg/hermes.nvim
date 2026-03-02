@@ -1,3 +1,4 @@
+use crate::nvim::parse::convert_metadata_to_lua_object;
 use agent_client_protocol::{ConfigOptionUpdate, SessionConfigKind};
 use nvim_oxi::Dictionary;
 
@@ -59,8 +60,8 @@ pub fn config_option_event(update: ConfigOptionUpdate) -> Dictionary {
     });
     data.insert("options", nvim_oxi::Array::from_iter(config_options));
 
-    if let Some(meta) = update.meta {
-        data.insert("meta", format!("{:?}", meta));
+    if let Some(obj) = convert_metadata_to_lua_object(update.meta) {
+        data.insert("meta", obj);
     }
 
     data

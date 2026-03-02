@@ -1,4 +1,5 @@
 use crate::nvim::parse::annotations::parse_annotations;
+use crate::nvim::parse::convert_metadata_to_lua_object;
 use agent_client_protocol::ResourceLink;
 use nvim_oxi::Dictionary;
 
@@ -21,8 +22,8 @@ pub fn resource_link_event(block: ResourceLink) -> (Dictionary, String) {
     if let Some(annotations) = block.annotations {
         dict.insert("annotations", parse_annotations(annotations));
     }
-    if let Some(meta) = block.meta {
-        dict.insert("meta", format!("{:?}", meta));
+    if let Some(obj) = convert_metadata_to_lua_object(block.meta) {
+        dict.insert("meta", obj);
     }
     (dict, "ResourceLink".to_string())
 }

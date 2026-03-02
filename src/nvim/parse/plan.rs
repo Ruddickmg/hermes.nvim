@@ -1,3 +1,4 @@
+use crate::nvim::parse::convert_metadata_to_lua_object;
 use agent_client_protocol::Plan;
 use nvim_oxi::Dictionary;
 
@@ -13,8 +14,8 @@ pub fn plan_event(plan: Plan) -> Dictionary {
 
     data.insert("entries", nvim_oxi::Array::from_iter(entries));
 
-    if let Some(meta) = plan.meta {
-        data.insert("meta", format!("{:?}", meta));
+    if let Some(obj) = convert_metadata_to_lua_object(plan.meta) {
+        data.insert("meta", obj);
     }
 
     data

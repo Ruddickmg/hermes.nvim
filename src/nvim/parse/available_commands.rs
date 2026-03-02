@@ -1,3 +1,4 @@
+use crate::nvim::parse::convert_metadata_to_lua_object;
 use agent_client_protocol::AvailableCommandInput;
 use agent_client_protocol::AvailableCommandsUpdate;
 use nvim_oxi::Dictionary;
@@ -22,8 +23,8 @@ pub fn available_commands_event(update: AvailableCommandsUpdate) -> Dictionary {
     });
     data.insert("commands", nvim_oxi::Array::from_iter(commands));
 
-    if let Some(meta) = update.meta {
-        data.insert("meta", format!("{:?}", meta));
+    if let Some(obj) = convert_metadata_to_lua_object(update.meta) {
+        data.insert("meta", obj);
     }
 
     data
