@@ -24,7 +24,10 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
 
     Ok(Dictionary::from_iter([
         ("connect", api::connect(connection_manager.clone())),
-        ("authenticate", api::authenticate(plugin_state.clone())),
-        ("prompt", api::disconnect(plugin_state.clone())),
+        (
+            "authenticate",
+            api::authenticate(connection_manager.clone()),
+        ),
+        ("disconnect", api::disconnect(connection_manager.clone())),
     ]))
 }

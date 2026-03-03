@@ -7,12 +7,9 @@ use nvim_oxi::{
 };
 use std::{rc::Rc, sync::Mutex};
 
-use crate::{
-    apc::connection::{Assistant, ConnectionManager},
-    nvim::autocommands::AutoCommands,
-};
+use crate::apc::connection::{Assistant, ConnectionManager};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum DisconnectArgs {
     Multiple(Vec<Assistant>),
     Single(Assistant),
@@ -113,7 +110,9 @@ impl Pushable for DisconnectArgs {
     }
 }
 
-pub fn disconnect<H: Client>(connection: Rc<Mutex<ConnectionManager<AutoCommands>>>) -> Object {
+pub fn disconnect<H: Client + Send + Sync + 'static>(
+    connection: Rc<Mutex<ConnectionManager<H>>>,
+) -> Object {
     let function: Function<DisconnectArgs, Result<(), Error>> =
         Function::from_fn(move |args: DisconnectArgs| -> Result<(), Error> {
             let mut manager = connection

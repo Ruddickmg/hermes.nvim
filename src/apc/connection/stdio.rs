@@ -7,11 +7,11 @@ use crate::{
     },
 };
 use agent_client_protocol::Client;
-use std::sync::mpsc::Receiver;
 use std::{ffi::OsStr, process::Stdio, sync::Arc};
+use tokio::sync::mpsc::Receiver;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
-pub fn stdio_connection<H, I, S>(
+pub async fn stdio_connection<H, I, S>(
     reciever: Receiver<UserRequest>,
     client: Arc<Handler<H>>,
     command: &str,
@@ -22,17 +22,13 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| Error::Connection(e.to_string()))?;
     let local_set = tokio::task::LocalSet::new();
-
     let mut child = tokio::process::Command::new(command)
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .kill_on_drop(true)
         .spawn()
         .map_err(|e| Error::Connection(e.to_string()))?;
 
@@ -48,35 +44,41 @@ where
         .ok_or_else(|| Error::Connection("Failed to take stdout".to_string()))?
         .compat();
 
-    let _: Result<(), Error> = runtime.block_on(local_set.run_until(async {
-        let (connection, handle_io) = agent_client_protocol::ClientSideConnection::new(
-            client.clone(),
-            outgoing,
-            incoming,
-            |fut| {
-                tokio::task::spawn_local(fut);
-            },
-        );
+    local_set
+        .run_until(async {
+            let (connection, handle_io) = agent_client_protocol::ClientSideConnection::new(
+                client.clone(),
+                outgoing,
+                incoming,
+                |fut| {
+                    tokio::task::spawn_local(fut);
+                },
+            );
 
-        tokio::task::spawn_local(handle_io);
+            tokio::task::spawn_local(handle_io);
 
-        handle_request(connection, reciever, client).await
-    }));
-    Ok(())
+            handle_request(connection, reciever, client).await
+        })
+        .await?;
+    drop(child);
+    Ok::<(), Error>(())
 }
 
-pub fn connect<H: Client + 'static>(
+pub async fn connect<H: Client + 'static>(
     client: Arc<Handler<H>>,
     agent: Assistant,
     receiver: Receiver<UserRequest>,
 ) -> Result<(), Error> {
     match agent.clone() {
-        Assistant::Copilot => stdio_connection(
-            receiver,
-            client,
-            "node",
-            ["copilot-language-server", "--acp"],
-        ),
-        Assistant::Opencode => stdio_connection(receiver, client, "opencode", ["acp"]),
+        Assistant::Copilot => {
+            stdio_connection(
+                receiver,
+                client,
+                "node",
+                ["copilot-language-server", "--acp"],
+            )
+            .await
+        }
+        Assistant::Opencode => stdio_connection(receiver, client, "opencode", ["acp"]).await,
     }
 }

@@ -1,4 +1,6 @@
-use std::sync::{Arc, mpsc::Receiver};
+use std::sync::Arc;
+
+use tokio::sync::mpsc::Receiver;
 
 use agent_client_protocol::{Agent, Client, ClientSideConnection};
 
@@ -9,13 +11,14 @@ use crate::{
 
 pub async fn handle_request<H: Client>(
     connection: ClientSideConnection,
-    reciever: Receiver<UserRequest>,
+    mut reciever: Receiver<UserRequest>,
     client: Arc<Handler<H>>,
 ) -> Result<(), Error> {
-    while let Ok(msg) = reciever.try_recv() {
+    while let Some(msg) = reciever.recv().await {
         match msg {
             UserRequest::Initialize(request) => {
                 let response = connection.initialize(request).await?;
+                println!("initialized! {:#?}", response);
                 client.initialized(response).await?;
             }
             UserRequest::Cancel(config) => {

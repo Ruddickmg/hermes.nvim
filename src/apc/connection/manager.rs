@@ -127,22 +127,30 @@ impl<H: Client + Sync + Send + 'static> ConnectionManager<H> {
         Ok(match self.get_connection(&agent) {
             Some(connection) => connection,
             None => {
-                let (sender, receiver) = std::sync::mpsc::channel();
+                let (sender, receiver) = tokio::sync::mpsc::channel(100);
                 let connection = Rc::new(Connection::new(sender));
                 let handler = self.handler.clone();
                 let thread_agent = agent.clone();
                 let init_config = InitializeRequest::new(ProtocolVersion::LATEST).client_info(
                     Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"),
                 );
+
                 self.handles
                     .lock()
                     .map_err(|e| Error::Internal(e.to_string()))?
                     .insert(
                         agent.clone(),
-                        std::thread::spawn(move || match protocol {
-                            Protocol::Stdio => stdio::connect(handler, thread_agent, receiver),
-                            Protocol::Http => unimplemented!(),
-                            Protocol::Socket => unimplemented!(),
+                        std::thread::spawn(move || {
+                            let runtime = tokio::runtime::Builder::new_current_thread()
+                                .enable_all()
+                                .build()
+                                .map_err(|e| Error::Internal(e.to_string()))?;
+
+                            runtime.block_on(match protocol {
+                                Protocol::Stdio => stdio::connect(handler, thread_agent, receiver),
+                                Protocol::Http => unimplemented!(),
+                                Protocol::Socket => unimplemented!(),
+                            })
                         }),
                     );
                 self.add_connection(agent.clone(), connection.clone());

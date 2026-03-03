@@ -2,10 +2,10 @@ use agent_client_protocol::{AuthenticateRequest, Client};
 use nvim_oxi::{Function, Object, lua::Error};
 use std::{rc::Rc, sync::Mutex};
 
-use crate::{apc::connection::ConnectionManager, nvim::autocommands::AutoCommands};
+use crate::apc::connection::ConnectionManager;
 
-pub fn create_lua_authenticate<H: Client>(
-    connection: Rc<Mutex<ConnectionManager<AutoCommands>>>,
+pub fn authenticate<H: Client + Send + Sync + 'static>(
+    connection: Rc<Mutex<ConnectionManager<H>>>,
 ) -> Object {
     let function: Function<String, Result<(), Error>> =
         Function::from_fn(move |id: String| -> Result<(), Error> {
