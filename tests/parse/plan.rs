@@ -11,14 +11,14 @@ fn test_plan_event_ok() {
     let plan = Plan::new(vec![entry]);
 
     let result = plan_event(plan);
-    assert_eq!(result.is_ok(), true);
+    assert_eq!(result.get("entries").is_some(), true);
 }
 
 #[test]
 fn test_plan_event_empty_entries() {
     let plan = Plan::new(vec![]);
 
-    let result = plan_event(plan).unwrap();
+    let result = plan_event(plan);
     let entries = result.get("entries").unwrap();
     assert_eq!(*entries, nvim_oxi::Object::from(nvim_oxi::Array::new()));
 }
@@ -32,7 +32,7 @@ fn test_plan_event_single_entry() {
     );
     let plan = Plan::new(vec![entry]);
 
-    let result = plan_event(plan).unwrap();
+    let result = plan_event(plan);
     let entries = result.get("entries").unwrap();
 
     let mut expected_entry = nvim_oxi::Dictionary::new();
@@ -56,7 +56,7 @@ fn test_plan_event_multiple_entries() {
     );
     let plan = Plan::new(vec![entry1, entry2]);
 
-    let result = plan_event(plan).unwrap();
+    let result = plan_event(plan);
     let entries = result.get("entries").unwrap();
 
     let mut expected_entry1 = nvim_oxi::Dictionary::new();
@@ -83,7 +83,7 @@ fn test_plan_event_entry_content_value() {
     );
     let plan = Plan::new(vec![entry]);
 
-    let result = plan_event(plan).unwrap();
+    let result = plan_event(plan);
     let entries = result.get("entries").unwrap();
 
     let mut expected_entry = nvim_oxi::Dictionary::new();
@@ -98,7 +98,7 @@ fn test_plan_event_entry_priority_high() {
     let entry = PlanEntry::new("Task", PlanEntryPriority::High, PlanEntryStatus::Pending);
     let plan = Plan::new(vec![entry]);
 
-    let result = plan_event(plan).unwrap();
+    let result = plan_event(plan);
     let entries = result.get("entries").unwrap();
 
     let mut expected_entry = nvim_oxi::Dictionary::new();
@@ -113,7 +113,7 @@ fn test_plan_event_entry_priority_medium() {
     let entry = PlanEntry::new("Task", PlanEntryPriority::Medium, PlanEntryStatus::Pending);
     let plan = Plan::new(vec![entry]);
 
-    let result = plan_event(plan).unwrap();
+    let result = plan_event(plan);
     let entries = result.get("entries").unwrap();
 
     let mut expected_entry = nvim_oxi::Dictionary::new();
@@ -128,7 +128,7 @@ fn test_plan_event_entry_priority_low() {
     let entry = PlanEntry::new("Task", PlanEntryPriority::Low, PlanEntryStatus::Pending);
     let plan = Plan::new(vec![entry]);
 
-    let result = plan_event(plan).unwrap();
+    let result = plan_event(plan);
     let entries = result.get("entries").unwrap();
 
     let mut expected_entry = nvim_oxi::Dictionary::new();
@@ -143,7 +143,7 @@ fn test_plan_event_without_meta() {
     let entry = PlanEntry::new("Task", PlanEntryPriority::High, PlanEntryStatus::Pending);
     let plan = Plan::new(vec![entry]);
 
-    let result = plan_event(plan).unwrap();
+    let result = plan_event(plan);
     assert_eq!(result.get("meta").is_some(), false);
 }
 
@@ -156,6 +156,6 @@ fn test_plan_event_with_meta() {
         .clone();
     let plan = Plan::new(vec![entry]).meta(meta);
 
-    let result = plan_event(plan).unwrap();
+    let result = plan_event(plan);
     assert_eq!(result.get("meta").is_some(), true);
 }

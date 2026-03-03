@@ -9,14 +9,14 @@ fn test_available_commands_event_ok() {
     let update = AvailableCommandsUpdate::new(vec![cmd]);
 
     let result = available_commands_event(update);
-    assert_eq!(result.is_ok(), true);
+    assert_eq!(result.get("commands").is_some(), true);
 }
 
 #[test]
 fn test_available_commands_event_empty_array() {
     let update = AvailableCommandsUpdate::new(vec![]);
 
-    let result = available_commands_event(update).unwrap();
+    let result = available_commands_event(update);
     let commands = result.get("commands").unwrap();
     assert_eq!(*commands, nvim_oxi::Object::from(nvim_oxi::Array::new()));
 }
@@ -26,7 +26,7 @@ fn test_available_commands_event_single_command() {
     let cmd = AvailableCommand::new("read_file", "Read a file");
     let update = AvailableCommandsUpdate::new(vec![cmd]);
 
-    let result = available_commands_event(update).unwrap();
+    let result = available_commands_event(update);
     let commands = result.get("commands").unwrap();
 
     let mut expected_cmd = nvim_oxi::Dictionary::new();
@@ -43,7 +43,7 @@ fn test_available_commands_event_multiple_commands() {
     let cmd2 = AvailableCommand::new("write_file", "Write a file");
     let update = AvailableCommandsUpdate::new(vec![cmd1, cmd2]);
 
-    let result = available_commands_event(update).unwrap();
+    let result = available_commands_event(update);
     let commands = result.get("commands").unwrap();
 
     let mut expected_cmd1 = nvim_oxi::Dictionary::new();
@@ -67,7 +67,7 @@ fn test_available_commands_event_without_input() {
     let cmd = AvailableCommand::new("delete_file", "Delete a file");
     let update = AvailableCommandsUpdate::new(vec![cmd]);
 
-    let result = available_commands_event(update).unwrap();
+    let result = available_commands_event(update);
     let commands = result.get("commands").unwrap();
 
     let mut expected_cmd = nvim_oxi::Dictionary::new();
@@ -85,7 +85,7 @@ fn test_available_commands_event_with_input() {
     );
     let update = AvailableCommandsUpdate::new(vec![cmd]);
 
-    let result = available_commands_event(update).unwrap();
+    let result = available_commands_event(update);
     let commands = result.get("commands").unwrap();
 
     let mut expected_cmd = nvim_oxi::Dictionary::new();
@@ -106,7 +106,7 @@ fn test_available_commands_event_without_meta() {
     let cmd = AvailableCommand::new("list_files", "List files");
     let update = AvailableCommandsUpdate::new(vec![cmd]);
 
-    let result = available_commands_event(update).unwrap();
+    let result = available_commands_event(update);
     assert_eq!(result.get("meta").is_some(), false);
 }
 
@@ -119,6 +119,6 @@ fn test_available_commands_event_with_meta() {
         .clone();
     let update = AvailableCommandsUpdate::new(vec![cmd]).meta(meta);
 
-    let result = available_commands_event(update).unwrap();
+    let result = available_commands_event(update);
     assert_eq!(result.get("meta").is_some(), true);
 }

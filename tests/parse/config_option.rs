@@ -10,14 +10,14 @@ fn test_config_option_event_ok() {
     let update = ConfigOptionUpdate::new(vec![]);
 
     let result = config_option_event(update);
-    assert_eq!(result.is_ok(), true);
+    assert_eq!(result.get("options").is_some(), true);
 }
 
 #[test]
 fn test_config_option_event_empty_config_options_array() {
     let update = ConfigOptionUpdate::new(vec![]);
 
-    let result = config_option_event(update).unwrap();
+    let result = config_option_event(update);
     let config_options = result.get("options").unwrap();
     assert_eq!(
         *config_options,
@@ -38,7 +38,7 @@ fn test_config_option_event_with_option_id_and_name() {
     );
     let update = ConfigOptionUpdate::new(vec![option]);
 
-    let result = config_option_event(update).unwrap();
+    let result = config_option_event(update);
     let config_options = result.get("options").unwrap();
 
     let mut expected_option = nvim_oxi::Dictionary::new();
@@ -77,7 +77,7 @@ fn test_config_option_event_with_description() {
     .description("This is a description");
     let update = ConfigOptionUpdate::new(vec![option]);
 
-    let result = config_option_event(update).unwrap();
+    let result = config_option_event(update);
     let config_options = result.get("options").unwrap();
 
     let mut expected_option = nvim_oxi::Dictionary::new();
@@ -117,7 +117,7 @@ fn test_config_option_event_with_category() {
     .category(SessionConfigOptionCategory::Model);
     let update = ConfigOptionUpdate::new(vec![option]);
 
-    let result = config_option_event(update).unwrap();
+    let result = config_option_event(update);
     let config_options = result.get("options").unwrap();
 
     let mut expected_option = nvim_oxi::Dictionary::new();
@@ -156,7 +156,7 @@ fn test_config_option_event_with_select_kind_ungrouped() {
     );
     let update = ConfigOptionUpdate::new(vec![option]);
 
-    let result = config_option_event(update).unwrap();
+    let result = config_option_event(update);
     let config_options = result.get("options").unwrap();
 
     let mut expected_option = nvim_oxi::Dictionary::new();
@@ -200,7 +200,7 @@ fn test_config_option_event_with_select_kind_ungrouped_option_description() {
     );
     let update = ConfigOptionUpdate::new(vec![option]);
 
-    let result = config_option_event(update).unwrap();
+    let result = config_option_event(update);
     let config_options = result.get("options").unwrap();
 
     let mut expected_option = nvim_oxi::Dictionary::new();
@@ -244,7 +244,7 @@ fn test_config_option_event_with_select_kind_grouped() {
     );
     let update = ConfigOptionUpdate::new(vec![option]);
 
-    let result = config_option_event(update).unwrap();
+    let result = config_option_event(update);
     let config_options = result.get("options").unwrap();
 
     let mut expected_option = nvim_oxi::Dictionary::new();
@@ -296,7 +296,7 @@ fn test_config_option_event_without_meta() {
     );
     let update = ConfigOptionUpdate::new(vec![option]);
 
-    let result = config_option_event(update).unwrap();
+    let result = config_option_event(update);
     assert_eq!(result.get("meta").is_some(), false);
 }
 
@@ -317,6 +317,6 @@ fn test_config_option_event_with_meta() {
         .clone();
     let update = ConfigOptionUpdate::new(vec![option]).meta(meta);
 
-    let result = config_option_event(update).unwrap();
+    let result = config_option_event(update);
     assert_eq!(result.get("meta").is_some(), true);
 }

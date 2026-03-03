@@ -4,14 +4,14 @@ use hermes::nvim::parse::resource_link_event;
 #[test]
 fn test_resource_link_event_ok() {
     let block = ResourceLink::new("test.txt", "file:///test.txt");
-    let result = resource_link_event(block);
-    assert_eq!(result.is_ok(), true);
+    let (dict, _) = resource_link_event(block);
+    assert_eq!(dict.get("name").is_some(), true);
 }
 
 #[test]
 fn test_resource_link_event_name_value() {
     let block = ResourceLink::new("myfile.txt", "file:///test.txt");
-    let (dict, _) = resource_link_event(block).unwrap();
+    let (dict, _) = resource_link_event(block);
 
     let name = dict.get("name").unwrap();
     assert_eq!(*name, nvim_oxi::Object::from("myfile.txt"));
@@ -20,7 +20,7 @@ fn test_resource_link_event_name_value() {
 #[test]
 fn test_resource_link_event_uri_value() {
     let block = ResourceLink::new("test.txt", "file:///path/to/file.txt");
-    let (dict, _) = resource_link_event(block).unwrap();
+    let (dict, _) = resource_link_event(block);
 
     let uri = dict.get("uri").unwrap();
     assert_eq!(*uri, nvim_oxi::Object::from("file:///path/to/file.txt"));
@@ -29,7 +29,7 @@ fn test_resource_link_event_uri_value() {
 #[test]
 fn test_resource_link_event_content_type() {
     let block = ResourceLink::new("test.txt", "file:///test.txt");
-    let (_, content_type) = resource_link_event(block).unwrap();
+    let (_, content_type) = resource_link_event(block);
 
     assert_eq!(content_type, "ResourceLink");
 }
@@ -37,7 +37,7 @@ fn test_resource_link_event_content_type() {
 #[test]
 fn test_resource_link_event_without_description() {
     let block = ResourceLink::new("test.txt", "file:///test.txt");
-    let (dict, _) = resource_link_event(block).unwrap();
+    let (dict, _) = resource_link_event(block);
 
     assert_eq!(dict.get("description").is_some(), false);
 }
@@ -46,7 +46,7 @@ fn test_resource_link_event_without_description() {
 fn test_resource_link_event_with_description() {
     let block =
         ResourceLink::new("test.txt", "file:///test.txt").description("A test file".to_string());
-    let (dict, _) = resource_link_event(block).unwrap();
+    let (dict, _) = resource_link_event(block);
 
     let description = dict.get("description").unwrap();
     assert_eq!(*description, nvim_oxi::Object::from("A test file"));
@@ -55,7 +55,7 @@ fn test_resource_link_event_with_description() {
 #[test]
 fn test_resource_link_event_without_mime_type() {
     let block = ResourceLink::new("test.txt", "file:///test.txt");
-    let (dict, _) = resource_link_event(block).unwrap();
+    let (dict, _) = resource_link_event(block);
 
     assert_eq!(dict.get("mimeType").is_some(), false);
 }
@@ -64,7 +64,7 @@ fn test_resource_link_event_without_mime_type() {
 fn test_resource_link_event_with_mime_type() {
     let block =
         ResourceLink::new("test.txt", "file:///test.txt").mime_type("text/plain".to_string());
-    let (dict, _) = resource_link_event(block).unwrap();
+    let (dict, _) = resource_link_event(block);
 
     let mime_type = dict.get("mimeType").unwrap();
     assert_eq!(*mime_type, nvim_oxi::Object::from("text/plain"));
@@ -73,7 +73,7 @@ fn test_resource_link_event_with_mime_type() {
 #[test]
 fn test_resource_link_event_without_size() {
     let block = ResourceLink::new("test.txt", "file:///test.txt");
-    let (dict, _) = resource_link_event(block).unwrap();
+    let (dict, _) = resource_link_event(block);
 
     assert_eq!(dict.get("size").is_some(), false);
 }
@@ -81,7 +81,7 @@ fn test_resource_link_event_without_size() {
 #[test]
 fn test_resource_link_event_with_size() {
     let block = ResourceLink::new("test.txt", "file:///test.txt").size(100);
-    let (dict, _) = resource_link_event(block).unwrap();
+    let (dict, _) = resource_link_event(block);
 
     let size = dict.get("size").unwrap();
     assert_eq!(*size, nvim_oxi::Object::from(100));
@@ -90,7 +90,7 @@ fn test_resource_link_event_with_size() {
 #[test]
 fn test_resource_link_event_without_title() {
     let block = ResourceLink::new("test.txt", "file:///test.txt");
-    let (dict, _) = resource_link_event(block).unwrap();
+    let (dict, _) = resource_link_event(block);
 
     assert_eq!(dict.get("title").is_some(), false);
 }
@@ -98,7 +98,7 @@ fn test_resource_link_event_without_title() {
 #[test]
 fn test_resource_link_event_with_title() {
     let block = ResourceLink::new("test.txt", "file:///test.txt").title("Test File".to_string());
-    let (dict, _) = resource_link_event(block).unwrap();
+    let (dict, _) = resource_link_event(block);
 
     let title = dict.get("title").unwrap();
     assert_eq!(*title, nvim_oxi::Object::from("Test File"));
@@ -107,7 +107,7 @@ fn test_resource_link_event_with_title() {
 #[test]
 fn test_resource_link_event_without_annotations() {
     let block = ResourceLink::new("test.txt", "file:///test.txt");
-    let (dict, _) = resource_link_event(block).unwrap();
+    let (dict, _) = resource_link_event(block);
 
     assert_eq!(dict.get("annotations").is_some(), false);
 }
@@ -116,7 +116,7 @@ fn test_resource_link_event_without_annotations() {
 fn test_resource_link_event_with_empty_annotations() {
     let annotations = Annotations::new();
     let block = ResourceLink::new("test.txt", "file:///test.txt").annotations(annotations);
-    let (dict, _) = resource_link_event(block).unwrap();
+    let (dict, _) = resource_link_event(block);
 
     let annotations_dict = dict.get("annotations").unwrap();
     let expected_dict = nvim_oxi::Dictionary::new();
@@ -127,7 +127,7 @@ fn test_resource_link_event_with_empty_annotations() {
 fn test_resource_link_event_with_annotations_audience() {
     let annotations = Annotations::new().audience(vec![Role::User]);
     let block = ResourceLink::new("test.txt", "file:///test.txt").annotations(annotations);
-    let (dict, _) = resource_link_event(block).unwrap();
+    let (dict, _) = resource_link_event(block);
 
     let annotations_dict = dict.get("annotations").unwrap();
     let expected_dict = {
@@ -144,7 +144,7 @@ fn test_resource_link_event_with_annotations_audience() {
 #[test]
 fn test_resource_link_event_without_meta() {
     let block = ResourceLink::new("test.txt", "file:///test.txt");
-    let (dict, _) = resource_link_event(block).unwrap();
+    let (dict, _) = resource_link_event(block);
 
     assert_eq!(dict.get("meta").is_some(), false);
 }
@@ -156,7 +156,7 @@ fn test_resource_link_event_with_meta() {
         .unwrap()
         .clone();
     let block = ResourceLink::new("test.txt", "file:///test.txt").meta(meta);
-    let (dict, _) = resource_link_event(block).unwrap();
+    let (dict, _) = resource_link_event(block);
 
     assert_eq!(dict.get("meta").is_some(), true);
 }
@@ -175,7 +175,7 @@ fn test_resource_link_event_with_all_optional_fields() {
         .title("Title".to_string())
         .annotations(annotations)
         .meta(meta);
-    let (dict, _) = resource_link_event(block).unwrap();
+    let (dict, _) = resource_link_event(block);
 
     let name = dict.get("name").unwrap();
     assert_eq!(*name, nvim_oxi::Object::from("test.txt"));

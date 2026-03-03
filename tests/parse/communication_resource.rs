@@ -11,8 +11,8 @@ fn test_resource_event_ok() {
         "Hello world",
     ));
     let block = EmbeddedResource::new(resource);
-    let result = resource_event(block);
-    assert_eq!(result.is_ok(), true);
+    let (dict, _content_type) = resource_event(block);
+    assert_eq!(dict.get("resource").is_some(), true);
 }
 
 #[test]
@@ -22,7 +22,7 @@ fn test_resource_event_text_resource_value() {
         "file content here",
     ));
     let block = EmbeddedResource::new(resource);
-    let (dict, _) = resource_event(block).unwrap();
+    let (dict, _) = resource_event(block);
 
     let resource_dict = dict.get("resource").unwrap();
     let expected_dict = {
@@ -41,7 +41,7 @@ fn test_resource_event_blob_resource_value() {
         "file:///blob.png",
     ));
     let block = EmbeddedResource::new(resource);
-    let (dict, _) = resource_event(block).unwrap();
+    let (dict, _) = resource_event(block);
 
     let resource_dict = dict.get("resource").unwrap();
     let expected_dict = {
@@ -59,7 +59,7 @@ fn test_resource_event_content_type() {
         "test.txt", "content",
     ));
     let block = EmbeddedResource::new(resource);
-    let (_dict, content_type) = resource_event(block).unwrap();
+    let (_dict, content_type) = resource_event(block);
 
     assert_eq!(content_type, "Resource");
 }
@@ -70,7 +70,7 @@ fn test_resource_event_without_annotations() {
         "test.txt", "content",
     ));
     let block = EmbeddedResource::new(resource);
-    let (dict, _) = resource_event(block).unwrap();
+    let (dict, _) = resource_event(block);
 
     assert_eq!(dict.get("annotations").is_some(), false);
 }
@@ -81,7 +81,7 @@ fn test_resource_event_without_meta() {
         "test.txt", "content",
     ));
     let block = EmbeddedResource::new(resource);
-    let (dict, _) = resource_event(block).unwrap();
+    let (dict, _) = resource_event(block);
 
     assert_eq!(dict.get("meta").is_some(), false);
 }
@@ -93,7 +93,7 @@ fn test_resource_event_with_empty_annotations() {
         "test.txt", "content",
     ));
     let block = EmbeddedResource::new(resource).annotations(annotations);
-    let (dict, _) = resource_event(block).unwrap();
+    let (dict, _) = resource_event(block);
 
     let annotations_dict = dict.get("annotations").unwrap();
     let expected_dict = nvim_oxi::Dictionary::new();
@@ -107,7 +107,7 @@ fn test_resource_event_with_annotations_audience() {
         "test.txt", "content",
     ));
     let block = EmbeddedResource::new(resource).annotations(annotations);
-    let (dict, _) = resource_event(block).unwrap();
+    let (dict, _) = resource_event(block);
 
     let annotations_dict = dict.get("annotations").unwrap();
     let expected_dict = {
@@ -128,7 +128,7 @@ fn test_resource_event_with_annotations_priority() {
         "test.txt", "content",
     ));
     let block = EmbeddedResource::new(resource).annotations(annotations);
-    let (dict, _) = resource_event(block).unwrap();
+    let (dict, _) = resource_event(block);
 
     let annotations_dict = dict.get("annotations").unwrap();
     let expected_dict = {
@@ -146,7 +146,7 @@ fn test_resource_event_with_annotations_last_modified() {
         "test.txt", "content",
     ));
     let block = EmbeddedResource::new(resource).annotations(annotations);
-    let (dict, _) = resource_event(block).unwrap();
+    let (dict, _) = resource_event(block);
 
     let annotations_dict = dict.get("annotations").unwrap();
     let expected_dict = {
@@ -167,7 +167,7 @@ fn test_resource_event_with_meta() {
         .unwrap()
         .clone();
     let block = EmbeddedResource::new(resource).meta(meta);
-    let (dict, _) = resource_event(block).unwrap();
+    let (dict, _) = resource_event(block);
 
     assert_eq!(dict.get("meta").is_some(), true);
 }
@@ -185,7 +185,7 @@ fn test_resource_event_with_annotations_and_meta() {
     let block = EmbeddedResource::new(resource)
         .annotations(annotations)
         .meta(meta);
-    let (dict, _) = resource_event(block).unwrap();
+    let (dict, _) = resource_event(block);
 
     let annotations_dict = dict.get("annotations").unwrap();
     let expected_annotations = nvim_oxi::Dictionary::new();

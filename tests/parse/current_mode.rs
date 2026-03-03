@@ -6,14 +6,14 @@ fn test_current_mode_event_ok() {
     let update = CurrentModeUpdate::new(SessionModeId::new("ask"));
 
     let result = current_mode_event(update);
-    assert_eq!(result.is_ok(), true);
+    assert_eq!(result.get("id").is_some(), true);
 }
 
 #[test]
 fn test_current_mode_event_id_ask() {
     let update = CurrentModeUpdate::new(SessionModeId::new("ask"));
 
-    let result = current_mode_event(update).unwrap();
+    let result = current_mode_event(update);
     let id = result.get("id").unwrap();
     assert_eq!(*id, nvim_oxi::Object::from("ask"));
 }
@@ -22,7 +22,7 @@ fn test_current_mode_event_id_ask() {
 fn test_current_mode_event_without_meta() {
     let update = CurrentModeUpdate::new(SessionModeId::new("ask"));
 
-    let result = current_mode_event(update).unwrap();
+    let result = current_mode_event(update);
     assert_eq!(result.get("meta").is_some(), false);
 }
 
@@ -34,6 +34,6 @@ fn test_current_mode_event_with_meta() {
         .clone();
     let update = CurrentModeUpdate::new(SessionModeId::new("code")).meta(meta);
 
-    let result = current_mode_event(update).unwrap();
+    let result = current_mode_event(update);
     assert_eq!(result.get("meta").is_some(), true);
 }
