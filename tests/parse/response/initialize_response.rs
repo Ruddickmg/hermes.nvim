@@ -22,9 +22,19 @@ fn test_initialize_response_basic() {
 
     let result = initialize_response(response);
 
-    assert_eq!(result.get("protocolVersion").is_some(), true);
-    assert_eq!(result.get("agentCapabilities").is_some(), true);
-    assert_eq!(result.get("authMethods").is_some(), true);
+    let protocol_version = result.get("protocolVersion").unwrap();
+    assert_eq!(
+        protocol_version.kind() == nvim_oxi::ObjectKind::String,
+        true
+    );
+
+    let agent_capabilities = result.get("agentCapabilities").unwrap();
+    let caps_dict = get_dict(agent_capabilities);
+    assert_eq!(caps_dict.get("loadSession").is_some(), true);
+
+    let auth_methods = result.get("authMethods").unwrap();
+    let arr = get_array(auth_methods);
+    assert_eq!(arr.is_empty(), true);
 }
 
 #[test]
@@ -48,10 +58,20 @@ fn test_initialize_response_agent_capabilities() {
     let capabilities = result.get("agentCapabilities").unwrap();
 
     let caps_dict = get_dict(capabilities);
-    assert_eq!(caps_dict.get("loadSession").is_some(), true);
-    assert_eq!(caps_dict.get("promptCapabilities").is_some(), true);
-    assert_eq!(caps_dict.get("mcpCapabilities").is_some(), true);
-    assert_eq!(caps_dict.get("sessionCapabilities").is_some(), true);
+    let load_session = caps_dict.get("loadSession").unwrap();
+    assert_eq!(load_session.kind() == nvim_oxi::ObjectKind::Boolean, true);
+
+    let prompt_caps = caps_dict.get("promptCapabilities").unwrap();
+    let prompt_dict = get_dict(prompt_caps);
+    assert_eq!(prompt_dict.get("image").is_some(), true);
+
+    let mcp_caps = caps_dict.get("mcpCapabilities").unwrap();
+    let mcp_dict = get_dict(mcp_caps);
+    assert_eq!(mcp_dict.get("http").is_some(), true);
+
+    let session_caps = caps_dict.get("sessionCapabilities").unwrap();
+    let session_dict = get_dict(session_caps);
+    assert_eq!(session_dict.get("list").is_some(), false);
 }
 
 #[test]
@@ -64,9 +84,17 @@ fn test_initialize_response_prompt_capabilities() {
     let prompt_caps = caps_dict.get("promptCapabilities").unwrap();
 
     let prompt_dict = get_dict(prompt_caps);
-    assert_eq!(prompt_dict.get("image").is_some(), true);
-    assert_eq!(prompt_dict.get("audio").is_some(), true);
-    assert_eq!(prompt_dict.get("embeddedContext").is_some(), true);
+    let image = prompt_dict.get("image").unwrap();
+    assert_eq!(image.kind() == nvim_oxi::ObjectKind::Boolean, true);
+
+    let audio = prompt_dict.get("audio").unwrap();
+    assert_eq!(audio.kind() == nvim_oxi::ObjectKind::Boolean, true);
+
+    let embedded_context = prompt_dict.get("embeddedContext").unwrap();
+    assert_eq!(
+        embedded_context.kind() == nvim_oxi::ObjectKind::Boolean,
+        true
+    );
 }
 
 #[test]
@@ -79,8 +107,11 @@ fn test_initialize_response_mcp_capabilities() {
     let mcp_caps = caps_dict.get("mcpCapabilities").unwrap();
 
     let mcp_dict = get_dict(mcp_caps);
-    assert_eq!(mcp_dict.get("http").is_some(), true);
-    assert_eq!(mcp_dict.get("sse").is_some(), true);
+    let http = mcp_dict.get("http").unwrap();
+    assert_eq!(http.kind() == nvim_oxi::ObjectKind::Boolean, true);
+
+    let sse = mcp_dict.get("sse").unwrap();
+    assert_eq!(sse.kind() == nvim_oxi::ObjectKind::Boolean, true);
 }
 
 #[test]
@@ -91,7 +122,9 @@ fn test_initialize_response_session_capabilities() {
     let capabilities = result.get("agentCapabilities").unwrap();
     let caps_dict = get_dict(capabilities);
 
-    assert_eq!(caps_dict.get("sessionCapabilities").is_some(), true);
+    let session_caps = caps_dict.get("sessionCapabilities").unwrap();
+    let session_dict = get_dict(session_caps);
+    assert_eq!(session_dict.get("list").is_some(), false);
 }
 
 #[test]
@@ -217,5 +250,10 @@ fn test_initialize_response_with_meta() {
 
     let result = initialize_response(response);
 
-    assert_eq!(result.get("meta").is_some(), true);
+    let meta_obj = result.get("meta").unwrap();
+    let meta_dict = get_dict(meta_obj);
+    let source = meta_dict.get("source").unwrap();
+    unsafe {
+        assert_eq!(source.as_nvim_str_unchecked().to_string(), "test");
+    }
 }
