@@ -10,7 +10,8 @@ fn test_config_option_event_ok() {
     let update = ConfigOptionUpdate::new(vec![]);
 
     let result = config_option_event(update);
-    assert_eq!(result.get("options").is_some(), true);
+    let options = result.get("options").unwrap();
+    assert_eq!(*options, nvim_oxi::Object::from(nvim_oxi::Array::new()));
 }
 
 #[test]
@@ -318,5 +319,8 @@ fn test_config_option_event_with_meta() {
     let update = ConfigOptionUpdate::new(vec![option]).meta(meta);
 
     let result = config_option_event(update);
-    assert_eq!(result.get("meta").is_some(), true);
+    let meta_obj = result.get("meta").unwrap();
+    let mut expected_meta = nvim_oxi::Dictionary::new();
+    expected_meta.insert("source", "agent");
+    assert_eq!(*meta_obj, nvim_oxi::Object::from(expected_meta));
 }

@@ -5,6 +5,7 @@
  - compare actual values, use "asser_eq" or similar assertions to make sure the values in the output are as expected based on the input
  - Write integration tests for nvim specific code since it is a requirement of nvim-oxi. See docs for nxim-oxi testing [here](https://github.com/noib3/nvim-oxi#testing)
  - run tests to debug and verify they are working
+ - make each test for one thing, do not have multiple assertions in a single test case unless absolutely necessary. This makes it easier to identify what is failing when a test does fail, and also makes it easier to understand the purpose of the test.
 
 Example of a good test
 ```rust

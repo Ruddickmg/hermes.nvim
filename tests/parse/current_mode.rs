@@ -6,7 +6,8 @@ fn test_current_mode_event_ok() {
     let update = CurrentModeUpdate::new(SessionModeId::new("ask"));
 
     let result = current_mode_event(update);
-    assert_eq!(result.get("id").is_some(), true);
+    let id = result.get("id").unwrap();
+    assert_eq!(*id, nvim_oxi::Object::from("ask"));
 }
 
 #[test]
@@ -35,5 +36,8 @@ fn test_current_mode_event_with_meta() {
     let update = CurrentModeUpdate::new(SessionModeId::new("code")).meta(meta);
 
     let result = current_mode_event(update);
-    assert_eq!(result.get("meta").is_some(), true);
+    let meta_obj = result.get("meta").unwrap();
+    let mut expected_meta = nvim_oxi::Dictionary::new();
+    expected_meta.insert("source", "user");
+    assert_eq!(*meta_obj, nvim_oxi::Object::from(expected_meta));
 }

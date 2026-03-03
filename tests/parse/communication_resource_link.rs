@@ -5,7 +5,8 @@ use hermes::nvim::parse::resource_link_event;
 fn test_resource_link_event_ok() {
     let block = ResourceLink::new("test.txt", "file:///test.txt");
     let (dict, _) = resource_link_event(block);
-    assert_eq!(dict.get("name").is_some(), true);
+    let name = dict.get("name").unwrap();
+    assert_eq!(*name, nvim_oxi::Object::from("test.txt"));
 }
 
 #[test]
@@ -158,7 +159,10 @@ fn test_resource_link_event_with_meta() {
     let block = ResourceLink::new("test.txt", "file:///test.txt").meta(meta);
     let (dict, _) = resource_link_event(block);
 
-    assert_eq!(dict.get("meta").is_some(), true);
+    let meta_obj = dict.get("meta").unwrap();
+    let mut expected_meta = nvim_oxi::Dictionary::new();
+    expected_meta.insert("source", "test");
+    assert_eq!(*meta_obj, nvim_oxi::Object::from(expected_meta));
 }
 
 #[test]
@@ -206,5 +210,8 @@ fn test_resource_link_event_with_all_optional_fields() {
         nvim_oxi::Object::from(expected_annotations)
     );
 
-    assert_eq!(dict.get("meta").is_some(), true);
+    let meta_obj = dict.get("meta").unwrap();
+    let mut expected_meta = nvim_oxi::Dictionary::new();
+    expected_meta.insert("source", "test");
+    assert_eq!(*meta_obj, nvim_oxi::Object::from(expected_meta));
 }

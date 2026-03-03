@@ -12,7 +12,14 @@ fn test_resource_event_ok() {
     ));
     let block = EmbeddedResource::new(resource);
     let (dict, _content_type) = resource_event(block);
-    assert_eq!(dict.get("resource").is_some(), true);
+    let resource_dict = dict.get("resource").unwrap();
+    let expected_dict = {
+        let mut d = nvim_oxi::Dictionary::new();
+        d.insert("text", "test.txt");
+        d.insert("uri", "Hello world");
+        d
+    };
+    assert_eq!(*resource_dict, nvim_oxi::Object::from(expected_dict));
 }
 
 #[test]
@@ -169,7 +176,10 @@ fn test_resource_event_with_meta() {
     let block = EmbeddedResource::new(resource).meta(meta);
     let (dict, _) = resource_event(block);
 
-    assert_eq!(dict.get("meta").is_some(), true);
+    let meta_obj = dict.get("meta").unwrap();
+    let mut expected_meta = nvim_oxi::Dictionary::new();
+    expected_meta.insert("source", "test");
+    assert_eq!(*meta_obj, nvim_oxi::Object::from(expected_meta));
 }
 
 #[test]
@@ -194,5 +204,8 @@ fn test_resource_event_with_annotations_and_meta() {
         nvim_oxi::Object::from(expected_annotations)
     );
 
-    assert_eq!(dict.get("meta").is_some(), true);
+    let meta_obj = dict.get("meta").unwrap();
+    let mut expected_meta = nvim_oxi::Dictionary::new();
+    expected_meta.insert("source", "test");
+    assert_eq!(*meta_obj, nvim_oxi::Object::from(expected_meta));
 }

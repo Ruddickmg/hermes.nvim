@@ -5,7 +5,8 @@ use hermes::nvim::parse::image_event;
 fn test_image_event_ok() {
     let image = ImageContent::new("base64data", "image/png");
     let (dict, _content_type) = image_event(image);
-    assert_eq!(dict.get("data").is_some(), true);
+    let data = dict.get("data").unwrap();
+    assert_eq!(*data, nvim_oxi::Object::from("base64data"));
 }
 
 #[test]
@@ -89,7 +90,10 @@ fn test_image_event_with_meta() {
     let image = ImageContent::new("data", "image/png").meta(meta);
     let (dict, _) = image_event(image);
 
-    assert_eq!(dict.get("meta").is_some(), true);
+    let meta_obj = dict.get("meta").unwrap();
+    let mut expected_meta = nvim_oxi::Dictionary::new();
+    expected_meta.insert("source", "test");
+    assert_eq!(*meta_obj, nvim_oxi::Object::from(expected_meta));
 }
 
 #[test]
@@ -106,5 +110,8 @@ fn test_image_event_with_uri_and_meta() {
     let uri = dict.get("uri").unwrap();
     assert_eq!(*uri, nvim_oxi::Object::from("file:///image.png"));
 
-    assert_eq!(dict.get("meta").is_some(), true);
+    let meta_obj = dict.get("meta").unwrap();
+    let mut expected_meta = nvim_oxi::Dictionary::new();
+    expected_meta.insert("source", "test");
+    assert_eq!(*meta_obj, nvim_oxi::Object::from(expected_meta));
 }

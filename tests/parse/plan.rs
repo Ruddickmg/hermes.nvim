@@ -11,7 +11,12 @@ fn test_plan_event_ok() {
     let plan = Plan::new(vec![entry]);
 
     let result = plan_event(plan);
-    assert_eq!(result.get("entries").is_some(), true);
+    let entries = result.get("entries").unwrap();
+    let mut expected_entry = nvim_oxi::Dictionary::new();
+    expected_entry.insert("content", "Analyze codebase");
+    expected_entry.insert("priority", "High");
+    let expected = nvim_oxi::Array::from_iter([nvim_oxi::Object::from(expected_entry)]);
+    assert_eq!(*entries, nvim_oxi::Object::from(expected));
 }
 
 #[test]
@@ -157,5 +162,8 @@ fn test_plan_event_with_meta() {
     let plan = Plan::new(vec![entry]).meta(meta);
 
     let result = plan_event(plan);
-    assert_eq!(result.get("meta").is_some(), true);
+    let meta_obj = result.get("meta").unwrap();
+    let mut expected_meta = nvim_oxi::Dictionary::new();
+    expected_meta.insert("source", "llm");
+    assert_eq!(*meta_obj, nvim_oxi::Object::from(expected_meta));
 }

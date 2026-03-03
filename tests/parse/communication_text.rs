@@ -5,7 +5,8 @@ use hermes::nvim::parse::text_event;
 fn test_text_event_ok() {
     let text = TextContent::new("Hello, world!");
     let (dict, _content_type) = text_event(text);
-    assert_eq!(dict.get("text").is_some(), true);
+    let text_value = dict.get("text").unwrap();
+    assert_eq!(*text_value, nvim_oxi::Object::from("Hello, world!"));
 }
 
 #[test]
@@ -63,7 +64,10 @@ fn test_text_event_with_meta() {
     let text = TextContent::new("With meta").meta(meta);
     let (dict, _) = text_event(text);
 
-    assert_eq!(dict.get("meta").is_some(), true);
+    let meta_obj = dict.get("meta").unwrap();
+    let mut expected_meta = nvim_oxi::Dictionary::new();
+    expected_meta.insert("source", "test");
+    assert_eq!(*meta_obj, nvim_oxi::Object::from(expected_meta));
 }
 
 #[test]
@@ -88,5 +92,8 @@ fn test_text_event_with_annotations_and_meta() {
         nvim_oxi::Object::from(expected_annotations)
     );
 
-    assert_eq!(dict.get("meta").is_some(), true);
+    let meta_obj = dict.get("meta").unwrap();
+    let mut expected_meta = nvim_oxi::Dictionary::new();
+    expected_meta.insert("source", "test");
+    assert_eq!(*meta_obj, nvim_oxi::Object::from(expected_meta));
 }

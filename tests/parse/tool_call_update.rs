@@ -9,8 +9,9 @@ fn test_tool_call_update_event_ok() {
     let fields = ToolCallUpdateFields::new();
     let update = ToolCallUpdate::new(ToolCallId::new("call_001"), fields);
 
-    let result = tool_call_update_event(update);
-    assert_eq!(result.is_ok(), true);
+    let result = tool_call_update_event(update).unwrap();
+    let id = result.get("id").unwrap();
+    assert_eq!(*id, nvim_oxi::Object::from("call_001"));
 }
 
 #[test]
@@ -90,5 +91,8 @@ fn test_tool_call_update_event_with_meta() {
     let update = ToolCallUpdate::new(ToolCallId::new("call_006"), fields).meta(meta);
 
     let result = tool_call_update_event(update).unwrap();
-    assert_eq!(result.get("meta").is_some(), true);
+    let meta_obj = result.get("meta").unwrap();
+    let mut expected_meta = nvim_oxi::Dictionary::new();
+    expected_meta.insert("source", "agent");
+    assert_eq!(*meta_obj, nvim_oxi::Object::from(expected_meta));
 }

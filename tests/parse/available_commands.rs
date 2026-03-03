@@ -9,7 +9,12 @@ fn test_available_commands_event_ok() {
     let update = AvailableCommandsUpdate::new(vec![cmd]);
 
     let result = available_commands_event(update);
-    assert_eq!(result.get("commands").is_some(), true);
+    let commands = result.get("commands").unwrap();
+    let mut expected_cmd = nvim_oxi::Dictionary::new();
+    expected_cmd.insert("name", "read_file");
+    expected_cmd.insert("description", "Read a file");
+    let expected = nvim_oxi::Array::from_iter([nvim_oxi::Object::from(expected_cmd)]);
+    assert_eq!(*commands, nvim_oxi::Object::from(expected));
 }
 
 #[test]
@@ -120,5 +125,8 @@ fn test_available_commands_event_with_meta() {
     let update = AvailableCommandsUpdate::new(vec![cmd]).meta(meta);
 
     let result = available_commands_event(update);
-    assert_eq!(result.get("meta").is_some(), true);
+    let meta_obj = result.get("meta").unwrap();
+    let mut expected_meta = nvim_oxi::Dictionary::new();
+    expected_meta.insert("source", "agent");
+    assert_eq!(*meta_obj, nvim_oxi::Object::from(expected_meta));
 }
