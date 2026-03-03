@@ -10,17 +10,14 @@ use std::{rc::Rc, sync::Mutex};
 use crate::apc::connection::{Assistant, ConnectionManager};
 
 #[derive(Clone, Debug)]
+#[derive(Default)]
 pub enum DisconnectArgs {
     Multiple(Vec<Assistant>),
     Single(Assistant),
+    #[default]
     All,
 }
 
-impl Default for DisconnectArgs {
-    fn default() -> Self {
-        DisconnectArgs::All
-    }
-}
 
 fn parse_assistant_string(
     assistant: nvim_oxi::String,

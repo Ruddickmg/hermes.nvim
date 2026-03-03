@@ -79,7 +79,7 @@ fn test_resource_event_without_annotations() {
     let block = EmbeddedResource::new(resource);
     let (dict, _) = resource_event(block);
 
-    assert_eq!(dict.get("annotations").is_some(), false);
+    assert!(dict.get("annotations").is_none());
 }
 
 #[test]
@@ -90,7 +90,7 @@ fn test_resource_event_without_meta() {
     let block = EmbeddedResource::new(resource);
     let (dict, _) = resource_event(block);
 
-    assert_eq!(dict.get("meta").is_some(), false);
+    assert!(dict.get("meta").is_none());
 }
 
 #[test]

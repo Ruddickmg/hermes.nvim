@@ -31,7 +31,7 @@ fn test_text_event_without_annotations() {
     let text = TextContent::new("No annotations");
     let (dict, _) = text_event(text);
 
-    assert_eq!(dict.get("annotations").is_some(), false);
+    assert!(dict.get("annotations").is_none());
 }
 
 #[test]
@@ -39,7 +39,7 @@ fn test_text_event_without_meta() {
     let text = TextContent::new("No meta");
     let (dict, _) = text_event(text);
 
-    assert_eq!(dict.get("meta").is_some(), false);
+    assert!(dict.get("meta").is_none());
 }
 
 #[test]

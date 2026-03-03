@@ -42,6 +42,17 @@ fn test_addition_function() {
 }
 ```
 
+ - write tests that use equals operators instead of `assert_eq`. 
+
+Example:
+```rust 
+// bad test
+assert!("something" == "something")
+
+// good test
+assert_eq!("something", "something")
+```
+
 
 This is a bad test because though it may check that the result exists (is not None), it doesn't verify that the value is correct. For example if we change variable "b" to 5, the test will pass, even though the result is different. Be as specific as possible while testing.
 

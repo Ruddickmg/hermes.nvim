@@ -149,7 +149,7 @@ fn test_plan_event_without_meta() {
     let plan = Plan::new(vec![entry]);
 
     let result = plan_event(plan);
-    assert_eq!(result.get("meta").is_some(), false);
+    assert!(result.get("meta").is_none());
 }
 
 #[test]

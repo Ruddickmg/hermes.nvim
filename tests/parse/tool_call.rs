@@ -13,7 +13,7 @@ fn test_tool_call_event_ok() {
         .status(agent_client_protocol::ToolCallStatus::Pending);
 
     let result = tool_call_event(tool_call);
-    assert_eq!(result.is_ok(), true);
+    assert!(result.is_ok());
 }
 
 #[test]
@@ -36,7 +36,7 @@ fn test_tool_call_event_with_input_output() {
         .raw_output(serde_json::json!({"bytes_written": 100}));
 
     let result = tool_call_event(tool_call);
-    assert_eq!(result.is_ok(), true);
+    assert!(result.is_ok());
 }
 
 #[test]

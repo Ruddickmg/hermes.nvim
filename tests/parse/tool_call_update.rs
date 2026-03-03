@@ -40,7 +40,7 @@ fn test_tool_call_update_event_without_fields_content() {
     let update = ToolCallUpdate::new(ToolCallId::new("call_002"), fields);
 
     let result = tool_call_update_event(update).unwrap();
-    assert_eq!(result.get("fields").is_some(), false);
+    assert!(result.get("fields").is_none());
 }
 
 #[test]
@@ -78,7 +78,7 @@ fn test_tool_call_update_event_without_meta() {
     let update = ToolCallUpdate::new(ToolCallId::new("call_005"), fields);
 
     let result = tool_call_update_event(update).unwrap();
-    assert_eq!(result.get("meta").is_some(), false);
+    assert!(result.get("meta").is_none());
 }
 
 #[test]

@@ -40,7 +40,7 @@ fn test_resource_link_event_without_description() {
     let block = ResourceLink::new("test.txt", "file:///test.txt");
     let (dict, _) = resource_link_event(block);
 
-    assert_eq!(dict.get("description").is_some(), false);
+    assert!(dict.get("description").is_none());
 }
 
 #[test]
@@ -58,7 +58,7 @@ fn test_resource_link_event_without_mime_type() {
     let block = ResourceLink::new("test.txt", "file:///test.txt");
     let (dict, _) = resource_link_event(block);
 
-    assert_eq!(dict.get("mimeType").is_some(), false);
+    assert!(dict.get("mimeType").is_none());
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn test_resource_link_event_without_size() {
     let block = ResourceLink::new("test.txt", "file:///test.txt");
     let (dict, _) = resource_link_event(block);
 
-    assert_eq!(dict.get("size").is_some(), false);
+    assert!(dict.get("size").is_none());
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn test_resource_link_event_without_title() {
     let block = ResourceLink::new("test.txt", "file:///test.txt");
     let (dict, _) = resource_link_event(block);
 
-    assert_eq!(dict.get("title").is_some(), false);
+    assert!(dict.get("title").is_none());
 }
 
 #[test]
@@ -110,7 +110,7 @@ fn test_resource_link_event_without_annotations() {
     let block = ResourceLink::new("test.txt", "file:///test.txt");
     let (dict, _) = resource_link_event(block);
 
-    assert_eq!(dict.get("annotations").is_some(), false);
+    assert!(dict.get("annotations").is_none());
 }
 
 #[test]
@@ -147,7 +147,7 @@ fn test_resource_link_event_without_meta() {
     let block = ResourceLink::new("test.txt", "file:///test.txt");
     let (dict, _) = resource_link_event(block);
 
-    assert_eq!(dict.get("meta").is_some(), false);
+    assert!(dict.get("meta").is_none());
 }
 
 #[test]

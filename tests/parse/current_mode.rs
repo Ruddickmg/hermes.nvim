@@ -24,7 +24,7 @@ fn test_current_mode_event_without_meta() {
     let update = CurrentModeUpdate::new(SessionModeId::new("ask"));
 
     let result = current_mode_event(update);
-    assert_eq!(result.get("meta").is_some(), false);
+    assert!(result.get("meta").is_none());
 }
 
 #[test]

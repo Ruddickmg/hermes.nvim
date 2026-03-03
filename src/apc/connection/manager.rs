@@ -8,9 +8,11 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
 #[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug)]
+#[derive(Default)]
 pub enum Protocol {
     Socket,
     Http,
+    #[default]
     Stdio,
 }
 
@@ -35,11 +37,6 @@ impl From<&str> for Protocol {
     }
 }
 
-impl Default for Protocol {
-    fn default() -> Self {
-        Protocol::Stdio
-    }
-}
 
 impl From<String> for Protocol {
     fn from(s: String) -> Self {
@@ -48,7 +45,9 @@ impl From<String> for Protocol {
 }
 
 #[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug)]
+#[derive(Default)]
 pub enum Assistant {
+    #[default]
     Copilot,
     Opencode,
 }
@@ -62,11 +61,6 @@ impl std::fmt::Display for Assistant {
     }
 }
 
-impl Default for Assistant {
-    fn default() -> Self {
-        Assistant::Copilot
-    }
-}
 
 impl From<&str> for Assistant {
     fn from(s: &str) -> Self {

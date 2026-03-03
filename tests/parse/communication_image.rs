@@ -40,7 +40,7 @@ fn test_image_event_without_uri() {
     let image = ImageContent::new("data", "image/png");
     let (dict, _) = image_event(image);
 
-    assert_eq!(dict.get("uri").is_some(), false);
+    assert!(dict.get("uri").is_none());
 }
 
 #[test]
@@ -57,7 +57,7 @@ fn test_image_event_without_annotations() {
     let image = ImageContent::new("data", "image/png");
     let (dict, _) = image_event(image);
 
-    assert_eq!(dict.get("annotations").is_some(), false);
+    assert!(dict.get("annotations").is_none());
 }
 
 #[test]
@@ -65,7 +65,7 @@ fn test_image_event_without_meta() {
     let image = ImageContent::new("data", "image/png");
     let (dict, _) = image_event(image);
 
-    assert_eq!(dict.get("meta").is_some(), false);
+    assert!(dict.get("meta").is_none());
 }
 
 #[test]

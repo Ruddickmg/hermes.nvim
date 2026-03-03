@@ -112,7 +112,7 @@ fn test_available_commands_event_without_meta() {
     let update = AvailableCommandsUpdate::new(vec![cmd]);
 
     let result = available_commands_event(update);
-    assert_eq!(result.get("meta").is_some(), false);
+    assert!(result.get("meta").is_none());
 }
 
 #[test]

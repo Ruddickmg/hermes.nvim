@@ -31,11 +31,7 @@ pub fn json_to_object(value: Value) -> Option<Object> {
         Value::Number(n) => {
             if let Some(i) = n.as_i64() {
                 Some(Object::from(i))
-            } else if let Some(f) = n.as_f64() {
-                Some(Object::from(f as f32))
-            } else {
-                None
-            }
+            } else { n.as_f64().map(|f| Object::from(f as f32)) }
         }
         Value::String(s) => Some(Object::from(s.as_str())),
         Value::Array(arr) => {

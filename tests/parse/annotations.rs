@@ -6,7 +6,7 @@ fn test_parse_annotations_empty() {
     let annotations = Annotations::new();
     let result = parse_annotations(annotations);
 
-    assert_eq!(result.is_empty(), true);
+    assert!(result.is_empty());
 }
 
 #[test]
@@ -94,7 +94,7 @@ fn test_parse_annotations_without_audience() {
         .priority(1.0);
     let result = parse_annotations(annotations);
 
-    assert_eq!(result.get("audience").is_none(), true);
+    assert!(result.get("audience").is_none());
 
     let last_modified = result.get("lastModified").unwrap();
     assert_eq!(*last_modified, nvim_oxi::Object::from("2024-01-01"));

@@ -298,7 +298,7 @@ fn test_config_option_event_without_meta() {
     let update = ConfigOptionUpdate::new(vec![option]);
 
     let result = config_option_event(update);
-    assert_eq!(result.get("meta").is_some(), false);
+    assert!(result.get("meta").is_none());
 }
 
 #[test]
