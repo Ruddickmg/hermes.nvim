@@ -1,8 +1,4 @@
-use agent_client_protocol::{
-    AgentCapabilities, AuthMethod, AuthMethodId, Implementation, InitializeResponse,
-    McpCapabilities, PromptCapabilities, ProtocolVersion, SessionCapabilities,
-    SessionListCapabilities,
-};
+use agent_client_protocol::{AuthMethod, AuthMethodId, Implementation, InitializeResponse};
 use hermes::nvim::parse::response::initialize_response;
 
 #[test]
