@@ -23,18 +23,15 @@ fn test_initialize_response_basic() {
     let result = initialize_response(response);
 
     let protocol_version = result.get("protocolVersion").unwrap();
-    assert_eq!(
-        protocol_version.kind() == nvim_oxi::ObjectKind::String,
-        true
-    );
+    assert_eq!(protocol_version.kind(), nvim_oxi::ObjectKind::String);
 
     let agent_capabilities = result.get("agentCapabilities").unwrap();
     let caps_dict = get_dict(agent_capabilities);
-    assert_eq!(caps_dict.get("loadSession").is_some(), true);
+    assert!(caps_dict.get("loadSession").is_some());
 
     let auth_methods = result.get("authMethods").unwrap();
     let arr = get_array(auth_methods);
-    assert_eq!(arr.is_empty(), true);
+    assert!(arr.is_empty());
 }
 
 #[test]
@@ -44,10 +41,7 @@ fn test_initialize_response_protocol_version() {
     let result = initialize_response(response);
     let protocol_version = result.get("protocolVersion").unwrap();
 
-    assert_eq!(
-        protocol_version.kind() == nvim_oxi::ObjectKind::String,
-        true
-    );
+    assert_eq!(protocol_version.kind(), nvim_oxi::ObjectKind::String);
 }
 
 #[test]
@@ -59,19 +53,19 @@ fn test_initialize_response_agent_capabilities() {
 
     let caps_dict = get_dict(capabilities);
     let load_session = caps_dict.get("loadSession").unwrap();
-    assert_eq!(load_session.kind() == nvim_oxi::ObjectKind::Boolean, true);
+    assert_eq!(load_session.kind(), nvim_oxi::ObjectKind::Boolean);
 
     let prompt_caps = caps_dict.get("promptCapabilities").unwrap();
     let prompt_dict = get_dict(prompt_caps);
-    assert_eq!(prompt_dict.get("image").is_some(), true);
+    assert!(prompt_dict.get("image").is_some());
 
     let mcp_caps = caps_dict.get("mcpCapabilities").unwrap();
     let mcp_dict = get_dict(mcp_caps);
-    assert_eq!(mcp_dict.get("http").is_some(), true);
+    assert!(mcp_dict.get("http").is_some());
 
     let session_caps = caps_dict.get("sessionCapabilities").unwrap();
     let session_dict = get_dict(session_caps);
-    assert_eq!(session_dict.get("list").is_some(), false);
+    assert!(session_dict.get("list").is_none());
 }
 
 #[test]
@@ -85,16 +79,13 @@ fn test_initialize_response_prompt_capabilities() {
 
     let prompt_dict = get_dict(prompt_caps);
     let image = prompt_dict.get("image").unwrap();
-    assert_eq!(image.kind() == nvim_oxi::ObjectKind::Boolean, true);
+    assert_eq!(image.kind(), nvim_oxi::ObjectKind::Boolean);
 
     let audio = prompt_dict.get("audio").unwrap();
-    assert_eq!(audio.kind() == nvim_oxi::ObjectKind::Boolean, true);
+    assert_eq!(audio.kind(), nvim_oxi::ObjectKind::Boolean);
 
     let embedded_context = prompt_dict.get("embeddedContext").unwrap();
-    assert_eq!(
-        embedded_context.kind() == nvim_oxi::ObjectKind::Boolean,
-        true
-    );
+    assert_eq!(embedded_context.kind(), nvim_oxi::ObjectKind::Boolean);
 }
 
 #[test]
@@ -108,10 +99,10 @@ fn test_initialize_response_mcp_capabilities() {
 
     let mcp_dict = get_dict(mcp_caps);
     let http = mcp_dict.get("http").unwrap();
-    assert_eq!(http.kind() == nvim_oxi::ObjectKind::Boolean, true);
+    assert_eq!(http.kind(), nvim_oxi::ObjectKind::Boolean);
 
     let sse = mcp_dict.get("sse").unwrap();
-    assert_eq!(sse.kind() == nvim_oxi::ObjectKind::Boolean, true);
+    assert_eq!(sse.kind(), nvim_oxi::ObjectKind::Boolean);
 }
 
 #[test]
@@ -124,7 +115,7 @@ fn test_initialize_response_session_capabilities() {
 
     let session_caps = caps_dict.get("sessionCapabilities").unwrap();
     let session_dict = get_dict(session_caps);
-    assert_eq!(session_dict.get("list").is_some(), false);
+    assert!(session_dict.get("list").is_none());
 }
 
 #[test]
@@ -135,7 +126,7 @@ fn test_initialize_response_auth_methods_empty() {
     let auth_methods = result.get("authMethods").unwrap();
 
     let arr = get_array(auth_methods);
-    assert_eq!(arr.is_empty(), true);
+    assert!(arr.is_empty());
 }
 
 #[test]
@@ -177,7 +168,7 @@ fn test_initialize_response_without_agent_info() {
 
     let result = initialize_response(response);
 
-    assert_eq!(result.get("agentInfo").is_some(), false);
+    assert!(result.get("agentInfo").is_none());
 }
 
 #[test]
@@ -236,7 +227,7 @@ fn test_initialize_response_without_meta() {
 
     let result = initialize_response(response);
 
-    assert_eq!(result.get("meta").is_some(), false);
+    assert!(result.get("meta").is_none());
 }
 
 #[test]
