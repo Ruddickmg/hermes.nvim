@@ -1,13 +1,15 @@
 pub mod api;
 pub mod autocommands;
+pub mod configuration;
 pub mod parse;
 pub mod state;
 
 use nvim_oxi::{Dictionary, api::opts::CreateAugroupOpts};
 use std::{
     rc::Rc,
-    sync::{Arc, Mutex},
+    sync::{Arc},
 };
+use tokio::sync::Mutex;
 
 use crate::{Handler, apc::connection::ConnectionManager};
 

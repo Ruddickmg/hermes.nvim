@@ -1,10 +1,11 @@
-use crate::apc::connection::{Assistant, ConnectionDetails, ConnectionManager, Protocol};
+use crate::{apc::connection::{Assistant, ConnectionDetails, ConnectionManager, Protocol}, nvim::autocommands::ResponseHandler};
 use agent_client_protocol::Client;
 use nvim_oxi::{
     Dictionary, Function, Object,
     lua::{Error, Poppable, Pushable, ffi::State},
 };
-use std::{rc::Rc, sync::Mutex};
+use std::{rc::Rc};
+use tokio::sync::Mutex;
 
 #[derive(Clone)]
 pub struct ConnectionArgs {
@@ -78,15 +79,14 @@ impl Pushable for ConnectionArgs {
     }
 }
 
-pub fn connect<H: Client + Send + Sync + 'static>(
+pub fn connect<H: Client + ResponseHandler + Send + Sync + 'static>(
     connection: Rc<Mutex<ConnectionManager<H>>>,
 ) -> Object {
     let function: Function<Option<ConnectionArgs>, Result<(), Error>> =
         Function::from_fn(move |arg: Option<ConnectionArgs>| -> Result<(), Error> {
             let details = arg.map(ConnectionDetails::from).unwrap_or_default();
             connection
-                .lock()
-                .map_err(|e| Error::RuntimeError(e.to_string()))?
+                .blocking_lock()
                 .connect(details.clone())?;
             Ok(())
         });

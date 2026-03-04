@@ -5,19 +5,21 @@ use nvim_oxi::{
     lua::{self, Error, Poppable, Pushable},
     serde::SerializeError,
 };
-use std::{rc::Rc, sync::Mutex};
+use std::rc::Rc;
+use tokio::sync::Mutex;
 
-use crate::apc::connection::{Assistant, ConnectionManager};
+use crate::{
+    apc::connection::{Assistant, ConnectionManager},
+    nvim::autocommands::ResponseHandler,
+};
 
-#[derive(Clone, Debug)]
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub enum DisconnectArgs {
     Multiple(Vec<Assistant>),
     Single(Assistant),
     #[default]
     All,
 }
-
 
 fn parse_assistant_string(
     assistant: nvim_oxi::String,
@@ -107,14 +109,12 @@ impl Pushable for DisconnectArgs {
     }
 }
 
-pub fn disconnect<H: Client + Send + Sync + 'static>(
+pub fn disconnect<H: Client + ResponseHandler + Send + Sync + 'static>(
     connection: Rc<Mutex<ConnectionManager<H>>>,
 ) -> Object {
     let function: Function<DisconnectArgs, Result<(), Error>> =
         Function::from_fn(move |args: DisconnectArgs| -> Result<(), Error> {
-            let mut manager = connection
-                .lock()
-                .map_err(|e| Error::RuntimeError(e.to_string()))?;
+            let mut manager = connection.blocking_lock();
             match args {
                 DisconnectArgs::Multiple(agents) => manager.disconnect(agents),
                 DisconnectArgs::Single(agent) => manager.disconnect(vec![agent.clone()]),

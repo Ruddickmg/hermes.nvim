@@ -44,7 +44,8 @@ Below are a list of functions that Hermes provides to send requests to ai assist
 
 ### Connect
 
-This method allows you to connect to an agent, it takes the agent name as an argument.
+This method allows you to connect to an agent, it takes the agent name as a bd
+n argument.
 
 ```lua
 local hermes = require("hermes")

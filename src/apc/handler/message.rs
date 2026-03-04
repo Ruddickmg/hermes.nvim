@@ -6,10 +6,10 @@ use agent_client_protocol::{Agent, Client, ClientSideConnection};
 
 use crate::{
     Handler,
-    apc::{connection::UserRequest, error::Error},
+    apc::{connection::UserRequest, error::Error}, nvim::autocommands::ResponseHandler,
 };
 
-pub async fn handle_request<H: Client>(
+pub async fn handle_request<H: Client + ResponseHandler>(
     connection: ClientSideConnection,
     mut reciever: Receiver<UserRequest>,
     client: Arc<Handler<H>>,
@@ -18,7 +18,6 @@ pub async fn handle_request<H: Client>(
         match msg {
             UserRequest::Initialize(request) => {
                 let response = connection.initialize(request).await?;
-                println!("initialized! {:#?}", response);
                 client.initialized(response).await?;
             }
             UserRequest::Cancel(config) => {

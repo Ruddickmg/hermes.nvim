@@ -6,10 +6,10 @@ use agent_client_protocol::{
     WaitForTerminalExitResponse, WriteTextFileRequest, WriteTextFileResponse,
 };
 
-use crate::Handler;
+use crate::{Handler, nvim::autocommands::ResponseHandler};
 
 #[async_trait::async_trait(?Send)]
-impl<H: Client> Client for Handler<H> {
+impl<H: Client + ResponseHandler> Client for Handler<H> {
     async fn request_permission(
         &self,
         args: RequestPermissionRequest,

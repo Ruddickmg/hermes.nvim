@@ -4,7 +4,7 @@ use crate::{
         connection::{Assistant, UserRequest},
         error::Error,
         handler::message::handle_request,
-    },
+    }, nvim::autocommands::ResponseHandler,
 };
 use agent_client_protocol::Client;
 use std::{ffi::OsStr, process::Stdio, sync::Arc};
@@ -18,7 +18,7 @@ pub async fn stdio_connection<H, I, S>(
     args: I,
 ) -> Result<(), Error>
 where
-    H: Client + 'static,
+    H: Client + ResponseHandler + 'static,
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
@@ -64,7 +64,7 @@ where
     Ok::<(), Error>(())
 }
 
-pub async fn connect<H: Client + 'static>(
+pub async fn connect<H: Client + ResponseHandler + 'static>(
     client: Arc<Handler<H>>,
     agent: Assistant,
     receiver: Receiver<UserRequest>,

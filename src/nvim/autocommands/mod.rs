@@ -1,8 +1,15 @@
-use agent_client_protocol::Error;
-use nvim_oxi::{Object, api::opts::ExecAutocmdsOpts};
+use core::fmt;
+use std::fmt::{Debug, Display};
+
+use nvim_oxi::{
+    Object,
+    api::opts::{EchoOpts, ExecAutocmdsOpts},
+};
 
 mod event;
 mod response;
+
+pub use response::*;
 
 #[derive(Clone)]
 pub struct AutoCommands {
@@ -14,13 +21,23 @@ impl AutoCommands {
         Self { group }
     }
 
-    fn schedule_autocommand<T: ToString>(&self, command: T, data: Object) {
+    async fn schedule_autocommand<T: ToString>(&self, command: T, data: Object) {
         let group = self.group.clone();
         let command = command.to_string();
-        let opts = ExecAutocmdsOpts::builder().data(data).group(group).build();
+
+        println!("command: {:?}", command.to_string());
         nvim_oxi::schedule(move |_| {
-            nvim_oxi::api::exec_autocmds([command.as_str()], &opts)
-                .map_err(Error::into_internal_error)
+            println!("scheduling autocommand '{}'", command);
+            let opts = ExecAutocmdsOpts::builder().data(data).group(group).build();
+            let echo_opts = EchoOpts::default();
+
+            if let Err(err) = nvim_oxi::api::echo([("Hello from nvim-oxi!", None::<String>)], true, &echo_opts) {
+                eprintln!("Error echoing: {}", err);
+            }
+
+            if let Err(err) = nvim_oxi::api::exec_autocmds([command.as_str()], &opts) {
+            //     eprintln!("Error executing autocommand '{}': {:?}", command, err);
+            }
         });
     }
 }
@@ -30,5 +47,17 @@ impl Default for AutoCommands {
         Self {
             group: "hermes".to_string(),
         }
+    }
+}
+
+#[derive(Debug)]
+pub enum Commands {
+    AgentConnectionInitialized,
+    CreatedSession,
+}
+
+impl Display for Commands {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Debug::fmt(self, f)
     }
 }

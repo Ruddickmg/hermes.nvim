@@ -346,8 +346,11 @@ dependencies = [
 name = "hermes-e2e"
 version = "0.1.0"
 dependencies = [
+ "agent-client-protocol",
  "hermes",
  "nvim-oxi",
+ "serde",
+ "serde_json",
  "tokio",
  "tokio-test",
  "tokio-util",
