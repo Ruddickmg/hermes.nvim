@@ -57,3 +57,15 @@ impl Display for Commands {
         Debug::fmt(self, f)
     }
 }
+
+#[derive(Debug)]
+pub enum Commands {
+    AgentConnectionInitialized,
+    CreatedSession,
+}
+
+impl Display for Commands {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Debug::fmt(self, f)
+    }
+}

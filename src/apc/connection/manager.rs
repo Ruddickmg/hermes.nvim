@@ -1,14 +1,15 @@
 use crate::apc::connection::{Connection, stdio};
+use crate::nvim::autocommands::ResponseHandler;
 use crate::{Handler, apc::error::Error};
 use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolVersion};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
+use tokio::sync::Mutex;
 use std::thread::JoinHandle;
 
-#[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug)]
-#[derive(Default)]
+#[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
 pub enum Protocol {
     Socket,
     Http,
@@ -37,15 +38,13 @@ impl From<&str> for Protocol {
     }
 }
 
-
 impl From<String> for Protocol {
     fn from(s: String) -> Self {
         Protocol::from(s.as_str())
     }
 }
 
-#[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug)]
-#[derive(Default)]
+#[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
 pub enum Assistant {
     #[default]
     Copilot,
@@ -60,7 +59,6 @@ impl std::fmt::Display for Assistant {
         }
     }
 }
-
 
 impl From<&str> for Assistant {
     fn from(s: &str) -> Self {
@@ -92,7 +90,7 @@ pub struct ConnectionManager<H: Client> {
     agent: Assistant,
 }
 
-impl<H: Client + Sync + Send + 'static> ConnectionManager<H> {
+impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
     pub fn new(client: Arc<Handler<H>>) -> Self {
         Self {
             agent: Assistant::default(),
@@ -130,8 +128,7 @@ impl<H: Client + Sync + Send + 'static> ConnectionManager<H> {
                 );
 
                 self.handles
-                    .lock()
-                    .map_err(|e| Error::Internal(e.to_string()))?
+                    .blocking_lock()
                     .insert(
                         agent.clone(),
                         std::thread::spawn(move || {
@@ -159,11 +156,19 @@ impl<H: Client + Sync + Send + 'static> ConnectionManager<H> {
     }
 
     pub fn disconnect(&mut self, assistants: Vec<Assistant>) -> Result<(), Error> {
-        // TODO: store errors in an array and keep processing, then return any errors after
-        for assistant in assistants {
-            self.disconnect_assistant(&assistant)?;
+        let erroneous = assistants
+            .into_iter()
+            .filter(|assistant| self.disconnect_assistant(assistant).is_err())
+            .map(|assistant| assistant.to_string())
+            .collect::<Vec<String>>();
+        if erroneous.is_empty() {
+            Ok(())
+        } else {
+            Err(Error::Connection(format!(
+                "A problem occurred while trying to disconnect from agent(s): {}",
+                erroneous.join(", ")
+            )))
         }
-        Ok(())
     }
 
     fn disconnect_assistant(&mut self, assistant: &Assistant) -> Result<(), Error> {
@@ -172,13 +177,7 @@ impl<H: Client + Sync + Send + 'static> ConnectionManager<H> {
         })?;
         let handle = self
             .handles
-            .lock()
-            .map_err(|e| {
-                Error::Internal(format!(
-                    "Couldn't get a lock on handle for assistant: {}. Error: {:#?}",
-                    assistant, e
-                ))
-            })?
+            .blocking_lock()
             .remove(assistant)
             .ok_or_else(|| {
                 Error::Connection(format!("No handle found for assistant {}", assistant))
