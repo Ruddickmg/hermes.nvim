@@ -27,8 +27,39 @@ pub trait ResponseHandler {
 #[async_trait::async_trait(?Send)]
 impl ResponseHandler for AutoCommands {
     async fn initialized(&self, info: InitializeResponse) -> Result<()> {
-        self.schedule_autocommand(Commands::AgentConnectionInitialized, info).await;
-        println!("did the thing");
+        let c = info.clone();
+        // TODO: figure out a better way to deal with the deserialization issue with the protocol version
+        let value = serde_json::json!({
+            "protocolVersion": info.protocol_version.to_string(),
+            "agentCapabilities": {
+                "loadSession": info.agent_capabilities.load_session,
+                "promptCapabilities": {
+                    "image": info.agent_capabilities.prompt_capabilities.image,
+                    "audio": info.agent_capabilities.prompt_capabilities.audio,
+                    "embeddedContext": info.agent_capabilities.prompt_capabilities.embedded_context,
+                },
+                "mcpCapabilities": {
+                    "http": info.agent_capabilities.mcp_capabilities.http,
+                    "sse": info.agent_capabilities.mcp_capabilities.sse,
+                },
+                "sessionCapabilities": {
+                    "list": info.agent_capabilities.session_capabilities.list,
+                    "fork": info.agent_capabilities.session_capabilities.fork,
+                    "resume": info.agent_capabilities.session_capabilities.resume,
+                },
+            },
+            "authMethods": info.auth_methods.iter().map(|m| serde_json::json!({
+                "id": m.id.0,
+                "name": m.name,
+                "description": m.description,
+            })).collect::<Vec<_>>(),
+            "agentInfo": info.agent_info.map(|i| serde_json::json!({
+                "name": i.name,
+                "version": i.version,
+                "title": i.title,
+            })),
+        });
+        self.schedule_autocommand(Commands::AgentConnectionInitialized, c).await?;
         Ok(())
     }
 

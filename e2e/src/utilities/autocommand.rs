@@ -1,10 +1,7 @@
-use hermes::apc;
 use hermes::nvim::autocommands::Commands;
 use nvim_oxi::api::{self, opts::CreateAutocmdOpts, types::AutocmdCallbackArgs};
-use nvim_oxi::conversion::FromObject;
 use nvim_oxi::{serde::Deserializer, Object};
 use serde::de::DeserializeOwned;
-use serde::Deserialize;
 use std::sync::mpsc;
 use std::{
     fmt::Debug,
@@ -34,7 +31,7 @@ where
         .group("hermes")
         .patterns(vec![pattern_string.as_str()])
         .callback(move |v: AutocmdCallbackArgs| {
-            println!("Received autocmd callback");
+            println!("Received autocmd callback: {:#?}", v.data);
 
             let parsed: T = object_to_struct(v.data).map_err(|e| {
                 println!("parsing error: {:?}", e);

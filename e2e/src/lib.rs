@@ -1,6 +1,5 @@
 mod utilities;
 use std::time::Duration;
-
 use agent_client_protocol::InitializeResponse;
 use hermes::{
     apc::connection::{Assistant, Protocol},
@@ -9,10 +8,6 @@ use hermes::{
 };
 use nvim_oxi::{
     Dictionary, Function,
-    api::{
-        self,
-        opts::{CreateAugroupOpts, GetAutocmdsOpts},
-    },
     conversion::FromObject,
 };
 use utilities::autocommand;
@@ -65,8 +60,6 @@ fn test_initialization() -> Result<(), nvim_oxi::Error> {
     let response = wait_for_response(Duration::from_secs(2)).expect("Autocmd did not fire");
 
     disconnect.call(DisconnectArgs::All)?;
-
-    // Block until autocmd fires (with timeout)
 
     println!("response: {:?}", response);
 
