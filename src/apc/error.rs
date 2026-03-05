@@ -1,7 +1,7 @@
-use nvim_oxi::lua;
+use nvim_oxi::{Object, lua};
 use std::sync::{PoisonError, mpsc::SendError};
 
-use crate::apc::connection::UserRequest;
+use crate::{apc::connection::UserRequest, nvim::autocommands::Commands};
 
 #[derive(Debug, Clone)]
 pub enum Error {
@@ -22,8 +22,8 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-impl From<SendError<UserRequest>> for Error {
-    fn from(e: SendError<UserRequest>) -> Self {
+impl<T> From<SendError<T>> for Error {
+    fn from(e: SendError<T>) -> Self {
         Error::Internal(e.to_string())
     }
 }
@@ -31,6 +31,12 @@ impl From<SendError<UserRequest>> for Error {
 impl From<Error> for lua::Error {
     fn from(e: Error) -> Self {
         lua::Error::RuntimeError(e.to_string())
+    }
+}
+
+impl From<Error> for agent_client_protocol::Error {
+    fn from(value: Error) -> Self {
+        agent_client_protocol::Error::into_internal_error(value)
     }
 }
 
@@ -42,6 +48,12 @@ impl From<agent_client_protocol::Error> for Error {
 
 impl<T> From<PoisonError<T>> for Error {
     fn from(e: PoisonError<T>) -> Self {
+        Error::Internal(e.to_string())
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(e: serde_json::Error) -> Self {
         Error::Internal(e.to_string())
     }
 }

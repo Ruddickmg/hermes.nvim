@@ -6,10 +6,7 @@ use std::fs;
 pub fn parse_tool_call_content(content: ToolCallContent) -> Result<Dictionary> {
     match content {
         ToolCallContent::Content(container) => {
-            parse::communication(container.content.clone()).map(|(mut dict, content_type)| {
-                dict.insert("type", content_type.to_lowercase());
-                dict
-            })
+            Ok(Dictionary::new())
         }
         ToolCallContent::Terminal(terminal) => {
             let mut dict = Dictionary::new();

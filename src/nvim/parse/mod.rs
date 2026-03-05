@@ -13,7 +13,6 @@ use agent_client_protocol::Meta;
 pub use annotations::*;
 pub use available_commands::*;
 pub use communication::*;
-pub use communication::{image_event, resource_event, resource_link_event, text_event};
 pub use config_option::*;
 pub use current_mode::*;
 pub use plan::*;

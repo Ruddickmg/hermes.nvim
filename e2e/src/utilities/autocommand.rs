@@ -1,32 +1,35 @@
-use std::{sync::{Arc, Mutex, mpsc}, time::Duration};
-
-use nvim_oxi::{api::{self, opts::CreateAutocmdOpts, types::AutocmdCallbackArgs}, serde::Deserializer};
+use hermes::{apc, nvim::autocommands::Commands};
+use nvim_oxi::{
+    api::{self, opts::CreateAutocmdOpts, types::AutocmdCallbackArgs},
+    serde::Deserializer,
+};
 use serde::de::DeserializeOwned;
+use std::{
+    fmt::Debug,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
-pub fn wait_for_user_event<T>(
-    pattern: &str,
-    timeout: Duration,
-) -> Box<dyn Fn() -> Result<T, nvim_oxi::Error>>
+pub fn listen_for_autocommand<T>(
+    pattern: Commands,
+) -> Box<dyn Fn(Duration) -> Result<T, nvim_oxi::Error>>
 where
-    T: DeserializeOwned + Send + 'static,
+    T: Debug + DeserializeOwned + Send + Clone + 'static,
 {
-    let (tx, rx) = mpsc::channel::<T>();
-
-    // Wrap sender so closure remains `Fn`
-    let tx = Arc::new(Mutex::new(Some(tx)));
-    let tx_clone = tx.clone();
+    let pattern_string = pattern.to_string();
+    let result: Arc<Mutex<Option<T>>> = Arc::new(Mutex::new(None));
+    let copy = result.clone();
 
     let opts = CreateAutocmdOpts::builder()
-        .patterns(vec![pattern])
+        .group("hermes")
+        .patterns(vec![pattern_string.as_str()])
         .callback(move |v: AutocmdCallbackArgs| {
-            let mut deserializer = Deserializer::new(v.data);
+            println!("Received autocmd callback");
 
-            let parsed = T::deserialize(deserializer)
+            let parsed: T = T::deserialize(Deserializer::new(v.data))
                 .expect("Failed to deserialize autocmd data");
 
-            if let Some(sender) = tx_clone.lock().unwrap().take() {
-                let _ = sender.send(parsed);
-            }
+            *result.lock().unwrap() = Some(parsed);
 
             false
         })
@@ -34,6 +37,22 @@ where
 
     api::create_autocmd(vec!["User"], &opts).unwrap();
 
-    Box::new(move || rx.recv_timeout(timeout)
-        .map_err(|_| nvim_oxi::Error::Api))
+    Box::new(move |duration| {
+        let start = Instant::now();
+
+        loop {
+            if let Some(value) = copy.lock().unwrap().clone() {
+                return Ok(value);
+            }
+
+            if start.elapsed() > duration {
+                return Err(nvim_oxi::Error::Api(
+                    api::Error::Other("Timed out waiting for Autocmd".into()),
+                ));
+            }
+
+            // tick Neovim's input loop
+            api::input("<Ignore>")?;
+        }
+    })
 }

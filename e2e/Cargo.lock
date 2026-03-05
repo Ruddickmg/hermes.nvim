@@ -456,6 +456,7 @@ dependencies = [
  "cargo_metadata",
  "mlua",
  "nvim-oxi-api",
+ "nvim-oxi-libuv",
  "nvim-oxi-luajit",
  "nvim-oxi-macros",
  "nvim-oxi-types",
@@ -473,6 +474,16 @@ dependencies = [
  "nvim-oxi-types",
  "serde",
  "serde_repr",
+ "thiserror",
+]
+
+[[package]]
+name = "nvim-oxi-libuv"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91360300b2f7e0d1aaf4fe42d06ec9096a21d4162614e601029e78f583d83203"
+dependencies = [
+ "nvim-oxi-luajit",
  "thiserror",
 ]
 

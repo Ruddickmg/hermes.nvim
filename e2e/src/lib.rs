@@ -1,21 +1,21 @@
 mod utilities;
-
-use utilities::autocommand;
-use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use agent_client_protocol::InitializeResponse;
 use hermes::{
     apc::connection::{Assistant, Protocol},
     api::{ConnectionArgs, DisconnectArgs},
-    nvim::hermes,
+    nvim::{autocommands::Commands, hermes},
 };
 use nvim_oxi::{
     Dictionary, Function,
-    api::{self, types::AutocmdCallbackArgs},
+    api::{
+        self,
+        opts::{CreateAugroupOpts, GetAutocmdsOpts},
+    },
     conversion::FromObject,
-    serde::Deserializer,
 };
-use serde::Deserialize;
+use utilities::autocommand;
 
 #[nvim_oxi::test]
 fn test_setup_returns_connect_function() -> Result<(), nvim_oxi::Error> {
@@ -45,9 +45,6 @@ async fn test_connect_function() -> Result<(), nvim_oxi::Error> {
     Ok(())
 }
 
-use std::sync::mpsc;
-use std::time::Duration;
-
 #[nvim_oxi::test]
 fn test_initialization() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;
@@ -56,21 +53,22 @@ fn test_initialization() -> Result<(), nvim_oxi::Error> {
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
 
-    let wait_for_response = autocommand::wait_for_user_event::<InitializeResponse>("", Duration::from_secs(5));
+    let wait_for_response = autocommand::listen_for_autocommand::<InitializeResponse>(
+        Commands::AgentConnectionInitialized,
+    );
 
     connect.call(Some(ConnectionArgs {
         agent: Some(Assistant::Opencode),
         protocol: Some(Protocol::Stdio),
     }))?;
 
-    // Block until autocmd fires (with timeout)
-    let response = rx
-        .recv_timeout(Duration::from_secs(2))
-        .expect("Autocmd did not fire");
+    let response = wait_for_response(Duration::from_secs(2)).expect("Autocmd did not fire");
 
     disconnect.call(DisconnectArgs::All)?;
 
-    assert!(/* validate response */ true);
+    // Block until autocmd fires (with timeout)
+
+    println!("response: {:?}", response);
 
     Ok(())
 }
