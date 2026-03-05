@@ -63,12 +63,13 @@ impl Display for Commands {
         data: S,
     ) -> Result<()> {
         let serialized: serde_json::Value = data.serialize(serde_json::value::Serializer)?;
-        self
-            .channel
-            .send((Commands::AgentConnectionInitialized, serialized))
+        self.channel
+            .send((command.to_string(), serialized))
             .await
             .map_err(|e| Error::Internal(e.to_string()))?;
-        self.handle.send().map_err(|e|Error::Internal(e.to_string()))
+        self.handle
+            .send()
+            .map_err(|e| Error::Internal(e.to_string()))
     }
 }
 

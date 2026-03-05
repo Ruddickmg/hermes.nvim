@@ -5,9 +5,9 @@ use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolV
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::{Arc};
-use tokio::sync::Mutex;
+use std::sync::Arc;
 use std::thread::JoinHandle;
+use tokio::sync::Mutex;
 
 #[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
 pub enum Protocol {
@@ -127,23 +127,21 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
                     Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"),
                 );
 
-                self.handles
-                    .blocking_lock()
-                    .insert(
-                        agent.clone(),
-                        std::thread::spawn(move || {
-                            let runtime = tokio::runtime::Builder::new_current_thread()
-                                .enable_all()
-                                .build()
-                                .map_err(|e| Error::Internal(e.to_string()))?;
+                self.handles.blocking_lock().insert(
+                    agent.clone(),
+                    std::thread::spawn(move || {
+                        let runtime = tokio::runtime::Builder::new_current_thread()
+                            .enable_all()
+                            .build()
+                            .map_err(|e| Error::Internal(e.to_string()))?;
 
-                            runtime.block_on(match protocol {
-                                Protocol::Stdio => stdio::connect(handler, thread_agent, receiver),
-                                Protocol::Http => unimplemented!(),
-                                Protocol::Socket => unimplemented!(),
-                            })
-                        }),
-                    );
+                        runtime.block_on(match protocol {
+                            Protocol::Stdio => stdio::connect(handler, thread_agent, receiver),
+                            Protocol::Http => unimplemented!(),
+                            Protocol::Socket => unimplemented!(),
+                        })
+                    }),
+                );
                 self.add_connection(agent.clone(), connection.clone());
                 connection.initialize(init_config)?;
                 connection
