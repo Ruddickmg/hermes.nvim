@@ -7,10 +7,15 @@ edition = "2024"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-agent-client-protocol = "0.9.4"
+agent-client-protocol = { version = "0.9.4", features = [
+  "unstable_session_fork",
+  "unstable_session_list",
+  "unstable_session_model",
+  "unstable_session_resume"
+] }
 async-trait = "0.1"
-nvim-oxi = { version = "0.6.0", features = ["neovim-0-10", "test"] }
-nvim-utils = "0.1.12"
+mlua = { version = "0.10", features = ["module"] }
+nvim-oxi = { version = "0.6.0", features = ["libuv", "mlua", "neovim-0-11"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.49", features = ["full"] }

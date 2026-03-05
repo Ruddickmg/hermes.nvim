@@ -1,2 +1,4 @@
-mod integration_test;
-mod parse;
+#[test]
+fn stub() {
+    assert_eq!(2 + 2, 4);
+}

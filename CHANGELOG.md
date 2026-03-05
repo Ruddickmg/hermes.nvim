@@ -8,8 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-02-17
 
 ### Added
-- Initial implementation of APC client for Neovim
-- `ApcClient` struct implementing the `Client` trait from agent-client-protocol
+- Initial implementation of ACP client for Neovim
+- `AcpClient` struct implementing the `Client` trait from agent-client-protocol
 - `ClientConfig` for configurable capabilities (filesystem and terminal)
 - `PluginState` for managing Neovim plugin state
 - `NvimError` custom error type for Neovim-specific errors

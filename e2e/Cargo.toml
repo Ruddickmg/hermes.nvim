@@ -1,3 +1,6 @@
+# [package.metadata]
+# test-threads = 1
+
 [package]
 name = "hermes-e2e"
 version = "0.1.0"
@@ -7,11 +10,23 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
+agent-client-protocol = { version = "0.9.4", features = [
+  "unstable_session_fork",
+  "unstable_session_list",
+  "unstable_session_model",
+  "unstable_session_resume"
+] }
 hermes = { path = ".." }
 nvim-oxi = { version = "0.6.0", features = ["neovim-0-10", "test"] }
 tokio = { version = "1.49", features = ["full"] }
 tokio-test = "0.4"
 tokio-util = { version = "0.7", features = ["compat"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [build-dependencies]
 nvim-oxi = { version = "0.6.0", features = ["neovim-0-10", "test"] }
+
+# [profile.test]
+# opt-level = 0
+

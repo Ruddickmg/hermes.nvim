@@ -1,6 +1,6 @@
 # Hermes
 
-An APC (Agent Client Protocol) Client implementation designed for integration with Neovim
+An ACP (Agent Client Protocol) Client implementation designed for integration with Neovim
 
 ## Overview
 
@@ -13,14 +13,14 @@ Hermes focuses on:
 
 ## Features
 
-- [x] Full implementation of APC Client
+- [x] Full implementation of ACP Client
 - [x] Configurable capabilities (filesystem, terminal, etc)
 - [x] Trigger Autocommands for messages/notifications
 - [x] Allow connecting to Agents
   - [x] Via stdio
   - [ ] Via http
   - [ ] Via linux socket
-  - [ ] handle authentication
+  - [x] handle authentication
 - [ ] Allow mode selection
 - [ ] Allow model selection
 - [ ] Allow agent to write to files
@@ -29,14 +29,17 @@ Hermes focuses on:
 - [ ] Allow agent to use terminal
   - [ ] Create autocommands for Agent progress in the terminal
 - [ ] Allow user to give permission when needed
-- [ ] Allow user to configure/turn off any/all aspects of APC (if, for example, you just want to send data to the agent but still interact with it via the CLI)
+- [ ] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
 - [ ] Allow user to send prompts
   - [ ] Send files
   - [ ] Send text
   - [ ] Send images 
   - [ ] Send resource links
   - [ ] Send audio
+    - [ ] allow collecting audio input
+    - [ ] use [whisper.rs](https://crates.io/crates/whisper-rs) to facilitate speech to text
   - [ ] Cancel
+  
 
 ## API
 
@@ -44,7 +47,8 @@ Below are a list of functions that Hermes provides to send requests to ai assist
 
 ### Connect
 
-This method allows you to connect to an agent, it takes the agent name as an argument.
+This method allows you to connect to an agent, it takes the agent name as a bd
+n argument.
 
 ```lua
 local hermes = require("hermes")
@@ -60,9 +64,9 @@ hermes.connect({
 Hermes generates autocommands for all communication between agent and client. Here's an example of hooking into one:
 
 ```lua
-vim.api.nvim_create_autocmd("AgentTextMessage", {
-    group = "Hermes",
-    pattern = { "*" },
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "AgentTextMessage",
     callback = function(args)
         print("Received some text from our assistant: " .. args.data.text)
     end,
