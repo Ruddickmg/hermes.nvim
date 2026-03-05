@@ -2,9 +2,9 @@ use hermes::apc;
 use hermes::nvim::autocommands::Commands;
 use nvim_oxi::api::{self, opts::CreateAutocmdOpts, types::AutocmdCallbackArgs};
 use nvim_oxi::conversion::FromObject;
-use nvim_oxi::{Object, serde::Deserializer};
-use serde::Deserialize;
+use nvim_oxi::{serde::Deserializer, Object};
 use serde::de::DeserializeOwned;
+use serde::Deserialize;
 use std::sync::mpsc;
 use std::{
     fmt::Debug,
@@ -12,16 +12,12 @@ use std::{
     time::{Duration, Instant},
 };
 
-fn object_to_struct<T>(obj: Object) -> Result<T, Box<dyn std::error::Error>>
+fn object_to_struct<T>(obj: Object) -> Result<T, nvim_oxi::Error>
 where
-    T: for<'de> Deserialize<'de>,
+    T: DeserializeOwned,
 {
-    let json_str = api::json_encode(&obj)?;
-
-    // Step 2: Deserialize JSON string → struct
-    let result: T = serde_json::from_str(&json_str)?;
-
-    Ok(result)
+    T::deserialize(Deserializer::new(obj))
+        .map_err(|e| nvim_oxi::Error::Api(nvim_oxi::api::Error::Other(e.to_string())))
 }
 
 pub fn listen_for_autocommand<T>(
@@ -40,12 +36,10 @@ where
         .callback(move |v: AutocmdCallbackArgs| {
             println!("Received autocmd callback");
 
-            let parsed: T = from_object(v.data)
-                .map_err(|e| {
-                    println!("Failed to deserialize autocmd data: {:?}", e);
-                    e
-                })
-                .expect("Failed to deserialize autocmd data");
+            let parsed: T = object_to_struct(v.data).map_err(|e| {
+                println!("parsing error: {:?}", e);
+                e
+            }).expect("Failed to deserialize autocmd data");
 
             println!("Parsed autocmd data: {:?}", parsed);
             sender.send(parsed).unwrap();
