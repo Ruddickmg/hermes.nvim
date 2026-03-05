@@ -1,8 +1,3 @@
-mod image;
-mod resource;
-mod resource_link;
-mod text;
-
 use agent_client_protocol::{ContentBlock, Error as AcpError, Result};
 
 pub fn communication(content: ContentBlock) -> Result<String> {

@@ -4,7 +4,8 @@ use crate::{
         connection::{Assistant, UserRequest},
         error::Error,
         handler::message::handle_request,
-    }, nvim::autocommands::ResponseHandler,
+    },
+    nvim::autocommands::ResponseHandler,
 };
 use agent_client_protocol::Client;
 use std::{ffi::OsStr, process::Stdio, sync::Arc};

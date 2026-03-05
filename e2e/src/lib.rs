@@ -57,11 +57,11 @@ fn test_initialization() -> Result<(), nvim_oxi::Error> {
         protocol: Some(Protocol::Stdio),
     }))?;
 
-    let response = wait_for_response(Duration::from_secs(2)).expect("Autocmd did not fire");
+    let response = wait_for_response(Duration::from_secs(2))?;
 
     disconnect.call(DisconnectArgs::All)?;
 
-    println!("response: {:?}", response);
+    assert_eq!(response.agent_info.unwrap().name.to_lowercase().as_str(), "opencode");
 
     Ok(())
 }

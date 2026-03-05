@@ -60,16 +60,15 @@ pub fn parse_session_config_option(opt: SessionConfigOption) -> Dictionary {
                     let mut group_dict = nvim_oxi::Dictionary::new();
                     group_dict.insert("group", g.group.0.as_ref().to_string());
                     group_dict.insert("name", g.name);
-                    let opts_array =
-                        nvim_oxi::Array::from_iter(g.options.into_iter().map(|o| {
-                            let mut opt_dict = nvim_oxi::Dictionary::new();
-                            opt_dict.insert("value", o.value.0.as_ref().to_string());
-                            opt_dict.insert("name", o.name);
-                            if let Some(desc) = o.description {
-                                opt_dict.insert("description", desc);
-                            }
-                            opt_dict
-                        }));
+                    let opts_array = nvim_oxi::Array::from_iter(g.options.into_iter().map(|o| {
+                        let mut opt_dict = nvim_oxi::Dictionary::new();
+                        opt_dict.insert("value", o.value.0.as_ref().to_string());
+                        opt_dict.insert("name", o.name);
+                        if let Some(desc) = o.description {
+                            opt_dict.insert("description", desc);
+                        }
+                        opt_dict
+                    }));
                     group_dict.insert("options", opts_array);
                     group_dict
                 }))

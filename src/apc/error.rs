@@ -1,7 +1,5 @@
-use nvim_oxi::{Object, lua};
+use nvim_oxi::lua;
 use std::sync::{PoisonError, mpsc::SendError};
-
-use crate::{apc::connection::UserRequest, nvim::autocommands::Commands};
 
 #[derive(Debug, Clone)]
 pub enum Error {

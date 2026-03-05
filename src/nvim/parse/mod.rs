@@ -1,24 +1,9 @@
-pub mod annotations;
-pub mod available_commands;
 pub mod communication;
-pub mod config_option;
-pub mod current_mode;
-pub mod plan;
 pub mod response;
-pub mod tool_call;
-pub mod tool_call_content;
-pub mod tool_call_update;
 
 use agent_client_protocol::Meta;
-pub use annotations::*;
-pub use available_commands::*;
 pub use communication::*;
-pub use config_option::*;
-pub use current_mode::*;
-pub use plan::*;
 pub use response::*;
-pub use tool_call::*;
-pub use tool_call_update::*;
 
 use nvim_oxi::Object;
 use serde_json::Value;
@@ -30,7 +15,9 @@ pub fn json_to_object(value: Value) -> Option<Object> {
         Value::Number(n) => {
             if let Some(i) = n.as_i64() {
                 Some(Object::from(i))
-            } else { n.as_f64().map(|f| Object::from(f as f32)) }
+            } else {
+                n.as_f64().map(|f| Object::from(f as f32))
+            }
         }
         Value::String(s) => Some(Object::from(s.as_str())),
         Value::Array(arr) => {

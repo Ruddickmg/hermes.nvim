@@ -9,7 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-fn object_to_struct<T>(obj: Object) -> Result<T, nvim_oxi::Error>
+pub fn nvim_object_to_struct<T>(obj: Object) -> Result<T, nvim_oxi::Error>
 where
     T: DeserializeOwned,
 {
@@ -18,29 +18,23 @@ where
 }
 
 pub fn listen_for_autocommand<T>(
-    pattern: Commands,
+    autocommand: Commands,
 ) -> Box<dyn Fn(Duration) -> Result<T, nvim_oxi::Error>>
 where
     T: Debug + DeserializeOwned + Send + Clone + 'static,
 {
-    let pattern_string = pattern.to_string();
+    let pattern = autocommand.to_string();
     let (tx, reciever) = mpsc::channel::<T>();
     let sender = Rc::new(tx);
 
     let opts = CreateAutocmdOpts::builder()
         .group("hermes")
-        .patterns(vec![pattern_string.as_str()])
+        .patterns(vec![pattern.as_str()])
         .callback(move |v: AutocmdCallbackArgs| {
-            println!("Received autocmd callback: {:#?}", v.data);
-
-            let parsed: T = object_to_struct(v.data).map_err(|e| {
-                println!("parsing error: {:?}", e);
-                e
-            }).expect("Failed to deserialize autocmd data");
-
-            println!("Parsed autocmd data: {:?}", parsed);
-            sender.send(parsed).unwrap();
-
+            match nvim_object_to_struct(v.data) {
+               Ok(parsed) => sender.send(parsed).unwrap(),
+               Err(e) => println!("Error occurred while parsing: {:?}", e),
+            };
             false
         })
         .build();
@@ -50,14 +44,11 @@ where
     Box::new(move |duration| {
         let start = Instant::now();
         loop {
-            println!("Waiting for autocmd response...");
             if let Ok(response) = reciever.try_recv() {
-                println!("Received response: {:?}", response);
-                return Ok(response);
+                break Ok(response);
             }
             if start.elapsed() > duration {
-                println!("Timed out waiting for autocmd response");
-                return Err(nvim_oxi::Error::Api(nvim_oxi::api::Error::Other(
+                break Err(nvim_oxi::Error::Api(nvim_oxi::api::Error::Other(
                     "Timed out waiting for Autocmd".into(),
                 )));
             }
@@ -65,58 +56,3 @@ where
         }
     })
 }
-
-// fn test_initialization() -> Result<(), nvim_oxi::Error> {
-//     let dict: Dictionary = hermes()?;
-//     let connect: Function<Option<ConnectionArgs>, ()> =
-//         FromObject::from_object(dict.get("connect").unwrap().clone())?;
-//     let disconnect: Function<DisconnectArgs, ()> =
-//         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
-//
-//     let (tx, rx) = std::sync::mpsc::channel::<InitializeResponse>();
-//     let pattern_string = Commands::AgentConnectionInitialized.to_string();
-//     let tx_cell = std::cell::RefCell::new(Some(tx));
-//
-//     let opts = nvim_oxi::api::opts::CreateAutocmdOpts::builder()
-//         .group("hermes")
-//         .patterns(vec![pattern_string.as_str()])
-//         .callback(move |v: nvim_oxi::api::types::AutocmdCallbackArgs| {
-//             if let Ok(parsed) = InitializeResponse::deserialize(Deserializer::new(v.data)) {
-//                 if let Some(tx) = tx_cell.borrow_mut().take() {
-//                     let _ = tx.send(parsed);
-//                 }
-//             }
-//             false
-//         })
-//         .build();
-//
-//     nvim_oxi::api::create_autocmd(vec!["User"], &opts).unwrap();
-//
-//     connect.call(Some(ConnectionArgs {
-//         agent: Some(Assistant::Opencode),
-//         protocol: Some(Protocol::Stdio),
-//     }))?;
-//
-//     let start = std::time::Instant::now();
-//     let timeout = Duration::from_secs(10);
-//
-//     let response = loop {
-//         if let Ok(response) = rx.try_recv() {
-//             break response;
-//         }
-//
-//         if start.elapsed() > timeout {
-//             return Err(nvim_oxi::Error::Api(nvim_oxi::api::Error::Other(
-//                 "Timed out waiting for Autocmd".into(),
-//             )));
-//         }
-//
-//         nvim_oxi::api::command("sleep 100m")?;
-//     };
-//
-//     assert_eq!(response.agent_info.as_ref().unwrap().name, "OpenCode");
-//
-//     disconnect.call(DisconnectArgs::All)?;
-//
-//     Ok(())
-// }

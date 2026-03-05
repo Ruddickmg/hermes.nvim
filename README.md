@@ -36,7 +36,11 @@ Hermes focuses on:
   - [ ] Send images 
   - [ ] Send resource links
   - [ ] Send audio
+    - [ ] allow collecting audio input
+    - [ ] use [whisper.rs](https://crates.io/crates/whisper-rs) to facilitate speech to text
   - [ ] Cancel
+- [ ] Speech
+  
 
 ## API
 
@@ -61,9 +65,9 @@ hermes.connect({
 Hermes generates autocommands for all communication between agent and client. Here's an example of hooking into one:
 
 ```lua
-vim.api.nvim_create_autocmd("AgentTextMessage", {
-    group = "Hermes",
-    pattern = { "*" },
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "AgentTextMessage",
     callback = function(args)
         print("Received some text from our assistant: " .. args.data.text)
     end,

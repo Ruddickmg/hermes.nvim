@@ -5,8 +5,8 @@ use agent_client_protocol::{
     SetSessionModelResponse,
 };
 
-use crate::{Handler, nvim::autocommands::ResponseHandler};
 use crate::apc::error::Error;
+use crate::{Handler, nvim::autocommands::ResponseHandler};
 
 impl<H: agent_client_protocol::Client + ResponseHandler> Handler<H> {
     pub async fn initialized(&self, info: InitializeResponse) -> Result<(), Error> {
@@ -14,8 +14,7 @@ impl<H: agent_client_protocol::Client + ResponseHandler> Handler<H> {
         let agent = config.agent.clone();
         config.agent_info.insert(agent, info.clone());
         drop(config);
-        self.handler.initialized(info).await;
-        Ok(())
+        self.handler.initialized(info).await
     }
     pub async fn session_created(&self, _response: NewSessionResponse) -> Result<(), Error> {
         Ok(())

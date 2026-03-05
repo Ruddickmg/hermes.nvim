@@ -1,6 +1,6 @@
 use agent_client_protocol::{AuthenticateRequest, Client};
 use nvim_oxi::{Function, Object, lua::Error};
-use std::{rc::Rc};
+use std::rc::Rc;
 use tokio::sync::Mutex;
 
 use crate::{apc::connection::ConnectionManager, nvim::autocommands::ResponseHandler};

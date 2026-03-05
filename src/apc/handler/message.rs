@@ -6,7 +6,8 @@ use agent_client_protocol::{Agent, Client, ClientSideConnection};
 
 use crate::{
     Handler,
-    apc::{connection::UserRequest, error::Error}, nvim::autocommands::ResponseHandler,
+    apc::{connection::UserRequest, error::Error},
+    nvim::autocommands::ResponseHandler,
 };
 
 pub async fn handle_request<H: Client + ResponseHandler>(

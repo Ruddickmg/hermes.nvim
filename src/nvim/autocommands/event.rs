@@ -7,15 +7,16 @@ use agent_client_protocol::{
     WriteTextFileResponse,
 };
 
-use crate::nvim::{autocommands::AutoCommands, parse};
+use crate::nvim::{autocommands::AutoCommand, parse};
 
 #[async_trait::async_trait(?Send)]
-impl Client for AutoCommands {
+impl Client for AutoCommand {
     async fn request_permission(
         &self,
         args: RequestPermissionRequest,
     ) -> Result<RequestPermissionResponse> {
-        self.schedule_autocommand("AgentPermissionRequest".to_string(), args);
+        self.schedule_autocommand("AgentPermissionRequest".to_string(), args)
+            .await?;
         let outcome: RequestPermissionOutcome = RequestPermissionOutcome::Cancelled;
         Ok(RequestPermissionResponse::new(outcome))
     }
@@ -23,20 +24,18 @@ impl Client for AutoCommands {
     async fn session_notification(&self, session_notification: SessionNotification) -> Result<()> {
         let command = match session_notification.update.clone() {
             SessionUpdate::UserMessageChunk(chunk) => {
-                parse::communication(chunk.content).map(|s|format!("User{}Message", s))
+                parse::communication(chunk.content).map(|s| format!("User{}Message", s))
             }
             SessionUpdate::AgentMessageChunk(chunk) => {
-                parse::communication(chunk.content).map(|s|format!("Agent{}Message", s))
+                parse::communication(chunk.content).map(|s| format!("Agent{}Message", s))
             }
             SessionUpdate::AgentThoughtChunk(chunk) => {
-                parse::communication(chunk.content).map(|s|format!("Agent{}Thought", s))
+                parse::communication(chunk.content).map(|s| format!("Agent{}Thought", s))
             }
             SessionUpdate::ToolCall(_) => Ok("AgentToolCall".to_string()),
             SessionUpdate::ToolCallUpdate(_) => Ok("AgentToolCallUpdate".to_string()),
             SessionUpdate::Plan(_) => Ok("AgentPlan".to_string()),
-            SessionUpdate::AvailableCommandsUpdate(_) => {
-                Ok("AgentAvailableCommands".to_string())
-            }
+            SessionUpdate::AvailableCommandsUpdate(_) => Ok("AgentAvailableCommands".to_string()),
             SessionUpdate::CurrentModeUpdate(_) => Ok("AgentCurrentMode".to_string()),
             SessionUpdate::ConfigOptionUpdate(_) => Ok("AgentConfigOption".to_string()),
             _ => return Err(Error::method_not_found()),

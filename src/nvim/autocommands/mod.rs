@@ -11,23 +11,14 @@ mod response;
 pub use response::*;
 
 #[derive(Clone)]
-pub struct AutoCommands {
-    group: String,
+pub struct AutoCommand {
     handle: AsyncHandle,
-    channel: Sender<(Commands, serde_json::Value)>,
+    channel: Sender<(String, serde_json::Value)>,
 }
 
-impl AutoCommands {
-    pub fn new(
-        group: String,
-        channel: Sender<(Commands, serde_json::Value)>,
-        handle: AsyncHandle,
-    ) -> Self {
-        Self {
-            group,
-            channel,
-            handle,
-        }
+impl AutoCommand {
+    pub fn new(channel: Sender<(String, serde_json::Value)>, handle: AsyncHandle) -> Self {
+        Self { channel, handle }
     }
 
     async fn schedule_autocommand<T: ToString, S: Serialize>(
@@ -36,12 +27,13 @@ impl AutoCommands {
         data: S,
     ) -> Result<()> {
         let serialized: serde_json::Value = data.serialize(serde_json::value::Serializer)?;
-        self
-            .channel
-            .send((Commands::AgentConnectionInitialized, serialized))
+        self.channel
+            .send((command.to_string(), serialized))
             .await
             .map_err(|e| Error::Internal(e.to_string()))?;
-        self.handle.send().map_err(|e|Error::Internal(e.to_string()))
+        self.handle
+            .send()
+            .map_err(|e| Error::Internal(e.to_string()))
     }
 }
 

@@ -1,6 +1,5 @@
-use crate::apc::{self, Result};
-use crate::nvim::autocommands::{AutoCommands, Commands};
-use crate::nvim::parse::response;
+use crate::apc::Result;
+use crate::nvim::autocommands::{AutoCommand, Commands};
 use agent_client_protocol::{
     AuthenticateResponse, ExtResponse, ForkSessionResponse, InitializeResponse,
     ListSessionsResponse, LoadSessionResponse, NewSessionResponse, PromptResponse,
@@ -25,9 +24,8 @@ pub trait ResponseHandler {
 }
 
 #[async_trait::async_trait(?Send)]
-impl ResponseHandler for AutoCommands {
+impl ResponseHandler for AutoCommand {
     async fn initialized(&self, info: InitializeResponse) -> Result<()> {
-        let c = info.clone();
         // TODO: figure out a better way to deal with the deserialization issue with the protocol version
         let value = serde_json::json!({
             "protocolVersion": info.protocol_version.to_string(),
@@ -59,32 +57,39 @@ impl ResponseHandler for AutoCommands {
                 "title": i.title,
             })),
         });
-        self.schedule_autocommand(Commands::AgentConnectionInitialized, c).await?;
+        self.schedule_autocommand(Commands::AgentConnectionInitialized, value)
+            .await?;
         Ok(())
     }
 
     async fn session_created(&self, response: NewSessionResponse) -> Result<()> {
-        self.schedule_autocommand(Commands::CreatedSession, response).await
+        self.schedule_autocommand(Commands::CreatedSession, response)
+            .await
     }
 
     async fn prompted(&self, response: PromptResponse) -> Result<()> {
-        self.schedule_autocommand(Commands::AgentPrompted, response).await
+        self.schedule_autocommand(Commands::AgentPrompted, response)
+            .await
     }
 
     async fn authenticated(&self, response: AuthenticateResponse) -> Result<()> {
-        self.schedule_autocommand(Commands::ClientAuthenticated, response).await
+        self.schedule_autocommand(Commands::ClientAuthenticated, response)
+            .await
     }
 
     async fn config_option_set(&self, response: SetSessionConfigOptionResponse) -> Result<()> {
-        self.schedule_autocommand(Commands::AgentConfigUpdated, response).await
+        self.schedule_autocommand(Commands::AgentConfigUpdated, response)
+            .await
     }
 
     async fn mode_set(&self, response: SetSessionModeResponse) -> Result<()> {
-        self.schedule_autocommand(Commands::ModeUpdated, response).await
+        self.schedule_autocommand(Commands::ModeUpdated, response)
+            .await
     }
 
     async fn session_loaded(&self, response: LoadSessionResponse) -> Result<()> {
-        self.schedule_autocommand(Commands::LoadedSession, response).await
+        self.schedule_autocommand(Commands::LoadedSession, response)
+            .await
     }
 
     async fn custom_command_executed(&self, _response: ExtResponse) -> Result<()> {
@@ -92,18 +97,22 @@ impl ResponseHandler for AutoCommands {
     }
 
     async fn sessions_listed(&self, response: ListSessionsResponse) -> Result<()> {
-        self.schedule_autocommand(Commands::ListedSessions, response).await
+        self.schedule_autocommand(Commands::ListedSessions, response)
+            .await
     }
 
     async fn session_forked(&self, response: ForkSessionResponse) -> Result<()> {
-        self.schedule_autocommand(Commands::ForkedSession, response).await
+        self.schedule_autocommand(Commands::ForkedSession, response)
+            .await
     }
 
     async fn session_resumed(&self, response: ResumeSessionResponse) -> Result<()> {
-        self.schedule_autocommand(Commands::ResumedSession, response).await
+        self.schedule_autocommand(Commands::ResumedSession, response)
+            .await
     }
 
     async fn session_model_set(&self, response: SetSessionModelResponse) -> Result<()> {
-        self.schedule_autocommand(Commands::SessionModelUpdated, response).await
+        self.schedule_autocommand(Commands::SessionModelUpdated, response)
+            .await
     }
 }
