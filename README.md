@@ -39,7 +39,6 @@ Hermes focuses on:
     - [ ] allow collecting audio input
     - [ ] use [whisper.rs](https://crates.io/crates/whisper-rs) to facilitate speech to text
   - [ ] Cancel
-- [ ] Speech
   
 
 ## API
