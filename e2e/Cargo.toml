@@ -1,5 +1,5 @@
-[package.metadata]
-test-threads = 1
+# [package.metadata]
+# test-threads = 1
 
 [package]
 name = "hermes-e2e"
@@ -27,6 +27,6 @@ serde_json = "1"
 [build-dependencies]
 nvim-oxi = { version = "0.6.0", features = ["neovim-0-10", "test"] }
 
-[profile.test]
-opt-level = 0
+# [profile.test]
+# opt-level = 0
 
