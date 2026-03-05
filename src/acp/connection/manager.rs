@@ -1,6 +1,6 @@
-use crate::apc::connection::{Connection, stdio};
+use crate::acp::connection::{Connection, stdio};
 use crate::nvim::autocommands::ResponseHandler;
-use crate::{Handler, apc::error::Error};
+use crate::{Handler, acp::error::Error};
 use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolVersion};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

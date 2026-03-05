@@ -11,7 +11,7 @@ use nvim_oxi::{
 use std::{rc::Rc, sync::Arc};
 use tokio::{sync::Mutex, sync::mpsc::channel};
 
-use crate::{Handler, apc::connection::ConnectionManager};
+use crate::{Handler, acp::connection::ConnectionManager};
 
 const GROUP: &str = "hermes";
 

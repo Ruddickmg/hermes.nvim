@@ -1,6 +1,6 @@
 # Hermes
 
-An APC (Agent Client Protocol) Client implementation designed for integration with Neovim
+An ACP (Agent Client Protocol) Client implementation designed for integration with Neovim
 
 ## Overview
 
@@ -13,7 +13,7 @@ Hermes focuses on:
 
 ## Features
 
-- [x] Full implementation of APC Client
+- [x] Full implementation of ACP Client
 - [x] Configurable capabilities (filesystem, terminal, etc)
 - [x] Trigger Autocommands for messages/notifications
 - [x] Allow connecting to Agents
@@ -29,7 +29,7 @@ Hermes focuses on:
 - [ ] Allow agent to use terminal
   - [ ] Create autocommands for Agent progress in the terminal
 - [ ] Allow user to give permission when needed
-- [ ] Allow user to configure/turn off any/all aspects of APC (if, for example, you just want to send data to the agent but still interact with it via the CLI)
+- [ ] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
 - [ ] Allow user to send prompts
   - [ ] Send files
   - [ ] Send text

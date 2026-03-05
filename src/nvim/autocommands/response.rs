@@ -1,4 +1,4 @@
-use crate::apc::Result;
+use crate::acp::Result;
 use crate::nvim::autocommands::{AutoCommand, Commands};
 use agent_client_protocol::{
     AuthenticateResponse, ExtResponse, ForkSessionResponse, InitializeResponse,

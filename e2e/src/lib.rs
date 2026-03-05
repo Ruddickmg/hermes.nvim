@@ -2,7 +2,7 @@ mod utilities;
 use std::time::Duration;
 use agent_client_protocol::InitializeResponse;
 use hermes::{
-    apc::connection::{Assistant, Protocol},
+    acp::connection::{Assistant, Protocol},
     api::{ConnectionArgs, DisconnectArgs},
     nvim::{autocommands::Commands, hermes},
 };

@@ -6,7 +6,7 @@ use agent_client_protocol::{Agent, Client, ClientSideConnection};
 
 use crate::{
     Handler,
-    apc::{connection::UserRequest, error::Error},
+    acp::{connection::UserRequest, error::Error},
     nvim::autocommands::ResponseHandler,
 };
 

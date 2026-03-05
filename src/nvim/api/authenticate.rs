@@ -3,7 +3,7 @@ use nvim_oxi::{Function, Object, lua::Error};
 use std::rc::Rc;
 use tokio::sync::Mutex;
 
-use crate::{apc::connection::ConnectionManager, nvim::autocommands::ResponseHandler};
+use crate::{acp::connection::ConnectionManager, nvim::autocommands::ResponseHandler};
 
 pub fn authenticate<H: Client + ResponseHandler + Send + Sync + 'static>(
     connection: Rc<Mutex<ConnectionManager<H>>>,

@@ -1,4 +1,4 @@
-use crate::{apc::connection::Assistant, nvim::configuration::ClientConfig};
+use crate::{acp::connection::Assistant, nvim::configuration::ClientConfig};
 use agent_client_protocol::InitializeResponse;
 use std::collections::HashMap;
 

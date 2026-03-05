@@ -5,7 +5,7 @@ use agent_client_protocol::{
     SetSessionModelResponse,
 };
 
-use crate::apc::error::Error;
+use crate::acp::error::Error;
 use crate::{Handler, nvim::autocommands::ResponseHandler};
 
 impl<H: agent_client_protocol::Client + ResponseHandler> Handler<H> {

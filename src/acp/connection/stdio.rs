@@ -1,6 +1,6 @@
 use crate::{
     Handler,
-    apc::{
+    acp::{
         connection::{Assistant, UserRequest},
         error::Error,
         handler::message::handle_request,

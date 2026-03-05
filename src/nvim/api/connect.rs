@@ -1,5 +1,5 @@
 use crate::{
-    apc::connection::{Assistant, ConnectionDetails, ConnectionManager, Protocol},
+    acp::connection::{Assistant, ConnectionDetails, ConnectionManager, Protocol},
     nvim::autocommands::ResponseHandler,
 };
 use agent_client_protocol::Client;

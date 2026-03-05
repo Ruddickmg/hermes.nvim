@@ -9,7 +9,7 @@ use std::rc::Rc;
 use tokio::sync::Mutex;
 
 use crate::{
-    apc::connection::{Assistant, ConnectionManager},
+    acp::connection::{Assistant, ConnectionManager},
     nvim::autocommands::ResponseHandler,
 };
 
