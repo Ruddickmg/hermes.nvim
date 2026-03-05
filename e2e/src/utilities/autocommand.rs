@@ -2,6 +2,7 @@ use hermes::nvim::autocommands::Commands;
 use nvim_oxi::api::{self, opts::CreateAutocmdOpts, types::AutocmdCallbackArgs};
 use nvim_oxi::{serde::Deserializer, Object};
 use serde::de::DeserializeOwned;
+use serde::Deserialize;
 use std::sync::mpsc;
 use std::{
     fmt::Debug,
