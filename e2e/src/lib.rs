@@ -40,9 +40,6 @@ async fn test_connect_function() -> Result<(), nvim_oxi::Error> {
     Ok(())
 }
 
-use std::sync::mpsc;
-use std::time::Duration;
-
 #[nvim_oxi::test]
 fn test_initialization() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;

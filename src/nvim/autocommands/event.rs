@@ -6,7 +6,6 @@ use agent_client_protocol::{
     WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
     WriteTextFileResponse,
 };
-use nvim_oxi::Dictionary;
 
 use crate::nvim::{autocommands::AutoCommand, parse};
 
