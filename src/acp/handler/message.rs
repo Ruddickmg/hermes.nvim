@@ -7,22 +7,26 @@ use tracing::{debug, instrument};
 
 use crate::{
     Handler,
-    acp::{connection::UserRequest, error::Error},
+    acp::{
+        connection::{Assistant, UserRequest},
+        error::Error,
+    },
     nvim::autocommands::ResponseHandler,
 };
 
 #[instrument(level = "trace", skip_all)]
 pub async fn handle_request<H: Client + ResponseHandler>(
     connection: ClientSideConnection,
-    mut reciever: Receiver<UserRequest>,
+    mut receiver: Receiver<UserRequest>,
     client: Arc<Handler<H>>,
+    agent: &Assistant,
 ) -> Result<(), Error> {
-    while let Some(msg) = reciever.recv().await {
-        debug!("Recieved request from agent: {:#?}", msg);
+    while let Some(msg) = receiver.recv().await {
+        debug!("Received request from '{}': {:#?}", agent, msg);
         match msg {
             UserRequest::Initialize(request) => {
                 let response = connection.initialize(request).await?;
-                client.initialized(response).await?;
+                client.initialized(agent, response).await?;
             }
             UserRequest::Cancel(config) => {
                 connection.cancel(config).await?;

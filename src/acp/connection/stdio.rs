@@ -49,7 +49,7 @@ where
         .ok_or_else(|| Error::Connection("Failed to take stdout".to_string()))?
         .compat();
 
-    trace!("Starting async runtime for ACP communitation");
+    trace!("Starting async runtime for ACP communication");
     local_set
         .run_until(async {
             let (connection, handle_io) = agent_client_protocol::ClientSideConnection::new(
@@ -63,12 +63,12 @@ where
 
             tokio::task::spawn_local(handle_io);
 
-            handle_request(connection, receiver, client.clone()).await
+            handle_request(connection, receiver, client.clone(), agent).await
         })
         .await?;
 
-    info!("Disconnected from '{}'", agent);
     drop(child);
+    info!("Disconnected from '{}'", agent);
     Ok::<(), Error>(())
 }
 
@@ -84,7 +84,7 @@ pub async fn connect<H: Client + ResponseHandler + 'static>(
             stdio_connection(
                 receiver,
                 client,
-                agent,
+                &agent,
                 "node",
                 ["copilot-language-server", "--acp"],
             )
@@ -92,7 +92,7 @@ pub async fn connect<H: Client + ResponseHandler + 'static>(
         }
         Assistant::Opencode => {
             trace!("Starting opencode connection");
-            stdio_connection(receiver, client, agent, "opencode", ["acp"]).await
+            stdio_connection(receiver, client, &agent, "opencode", ["acp"]).await
         }
     }
 }
