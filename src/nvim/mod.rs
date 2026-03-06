@@ -5,27 +5,44 @@ pub mod parse;
 pub mod state;
 
 use nvim_oxi::{Dictionary, api::opts::CreateAugroupOpts};
-use std::{rc::Rc, sync::Arc};
+use std::{rc::Rc, sync::{Arc, OnceLock}};
 use tokio::sync::Mutex;
-use tracing::Level;
-use tracing_subscriber::FmtSubscriber;
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 use crate::{Handler, acp::connection::ConnectionManager, nvim::autocommands::AutoCommand};
 
 pub const GROUP: &str = "hermes";
 
+static LOGGING_INIT: OnceLock<()> = OnceLock::new();
+
+fn init_logging() {
+    LOGGING_INIT.get_or_init(|| {
+        let filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("info"));
+        let subscriber = FmtSubscriber::builder()
+            .with_env_filter(filter)
+            .finish();
+        // SetGlobalDefaultError only occurs when a subscriber is already set,
+        // which is expected on plugin reload or in test environments.
+        let _ = tracing::subscriber::set_global_default(subscriber);
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_init_logging_idempotent() {
+        // Should not panic when called multiple times
+        init_logging();
+        init_logging();
+    }
+}
+
 #[nvim_oxi::plugin]
 pub fn hermes() -> nvim_oxi::Result<Dictionary> {
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::TRACE)
-        .finish();
-
-    tracing::subscriber::set_global_default(subscriber).map_err(|e| {
-        nvim_oxi::Error::Api(nvim_oxi::api::Error::Other(format!(
-            "Failed to set global subscriber: {}",
-            e
-        )))
-    })?;
+    init_logging();
 
     let (handle, sender) = AutoCommand::listener()?;
     let plugin_state = Arc::new(Mutex::new(state::PluginState::new()));
