@@ -3,6 +3,7 @@ use crate::nvim::autocommands::ResponseHandler;
 use crate::{Handler, acp::error::Error};
 use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolVersion};
 use serde::{Deserialize, Serialize};
+use tracing::{debug, info, instrument, trace, warn};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -91,6 +92,7 @@ pub struct ConnectionManager<H: Client> {
 }
 
 impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
+    #[instrument(level = "trace", skip(client))]
     pub fn new(client: Arc<Handler<H>>) -> Self {
         Self {
             agent: Assistant::default(),
@@ -100,24 +102,31 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
         }
     }
 
+    #[instrument(level = "trace", skip(self, connection))]
     fn add_connection(&mut self, agent: Assistant, connection: Rc<Connection>) {
         self.connection.insert(agent, connection);
     }
 
+    #[instrument(level = "trace", skip(self))]
     pub fn get_connection(&self, agent: &Assistant) -> Option<Rc<Connection>> {
         self.connection.get(agent).cloned()
     }
 
+    #[instrument(level = "trace", skip(self))]
     pub fn get_current_connection(&self) -> Option<Rc<Connection>> {
         self.get_connection(&self.agent)
     }
 
+    #[instrument(level = "trace", skip(self))]
     pub fn connect(
         &mut self,
         ConnectionDetails { agent, protocol }: ConnectionDetails,
     ) -> Result<Rc<Connection>, Error> {
         Ok(match self.get_connection(&agent) {
-            Some(connection) => connection,
+            Some(connection) => {
+                warn!("Returning existing connection");
+                connection
+            },
             None => {
                 let (sender, receiver) = tokio::sync::mpsc::channel(100);
                 let connection = Rc::new(Connection::new(sender));
@@ -127,6 +136,7 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
                     Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"),
                 );
 
+                trace!("Starting agent communication in new thread");
                 self.handles.blocking_lock().insert(
                     agent.clone(),
                     std::thread::spawn(move || {
@@ -135,6 +145,7 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
                             .build()
                             .map_err(|e| Error::Internal(e.to_string()))?;
 
+                        trace!("Starting tokio runtime");
                         runtime.block_on(match protocol {
                             Protocol::Stdio => stdio::connect(handler, thread_agent, receiver),
                             Protocol::Http => unimplemented!(),
@@ -143,16 +154,20 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
                     }),
                 );
                 self.add_connection(agent.clone(), connection.clone());
+                debug!("Stored connection to '{}'", agent);
                 connection.initialize(init_config)?;
+                info!("Initialized connection to '{}'", agent);
                 connection
             }
         })
     }
 
+    #[instrument(level = "trace", skip(self))]
     pub fn close_all(&mut self) -> Result<(), Error> {
         self.disconnect(self.connection.keys().cloned().collect())
     }
 
+    #[instrument(level = "trace", skip(self))]
     pub fn disconnect(&mut self, assistants: Vec<Assistant>) -> Result<(), Error> {
         let erroneous = assistants
             .into_iter()
@@ -160,6 +175,7 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
             .map(|assistant| assistant.to_string())
             .collect::<Vec<String>>();
         if erroneous.is_empty() {
+            debug!("Successfully disconnected from all agents");
             Ok(())
         } else {
             Err(Error::Connection(format!(
@@ -169,6 +185,7 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
         }
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn disconnect_assistant(&mut self, assistant: &Assistant) -> Result<(), Error> {
         let sender = self.connection.remove(assistant).ok_or_else(|| {
             Error::Connection(format!("No connection found for assistant {}", assistant))
@@ -180,6 +197,7 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
             .ok_or_else(|| {
                 Error::Connection(format!("No handle found for assistant {}", assistant))
             })?;
+        debug!("Disconnecting from assistant {}", assistant);
         drop(sender);
         handle
             .join()

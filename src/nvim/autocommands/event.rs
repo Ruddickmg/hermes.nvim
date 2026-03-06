@@ -15,7 +15,8 @@ impl Client for AutoCommand {
         &self,
         args: RequestPermissionRequest,
     ) -> Result<RequestPermissionResponse> {
-        self.schedule_autocommand("AgentPermissionRequest".to_string(), args)
+
+        self.execute_autocommand("AgentPermissionRequest".to_string(), args)
             .await?;
         let outcome: RequestPermissionOutcome = RequestPermissionOutcome::Cancelled;
         Ok(RequestPermissionResponse::new(outcome))
@@ -42,7 +43,7 @@ impl Client for AutoCommand {
         }?;
 
         Ok(self
-            .schedule_autocommand(command, session_notification)
+            .execute_autocommand(command, session_notification)
             .await?)
     }
 

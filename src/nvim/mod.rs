@@ -33,7 +33,13 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     let event_handler = Arc::new(Handler::new(plugin_state.clone(), auto_command));
     let connection_manager = Rc::new(Mutex::new(ConnectionManager::new(event_handler.clone())));
 
-    nvim_oxi::api::create_augroup(GROUP, &CreateAugroupOpts::default()).unwrap();
+    nvim_oxi::api::create_augroup(GROUP, &CreateAugroupOpts::default()).map_err(|e| {
+        nvim_oxi::Error::Api(nvim_oxi::api::Error::Other(format!(
+            "Failed to create autogroup for the '{}' group: {}",
+            GROUP,
+            e
+        )))
+    })?;
 
     Ok(Dictionary::from_iter([
         ("connect", api::connect(connection_manager.clone())),

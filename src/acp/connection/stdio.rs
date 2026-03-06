@@ -11,7 +11,10 @@ use agent_client_protocol::Client;
 use std::{ffi::OsStr, process::Stdio, sync::Arc};
 use tokio::sync::mpsc::Receiver;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
+use tracing::{info, instrument, trace};
+use std::fmt::Debug;
 
+#[instrument(level = "trace", skip(client, reciever))]
 pub async fn stdio_connection<H, I, S>(
     reciever: Receiver<UserRequest>,
     client: Arc<Handler<H>>,
@@ -20,7 +23,7 @@ pub async fn stdio_connection<H, I, S>(
 ) -> Result<(), Error>
 where
     H: Client + ResponseHandler + 'static,
-    I: IntoIterator<Item = S>,
+    I: IntoIterator<Item = S> + Debug,
     S: AsRef<OsStr>,
 {
     let local_set = tokio::task::LocalSet::new();
@@ -45,6 +48,7 @@ where
         .ok_or_else(|| Error::Connection("Failed to take stdout".to_string()))?
         .compat();
 
+    trace!("Starting async runtime for ACP communitation");
     local_set
         .run_until(async {
             let (connection, handle_io) = agent_client_protocol::ClientSideConnection::new(
@@ -58,13 +62,19 @@ where
 
             tokio::task::spawn_local(handle_io);
 
-            handle_request(connection, reciever, client).await
+            handle_request(connection, reciever, client.clone()).await
         })
         .await?;
+
+    let state = client.state.lock().await;
+    let agent = state.agent.clone();
+    drop(state);
+    info!("Disconnected from '{}'", agent);
     drop(child);
     Ok::<(), Error>(())
 }
 
+#[instrument(level = "trace", skip(client, receiver))]
 pub async fn connect<H: Client + ResponseHandler + 'static>(
     client: Arc<Handler<H>>,
     agent: Assistant,
@@ -72,6 +82,7 @@ pub async fn connect<H: Client + ResponseHandler + 'static>(
 ) -> Result<(), Error> {
     match agent.clone() {
         Assistant::Copilot => {
+            trace!("Starting copilot connection");
             stdio_connection(
                 receiver,
                 client,
@@ -80,6 +91,9 @@ pub async fn connect<H: Client + ResponseHandler + 'static>(
             )
             .await
         }
-        Assistant::Opencode => stdio_connection(receiver, client, "opencode", ["acp"]).await,
+        Assistant::Opencode => {
+            trace!("Starting opencode connection");
+            stdio_connection(receiver, client, "opencode", ["acp"]).await
+        }
     }
 }
