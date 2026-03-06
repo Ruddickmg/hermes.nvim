@@ -4,20 +4,21 @@ use agent_client_protocol::{
     ResumeSessionResponse, SetSessionConfigOptionResponse, SetSessionModeResponse,
     SetSessionModelResponse,
 };
-use tracing::{debug, instrument};
+use tracing::instrument;
 
+use crate::acp::connection::Assistant;
 use crate::acp::error::Error;
 use crate::nvim::autocommands::Commands;
 use crate::{Handler, nvim::autocommands::ResponseHandler};
 
 impl<H: agent_client_protocol::Client + ResponseHandler> Handler<H> {
     #[instrument(level = "trace", skip(self))]
-    pub async fn initialized(&self, info: InitializeResponse) -> Result<(), Error> {
-        let mut config = self.state.lock().await;
-        let agent = config.agent.clone();
-        config.agent_info.insert(agent.clone(), info.clone());
-        debug!("Upated configuration for '{}': {:?}", agent, config);
-        drop(config);
+    pub async fn initialized(
+        &self,
+        agent: &Assistant,
+        info: InitializeResponse,
+    ) -> Result<(), Error> {
+        self.set_agent_info(agent.clone(), info.clone()).await;
 
         // TODO: figure out a better way to deal with the deserialization issue with the protocol version
         let value = serde_json::json!({
@@ -87,13 +88,15 @@ impl<H: agent_client_protocol::Client + ResponseHandler> Handler<H> {
 
     #[instrument(level = "trace", skip(self))]
     pub async fn mode_set(&self, response: SetSessionModeResponse) -> Result<(), Error> {
-        self.handler.schedule_autocommand(Commands::ModeUpdated, response)
+        self.handler
+            .schedule_autocommand(Commands::ModeUpdated, response)
             .await
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn session_loaded(&self, response: LoadSessionResponse) -> Result<(), Error> {
-        self.handler.schedule_autocommand(Commands::LoadedSession, response)
+        self.handler
+            .schedule_autocommand(Commands::LoadedSession, response)
             .await
     }
 
@@ -104,25 +107,29 @@ impl<H: agent_client_protocol::Client + ResponseHandler> Handler<H> {
 
     #[instrument(level = "trace", skip(self))]
     pub async fn sessions_listed(&self, response: ListSessionsResponse) -> Result<(), Error> {
-        self.handler.schedule_autocommand(Commands::ListedSessions, response)
+        self.handler
+            .schedule_autocommand(Commands::ListedSessions, response)
             .await
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn session_forked(&self, response: ForkSessionResponse) -> Result<(), Error> {
-        self.handler.schedule_autocommand(Commands::ForkedSession, response)
+        self.handler
+            .schedule_autocommand(Commands::ForkedSession, response)
             .await
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn session_resumed(&self, response: ResumeSessionResponse) -> Result<(), Error> {
-        self.handler.schedule_autocommand(Commands::ResumedSession, response)
+        self.handler
+            .schedule_autocommand(Commands::ResumedSession, response)
             .await
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn session_model_set(&self, response: SetSessionModelResponse) -> Result<(), Error> {
-        self.handler.schedule_autocommand(Commands::SessionModelUpdated, response)
+        self.handler
+            .schedule_autocommand(Commands::SessionModelUpdated, response)
             .await
     }
 }

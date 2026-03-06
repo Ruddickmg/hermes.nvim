@@ -8,16 +8,17 @@ use crate::{
     nvim::autocommands::ResponseHandler,
 };
 use agent_client_protocol::Client;
+use std::fmt::Debug;
 use std::{ffi::OsStr, process::Stdio, sync::Arc};
 use tokio::sync::mpsc::Receiver;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::{info, instrument, trace};
-use std::fmt::Debug;
 
-#[instrument(level = "trace", skip(client, reciever))]
+#[instrument(level = "trace", skip(client, receiver))]
 pub async fn stdio_connection<H, I, S>(
-    reciever: Receiver<UserRequest>,
+    receiver: Receiver<UserRequest>,
     client: Arc<Handler<H>>,
+    agent: &Assistant,
     command: &str,
     args: I,
 ) -> Result<(), Error>
@@ -62,13 +63,10 @@ where
 
             tokio::task::spawn_local(handle_io);
 
-            handle_request(connection, reciever, client.clone()).await
+            handle_request(connection, receiver, client.clone()).await
         })
         .await?;
 
-    let state = client.state.lock().await;
-    let agent = state.agent.clone();
-    drop(state);
     info!("Disconnected from '{}'", agent);
     drop(child);
     Ok::<(), Error>(())
@@ -86,6 +84,7 @@ pub async fn connect<H: Client + ResponseHandler + 'static>(
             stdio_connection(
                 receiver,
                 client,
+                agent,
                 "node",
                 ["copilot-language-server", "--acp"],
             )
@@ -93,7 +92,7 @@ pub async fn connect<H: Client + ResponseHandler + 'static>(
         }
         Assistant::Opencode => {
             trace!("Starting opencode connection");
-            stdio_connection(receiver, client, "opencode", ["acp"]).await
+            stdio_connection(receiver, client, agent, "opencode", ["acp"]).await
         }
     }
 }

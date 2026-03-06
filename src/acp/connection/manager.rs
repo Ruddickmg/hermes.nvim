@@ -3,12 +3,12 @@ use crate::nvim::autocommands::ResponseHandler;
 use crate::{Handler, acp::error::Error};
 use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolVersion};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, instrument, trace, warn};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use tokio::sync::Mutex;
+use tracing::{debug, info, instrument, trace, warn};
 
 #[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
 pub enum Protocol {
@@ -124,9 +124,15 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
     ) -> Result<Rc<Connection>, Error> {
         Ok(match self.get_connection(&agent) {
             Some(connection) => {
-                warn!("Returning existing connection");
+                let mut config = self.handler.state.blocking_lock();
+                config.set_agent(agent.clone());
+                drop(config);
+                warn!(
+                    "A connection already exists for '{}'. Returning existing connection",
+                    agent
+                );
                 connection
-            },
+            }
             None => {
                 let (sender, receiver) = tokio::sync::mpsc::channel(100);
                 let connection = Rc::new(Connection::new(sender));
@@ -164,18 +170,21 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
 
     #[instrument(level = "trace", skip(self))]
     pub fn close_all(&mut self) -> Result<(), Error> {
-        self.disconnect(self.connection.keys().cloned().collect())
+        self.disconnect(self.connection.keys().cloned().collect())?;
+        info!("Successfully disconnected from all agents");
+        Ok(())
     }
 
     #[instrument(level = "trace", skip(self))]
     pub fn disconnect(&mut self, assistants: Vec<Assistant>) -> Result<(), Error> {
         let erroneous = assistants
+            .clone()
             .into_iter()
             .filter(|assistant| self.disconnect_assistant(assistant).is_err())
             .map(|assistant| assistant.to_string())
             .collect::<Vec<String>>();
         if erroneous.is_empty() {
-            debug!("Successfully disconnected from all agents");
+            debug!("Disconnected from agent(s), {:?}", assistants);
             Ok(())
         } else {
             Err(Error::Connection(format!(
@@ -197,7 +206,7 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
             .ok_or_else(|| {
                 Error::Connection(format!("No handle found for assistant {}", assistant))
             })?;
-        debug!("Disconnecting from assistant {}", assistant);
+        debug!("Disconnecting from agent {}", assistant);
         drop(sender);
         handle
             .join()
@@ -213,6 +222,7 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
                     assistant, e
                 ))
             })?;
+        debug!("Successfully disconnected from agent {}", assistant);
         Ok(())
     }
 }

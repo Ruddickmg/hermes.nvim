@@ -15,7 +15,6 @@ impl Client for AutoCommand {
         &self,
         args: RequestPermissionRequest,
     ) -> Result<RequestPermissionResponse> {
-
         self.execute_autocommand("AgentPermissionRequest".to_string(), args)
             .await?;
         let outcome: RequestPermissionOutcome = RequestPermissionOutcome::Cancelled;

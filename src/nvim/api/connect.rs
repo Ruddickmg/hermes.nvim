@@ -7,9 +7,9 @@ use nvim_oxi::{
     Dictionary, Function, Object,
     lua::{Error, Poppable, Pushable, ffi::State},
 };
-use tracing::{debug, instrument};
 use std::rc::Rc;
 use tokio::sync::Mutex;
+use tracing::{debug, instrument};
 
 #[derive(Clone, Debug)]
 pub struct ConnectionArgs {

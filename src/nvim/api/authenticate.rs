@@ -1,8 +1,8 @@
 use agent_client_protocol::{AuthenticateRequest, Client};
 use nvim_oxi::{Function, Object, lua::Error};
-use tracing::{debug, instrument};
 use std::rc::Rc;
 use tokio::sync::Mutex;
+use tracing::{debug, instrument};
 
 use crate::{acp::connection::ConnectionManager, nvim::autocommands::ResponseHandler};
 

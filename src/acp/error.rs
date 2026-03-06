@@ -2,7 +2,6 @@
 use nvim_oxi::{api, lua};
 use std::sync::{PoisonError, mpsc::SendError};
 
-
 #[derive(Debug, Clone)]
 pub enum Error {
     Internal(String),

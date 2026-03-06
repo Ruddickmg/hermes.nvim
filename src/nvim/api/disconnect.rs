@@ -5,9 +5,9 @@ use nvim_oxi::{
     lua::{self, Error, Poppable, Pushable},
     serde::SerializeError,
 };
-use tracing::{debug, instrument};
 use std::rc::Rc;
 use tokio::sync::Mutex;
+use tracing::{debug, instrument};
 
 use crate::{
     acp::connection::{Assistant, ConnectionManager},
