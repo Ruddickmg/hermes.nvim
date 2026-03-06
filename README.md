@@ -29,7 +29,7 @@ Hermes focuses on:
 - [ ] Allow agent to use terminal
   - [ ] Create autocommands for Agent progress in the terminal
 - [ ] Allow user to give permission when needed
-- [ ] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
+- [ ] Allow user to configure/turn off any/all aspects of APC (if, for example, you just want to send data to the agent but still interact with it via the CLI)
 - [ ] Allow user to send prompts
   - [ ] Send files
   - [ ] Send text
@@ -39,6 +39,7 @@ Hermes focuses on:
     - [ ] allow collecting audio input
     - [ ] use [whisper.rs](https://crates.io/crates/whisper-rs) to facilitate speech to text
   - [ ] Cancel
+- [ ] Speech
   
 
 ## API

@@ -4,37 +4,33 @@ pub mod configuration;
 pub mod parse;
 pub mod state;
 
-use nvim_oxi::{
-    Dictionary, Object,
-    api::opts::{CreateAugroupOpts, ExecAutocmdsOpts},
-};
+use nvim_oxi::{Dictionary, api::opts::CreateAugroupOpts};
 use std::{rc::Rc, sync::Arc};
-use tokio::{sync::Mutex, sync::mpsc::channel};
+use tokio::sync::Mutex;
+use tracing::Level;
+use tracing_subscriber::FmtSubscriber;
 
-use crate::{Handler, acp::connection::ConnectionManager};
+use crate::{Handler, acp::connection::ConnectionManager, nvim::autocommands::AutoCommand};
 
-const GROUP: &str = "hermes";
+pub const GROUP: &str = "hermes";
 
 #[nvim_oxi::plugin]
 pub fn hermes() -> nvim_oxi::Result<Dictionary> {
-    let (sender, mut receiver) = channel::<(String, serde_json::Value)>(100);
-    let handle = nvim_oxi::libuv::AsyncHandle::new(move || {
-        while let Ok((command, data)) = receiver.try_recv() {
-            let obj: Object =
-                serde_json::from_value(data).expect("Failed to convert data to Object");
-            let opts = ExecAutocmdsOpts::builder()
-                .patterns(command.to_string())
-                .data(obj)
-                .group(GROUP)
-                .build();
-            if let Err(err) = nvim_oxi::api::exec_autocmds(["User"], &opts) {
-                eprintln!("Error executing autocommand '{}': {:?}", command, err);
-            }
-        }
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::TRACE)
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber).map_err(|e| {
+        nvim_oxi::Error::Api(nvim_oxi::api::Error::Other(format!(
+            "Failed to set global subscriber: {}",
+            e
+        )))
     })?;
+
+    let (handle, sender) = AutoCommand::listener()?;
     let plugin_state = Arc::new(Mutex::new(state::PluginState::new()));
-    let auto_command_generator = autocommands::AutoCommand::new(sender, handle);
-    let event_handler = Arc::new(Handler::new(plugin_state.clone(), auto_command_generator));
+    let auto_command = autocommands::AutoCommand::producer(sender, handle);
+    let event_handler = Arc::new(Handler::new(plugin_state.clone(), auto_command));
     let connection_manager = Rc::new(Mutex::new(ConnectionManager::new(event_handler.clone())));
 
     nvim_oxi::api::create_augroup(GROUP, &CreateAugroupOpts::default()).unwrap();
@@ -48,5 +44,3 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
         ("disconnect", api::disconnect(connection_manager.clone())),
     ]))
 }
-
-pub fn example() {}

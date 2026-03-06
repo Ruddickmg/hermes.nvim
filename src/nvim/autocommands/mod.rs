@@ -1,9 +1,13 @@
-use crate::acp::{Result, error::Error};
+use crate::{
+    acp::{Result, error::Error},
+    nvim::GROUP,
+};
 use core::fmt;
-use nvim_oxi::libuv::AsyncHandle;
+use nvim_oxi::{Object, api::opts::ExecAutocmdsOpts, libuv::AsyncHandle};
 use serde::Serialize;
 use std::fmt::{Debug, Display};
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{Sender, channel};
+use tracing::{debug, error, instrument};
 
 mod event;
 mod response;
@@ -17,11 +21,42 @@ pub struct AutoCommand {
 }
 
 impl AutoCommand {
-    pub fn new(channel: Sender<(String, serde_json::Value)>, handle: AsyncHandle) -> Self {
+    #[instrument(level = "trace", skip_all)]
+    pub fn producer(channel: Sender<(String, serde_json::Value)>, handle: AsyncHandle) -> Self {
         Self { channel, handle }
     }
 
-    async fn schedule_autocommand<T: ToString, S: Serialize>(
+    #[instrument(level = "trace", skip_all)]
+    pub fn listener() -> Result<(AsyncHandle, Sender<(String, serde_json::Value)>)> {
+        let (sender, mut receiver) = channel::<(String, serde_json::Value)>(100);
+        let handle = nvim_oxi::libuv::AsyncHandle::new(move || {
+            while let Ok((command, data)) = receiver.try_recv() {
+                debug!("Received autocommand: {}, with data: {:?}", command, data);
+                match serde_json::from_value::<Object>(data) {
+                    Ok(obj) => {
+                        let opts = ExecAutocmdsOpts::builder()
+                            .patterns(command.to_string())
+                            .data(obj)
+                            .group(GROUP)
+                            .build();
+                        debug!("Executing autocommand: {} with options: {:?}", command, opts);
+                        if let Err(err) = nvim_oxi::api::exec_autocmds(["User"], &opts) {
+                            error!("Error executing autocommand: '{}': {:?}", command, err);
+                        }
+                    }
+                    Err(e) => error!(
+                        "Failed to deserialize autocommand data for '{}': {:?}",
+                        command, e
+                    ),
+                }
+            }
+        })
+        .map_err(|e| Error::Internal(e.to_string()))?;
+        Ok((handle, sender))
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    async fn schedule_autocommand<T: Debug + ToString, S: Debug + Serialize>(
         &self,
         command: T,
         data: S,
