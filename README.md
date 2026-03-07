@@ -78,7 +78,7 @@ hermes.disconnect()
 
 ### Create Session
 
-To create a session you call the `createSession`. If no arguments are provided, the session defaults to either the project root or the current directory if the root cannot be detected. 
+Create a new session. If no arguments are provided, the session defaults to either the project root or the current directory. 
 
 ```lua
 local hermes = require("hermes")
@@ -89,11 +89,11 @@ hermes.createSession()
 -- customize connection config
 hermes.createSession({
   cwd = ".", -- path to create the session in (optional)
-  mcpServers = { -- MCP server definitions (optional)
+  mcpServers = {
     { -- Http or Css MCP server definition
       name = "Human readable name for MPC server",
       url = "http://url-to-mcp-server.com",
-      headers = { -- HTTP headers to set when making requests to the MCP server.
+      headers = {
         { ["Content-Type"] = "application/json" },
         { headerName = "header value" },
       },
@@ -101,7 +101,6 @@ hermes.createSession({
     {  -- Stdio MCP server definition
       name = "Human readable name for MPC server",
       command = "/path/to/the/MCP/server/executable",
-      -- Command-line arguments to pass to the MCP server.
       args = { "run", "--flag", "something" },
       -- Environment variables to set when launching the MCP server.
       env = {
