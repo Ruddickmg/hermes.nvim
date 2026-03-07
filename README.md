@@ -358,3 +358,37 @@ Below is a list of all autocommands and their associated data (passed to the cal
     </tr>
   </tbody>
 </table>
+
+
+## Logging
+
+### Level
+Hermes defaults to the global neovim log level, or to `INFO` if there is no global log level set.
+
+Global log level example:
+```lua
+vim.opt.verbose = vim.log.levels.DEBUG;
+```
+
+ You can also use the neovim log levels to configure Hermes logging which will override the default behavior.
+
+Example: 
+```lua
+require("hermes").setup({
+    logLevel: vim.log.levels.DEBUG,
+})
+```
+
+### Format
+
+Logging defaults to pretty formatting, but you can change that format by setting a global variable in vim
+
+```lua
+vim.g.HERMES_LOG_FORMAT = "json"
+```
+
+Your options for log formats are:
+- json
+- pretty
+- compact
+- full 
