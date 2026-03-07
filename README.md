@@ -39,6 +39,7 @@ Hermes focuses on:
     - [ ] allow collecting audio input
     - [ ] use [whisper.rs](https://crates.io/crates/whisper-rs) to facilitate speech to text
   - [ ] Cancel
+- [ ] Speech
   
 
 ## API
@@ -357,3 +358,46 @@ Below is a list of all autocommands and their associated data (passed to the cal
     </tr>
   </tbody>
 </table>
+
+
+## Logging
+
+If you want or need, there are a few ways you can configure logging in Hermes
+
+### Level
+Hermes defaults to the global neovim log level, or to `INFO` if there is no global log level set.
+
+Global log level example:
+```lua
+vim.opt.verbose = vim.log.levels.DEBUG;
+```
+
+
+ You can also use the neovim log levels to configure Hermes logging which will override the default behavior.
+
+Example: 
+```lua
+require("hermes").setup({
+    logLevel: vim.log.levels.DEBUG,
+})
+```
+
+### Format
+
+Logging defaults to pretty formatting, due to limitations of the logging tool used in Hermes, the format cannot be updated after the plugin has loaded. However, you can configure the log format by setting a global variable in Noevim prior to loading the plugin
+
+```lua
+-- before hermes is required
+vim.g.HERMES_LOG_FORMAT = "json"
+
+-- require hermes after setting global so that it can pick up the configuration 
+requre("hermes").setup({
+    ...
+});
+```
+
+Your options for log formats are:
+- json
+- pretty
+- compact
+- full 

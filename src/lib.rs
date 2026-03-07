@@ -1,4 +1,5 @@
 pub mod acp;
+mod logging;
 pub mod nvim;
 
 pub use acp::handler::Handler;

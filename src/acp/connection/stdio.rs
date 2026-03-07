@@ -8,19 +8,23 @@ use crate::{
     nvim::autocommands::ResponseHandler,
 };
 use agent_client_protocol::Client;
+use std::fmt::Debug;
 use std::{ffi::OsStr, process::Stdio, sync::Arc};
 use tokio::sync::mpsc::Receiver;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
+use tracing::{info, instrument, trace};
 
+#[instrument(level = "trace", skip(client, receiver))]
 pub async fn stdio_connection<H, I, S>(
-    reciever: Receiver<UserRequest>,
+    receiver: Receiver<UserRequest>,
     client: Arc<Handler<H>>,
+    agent: &Assistant,
     command: &str,
     args: I,
 ) -> Result<(), Error>
 where
     H: Client + ResponseHandler + 'static,
-    I: IntoIterator<Item = S>,
+    I: IntoIterator<Item = S> + Debug,
     S: AsRef<OsStr>,
 {
     let local_set = tokio::task::LocalSet::new();
@@ -45,6 +49,7 @@ where
         .ok_or_else(|| Error::Connection("Failed to take stdout".to_string()))?
         .compat();
 
+    trace!("Starting async runtime for ACP communication");
     local_set
         .run_until(async {
             let (connection, handle_io) = agent_client_protocol::ClientSideConnection::new(
@@ -58,13 +63,16 @@ where
 
             tokio::task::spawn_local(handle_io);
 
-            handle_request(connection, reciever, client).await
+            handle_request(connection, receiver, client.clone(), agent).await
         })
         .await?;
+
     drop(child);
+    info!("Disconnected from '{}'", agent);
     Ok::<(), Error>(())
 }
 
+#[instrument(level = "trace", skip(client, receiver))]
 pub async fn connect<H: Client + ResponseHandler + 'static>(
     client: Arc<Handler<H>>,
     agent: Assistant,
@@ -72,14 +80,19 @@ pub async fn connect<H: Client + ResponseHandler + 'static>(
 ) -> Result<(), Error> {
     match agent.clone() {
         Assistant::Copilot => {
+            trace!("Starting copilot connection");
             stdio_connection(
                 receiver,
                 client,
+                &agent,
                 "node",
                 ["copilot-language-server", "--acp"],
             )
             .await
         }
-        Assistant::Opencode => stdio_connection(receiver, client, "opencode", ["acp"]).await,
+        Assistant::Opencode => {
+            trace!("Starting opencode connection");
+            stdio_connection(receiver, client, &agent, "opencode", ["acp"]).await
+        }
     }
 }

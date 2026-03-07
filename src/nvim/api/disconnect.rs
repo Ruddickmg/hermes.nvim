@@ -7,6 +7,7 @@ use nvim_oxi::{
 };
 use std::rc::Rc;
 use tokio::sync::Mutex;
+use tracing::{debug, instrument};
 
 use crate::{
     acp::connection::{Assistant, ConnectionManager},
@@ -21,6 +22,7 @@ pub enum DisconnectArgs {
     All,
 }
 
+#[instrument(level = "trace", skip_all)]
 fn parse_assistant_string(
     assistant: nvim_oxi::String,
 ) -> Result<Assistant, nvim_oxi::conversion::Error> {
@@ -109,11 +111,13 @@ impl Pushable for DisconnectArgs {
     }
 }
 
+#[instrument(level = "trace", skip_all)]
 pub fn disconnect<H: Client + ResponseHandler + Send + Sync + 'static>(
     connection: Rc<Mutex<ConnectionManager<H>>>,
 ) -> Object {
     let function: Function<DisconnectArgs, Result<(), Error>> =
         Function::from_fn(move |args: DisconnectArgs| -> Result<(), Error> {
+            debug!("Disconnect function called with {:?}", args);
             let mut manager = connection.blocking_lock();
             match args {
                 DisconnectArgs::Multiple(agents) => manager.disconnect(agents),

@@ -9,8 +9,9 @@ use nvim_oxi::{
 };
 use std::rc::Rc;
 use tokio::sync::Mutex;
+use tracing::{debug, instrument};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ConnectionArgs {
     pub agent: Option<Assistant>,
     pub protocol: Option<Protocol>,
@@ -82,11 +83,13 @@ impl Pushable for ConnectionArgs {
     }
 }
 
+#[instrument(level = "trace", skip_all)]
 pub fn connect<H: Client + ResponseHandler + Send + Sync + 'static>(
     connection: Rc<Mutex<ConnectionManager<H>>>,
 ) -> Object {
     let function: Function<Option<ConnectionArgs>, Result<(), Error>> =
         Function::from_fn(move |arg: Option<ConnectionArgs>| -> Result<(), Error> {
+            debug!("Connect function called with: {:?}", arg);
             let details = arg.map(ConnectionDetails::from).unwrap_or_default();
             connection.blocking_lock().connect(details.clone())?;
             Ok(())

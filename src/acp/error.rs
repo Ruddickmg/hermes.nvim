@@ -1,4 +1,5 @@
-use nvim_oxi::lua;
+// TODO: refine these error conversions to be more meaningful
+use nvim_oxi::{api, lua};
 use std::sync::{PoisonError, mpsc::SendError};
 
 #[derive(Debug, Clone)]
@@ -53,5 +54,17 @@ impl<T> From<PoisonError<T>> for Error {
 impl From<serde_json::Error> for Error {
     fn from(e: serde_json::Error) -> Self {
         Error::Internal(e.to_string())
+    }
+}
+
+impl From<nvim_oxi::Error> for Error {
+    fn from(e: nvim_oxi::Error) -> Self {
+        Error::Internal(e.to_string())
+    }
+}
+
+impl From<Error> for nvim_oxi::Error {
+    fn from(e: Error) -> Self {
+        nvim_oxi::Error::Api(api::Error::Other(e.to_string()))
     }
 }
