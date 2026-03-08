@@ -117,7 +117,7 @@ pub fn disconnect<H: Client + ResponseHandler + Send + Sync + 'static>(
 ) -> Object {
     let function: Function<DisconnectArgs, Result<(), Error>> =
         Function::from_fn(move |args: DisconnectArgs| -> Result<(), Error> {
-            debug!("Disconnect function called with {:?}", args);
+            debug!("Disconnect function called with {:#?}", args);
             let mut manager = connection.blocking_lock();
             match args {
                 DisconnectArgs::Multiple(agents) => manager.disconnect(agents),

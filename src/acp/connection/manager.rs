@@ -184,7 +184,7 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
             .map(|assistant| assistant.to_string())
             .collect::<Vec<String>>();
         if erroneous.is_empty() {
-            debug!("Disconnected from agent(s), {:?}", assistants);
+            debug!("Disconnected from agent(s), {:#?}", assistants);
             Ok(())
         } else {
             Err(Error::Connection(format!(

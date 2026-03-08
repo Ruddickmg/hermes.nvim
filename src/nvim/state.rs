@@ -35,7 +35,7 @@ impl PluginState {
     #[instrument(level = "trace")]
     pub fn set_agent_info(&mut self, agent: Assistant, info: InitializeResponse) -> &mut Self {
         self.agent_info.insert(agent.clone(), info.clone());
-        debug!("Upated information for '{}': {:?}", agent, info);
+        debug!("Upated information for '{}': {:#?}", agent, info);
         self
     }
 }

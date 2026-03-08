@@ -91,6 +91,7 @@ hermes.createSession({
   cwd = ".", -- path to create the session in (optional)
   mcpServers = {
     { -- Http or Css MCP server definition
+      type = "http", -- or "sse"
       name = "Human readable name for MPC server",
       url = "http://url-to-mcp-server.com",
       headers = {
@@ -99,6 +100,7 @@ hermes.createSession({
       },
     },
     {  -- Stdio MCP server definition
+      type = "stdio",
       name = "Human readable name for MPC server",
       command = "/path/to/the/MCP/server/executable",
       args = { "run", "--flag", "something" },
@@ -443,3 +445,10 @@ Your options for log formats are:
 - pretty
 - compact
 - full 
+
+
+## TODO:
+
+- look into ways of improving ai integration
+  - research RLM ([example](https://github.com/JaredStewart/coderlm))
+  - connect agent to lsp (try to set it up as a tool call/connect to neovim lsp)
