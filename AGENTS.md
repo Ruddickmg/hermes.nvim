@@ -34,7 +34,30 @@ Essential references for development:
 
 ## Practices
 
-- **Code Style:** Adhere to "Clean Code" patterns.
+### Tool Usage
+
+**Always use the LSP tool when available and appropriate.** It provides:
+- Precise symbol navigation (go to definition, find references)
+- Accurate type information and documentation
+- Efficient codebase exploration without reading entire files
+- Real-time error detection and hover information
+
+**When to use LSP:**
+- Navigating to function/struct definitions
+- Understanding function signatures and types
+- Exploring module structure (documentSymbol)
+- Finding all references to a symbol
+- Getting type information at specific locations
+
+**When LSP is not available:**
+- Global text search (use grep)
+- File discovery (use glob)
+- Complex multi-step operations (use task agent)
+- Web documentation lookup (use webfetch/codesearch)
+
+**Priority:** LSP > grep > read > other tools when working with code.
+
+### Code Style Adhere to "Clean Code" patterns.
 - **Design:** Apply SOLID principles where applicable.
 
 ## Testing
@@ -67,6 +90,23 @@ Aim for the **minimum number of tests that cover all code paths**. Avoid testing
 - Different code paths within the same function should each be tested
 
 **Principle:** If removing a test would leave a code path uncovered, keep it. If multiple tests hit the exact same `if` branch with the same logic, consolidate them.
+
+### Test Types
+
+We follow the [Testing Pyramid](https://martinfowler.com/articles/practical-test-pyramid.html) approach:
+
+- **Unit Tests** (`src/**/*.rs`): Fast, isolated tests for individual functions and modules. These should be comprehensive and cover all code paths, edge cases, and error scenarios.
+  - Located alongside source code in `#[cfg(test)]` modules
+  - Use `cargo test --lib` to run
+  - Should cover all parsing logic, validation, and conversion functions
+
+- **E2E Tests** (`e2e/`): Integration tests that verify the full flow from Lua API through to autocommand responses.
+  - Run inside a Neovim instance using `#[nvim_oxi::test]`
+  - Focus on verifying that components integrate correctly
+  - Test representative scenarios rather than exhaustive coverage
+  - Should not duplicate unit test coverage - if a parsing edge case is covered in unit tests, don't repeat it in E2E
+
+**Guideline**: E2E tests verify that "the system works together", unit tests verify that "each component works correctly". Keep E2E tests minimal and focused on integration points.
 
 ### Examples
 
