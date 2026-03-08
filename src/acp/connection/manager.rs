@@ -1,6 +1,6 @@
-use crate::acp::connection::{Connection, stdio};
+use crate::acp::connection::{stdio, Connection};
 use crate::nvim::autocommands::ResponseHandler;
-use crate::{Handler, acp::error::Error};
+use crate::{acp::error::Error, Handler};
 use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolVersion};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -237,5 +237,80 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
             })?;
         debug!("Successfully disconnected from agent {}", assistant);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_protocol_display_socket() {
+        assert_eq!(format!("{}", Protocol::Socket), "socket");
+    }
+
+    #[test]
+    fn test_protocol_display_http() {
+        assert_eq!(format!("{}", Protocol::Http), "http");
+    }
+
+    #[test]
+    fn test_protocol_display_stdio() {
+        assert_eq!(format!("{}", Protocol::Stdio), "stdio");
+    }
+
+    #[test]
+    fn test_protocol_from_str_socket() {
+        assert_eq!(Protocol::from("socket"), Protocol::Socket);
+    }
+
+    #[test]
+    fn test_protocol_from_str_socket_case_insensitive() {
+        assert_eq!(Protocol::from("SOCKET"), Protocol::Socket);
+    }
+
+    #[test]
+    fn test_protocol_from_str_http() {
+        assert_eq!(Protocol::from("http"), Protocol::Http);
+    }
+
+    #[test]
+    fn test_protocol_from_str_stdio() {
+        assert_eq!(Protocol::from("stdio"), Protocol::Stdio);
+    }
+
+    #[test]
+    fn test_protocol_from_str_unknown() {
+        assert_eq!(Protocol::from("unknown"), Protocol::Stdio);
+    }
+
+    #[test]
+    fn test_assistant_display_copilot() {
+        assert_eq!(format!("{}", Assistant::Copilot), "copilot");
+    }
+
+    #[test]
+    fn test_assistant_display_opencode() {
+        assert_eq!(format!("{}", Assistant::Opencode), "opencode");
+    }
+
+    #[test]
+    fn test_assistant_from_str_copilot() {
+        assert_eq!(Assistant::from("copilot"), Assistant::Copilot);
+    }
+
+    #[test]
+    fn test_assistant_from_str_copilot_case_insensitive() {
+        assert_eq!(Assistant::from("COPILOT"), Assistant::Copilot);
+    }
+
+    #[test]
+    fn test_assistant_from_str_opencode() {
+        assert_eq!(Assistant::from("opencode"), Assistant::Opencode);
+    }
+
+    #[test]
+    fn test_assistant_from_str_unknown() {
+        assert_eq!(Assistant::from("unknown"), Assistant::Copilot);
     }
 }
