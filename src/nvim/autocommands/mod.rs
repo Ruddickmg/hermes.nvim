@@ -31,7 +31,7 @@ impl AutoCommand {
         let (sender, mut receiver) = channel::<(String, serde_json::Value)>(100);
         let handle = nvim_oxi::libuv::AsyncHandle::new(move || {
             while let Ok((command, data)) = receiver.try_recv() {
-                debug!("Received autocommand: {}, with data: {:?}", command, data);
+                debug!("Received autocommand: {}, with data: {:#?}", command, data);
                 match serde_json::from_value::<Object>(data) {
                     Ok(obj) => {
                         let opts = ExecAutocmdsOpts::builder()
@@ -40,15 +40,15 @@ impl AutoCommand {
                             .group(GROUP)
                             .build();
                         debug!(
-                            "Executing autocommand: {} with options: {:?}",
+                            "Executing autocommand: {} with options: {:#?}",
                             command, opts
                         );
                         if let Err(err) = nvim_oxi::api::exec_autocmds(["User"], &opts) {
-                            error!("Error executing autocommand: '{}': {:?}", command, err);
+                            error!("Error executing autocommand: '{}': {:#?}", command, err);
                         }
                     }
                     Err(e) => error!(
-                        "Failed to deserialize autocommand data for '{}': {:?}",
+                        "Failed to deserialize autocommand data for '{}': {:#?}",
                         command, e
                     ),
                 }
@@ -64,7 +64,7 @@ impl AutoCommand {
         data: S,
     ) -> Result<()> {
         let serialized: serde_json::Value = data.serialize(serde_json::value::Serializer)?;
-        debug!("Serialized data: {:?}", serialized);
+        debug!("Serialized data: {:#?}", serialized);
         self.channel
             .send((command.to_string(), serialized))
             .await
@@ -78,7 +78,7 @@ impl AutoCommand {
 
 #[derive(Debug)]
 pub enum Commands {
-    AgentConnectionInitialized,
+    ConnectionInitialized,
     CreatedSession,
     AgentPrompted,
     ClientAuthenticated,

@@ -21,26 +21,18 @@ impl<H: Client + ResponseHandler> Handler<H> {
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn can_write(&self) -> bool {
-        self.state
-            .blocking_lock()
-            .config
-            .permissions
-            .fs_write_access
+    pub async fn can_write(&self) -> bool {
+        self.state.lock().await.config.permissions.fs_write_access
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn can_read(&self) -> bool {
-        self.state.blocking_lock().config.permissions.fs_read_access
+    pub async fn can_read(&self) -> bool {
+        self.state.lock().await.config.permissions.fs_read_access
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn can_access_terminal(&self) -> bool {
-        self.state
-            .blocking_lock()
-            .config
-            .permissions
-            .terminal_access
+    pub async fn can_access_terminal(&self) -> bool {
+        self.state.lock().await.config.permissions.terminal_access
     }
 
     #[instrument(level = "trace", skip(self))]

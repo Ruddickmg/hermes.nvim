@@ -88,18 +88,31 @@ pub struct ConnectionManager<H: Client> {
     handles: Arc<Mutex<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>,
     connection: HashMap<Assistant, Rc<Connection>>,
     handler: Arc<Handler<H>>,
-    agent: Assistant,
 }
 
 impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
     #[instrument(level = "trace", skip(client))]
     pub fn new(client: Arc<Handler<H>>) -> Self {
         Self {
-            agent: Assistant::default(),
             handler: client,
             handles: Arc::new(Mutex::new(HashMap::new())),
             connection: HashMap::new(),
         }
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    fn set_agent(&self, agent: Assistant) {
+        let mut config = self.handler.state.blocking_lock();
+        config.set_agent(agent);
+        drop(config);
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    fn get_agent(&self) -> Assistant {
+        let config = self.handler.state.blocking_lock();
+        let agent = config.agent.clone();
+        drop(config);
+        agent
     }
 
     #[instrument(level = "trace", skip(self, connection))]
@@ -114,7 +127,7 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
 
     #[instrument(level = "trace", skip(self))]
     pub fn get_current_connection(&self) -> Option<Rc<Connection>> {
-        self.get_connection(&self.agent)
+        self.get_connection(&self.get_agent())
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -124,9 +137,6 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
     ) -> Result<Rc<Connection>, Error> {
         Ok(match self.get_connection(&agent) {
             Some(connection) => {
-                let mut config = self.handler.state.blocking_lock();
-                config.set_agent(agent.clone());
-                drop(config);
                 warn!(
                     "A connection already exists for '{}'. Returning existing connection",
                     agent
@@ -163,6 +173,7 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
                 debug!("Stored connection to '{}'", agent);
                 connection.initialize(init_config)?;
                 info!("Initialized connection to '{}'", agent);
+                self.set_agent(agent.clone());
                 connection
             }
         })
@@ -184,7 +195,7 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
             .map(|assistant| assistant.to_string())
             .collect::<Vec<String>>();
         if erroneous.is_empty() {
-            debug!("Disconnected from agent(s), {:?}", assistants);
+            debug!("Disconnected from agent(s), {:#?}", assistants);
             Ok(())
         } else {
             Err(Error::Connection(format!(
@@ -224,5 +235,80 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
             })?;
         debug!("Successfully disconnected from agent {}", assistant);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_protocol_display_socket() {
+        assert_eq!(format!("{}", Protocol::Socket), "socket");
+    }
+
+    #[test]
+    fn test_protocol_display_http() {
+        assert_eq!(format!("{}", Protocol::Http), "http");
+    }
+
+    #[test]
+    fn test_protocol_display_stdio() {
+        assert_eq!(format!("{}", Protocol::Stdio), "stdio");
+    }
+
+    #[test]
+    fn test_protocol_from_str_socket() {
+        assert_eq!(Protocol::from("socket"), Protocol::Socket);
+    }
+
+    #[test]
+    fn test_protocol_from_str_socket_case_insensitive() {
+        assert_eq!(Protocol::from("SOCKET"), Protocol::Socket);
+    }
+
+    #[test]
+    fn test_protocol_from_str_http() {
+        assert_eq!(Protocol::from("http"), Protocol::Http);
+    }
+
+    #[test]
+    fn test_protocol_from_str_stdio() {
+        assert_eq!(Protocol::from("stdio"), Protocol::Stdio);
+    }
+
+    #[test]
+    fn test_protocol_from_str_unknown() {
+        assert_eq!(Protocol::from("unknown"), Protocol::Stdio);
+    }
+
+    #[test]
+    fn test_assistant_display_copilot() {
+        assert_eq!(format!("{}", Assistant::Copilot), "copilot");
+    }
+
+    #[test]
+    fn test_assistant_display_opencode() {
+        assert_eq!(format!("{}", Assistant::Opencode), "opencode");
+    }
+
+    #[test]
+    fn test_assistant_from_str_copilot() {
+        assert_eq!(Assistant::from("copilot"), Assistant::Copilot);
+    }
+
+    #[test]
+    fn test_assistant_from_str_copilot_case_insensitive() {
+        assert_eq!(Assistant::from("COPILOT"), Assistant::Copilot);
+    }
+
+    #[test]
+    fn test_assistant_from_str_opencode() {
+        assert_eq!(Assistant::from("opencode"), Assistant::Opencode);
+    }
+
+    #[test]
+    fn test_assistant_from_str_unknown() {
+        assert_eq!(Assistant::from("unknown"), Assistant::Copilot);
     }
 }
