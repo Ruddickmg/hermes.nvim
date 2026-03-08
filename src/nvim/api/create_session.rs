@@ -116,15 +116,17 @@ impl FromObject for CreateSessionArgs {
                                 let args: Vec<String> = server_dict
                                     .get("args")
                                     .map(|a| {
-                                        let arr: nvim_oxi::Array =
-                                            unsafe { a.clone().into_array_unchecked() };
-                                        arr.into_iter()
-                                            .filter_map(|v| {
-                                                v.try_into()
-                                                    .ok()
-                                                    .map(|s: nvim_oxi::String| s.to_string())
-                                            })
-                                            .collect()
+                                        match a.clone() {
+                                            nvim_oxi::Object::Array(arr) => arr
+                                                .into_iter()
+                                                .filter_map(|v| {
+                                                    v.try_into()
+                                                        .ok()
+                                                        .map(|s: nvim_oxi::String| s.to_string())
+                                                })
+                                                .collect(),
+                                            _ => Vec::new(),
+                                        }
                                     })
                                     .unwrap_or_default();
 
