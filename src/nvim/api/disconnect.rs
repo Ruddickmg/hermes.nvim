@@ -1,9 +1,9 @@
 use agent_client_protocol::Client;
 use nvim_oxi::{
-    Function, Object, ObjectKind,
     conversion::{self, FromObject},
     lua::{self, Error, Poppable, Pushable},
     serde::SerializeError,
+    Function, Object, ObjectKind,
 };
 use std::rc::Rc;
 use tokio::sync::Mutex;
