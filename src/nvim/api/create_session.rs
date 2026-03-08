@@ -116,16 +116,17 @@ impl FromObject for CreateSessionArgs {
                                 let args: Vec<String> = server_dict
                                     .get("args")
                                     .map(|a| {
-                                        match a.clone() {
-                                            nvim_oxi::Object::Array(arr) => arr
+                                        if let ObjectKind::Array = a.kind() {
+                                            unsafe { a.clone().into_array_unchecked() }
                                                 .into_iter()
                                                 .filter_map(|v| {
                                                     v.try_into()
                                                         .ok()
                                                         .map(|s: nvim_oxi::String| s.to_string())
                                                 })
-                                                .collect(),
-                                            _ => Vec::new(),
+                                                .collect()
+                                        } else {
+                                            Vec::new()
                                         }
                                     })
                                     .unwrap_or_default();
@@ -296,13 +297,13 @@ pub fn create_session<H: Client + ResponseHandler + Send + Sync + 'static>(
 
 #[cfg(test)]
 mod session_args_tests {
-    use std::path::PathBuf;
     use crate::api::McpServerType;
     use agent_client_protocol::McpServer;
     use nvim_oxi::{Dictionary, Object, conversion::FromObject};
+    use std::path::PathBuf;
 
     use crate::api::CreateSessionArgs;
-    
+
     // McpServerType Tests
 
     #[test]
@@ -343,7 +344,6 @@ mod session_args_tests {
         let server_type = McpServerType::from("unknown".to_string());
         assert!(matches!(server_type, McpServerType::Stdio));
     }
-
 
     #[test]
     fn test_from_object_default() {

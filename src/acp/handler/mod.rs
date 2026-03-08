@@ -22,12 +22,7 @@ impl<H: Client + ResponseHandler> Handler<H> {
 
     #[instrument(level = "trace", skip(self))]
     pub async fn can_write(&self) -> bool {
-        self.state
-            .lock()
-            .await
-            .config
-            .permissions
-            .fs_write_access
+        self.state.lock().await.config.permissions.fs_write_access
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -37,12 +32,7 @@ impl<H: Client + ResponseHandler> Handler<H> {
 
     #[instrument(level = "trace", skip(self))]
     pub async fn can_access_terminal(&self) -> bool {
-        self.state
-            .lock()
-            .await
-            .config
-            .permissions
-            .terminal_access
+        self.state.lock().await.config.permissions.terminal_access
     }
 
     #[instrument(level = "trace", skip(self))]

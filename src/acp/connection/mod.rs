@@ -111,13 +111,15 @@ mod tests {
         let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
         let connection = Connection::new(sender);
         let request = InitializeRequest::new(ProtocolVersion::LATEST);
-        
+
         // Spawn blocking task because Connection uses blocking_send
         let conn_clone = connection.clone();
         let req_clone = request.clone();
         tokio::task::spawn_blocking(move || {
             conn_clone.initialize(req_clone).unwrap();
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
 
         if let Some(UserRequest::Initialize(received)) = receiver.recv().await {
             assert_eq!(received.protocol_version, request.protocol_version);
@@ -131,14 +133,19 @@ mod tests {
         use agent_client_protocol::NewSessionRequest;
         let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
         let connection = Connection::new(sender);
-        
+
         let conn_clone = connection.clone();
         let request = NewSessionRequest::new(std::path::PathBuf::from("/"));
 
         tokio::task::spawn_blocking(move || {
             conn_clone.create_session(request).unwrap();
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
 
-        assert!(matches!(receiver.recv().await, Some(UserRequest::CreateSession(_))));
+        assert!(matches!(
+            receiver.recv().await,
+            Some(UserRequest::CreateSession(_))
+        ));
     }
 }

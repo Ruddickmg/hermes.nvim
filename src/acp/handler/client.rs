@@ -77,21 +77,20 @@ impl<H: Client + ResponseHandler> Client for Handler<H> {
     }
 }
 
-    #[cfg(test)]
-    mod tests {
+#[cfg(test)]
+mod tests {
     use super::*;
     use crate::nvim::state::PluginState;
     use agent_client_protocol::{
         Client, CreateTerminalRequest, CreateTerminalResponse, ReadTextFileRequest,
-        ReadTextFileResponse, TerminalOutputRequest, TerminalOutputResponse, WriteTextFileRequest,
-        WriteTextFileResponse, RequestPermissionRequest, RequestPermissionResponse,
-        SessionNotification, ReleaseTerminalRequest, ReleaseTerminalResponse,
-        WaitForTerminalExitRequest, WaitForTerminalExitResponse,
-        RequestPermissionOutcome, TerminalExitStatus,
+        ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
+        RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
+        SessionNotification, TerminalExitStatus, TerminalOutputRequest, TerminalOutputResponse,
+        WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
+        WriteTextFileResponse,
     };
     use std::sync::Arc;
     use tokio::sync::Mutex;
-
 
     #[derive(Clone)]
     struct MockClient {
@@ -112,7 +111,10 @@ impl<H: Client + ResponseHandler> Client for Handler<H> {
 
     #[async_trait::async_trait(?Send)]
     impl ResponseHandler for MockClient {
-        async fn schedule_autocommand<T: std::fmt::Debug + ToString, S: std::fmt::Debug + serde::Serialize>(
+        async fn schedule_autocommand<
+            T: std::fmt::Debug + ToString,
+            S: std::fmt::Debug + serde::Serialize,
+        >(
             &self,
             _command: T,
             _data: S,
@@ -123,7 +125,10 @@ impl<H: Client + ResponseHandler> Client for Handler<H> {
 
     #[async_trait::async_trait(?Send)]
     impl Client for MockClient {
-        async fn write_text_file(&self, _args: WriteTextFileRequest) -> Result<WriteTextFileResponse> {
+        async fn write_text_file(
+            &self,
+            _args: WriteTextFileRequest,
+        ) -> Result<WriteTextFileResponse> {
             *self.write_called.lock().await = true;
             Ok(WriteTextFileResponse::new())
         }
@@ -133,29 +138,52 @@ impl<H: Client + ResponseHandler> Client for Handler<H> {
             Ok(ReadTextFileResponse::new("content"))
         }
 
-        async fn create_terminal(&self, _args: CreateTerminalRequest) -> Result<CreateTerminalResponse> {
+        async fn create_terminal(
+            &self,
+            _args: CreateTerminalRequest,
+        ) -> Result<CreateTerminalResponse> {
             *self.terminal_create_called.lock().await = true;
             Ok(CreateTerminalResponse::new("1"))
         }
 
-        async fn request_permission(&self, _args: RequestPermissionRequest) -> Result<RequestPermissionResponse> { 
-            Ok(RequestPermissionResponse::new(RequestPermissionOutcome::Cancelled)) 
+        async fn request_permission(
+            &self,
+            _args: RequestPermissionRequest,
+        ) -> Result<RequestPermissionResponse> {
+            Ok(RequestPermissionResponse::new(
+                RequestPermissionOutcome::Cancelled,
+            ))
         }
-        async fn session_notification(&self, _args: SessionNotification) -> Result<()> { Ok(()) }
-        async fn terminal_output(&self, _args: TerminalOutputRequest) -> Result<TerminalOutputResponse> { Ok(TerminalOutputResponse::new("output", false)) }
-        async fn wait_for_terminal_exit(&self, _args: WaitForTerminalExitRequest) -> Result<WaitForTerminalExitResponse> { 
-            Ok(WaitForTerminalExitResponse::new(TerminalExitStatus::new())) 
+        async fn session_notification(&self, _args: SessionNotification) -> Result<()> {
+            Ok(())
         }
-        async fn release_terminal(&self, _args: ReleaseTerminalRequest) -> Result<ReleaseTerminalResponse> { Ok(ReleaseTerminalResponse::new()) }
+        async fn terminal_output(
+            &self,
+            _args: TerminalOutputRequest,
+        ) -> Result<TerminalOutputResponse> {
+            Ok(TerminalOutputResponse::new("output", false))
+        }
+        async fn wait_for_terminal_exit(
+            &self,
+            _args: WaitForTerminalExitRequest,
+        ) -> Result<WaitForTerminalExitResponse> {
+            Ok(WaitForTerminalExitResponse::new(TerminalExitStatus::new()))
+        }
+        async fn release_terminal(
+            &self,
+            _args: ReleaseTerminalRequest,
+        ) -> Result<ReleaseTerminalResponse> {
+            Ok(ReleaseTerminalResponse::new())
+        }
     }
 
     #[tokio::test]
     async fn test_write_text_file_permissions_allowed() {
         let mock = MockClient::new();
         let state = Arc::new(Mutex::new(PluginState::default()));
-        
+
         let handler = Handler::new(state.clone(), mock.clone());
-        
+
         let req = WriteTextFileRequest::new("session_id", "test.txt", "test");
         let res = handler.write_text_file(req.clone()).await;
         assert!(res.is_ok());
@@ -165,9 +193,9 @@ impl<H: Client + ResponseHandler> Client for Handler<H> {
     async fn test_write_text_file_calls_handler() {
         let mock = MockClient::new();
         let state = Arc::new(Mutex::new(PluginState::default()));
-        
+
         let handler = Handler::new(state.clone(), mock.clone());
-        
+
         let req = WriteTextFileRequest::new("session_id", "test.txt", "test");
         let _ = handler.write_text_file(req.clone()).await;
         assert!(*mock.write_called.lock().await);
@@ -178,9 +206,9 @@ impl<H: Client + ResponseHandler> Client for Handler<H> {
         let mock = MockClient::new();
         let state = Arc::new(Mutex::new(PluginState::default()));
         state.lock().await.config.permissions.fs_write_access = false;
-        
+
         let handler = Handler::new(state.clone(), mock.clone());
-        
+
         let req = WriteTextFileRequest::new("session_id", "test.txt", "test");
         let res = handler.write_text_file(req).await;
         assert!(res.is_err());
@@ -191,9 +219,9 @@ impl<H: Client + ResponseHandler> Client for Handler<H> {
         let mock = MockClient::new();
         let state = Arc::new(Mutex::new(PluginState::default()));
         state.lock().await.config.permissions.fs_write_access = false;
-        
+
         let handler = Handler::new(state.clone(), mock.clone());
-        
+
         let req = WriteTextFileRequest::new("session_id", "test.txt", "test");
         let _ = handler.write_text_file(req).await;
         assert!(!*mock.write_called.lock().await);
@@ -203,9 +231,9 @@ impl<H: Client + ResponseHandler> Client for Handler<H> {
     async fn test_read_text_file_permissions_allowed() {
         let mock = MockClient::new();
         let state = Arc::new(Mutex::new(PluginState::default()));
-        
+
         let handler = Handler::new(state.clone(), mock.clone());
-        
+
         let req = ReadTextFileRequest::new("session_id", "test.txt");
         let res = handler.read_text_file(req.clone()).await;
         assert!(res.is_ok());
@@ -215,9 +243,9 @@ impl<H: Client + ResponseHandler> Client for Handler<H> {
     async fn test_read_text_file_calls_handler() {
         let mock = MockClient::new();
         let state = Arc::new(Mutex::new(PluginState::default()));
-        
+
         let handler = Handler::new(state.clone(), mock.clone());
-        
+
         let req = ReadTextFileRequest::new("session_id", "test.txt");
         let _ = handler.read_text_file(req.clone()).await;
         assert!(*mock.read_called.lock().await);
@@ -228,9 +256,9 @@ impl<H: Client + ResponseHandler> Client for Handler<H> {
         let mock = MockClient::new();
         let state = Arc::new(Mutex::new(PluginState::default()));
         state.lock().await.config.permissions.fs_read_access = false;
-        
+
         let handler = Handler::new(state.clone(), mock.clone());
-        
+
         let req = ReadTextFileRequest::new("session_id", "test.txt");
         let res = handler.read_text_file(req.clone()).await;
         assert!(res.is_err());
@@ -241,9 +269,9 @@ impl<H: Client + ResponseHandler> Client for Handler<H> {
         let mock = MockClient::new();
         let state = Arc::new(Mutex::new(PluginState::default()));
         state.lock().await.config.permissions.fs_read_access = false;
-        
+
         let handler = Handler::new(state.clone(), mock.clone());
-        
+
         let req = ReadTextFileRequest::new("session_id", "test.txt");
         let _ = handler.read_text_file(req.clone()).await;
         assert!(!*mock.read_called.lock().await);

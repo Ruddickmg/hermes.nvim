@@ -1,6 +1,6 @@
-use crate::acp::connection::{stdio, Connection};
+use crate::acp::connection::{Connection, stdio};
 use crate::nvim::autocommands::ResponseHandler;
-use crate::{acp::error::Error, Handler};
+use crate::{Handler, acp::error::Error};
 use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolVersion};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -88,14 +88,12 @@ pub struct ConnectionManager<H: Client> {
     handles: Arc<Mutex<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>,
     connection: HashMap<Assistant, Rc<Connection>>,
     handler: Arc<Handler<H>>,
-    agent: Assistant,
 }
 
 impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
     #[instrument(level = "trace", skip(client))]
     pub fn new(client: Arc<Handler<H>>) -> Self {
         Self {
-            agent: Assistant::default(),
             handler: client,
             handles: Arc::new(Mutex::new(HashMap::new())),
             connection: HashMap::new(),
