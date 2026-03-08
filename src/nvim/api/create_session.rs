@@ -66,177 +66,193 @@ impl FromObject for CreateSessionArgs {
         });
 
         // Updated key to "mcpServers" to match README
-        let mcp_servers: Option<Vec<McpServer>> = dict.get("mcpServers").and_then(|servers_obj| {
-            if let ObjectKind::Array = servers_obj.kind() {
-                let array = unsafe { servers_obj.clone().into_array_unchecked() };
+        let mcp_servers: Option<Vec<McpServer>> = dict
+            .get("mcpServers")
+            .and_then(|servers_obj| {
+                if let ObjectKind::Array = servers_obj.kind() {
+                    let array = unsafe { servers_obj.clone().into_array_unchecked() };
 
-                let servers: Vec<McpServer> = array
-                    .into_iter()
-                    .filter_map(|server_obj| {
-                        let server_dict: Dictionary = server_obj.try_into().ok()?;
-                        let name: nvim_oxi::String =
-                            server_dict.get("name")?.clone().try_into().ok()?;
-                        let type_: McpServerType = server_dict
-                            .get("type")
-                            .map(|t| {
-                                t.clone()
-                                    .try_into()
-                                    .map(|s: nvim_oxi::String| McpServerType::from(s.to_string()))
-                                    .unwrap_or(McpServerType::Stdio)
-                            })
-                            .unwrap_or(McpServerType::Stdio);
+                    let servers: Vec<McpServer> = array
+                        .into_iter()
+                        .filter_map(|server_obj| {
+                            let server_dict: Dictionary = server_obj.try_into().ok()?;
+                            let name: nvim_oxi::String =
+                                server_dict.get("name")?.clone().try_into().ok()?;
+                            let type_: McpServerType = server_dict
+                                .get("type")
+                                .map(|t| {
+                                    t.clone()
+                                        .try_into()
+                                        .map(|s: nvim_oxi::String| {
+                                            McpServerType::from(s.to_string())
+                                        })
+                                        .unwrap_or(McpServerType::Stdio)
+                                })
+                                .unwrap_or(McpServerType::Stdio);
 
-                        match type_ {
-                            McpServerType::Http => {
-                                let url: nvim_oxi::String = server_dict
-                                    .get("url")
-                                    .or_else(|| server_dict.get("address"))?
-                                    .clone()
-                                    .try_into()
-                                    .ok()?;
+                            match type_ {
+                                McpServerType::Http => {
+                                    let url: nvim_oxi::String = server_dict
+                                        .get("url")
+                                        .or_else(|| server_dict.get("address"))?
+                                        .clone()
+                                        .try_into()
+                                        .ok()?;
 
-                                let mut server =
-                                    McpServerHttp::new(name.to_string(), url.to_string());
+                                    let mut server =
+                                        McpServerHttp::new(name.to_string(), url.to_string());
 
-                                // Handle headers
-                                if let Some(headers_obj) = server_dict.get("headers") {
-                                    if let ObjectKind::Array = headers_obj.kind() {
-                                        let headers_array =
-                                            unsafe { headers_obj.clone().into_array_unchecked() };
-                                        let headers: Vec<_> = headers_array
-                                            .into_iter()
-                                            .filter_map(|header_obj| {
-                                                let header_dict: Dictionary =
-                                                    header_obj.try_into().ok()?;
-                                                // Expect single key-value pair per object in array: { "Key": "Value" }
-                                                header_dict.into_iter().next().map(|(k, v)| {
-                                                    let k_str: nvim_oxi::String =
-                                                        k.try_into().unwrap_or_default();
-                                                    let v_str: nvim_oxi::String =
-                                                        v.try_into().unwrap_or_default();
-                                                    agent_client_protocol::HttpHeader::new(
-                                                        k_str.to_string(),
-                                                        v_str.to_string(),
-                                                    )
-                                                })
-                                            })
-                                            .collect();
-                                        server = server.headers(headers);
-                                    }
-                                }
-                                Some(McpServer::Http(server))
-                            }
-                            McpServerType::Sse => {
-                                let url: nvim_oxi::String = server_dict
-                                    .get("url")
-                                    .or_else(|| server_dict.get("address"))?
-                                    .clone()
-                                    .try_into()
-                                    .ok()?;
-
-                                let mut server =
-                                    McpServerSse::new(name.to_string(), url.to_string());
-
-                                // Handle headers
-                                if let Some(headers_obj) = server_dict.get("headers") {
-                                    if let ObjectKind::Array = headers_obj.kind() {
-                                        let headers_array =
-                                            unsafe { headers_obj.clone().into_array_unchecked() };
-                                        let headers: Vec<_> = headers_array
-                                            .into_iter()
-                                            .filter_map(|header_obj| {
-                                                let header_dict: Dictionary =
-                                                    header_obj.try_into().ok()?;
-                                                header_dict.into_iter().next().map(|(k, v)| {
-                                                    let k_str: nvim_oxi::String =
-                                                        k.try_into().unwrap_or_default();
-                                                    let v_str: nvim_oxi::String =
-                                                        v.try_into().unwrap_or_default();
-                                                    agent_client_protocol::HttpHeader::new(
-                                                        k_str.to_string(),
-                                                        v_str.to_string(),
-                                                    )
-                                                })
-                                            })
-                                            .collect();
-                                        server = server.headers(headers);
-                                    }
-                                }
-                                Some(McpServer::Sse(server))
-                            }
-                            McpServerType::Stdio => {
-                                let command: nvim_oxi::String =
-                                    server_dict.get("command")?.clone().try_into().ok()?;
-                                let args: Vec<String> = server_dict
-                                    .get("args")
-                                    .map(|a| {
-                                        if let ObjectKind::Array = a.kind() {
-                                            unsafe { a.clone().into_array_unchecked() }
+                                    // Handle headers
+                                    if let Some(headers_obj) = server_dict.get("headers") {
+                                        if let ObjectKind::Array = headers_obj.kind() {
+                                            let headers_array = unsafe {
+                                                headers_obj.clone().into_array_unchecked()
+                                            };
+                                            let headers: Vec<_> = headers_array
                                                 .into_iter()
-                                                .filter_map(|v| {
-                                                    v.try_into()
-                                                        .ok()
-                                                        .map(|s: nvim_oxi::String| s.to_string())
+                                                .filter_map(|header_obj| {
+                                                    let header_dict: Dictionary =
+                                                        header_obj.try_into().ok()?;
+                                                    // Expect single key-value pair per object in array: { "Key": "Value" }
+                                                    header_dict.into_iter().next().map(|(k, v)| {
+                                                        let k_str: nvim_oxi::String =
+                                                            k.try_into().unwrap_or_default();
+                                                        let v_str: nvim_oxi::String =
+                                                            v.try_into().unwrap_or_default();
+                                                        agent_client_protocol::HttpHeader::new(
+                                                            k_str.to_string(),
+                                                            v_str.to_string(),
+                                                        )
+                                                    })
                                                 })
-                                                .collect()
-                                        } else {
-                                            Vec::new()
+                                                .collect();
+                                            server = server.headers(headers);
                                         }
-                                    })
-                                    .unwrap_or_default();
+                                    }
+                                    Some(McpServer::Http(server))
+                                }
+                                McpServerType::Sse => {
+                                    let url: nvim_oxi::String = server_dict
+                                        .get("url")
+                                        .or_else(|| server_dict.get("address"))?
+                                        .clone()
+                                        .try_into()
+                                        .ok()?;
 
-                                let env: Vec<EnvVariable> = server_dict
-                                    .get("env")
-                                    .and_then(|e| {
-                                        // Expect array of objects: { { name = "VAR", value = "VAL" } }
-                                        if let ObjectKind::Array = e.kind() {
-                                            let array = unsafe { e.clone().into_array_unchecked() };
-                                            Some(
-                                                array
+                                    let mut server =
+                                        McpServerSse::new(name.to_string(), url.to_string());
+
+                                    // Handle headers
+                                    if let Some(headers_obj) = server_dict.get("headers") {
+                                        if let ObjectKind::Array = headers_obj.kind() {
+                                            let headers_array = unsafe {
+                                                headers_obj.clone().into_array_unchecked()
+                                            };
+                                            let headers: Vec<_> = headers_array
+                                                .into_iter()
+                                                .filter_map(|header_obj| {
+                                                    let header_dict: Dictionary =
+                                                        header_obj.try_into().ok()?;
+                                                    header_dict.into_iter().next().map(|(k, v)| {
+                                                        let k_str: nvim_oxi::String =
+                                                            k.try_into().unwrap_or_default();
+                                                        let v_str: nvim_oxi::String =
+                                                            v.try_into().unwrap_or_default();
+                                                        agent_client_protocol::HttpHeader::new(
+                                                            k_str.to_string(),
+                                                            v_str.to_string(),
+                                                        )
+                                                    })
+                                                })
+                                                .collect();
+                                            server = server.headers(headers);
+                                        }
+                                    }
+                                    Some(McpServer::Sse(server))
+                                }
+                                McpServerType::Stdio => {
+                                    let command: nvim_oxi::String =
+                                        server_dict.get("command")?.clone().try_into().ok()?;
+                                    let args: Vec<String> = server_dict
+                                        .get("args")
+                                        .map(|a| {
+                                            if let ObjectKind::Array = a.kind() {
+                                                unsafe { a.clone().into_array_unchecked() }
                                                     .into_iter()
                                                     .filter_map(|v| {
-                                                        let dict: Dictionary = v.try_into().ok()?;
-                                                        let name: nvim_oxi::String = dict
-                                                            .get("name")?
-                                                            .clone()
-                                                            .try_into()
-                                                            .ok()?;
-                                                        let value: nvim_oxi::String = dict
-                                                            .get("value")?
-                                                            .clone()
-                                                            .try_into()
-                                                            .ok()?;
-                                                        Some(EnvVariable::new(
-                                                            name.to_string(),
-                                                            value.to_string(),
-                                                        ))
+                                                        v.try_into().ok().map(
+                                                            |s: nvim_oxi::String| s.to_string(),
+                                                        )
                                                     })
-                                                    .collect(),
-                                            )
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .unwrap_or_default();
+                                                    .collect()
+                                            } else {
+                                                Vec::new()
+                                            }
+                                        })
+                                        .unwrap_or_default();
 
-                                Some(McpServer::Stdio(
-                                    McpServerStdio::new(
-                                        name.to_string(),
-                                        PathBuf::from(command.to_string()),
-                                    )
-                                    .args(args)
-                                    .env(env),
-                                ))
+                                    let env: Vec<EnvVariable> = server_dict
+                                        .get("env")
+                                        .and_then(|e| {
+                                            // Expect array of objects: { { name = "VAR", value = "VAL" } }
+                                            if let ObjectKind::Array = e.kind() {
+                                                let array =
+                                                    unsafe { e.clone().into_array_unchecked() };
+                                                Some(
+                                                    array
+                                                        .into_iter()
+                                                        .filter_map(|v| {
+                                                            let dict: Dictionary =
+                                                                v.try_into().ok()?;
+                                                            let name: nvim_oxi::String = dict
+                                                                .get("name")?
+                                                                .clone()
+                                                                .try_into()
+                                                                .ok()?;
+                                                            let value: nvim_oxi::String = dict
+                                                                .get("value")?
+                                                                .clone()
+                                                                .try_into()
+                                                                .ok()?;
+                                                            Some(EnvVariable::new(
+                                                                name.to_string(),
+                                                                value.to_string(),
+                                                            ))
+                                                        })
+                                                        .collect(),
+                                                )
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                        .unwrap_or_default();
+
+                                    Some(McpServer::Stdio(
+                                        McpServerStdio::new(
+                                            name.to_string(),
+                                            PathBuf::from(command.to_string()),
+                                        )
+                                        .args(args)
+                                        .env(env),
+                                    ))
+                                }
                             }
-                        }
-                    })
-                    .collect();
+                        })
+                        .collect();
 
-                Some(servers)
-            } else {
+                    Some(servers)
+                } else {
+                    eprintln!(
+                        "DEBUG: mcpServers is not an array, kind: {:?}",
+                        servers_obj.kind()
+                    );
+                    None
+                }
+            })
+            .or_else(|| {
+                eprintln!("DEBUG: mcpServers key not found or returned None from and_then");
                 None
-            }
-        });
+            });
 
         Ok(Self::Configuration { cwd, mcp_servers })
     }
@@ -707,7 +723,7 @@ mod session_args_tests {
         server_dict.insert("name", "http-srv");
         server_dict.insert("url", "http://example.com");
         let servers = vec![server_dict].into_iter().collect::<nvim_oxi::Array>();
-        dict.insert("mcp_servers", servers);
+        dict.insert("mcpServers", servers);
         CreateSessionArgs::from_object(Object::from(dict)).unwrap()
     }
 
@@ -718,7 +734,7 @@ mod session_args_tests {
         server_dict.insert("name", "sse-srv");
         server_dict.insert("url", "http://sse.example.com");
         let servers = vec![server_dict].into_iter().collect::<nvim_oxi::Array>();
-        dict.insert("mcp_servers", servers);
+        dict.insert("mcpServers", servers);
         CreateSessionArgs::from_object(Object::from(dict)).unwrap()
     }
 
@@ -729,7 +745,7 @@ mod session_args_tests {
         server_dict.insert("name", "stdio-srv");
         server_dict.insert("command", "my-cmd");
         let servers = vec![server_dict].into_iter().collect::<nvim_oxi::Array>();
-        dict.insert("mcp_servers", servers);
+        dict.insert("mcpServers", servers);
         CreateSessionArgs::from_object(Object::from(dict)).unwrap()
     }
 
