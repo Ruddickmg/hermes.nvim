@@ -9,7 +9,8 @@ use std::{rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
 
 use crate::{
-    Handler, acp::connection::ConnectionManager, logging::Logger, nvim::autocommands::AutoCommand,
+    Handler, acp::connection::ConnectionManager, nvim::autocommands::AutoCommand,
+    utilities::logging::Logger,
 };
 
 pub const GROUP: &str = "hermes";
