@@ -3,7 +3,7 @@ use hermes::nvim::api::CreateSessionArgs;
 use nvim_oxi::{Dictionary, Object, conversion::FromObject};
 use std::path::PathBuf;
 
-#[nvim_oxi::test]
+#[test]
 fn test_from_object_default() {
     let obj = Object::nil();
     let args = CreateSessionArgs::from_object(obj).unwrap();
@@ -27,7 +27,7 @@ fn create_stdio_default_args() -> CreateSessionArgs {
     CreateSessionArgs::from_object(obj).unwrap()
 }
 
-#[nvim_oxi::test]
+#[test]
 fn test_stdio_defaults_is_configuration() {
     let args = create_stdio_default_args();
     match args {
@@ -36,7 +36,7 @@ fn test_stdio_defaults_is_configuration() {
     }
 }
 
-#[nvim_oxi::test]
+#[test]
 fn test_stdio_defaults_server_count() {
     let args = create_stdio_default_args();
     match args {
@@ -47,7 +47,7 @@ fn test_stdio_defaults_server_count() {
     }
 }
 
-#[nvim_oxi::test]
+#[test]
 fn test_stdio_defaults_name() {
     let args = create_stdio_default_args();
     match args {
@@ -62,7 +62,7 @@ fn test_stdio_defaults_name() {
     }
 }
 
-#[nvim_oxi::test]
+#[test]
 fn test_stdio_defaults_command() {
     let args = create_stdio_default_args();
     match args {
@@ -108,7 +108,7 @@ fn create_explicit_args() -> CreateSessionArgs {
     CreateSessionArgs::from_object(obj).unwrap()
 }
 
-#[nvim_oxi::test]
+#[test]
 fn test_explicit_sse_name() {
     let args = create_explicit_args();
     match args {
@@ -123,7 +123,7 @@ fn test_explicit_sse_name() {
     }
 }
 
-#[nvim_oxi::test]
+#[test]
 fn test_explicit_sse_url() {
     let args = create_explicit_args();
     match args {
@@ -138,7 +138,7 @@ fn test_explicit_sse_url() {
     }
 }
 
-#[nvim_oxi::test]
+#[test]
 fn test_explicit_http_name() {
     let args = create_explicit_args();
     match args {
@@ -153,7 +153,7 @@ fn test_explicit_http_name() {
     }
 }
 
-#[nvim_oxi::test]
+#[test]
 fn test_explicit_http_url() {
     let args = create_explicit_args();
     match args {
@@ -168,7 +168,7 @@ fn test_explicit_http_url() {
     }
 }
 
-#[nvim_oxi::test]
+#[test]
 fn test_explicit_stdio_name() {
     let args = create_explicit_args();
     match args {
@@ -183,7 +183,7 @@ fn test_explicit_stdio_name() {
     }
 }
 
-#[nvim_oxi::test]
+#[test]
 fn test_explicit_stdio_command() {
     let args = create_explicit_args();
     match args {
@@ -198,7 +198,7 @@ fn test_explicit_stdio_command() {
     }
 }
 
-#[nvim_oxi::test]
+#[test]
 fn test_explicit_stdio_args() {
     let args = create_explicit_args();
     match args {
