@@ -297,11 +297,53 @@ pub fn create_session<H: Client + ResponseHandler + Send + Sync + 'static>(
 #[cfg(test)]
 mod session_args_tests {
     use std::path::PathBuf;
-
+    use crate::api::McpServerType;
     use agent_client_protocol::McpServer;
     use nvim_oxi::{Dictionary, Object, conversion::FromObject};
 
     use crate::api::CreateSessionArgs;
+    
+    // McpServerType Tests
+
+    #[test]
+    fn test_mcp_server_type_display_stdio() {
+        assert_eq!(format!("{}", McpServerType::Stdio), "stdio");
+    }
+
+    #[test]
+    fn test_mcp_server_type_display_http() {
+        assert_eq!(format!("{}", McpServerType::Http), "http");
+    }
+
+    #[test]
+    fn test_mcp_server_type_display_sse() {
+        assert_eq!(format!("{}", McpServerType::Sse), "sse");
+    }
+
+    #[test]
+    fn test_mcp_server_type_from_string_stdio() {
+        let server_type = McpServerType::from("stdio".to_string());
+        assert!(matches!(server_type, McpServerType::Stdio));
+    }
+
+    #[test]
+    fn test_mcp_server_type_from_string_http() {
+        let server_type = McpServerType::from("http".to_string());
+        assert!(matches!(server_type, McpServerType::Http));
+    }
+
+    #[test]
+    fn test_mcp_server_type_from_string_sse() {
+        let server_type = McpServerType::from("sse".to_string());
+        assert!(matches!(server_type, McpServerType::Sse));
+    }
+
+    #[test]
+    fn test_mcp_server_type_from_string_unknown_defaults_to_stdio() {
+        let server_type = McpServerType::from("unknown".to_string());
+        assert!(matches!(server_type, McpServerType::Stdio));
+    }
+
 
     #[test]
     fn test_from_object_default() {

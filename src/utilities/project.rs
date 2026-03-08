@@ -24,52 +24,9 @@ pub fn get_project_root(current_directory: PathBuf, root_markers: Vec<String>) -
 
 #[cfg(test)]
 mod get_project_root_tests {
-    use crate::api::McpServerType;
-
     use super::*;
     use std::fs::File;
     use tempfile::tempdir;
-
-    // McpServerType Tests
-
-    #[test]
-    fn test_mcp_server_type_display_stdio() {
-        assert_eq!(format!("{}", McpServerType::Stdio), "stdio");
-    }
-
-    #[test]
-    fn test_mcp_server_type_display_http() {
-        assert_eq!(format!("{}", McpServerType::Http), "http");
-    }
-
-    #[test]
-    fn test_mcp_server_type_display_sse() {
-        assert_eq!(format!("{}", McpServerType::Sse), "sse");
-    }
-
-    #[test]
-    fn test_mcp_server_type_from_string_stdio() {
-        let server_type = McpServerType::from("stdio".to_string());
-        assert!(matches!(server_type, McpServerType::Stdio));
-    }
-
-    #[test]
-    fn test_mcp_server_type_from_string_http() {
-        let server_type = McpServerType::from("http".to_string());
-        assert!(matches!(server_type, McpServerType::Http));
-    }
-
-    #[test]
-    fn test_mcp_server_type_from_string_sse() {
-        let server_type = McpServerType::from("sse".to_string());
-        assert!(matches!(server_type, McpServerType::Sse));
-    }
-
-    #[test]
-    fn test_mcp_server_type_from_string_unknown_defaults_to_stdio() {
-        let server_type = McpServerType::from("unknown".to_string());
-        assert!(matches!(server_type, McpServerType::Stdio));
-    }
 
     // get_project_root Tests
 
