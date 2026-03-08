@@ -33,7 +33,7 @@ where
         .callback(move |v: AutocmdCallbackArgs| {
             match nvim_object_to_struct(v.data) {
                Ok(parsed) => sender.send(parsed).unwrap(),
-               Err(e) => println!("Error occurred while parsing: {:?}", e),
+               Err(e) => println!("Error occurred while parsing: {:#?}", e),
             };
             false
         })

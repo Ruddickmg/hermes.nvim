@@ -23,6 +23,9 @@ tokio-util = { version = "0.7", features = ["compat"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.0", features = ["json", "env-filter"] }
 
+[build-dependencies]
+nvim-oxi = { version = "0.6.0", features = ["test", "neovim-0-11"] }
+
 [dev-dependencies]
 env_logger = "0.11"
 tempfile = "3.14"

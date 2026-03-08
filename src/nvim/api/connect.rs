@@ -89,7 +89,7 @@ pub fn connect<H: Client + ResponseHandler + Send + Sync + 'static>(
 ) -> Object {
     let function: Function<Option<ConnectionArgs>, Result<(), Error>> =
         Function::from_fn(move |arg: Option<ConnectionArgs>| -> Result<(), Error> {
-            debug!("Connect function called with: {:?}", arg);
+            debug!("Connect function called with: {:#?}", arg);
             let details = arg.map(ConnectionDetails::from).unwrap_or_default();
             connection.blocking_lock().connect(details.clone())?;
             Ok(())

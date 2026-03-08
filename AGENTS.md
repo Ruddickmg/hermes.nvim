@@ -1,9 +1,22 @@
+## Code
+
+### Documentation
+ - read documentation on nvim-oxi here: https://docs.rs/nvim-oxi/latest/nvim_oxi/
+ - read documentaion for the agent_client_protocol rust sdk here: https://docs.rs/agent-client-protocol-schema/latest/agent_client_protocol_schema/index.html
+ - read documentation on the agent client protocol here: https://agentclientprotocol.com/get-started/introduction
+
+### Practices
+ - Use clean code pattern
+ - use SOLID principles where applicable
+
 ## Testing
 
+The goal of testing is to give us confidence that our code is working as expected, and to catch any bugs or issues before they can be accidentally released. Keep that in mind when looking through code and writing tests. We want to be sure that if the tests pass, the application works as expected. We do not want undefined behavior.
+
 ### Do:
+ - Read documentation for nxim-oxi testing [here](https://github.com/noib3/nvim-oxi#testing)
  - cover all code paths, including edge cases and error paths
  - compare actual values, use "asser_eq" or similar assertions to make sure the values in the output are as expected based on the input
- - Write integration tests for nvim specific code since it is a requirement of nvim-oxi. See docs for nxim-oxi testing [here](https://github.com/noib3/nvim-oxi#testing)
  - run tests to debug and verify they are working
  - make each test for one thing, do not have multiple assertions in a single test case unless absolutely necessary. This makes it easier to identify what is failing when a test does fail, and also makes it easier to understand the purpose of the test.
 
@@ -56,6 +69,3 @@ assert_eq!("something", "something")
 
 This is a bad test because though it may check that the result exists (is not None), it doesn't verify that the value is correct. For example if we change variable "b" to 5, the test will pass, even though the result is different. Be as specific as possible while testing.
 
-## Code
-
- - Use clean code and SOLID principles

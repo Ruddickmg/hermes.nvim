@@ -52,7 +52,7 @@ impl<H: agent_client_protocol::Client + ResponseHandler> Handler<H> {
             })),
         });
         self.handler
-            .schedule_autocommand(Commands::AgentConnectionInitialized, value)
+            .schedule_autocommand(Commands::ConnectionInitialized, value)
             .await
     }
     #[instrument(level = "trace", skip(self))]

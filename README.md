@@ -48,8 +48,7 @@ Below are a list of functions that Hermes provides to send requests to ai assist
 
 ### Connect
 
-This method allows you to connect to an agent, it takes the agent name as a bd
-n argument.
+This method allows you to connect to an agent, it takes the agent name and the protocol for the connection (defaults to `stdio`).
 
 ```lua
 local hermes = require("hermes")
@@ -57,6 +56,60 @@ local hermes = require("hermes")
 hermes.connect({
     agent = "copilot", -- optional, defaults to "copilot", can be "copilot" | "opencode"
     protocol = "stdio", -- optional, defaults to "stdio"
+})
+```
+
+### Disconnect
+
+Below are examples of how you can disconnect from agent(s).
+
+```lua
+local hermes = require("hermes")
+
+-- disconnect from a single agent
+hermes.disconnect("copilot");
+
+-- disconnect from a list of agents
+hermes.disconnect({ "copilot", "opencode" })
+
+-- disconnect from all agents
+hermes.disconnect()
+```
+
+### Create Session
+
+Create a new session. If no arguments are provided, the session defaults to either the project root or the current directory. 
+
+```lua
+local hermes = require("hermes")
+
+-- use default session configuration
+hermes.createSession()
+
+-- customize connection config
+hermes.createSession({
+  cwd = ".", -- path to create the session in (optional)
+  mcpServers = {
+    { -- Http or Sse MCP server definition
+      type = "http", -- or "sse"
+      name = "Human readable name for MCP server",
+      url = "http://url-to-mcp-server.com",
+      headers = {
+        { ["Content-Type"] = "application/json" },
+        { headerName = "header value" },
+      },
+    },
+    {  -- Stdio MCP server definition
+      type = "stdio",
+      name = "Human readable name for MCP server",
+      command = "/path/to/the/MCP/server/executable",
+      args = { "run", "--flag", "something" },
+      -- Environment variables to set when launching the MCP server.
+      env = {
+        { name = "ENVIRONMENT_VAR_NAME", value = "value" },
+      },
+    },
+  },
 })
 ```
 
@@ -362,8 +415,6 @@ Below is a list of all autocommands and their associated data (passed to the cal
 
 ## Logging
 
-If you want or need, there are a few ways you can configure logging in Hermes
-
 ### Level
 Hermes defaults to the global neovim log level, or to `INFO` if there is no global log level set.
 
@@ -371,7 +422,6 @@ Global log level example:
 ```lua
 vim.opt.verbose = vim.log.levels.DEBUG;
 ```
-
 
  You can also use the neovim log levels to configure Hermes logging which will override the default behavior.
 
@@ -384,16 +434,10 @@ require("hermes").setup({
 
 ### Format
 
-Logging defaults to pretty formatting, due to limitations of the logging tool used in Hermes, the format cannot be updated after the plugin has loaded. However, you can configure the log format by setting a global variable in Noevim prior to loading the plugin
+Logging defaults to pretty formatting, but you can change that format by setting a global variable in vim
 
 ```lua
--- before hermes is required
 vim.g.HERMES_LOG_FORMAT = "json"
-
--- require hermes after setting global so that it can pick up the configuration 
-requre("hermes").setup({
-    ...
-});
 ```
 
 Your options for log formats are:
@@ -401,3 +445,10 @@ Your options for log formats are:
 - pretty
 - compact
 - full 
+
+
+## TODO:
+
+- look into ways of improving ai integration
+  - research RLM ([example](https://github.com/JaredStewart/coderlm))
+  - connect agent to lsp (try to set it up as a tool call/connect to neovim lsp)
