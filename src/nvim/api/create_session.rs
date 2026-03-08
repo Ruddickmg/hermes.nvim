@@ -2,9 +2,9 @@ use agent_client_protocol::{
     Client, EnvVariable, McpServer, McpServerHttp, McpServerSse, McpServerStdio, NewSessionRequest,
 };
 use nvim_oxi::{
+    Dictionary, Function, Object, ObjectKind,
     conversion::{Error, FromObject},
     lua::{Poppable, Pushable},
-    Dictionary, Function, Object, ObjectKind,
 };
 use std::{path::PathBuf, rc::Rc};
 use tokio::sync::Mutex;
@@ -374,7 +374,7 @@ pub fn create_session<H: Client + ResponseHandler + Send + Sync + 'static>(
 mod session_args_tests {
     use crate::api::McpServerType;
     use agent_client_protocol::McpServer;
-    use nvim_oxi::{conversion::FromObject, Dictionary, Object};
+    use nvim_oxi::{Dictionary, Object, conversion::FromObject};
     use std::path::PathBuf;
 
     use crate::api::CreateSessionArgs;
