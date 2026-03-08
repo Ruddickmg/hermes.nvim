@@ -1,26 +1,59 @@
-## Code
+## Codebase
 
-### Documentation
- - read documentation on nvim-oxi here: https://docs.rs/nvim-oxi/latest/nvim_oxi/
- - read documentaion for the agent_client_protocol rust sdk here: https://docs.rs/agent-client-protocol-schema/latest/agent_client_protocol_schema/index.html
- - read documentation on the agent client protocol here: https://agentclientprotocol.com/get-started/introduction
+Hermes is an interface between [Neovim](https://neovim.io/) and [ACP](https://agentclientprotocol.com/).
 
-### Practices
- - Use clean code pattern
- - use SOLID principles where applicable
+### Architecture
+
+The architecture separates Neovim logic from Rust ACP interactions:
+
+- **Directory Structure:**
+  - `src/acp`: Contains all direct interactions with the ACP SDK.
+  - `src/nvim`: Contains Neovim-specific bindings and logic.
+
+- **Concurrency Model:** The ACP SDK is single-threaded and async. We spawn a dedicated thread for each connection, each running a single-threaded Tokio runtime. This ensures every Agent has its own [independent](https://docs.rs/tokio/latest/tokio/task/struct.JoinHandle.html) environment. Thread handles are stored to be joined and dropped upon disconnection.
+
+- **Communication:**
+  - Agent threads communicate with the main Neovim thread via [mpsc channels](https://docs.rs/tokio/latest/tokio/sync/mpsc/fn.channel.html).
+  - Since Neovim is synchronous, an [AsyncHandle callback](https://docs.rs/nvim-oxi-libuv/latest/nvim_oxi_libuv/struct.AsyncHandle.html) triggers the processing of messages on the main thread.
+
+### Message Handling
+
+Messages sent by agent threads to the main Neovim thread are handled in three ways:
+
+1.  **Autocommand:** For informational events requiring no user response.
+2.  **Callback:** Executes a user-defined callback when the agent requires a response.
+3.  **Action:** Performs a specific action for the agent (e.g., read file, write file, terminal command).
+
+## Documentation
+
+Essential references for development:
+
+- **Neovim Bindings:** [nvim-oxi documentation](https://docs.rs/nvim-oxi/latest/nvim_oxi/)
+- **ACP SDK:** [Rust SDK documentation](https://docs.rs/agent-client-protocol-schema/latest/agent_client_protocol_schema/index.html)
+- **Protocol:** [Agent Client Protocol documentation](https://agentclientprotocol.com/get-started/introduction)
+
+## Practices
+
+- **Code Style:** Adhere to "Clean Code" patterns.
+- **Design:** Apply SOLID principles where applicable.
 
 ## Testing
 
-The goal of testing is to give us confidence that our code is working as expected, and to catch any bugs or issues before they can be accidentally released. Keep that in mind when looking through code and writing tests. We want to be sure that if the tests pass, the application works as expected. We do not want undefined behavior.
+Tests ensure code reliability and prevent regression.
 
-### Do:
- - Read documentation for nxim-oxi testing [here](https://github.com/noib3/nvim-oxi#testing)
- - cover all code paths, including edge cases and error paths
- - compare actual values, use "asser_eq" or similar assertions to make sure the values in the output are as expected based on the input
- - run tests to debug and verify they are working
- - make each test for one thing, do not have multiple assertions in a single test case unless absolutely necessary. This makes it easier to identify what is failing when a test does fail, and also makes it easier to understand the purpose of the test.
+### Guidelines
 
-Example of a good test
+- **Coverage:** Cover all code paths, including edge cases and error handling.
+- **Assertions:**
+  - Use `assert_eq!` to verify exact values.
+  - Avoid `assert!` with boolean checks (e.g., `is_some()`) when the value itself can be verified.
+- **Scope:** Each test should verify a single behavior or unit. Use only **one assertion** per test unless absolutely necessary.
+- **Debugging:** Run tests locally to verify fixes.
+
+### Examples
+
+**Good Test:** Verifies the *exact output* for a given input.
+
 ```rust
 fn add_less_than_ten(a: i32, b: i32) -> Option<i32> {
     if a < 10 && b < 10 {
@@ -34,38 +67,29 @@ fn add_less_than_ten(a: i32, b: i32) -> Option<i32> {
 fn test_addition_function() {
    let a = 1;
    let b = 2;
-   assert_eq!(addition(a, b), Some(3));
+   // Correct: Verifies the exact value
+   assert_eq!(add_less_than_ten(a, b), Some(3));
 }
 ```
 
-This is a good test because we test agains the expected output for given input
+**Bad Test:** Only verifies *existence*, missing correctness.
 
-
-### Don't:
- - write tests that check the existance of things like "is_some" when you can compare the actual value
- - delete tests in order to fix failures
-
-Example of a bad version of the test above
 ```rust
 #[test]
 fn test_addition_function() {
    let a = 1;
    let b = 2;
-   assert!(addition(a, b).is_some());
+   // Incorrect: Only checks if result is Some, not if it's 3
+   assert!(add_less_than_ten(a, b).is_some());
 }
 ```
 
- - write tests that use equals operators instead of `assert_eq`. 
+**Assertion Style:**
 
-Example:
-```rust 
-// bad test
-assert!("something" == "something")
+```rust
+// Bad
+assert!("something" == "something");
 
-// good test
-assert_eq!("something", "something")
+// Good
+assert_eq!("something", "something");
 ```
-
-
-This is a bad test because though it may check that the result exists (is not None), it doesn't verify that the value is correct. For example if we change variable "b" to 5, the test will pass, even though the result is different. Be as specific as possible while testing.
-
