@@ -35,7 +35,7 @@ pub fn parse_session_config_option(opt: SessionConfigOption) -> Dictionary {
         dict.insert("description", description);
     }
     if let Some(category) = opt.category {
-        dict.insert("category", format!("{:#?}", category));
+        dict.insert("category", format!("{:?}", category));
     }
     if let agent_client_protocol::SessionConfigKind::Select(selected) = opt.kind {
         let mut select_dict = nvim_oxi::Dictionary::new();
