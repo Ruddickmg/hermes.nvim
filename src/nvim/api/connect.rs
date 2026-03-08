@@ -4,8 +4,8 @@ use crate::{
 };
 use agent_client_protocol::Client;
 use nvim_oxi::{
-    lua::{ffi::State, Error, Poppable, Pushable},
     Dictionary, Function, Object,
+    lua::{Error, Poppable, Pushable, ffi::State},
 };
 use std::rc::Rc;
 use tokio::sync::Mutex;

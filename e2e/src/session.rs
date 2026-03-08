@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::{TIMEOUT_IN_SECONDS, utilities::autocommand};
+use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
 use agent_client_protocol::{InitializeResponse, NewSessionResponse};
 use hermes::{
     acp::connection::{Assistant, Protocol},
@@ -29,7 +29,7 @@ fn test_default_session_creation() -> Result<(), nvim_oxi::Error> {
         protocol: Some(Protocol::Stdio),
     }))?;
 
-    wait_for_initialization(Duration::from_secs(2))?;
+    wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
     create_session.call(CreateSessionArgs::Default)?;
 
@@ -70,7 +70,7 @@ fn test_custom_session_creation() -> Result<(), nvim_oxi::Error> {
         mcp_servers: None,
     })?;
 
-    let session = wait_for_session(Duration::from_secs(2));
+    let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS));
 
     disconnect.call(DisconnectArgs::All)?;
 

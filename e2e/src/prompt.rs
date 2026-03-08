@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::{TIMEOUT_IN_SECONDS, utilities::autocommand};
+use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
 use agent_client_protocol::{InitializeResponse, NewSessionResponse, PromptResponse, StopReason};
 use hermes::{
     acp::connection::{Assistant, Protocol},
@@ -102,22 +102,15 @@ fn test_prompt_multiple_content() -> Result<(), nvim_oxi::Error> {
     let session_id = session.session_id;
 
     // Create array of all content types
-    let mut content_array = Array::new();
-
-    // 1. Text content
     let mut text_dict = Dictionary::new();
     text_dict.insert("type", "text");
     text_dict.insert("text", "What time is it?");
-    content_array.push(Object::from(text_dict));
 
-    // 2. Link content
     let mut link_dict = Dictionary::new();
     link_dict.insert("type", "link");
     link_dict.insert("name", "Example file");
     link_dict.insert("uri", "/path/to/example.txt");
-    content_array.push(Object::from(link_dict));
 
-    // 3. Embedded text resource
     let mut embedded_text_dict = Dictionary::new();
     embedded_text_dict.insert("type", "embedded");
     let mut text_resource_dict = Dictionary::new();
@@ -125,9 +118,7 @@ fn test_prompt_multiple_content() -> Result<(), nvim_oxi::Error> {
     text_resource_dict.insert("mimeType", "text/x-python");
     text_resource_dict.insert("text", "def hello():\n    print('Hello, world!')");
     embedded_text_dict.insert("resource", text_resource_dict);
-    content_array.push(Object::from(embedded_text_dict));
 
-    // 4. Embedded blob resource
     let mut embedded_blob_dict = Dictionary::new();
     embedded_blob_dict.insert("type", "embedded");
     let mut blob_resource_dict = Dictionary::new();
@@ -135,21 +126,25 @@ fn test_prompt_multiple_content() -> Result<(), nvim_oxi::Error> {
     blob_resource_dict.insert("mimeType", "application/pdf");
     blob_resource_dict.insert("blob", "Base64-encoded-binary-data");
     embedded_blob_dict.insert("resource", blob_resource_dict);
-    content_array.push(Object::from(embedded_blob_dict));
 
-    // 5. Image content
     let mut image_dict = Dictionary::new();
     image_dict.insert("type", "image");
     image_dict.insert("data", "base64-encoded-image-data");
     image_dict.insert("mimeType", "image/png");
-    content_array.push(Object::from(image_dict));
 
-    // 6. Audio content
     let mut audio_dict = Dictionary::new();
     audio_dict.insert("type", "audio");
     audio_dict.insert("data", "base64-encoded-audio-data");
     audio_dict.insert("mimeType", "audio/wav");
-    content_array.push(Object::from(audio_dict));
+
+    let content_array = Array::from_iter(vec![
+        Object::from(text_dict),
+        Object::from(link_dict),
+        Object::from(embedded_text_dict),
+        Object::from(embedded_blob_dict),
+        Object::from(image_dict),
+        Object::from(audio_dict),
+    ]);
 
     let content = PromptContent::Multiple(
         content_array

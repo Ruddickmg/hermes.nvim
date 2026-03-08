@@ -3,15 +3,31 @@ use agent_client_protocol::{
     ImageContent, PromptRequest, ResourceLink, TextContent, TextResourceContents,
 };
 use nvim_oxi::{
+    Array, Dictionary, Function, Object, ObjectKind,
     conversion::{Error as ConversionError, FromObject},
     lua::{Error, Poppable, Pushable},
-    Array, Dictionary, Object, ObjectKind,
 };
 use std::rc::Rc;
 use tokio::sync::Mutex;
 use tracing::{debug, instrument};
 
 use crate::{acp::connection::ConnectionManager, nvim::autocommands::ResponseHandler};
+
+/// Extracts a required string field from a Lua dictionary.
+fn required_string(dict: &Dictionary, key: &str) -> Result<String, ConversionError> {
+    let value: nvim_oxi::String = dict
+        .get(key)
+        .ok_or_else(|| ConversionError::Other(format!("Missing '{key}' field")))?
+        .clone()
+        .try_into()?;
+    Ok(value.to_string())
+}
+
+/// Extracts an optional string field from a Lua dictionary.
+fn optional_string(dict: &Dictionary, key: &str) -> Option<String> {
+    let value: nvim_oxi::String = dict.get(key).and_then(|v| v.clone().try_into().ok())?;
+    Some(value.to_string())
+}
 
 /// Represents the content block type from Lua
 #[derive(Debug, Clone)]
@@ -39,12 +55,20 @@ pub enum ContentBlockType {
     },
 }
 
-impl ContentBlockType {
-    fn into_content_block(self) -> ContentBlock {
-        match self {
+impl From<ContentBlockType> for ContentBlock {
+    fn from(block: ContentBlockType) -> Self {
+        match block {
             ContentBlockType::Text { text } => ContentBlock::Text(TextContent::new(text)),
-            ContentBlockType::Link { name, uri, .. } => {
-                ContentBlock::ResourceLink(ResourceLink::new(name, uri))
+            ContentBlockType::Link {
+                name,
+                uri,
+                description,
+                mime_type,
+            } => {
+                let mut link = ResourceLink::new(name, uri);
+                link.description = description;
+                link.mime_type = mime_type;
+                ContentBlock::ResourceLink(link)
             }
             ContentBlockType::Embedded { resource } => {
                 ContentBlock::Resource(EmbeddedResource::new(resource))
@@ -71,56 +95,18 @@ impl ContentBlockType {
 impl FromObject for ContentBlockType {
     fn from_object(obj: Object) -> Result<Self, ConversionError> {
         let dict: Dictionary = obj.try_into()?;
-        let type_str: nvim_oxi::String = dict
-            .get("type")
-            .ok_or_else(|| {
-                ConversionError::Other("Missing 'type' field in content block".to_string())
-            })?
-            .clone()
-            .try_into()?;
+        let type_str = required_string(&dict, "type")?;
 
-        match type_str.to_string().as_str() {
-            "text" => {
-                let text: nvim_oxi::String = dict
-                    .get("text")
-                    .ok_or_else(|| {
-                        ConversionError::Other("Missing 'text' field for text content".to_string())
-                    })?
-                    .clone()
-                    .try_into()?;
-                Ok(ContentBlockType::Text {
-                    text: text.to_string(),
-                })
-            }
-            "link" => {
-                let name: nvim_oxi::String = dict
-                    .get("name")
-                    .ok_or_else(|| {
-                        ConversionError::Other("Missing 'name' field for link content".to_string())
-                    })?
-                    .clone()
-                    .try_into()?;
-                let uri: nvim_oxi::String = dict
-                    .get("uri")
-                    .ok_or_else(|| {
-                        ConversionError::Other("Missing 'uri' field for link content".to_string())
-                    })?
-                    .clone()
-                    .try_into()?;
-                let description: Option<nvim_oxi::String> = dict
-                    .get("description")
-                    .and_then(|v| v.clone().try_into().ok());
-                let description = description.map(|s| s.to_string());
-                let mime_type: Option<nvim_oxi::String> =
-                    dict.get("mimeType").and_then(|v| v.clone().try_into().ok());
-                let mime_type = mime_type.map(|s| s.to_string());
-                Ok(ContentBlockType::Link {
-                    name: name.to_string(),
-                    uri: uri.to_string(),
-                    description,
-                    mime_type,
-                })
-            }
+        match type_str.as_str() {
+            "text" => Ok(ContentBlockType::Text {
+                text: required_string(&dict, "text")?,
+            }),
+            "link" => Ok(ContentBlockType::Link {
+                name: required_string(&dict, "name")?,
+                uri: required_string(&dict, "uri")?,
+                description: optional_string(&dict, "description"),
+                mime_type: optional_string(&dict, "mimeType"),
+            }),
             "embedded" => {
                 let resource_dict: Dictionary = dict
                     .get("resource")
@@ -132,39 +118,23 @@ impl FromObject for ContentBlockType {
                     .clone()
                     .try_into()?;
 
-                let uri: nvim_oxi::String = resource_dict
-                    .get("uri")
-                    .ok_or_else(|| {
-                        ConversionError::Other(
-                            "Missing 'uri' field in embedded resource".to_string(),
-                        )
-                    })?
-                    .clone()
-                    .try_into()?;
-
-                let mime_type: Option<nvim_oxi::String> = resource_dict
-                    .get("mimeType")
-                    .and_then(|v| v.clone().try_into().ok());
-                let mime_type: Option<String> = mime_type.map(|s| s.to_string());
+                let uri = required_string(&resource_dict, "uri")?;
+                let mime_type = optional_string(&resource_dict, "mimeType");
 
                 let resource = if let Some(text_obj) = resource_dict.get("text") {
                     let text: nvim_oxi::String = text_obj.clone().try_into()?;
-                    let trc = TextResourceContents::new(uri.to_string(), text.to_string());
-                    // Apply mime_type if provided
-                    let trc = if let Some(mt) = mime_type {
-                        trc.mime_type(mt)
-                    } else {
-                        trc
+                    let trc = TextResourceContents::new(uri, text.to_string());
+                    let trc = match mime_type {
+                        Some(mt) => trc.mime_type(mt),
+                        None => trc,
                     };
                     EmbeddedResourceResource::TextResourceContents(trc)
                 } else if let Some(blob_obj) = resource_dict.get("blob") {
                     let blob: nvim_oxi::String = blob_obj.clone().try_into()?;
-                    let brc = BlobResourceContents::new(blob.to_string(), uri.to_string());
-                    // Apply mime_type if provided
-                    let brc = if let Some(mt) = mime_type {
-                        brc.mime_type(mt)
-                    } else {
-                        brc
+                    let brc = BlobResourceContents::new(blob.to_string(), uri);
+                    let brc = match mime_type {
+                        Some(mt) => brc.mime_type(mt),
+                        None => brc,
                     };
                     EmbeddedResourceResource::BlobResourceContents(brc)
                 } else {
@@ -175,57 +145,17 @@ impl FromObject for ContentBlockType {
 
                 Ok(ContentBlockType::Embedded { resource })
             }
-            "image" => {
-                let data: nvim_oxi::String = dict
-                    .get("data")
-                    .ok_or_else(|| {
-                        ConversionError::Other("Missing 'data' field for image content".to_string())
-                    })?
-                    .clone()
-                    .try_into()?;
-                let mime_type: nvim_oxi::String = dict
-                    .get("mimeType")
-                    .ok_or_else(|| {
-                        ConversionError::Other(
-                            "Missing 'mimeType' field for image content".to_string(),
-                        )
-                    })?
-                    .clone()
-                    .try_into()?;
-                let uri: Option<nvim_oxi::String> =
-                    dict.get("uri").and_then(|v| v.clone().try_into().ok());
-                let uri = uri.map(|s| s.to_string());
-                Ok(ContentBlockType::Image {
-                    data: data.to_string(),
-                    mime_type: mime_type.to_string(),
-                    uri,
-                })
-            }
-            "audio" => {
-                let data: nvim_oxi::String = dict
-                    .get("data")
-                    .ok_or_else(|| {
-                        ConversionError::Other("Missing 'data' field for audio content".to_string())
-                    })?
-                    .clone()
-                    .try_into()?;
-                let mime_type: nvim_oxi::String = dict
-                    .get("mimeType")
-                    .ok_or_else(|| {
-                        ConversionError::Other(
-                            "Missing 'mimeType' field for audio content".to_string(),
-                        )
-                    })?
-                    .clone()
-                    .try_into()?;
-                Ok(ContentBlockType::Audio {
-                    data: data.to_string(),
-                    mime_type: mime_type.to_string(),
-                })
-            }
+            "image" => Ok(ContentBlockType::Image {
+                data: required_string(&dict, "data")?,
+                mime_type: required_string(&dict, "mimeType")?,
+                uri: optional_string(&dict, "uri"),
+            }),
+            "audio" => Ok(ContentBlockType::Audio {
+                data: required_string(&dict, "data")?,
+                mime_type: required_string(&dict, "mimeType")?,
+            }),
             other => Err(ConversionError::Other(format!(
-                "Unknown content type: {}. Expected one of: text, link, embedded, image, audio",
-                other
+                "Unknown content type: {other}. Expected one of: text, link, embedded, image, audio"
             ))),
         }
     }
@@ -386,18 +316,12 @@ pub type PromptArgs = (String, PromptContent);
 pub fn prompt<H: agent_client_protocol::Client + ResponseHandler + Send + Sync + 'static>(
     connection: Rc<Mutex<ConnectionManager<H>>>,
 ) -> Object {
-    use nvim_oxi::Function;
-
     let function: Function<PromptArgs, Result<(), Error>> =
         Function::from_fn(move |(session_id, content): PromptArgs| {
             debug!("Prompt function called with session_id: {}", session_id);
 
-            // Convert content blocks to ContentBlock
-            let content_blocks: Vec<ContentBlock> = content
-                .into_vec()
-                .into_iter()
-                .map(|c| c.into_content_block())
-                .collect();
+            let content_blocks: Vec<ContentBlock> =
+                content.into_vec().into_iter().map(Into::into).collect();
 
             let request = PromptRequest::new(session_id, content_blocks);
 
@@ -748,7 +672,7 @@ mod tests {
         let block = ContentBlockType::Text {
             text: "Hello, world!".to_string(),
         };
-        let content_block = block.into_content_block();
+        let content_block = block.into();
         assert!(matches!(content_block, ContentBlock::Text(_)));
     }
 
@@ -760,7 +684,7 @@ mod tests {
             description: None,
             mime_type: None,
         };
-        let content_block = block.into_content_block();
+        let content_block = block.into();
         assert!(matches!(content_block, ContentBlock::ResourceLink(_)));
     }
 
@@ -771,7 +695,7 @@ mod tests {
             "content".to_string(),
         ));
         let block = ContentBlockType::Embedded { resource };
-        let content_block = block.into_content_block();
+        let content_block = block.into();
         assert!(matches!(content_block, ContentBlock::Resource(_)));
     }
 
@@ -782,7 +706,7 @@ mod tests {
             mime_type: "image/png".to_string(),
             uri: None,
         };
-        let content_block = block.into_content_block();
+        let content_block = block.into();
         assert!(matches!(content_block, ContentBlock::Image(_)));
     }
 
@@ -793,7 +717,7 @@ mod tests {
             mime_type: "image/png".to_string(),
             uri: Some("file:///path/to/image.png".to_string()),
         };
-        let content_block = block.into_content_block();
+        let content_block = block.into();
         assert!(matches!(content_block, ContentBlock::Image(_)));
     }
 
@@ -803,7 +727,7 @@ mod tests {
             data: "base64data".to_string(),
             mime_type: "audio/wav".to_string(),
         };
-        let content_block = block.into_content_block();
+        let content_block = block.into();
         assert!(matches!(content_block, ContentBlock::Audio(_)));
     }
 

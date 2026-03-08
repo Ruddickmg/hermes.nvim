@@ -57,7 +57,8 @@ Essential references for development:
 
 **Priority:** LSP > grep > read > other tools when working with code.
 
-### Code Style Adhere to "Clean Code" patterns.
+### Code Style
+Adhere to "Clean Code" patterns.
 - **Design:** Apply SOLID principles where applicable.
 
 ## Testing
