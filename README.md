@@ -83,16 +83,16 @@ Create a new session. If no arguments are provided, the session defaults to eith
 ```lua
 local hermes = require("hermes")
 
--- use default session configurtaion
+-- use default session configuration
 hermes.createSession()
 
 -- customize connection config
 hermes.createSession({
   cwd = ".", -- path to create the session in (optional)
   mcpServers = {
-    { -- Http or Css MCP server definition
+    { -- Http or Sse MCP server definition
       type = "http", -- or "sse"
-      name = "Human readable name for MPC server",
+      name = "Human readable name for MCP server",
       url = "http://url-to-mcp-server.com",
       headers = {
         { ["Content-Type"] = "application/json" },
@@ -101,7 +101,7 @@ hermes.createSession({
     },
     {  -- Stdio MCP server definition
       type = "stdio",
-      name = "Human readable name for MPC server",
+      name = "Human readable name for MCP server",
       command = "/path/to/the/MCP/server/executable",
       args = { "run", "--flag", "something" },
       -- Environment variables to set when launching the MCP server.
