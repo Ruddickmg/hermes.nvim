@@ -192,6 +192,7 @@ impl Pushable for CreateSessionArgs {
                         .map(|server| match server {
                             McpServer::Http(http) => {
                                 let mut server_dict = Dictionary::new();
+                                server_dict.insert("type", "http");
                                 server_dict.insert("name", http.name);
                                 server_dict.insert("url", http.url);
                                 let arr: nvim_oxi::Array = http
@@ -209,6 +210,7 @@ impl Pushable for CreateSessionArgs {
                             }
                             McpServer::Sse(sse) => {
                                 let mut server_dict = Dictionary::new();
+                                server_dict.insert("type", "sse");
                                 server_dict.insert("name", sse.name);
                                 server_dict.insert("url", sse.url);
                                 let arr: nvim_oxi::Array = sse
@@ -226,6 +228,7 @@ impl Pushable for CreateSessionArgs {
                             }
                             McpServer::Stdio(stdio) => {
                                 let mut server_dict = Dictionary::new();
+                                server_dict.insert("type", "stdio");
                                 server_dict.insert("name", stdio.name);
                                 server_dict.insert("command", stdio.command.to_str());
                                 server_dict.insert(
@@ -505,6 +508,131 @@ mod session_args_tests {
                 match &servers[2] {
                     McpServer::Stdio(s) => assert_eq!(s.args, vec!["arg1", "arg2"]),
                     _ => panic!("Expected Stdio server at index 2"),
+                }
+            }
+            _ => panic!("Expected Configuration variant"),
+        }
+    }
+
+    // Round-trip helpers: build the dictionary that `push` now produces (with `type` field)
+    // and verify `from_object` correctly restores each variant.
+    fn round_trip_http_dict() -> CreateSessionArgs {
+        let mut dict = Dictionary::new();
+        let mut server_dict = Dictionary::new();
+        server_dict.insert("type", "http");
+        server_dict.insert("name", "http-srv");
+        server_dict.insert("url", "http://example.com");
+        let servers = vec![server_dict].into_iter().collect::<nvim_oxi::Array>();
+        dict.insert("mcp_servers", servers);
+        CreateSessionArgs::from_object(Object::from(dict)).unwrap()
+    }
+
+    fn round_trip_sse_dict() -> CreateSessionArgs {
+        let mut dict = Dictionary::new();
+        let mut server_dict = Dictionary::new();
+        server_dict.insert("type", "sse");
+        server_dict.insert("name", "sse-srv");
+        server_dict.insert("url", "http://sse.example.com");
+        let servers = vec![server_dict].into_iter().collect::<nvim_oxi::Array>();
+        dict.insert("mcp_servers", servers);
+        CreateSessionArgs::from_object(Object::from(dict)).unwrap()
+    }
+
+    fn round_trip_stdio_dict() -> CreateSessionArgs {
+        let mut dict = Dictionary::new();
+        let mut server_dict = Dictionary::new();
+        server_dict.insert("type", "stdio");
+        server_dict.insert("name", "stdio-srv");
+        server_dict.insert("command", "my-cmd");
+        let servers = vec![server_dict].into_iter().collect::<nvim_oxi::Array>();
+        dict.insert("mcp_servers", servers);
+        CreateSessionArgs::from_object(Object::from(dict)).unwrap()
+    }
+
+    #[test]
+    fn test_round_trip_http_name() {
+        let args = round_trip_http_dict();
+        match args {
+            CreateSessionArgs::Configuration { mcp_servers, .. } => {
+                let servers = mcp_servers.unwrap();
+                match &servers[0] {
+                    McpServer::Http(h) => assert_eq!(h.name, "http-srv"),
+                    _ => panic!("Expected Http server after round-trip"),
+                }
+            }
+            _ => panic!("Expected Configuration variant"),
+        }
+    }
+
+    #[test]
+    fn test_round_trip_http_url() {
+        let args = round_trip_http_dict();
+        match args {
+            CreateSessionArgs::Configuration { mcp_servers, .. } => {
+                let servers = mcp_servers.unwrap();
+                match &servers[0] {
+                    McpServer::Http(h) => assert_eq!(h.url, "http://example.com"),
+                    _ => panic!("Expected Http server after round-trip"),
+                }
+            }
+            _ => panic!("Expected Configuration variant"),
+        }
+    }
+
+    #[test]
+    fn test_round_trip_sse_name() {
+        let args = round_trip_sse_dict();
+        match args {
+            CreateSessionArgs::Configuration { mcp_servers, .. } => {
+                let servers = mcp_servers.unwrap();
+                match &servers[0] {
+                    McpServer::Sse(s) => assert_eq!(s.name, "sse-srv"),
+                    _ => panic!("Expected Sse server after round-trip"),
+                }
+            }
+            _ => panic!("Expected Configuration variant"),
+        }
+    }
+
+    #[test]
+    fn test_round_trip_sse_url() {
+        let args = round_trip_sse_dict();
+        match args {
+            CreateSessionArgs::Configuration { mcp_servers, .. } => {
+                let servers = mcp_servers.unwrap();
+                match &servers[0] {
+                    McpServer::Sse(s) => assert_eq!(s.url, "http://sse.example.com"),
+                    _ => panic!("Expected Sse server after round-trip"),
+                }
+            }
+            _ => panic!("Expected Configuration variant"),
+        }
+    }
+
+    #[test]
+    fn test_round_trip_stdio_name() {
+        let args = round_trip_stdio_dict();
+        match args {
+            CreateSessionArgs::Configuration { mcp_servers, .. } => {
+                let servers = mcp_servers.unwrap();
+                match &servers[0] {
+                    McpServer::Stdio(s) => assert_eq!(s.name, "stdio-srv"),
+                    _ => panic!("Expected Stdio server after round-trip"),
+                }
+            }
+            _ => panic!("Expected Configuration variant"),
+        }
+    }
+
+    #[test]
+    fn test_round_trip_stdio_command() {
+        let args = round_trip_stdio_dict();
+        match args {
+            CreateSessionArgs::Configuration { mcp_servers, .. } => {
+                let servers = mcp_servers.unwrap();
+                match &servers[0] {
+                    McpServer::Stdio(s) => assert_eq!(s.command, PathBuf::from("my-cmd")),
+                    _ => panic!("Expected Stdio server after round-trip"),
                 }
             }
             _ => panic!("Expected Configuration variant"),
