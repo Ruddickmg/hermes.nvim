@@ -102,6 +102,21 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
         }
     }
 
+    #[instrument(level = "trace", skip(self))]
+    fn set_agent(&self, agent: Assistant) {
+        let mut config = self.handler.state.blocking_lock();
+        config.set_agent(agent);
+        drop(config);
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    fn get_agent(&self) -> Assistant {
+        let config = self.handler.state.blocking_lock();
+        let agent = config.agent.clone();
+        drop(config);
+        agent
+    }
+
     #[instrument(level = "trace", skip(self, connection))]
     fn add_connection(&mut self, agent: Assistant, connection: Rc<Connection>) {
         self.connection.insert(agent, connection);
@@ -114,7 +129,7 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
 
     #[instrument(level = "trace", skip(self))]
     pub fn get_current_connection(&self) -> Option<Rc<Connection>> {
-        self.get_connection(&self.agent)
+        self.get_connection(&self.get_agent())
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -124,9 +139,6 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
     ) -> Result<Rc<Connection>, Error> {
         Ok(match self.get_connection(&agent) {
             Some(connection) => {
-                let mut config = self.handler.state.blocking_lock();
-                config.set_agent(agent.clone());
-                drop(config);
                 warn!(
                     "A connection already exists for '{}'. Returning existing connection",
                     agent
@@ -163,6 +175,7 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
                 debug!("Stored connection to '{}'", agent);
                 connection.initialize(init_config)?;
                 info!("Initialized connection to '{}'", agent);
+                self.set_agent(agent.clone());
                 connection
             }
         })

@@ -2,9 +2,9 @@ use agent_client_protocol::{
     Client, EnvVariable, McpServer, McpServerHttp, McpServerSse, McpServerStdio, NewSessionRequest,
 };
 use nvim_oxi::{
+    Dictionary, Function, Object, ObjectKind,
     conversion::{Error, FromObject},
     lua::{Poppable, Pushable},
-    Dictionary, Function, Object, ObjectKind,
 };
 use std::{collections::HashMap, path::PathBuf, rc::Rc};
 use tokio::sync::Mutex;

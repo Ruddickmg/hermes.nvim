@@ -37,6 +37,9 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
             api::authenticate(connection_manager.clone()),
         ),
         ("disconnect", api::disconnect(connection_manager.clone())),
-        ("createSession", api::create_session(connection_manager.clone())),
+        (
+            "createSession",
+            api::create_session(connection_manager.clone()),
+        ),
     ]))
 }

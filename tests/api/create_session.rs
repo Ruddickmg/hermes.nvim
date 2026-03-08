@@ -1,6 +1,6 @@
 use agent_client_protocol::McpServer;
 use hermes::nvim::api::CreateSessionArgs;
-use nvim_oxi::{conversion::FromObject, Dictionary, Object};
+use nvim_oxi::{Dictionary, Object, conversion::FromObject};
 use std::path::PathBuf;
 
 #[nvim_oxi::test]
