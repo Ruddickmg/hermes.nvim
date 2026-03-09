@@ -172,6 +172,18 @@ hermes.prompt(sessionId, {
     mimeType = "audio/wav"
   }
 })
+
+```
+
+### Cancel
+
+Cancel the current operation of the agent (e.g., stop generating text, stop a tool call in progress, etc)
+
+```lua
+local hermes = require("hermes")
+local sessionId = 'session-id-from-create-session-response'
+
+hermes.cancel(sessionId)
 ```
 
 ### Set mode
