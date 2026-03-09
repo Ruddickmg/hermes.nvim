@@ -79,7 +79,7 @@ fn test_authenticate_flow() -> Result<(), nvim_oxi::Error> {
     let wait_for_init =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_authentication = autocommand::listen_for_autocommand::<AuthenticateResponse>(
-        Commands::ConnectionInitialized,
+        Commands::ClientAuthenticated,
     );
 
     connect.call(Some(ConnectionArgs {
@@ -98,7 +98,7 @@ fn test_authenticate_flow() -> Result<(), nvim_oxi::Error> {
         );
         assert!(
             auth_response.is_ok(),
-            "Agent info should be present after authentication"
+            "Authentication should succeed"
         );
     } else {
         warn!("No authentication methods available from agent, skipping auth test");
