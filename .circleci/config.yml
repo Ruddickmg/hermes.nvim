@@ -247,11 +247,16 @@ jobs:
           name: Install Opencode
           command: curl -fsSL https://opencode.ai/install | bash
       - run:
+          name: Install GitHub Copilot
+          command: curl -fsSL https://gh.io/copilot-install | bash
+      - run:
           name: Set up environment
           command: just
       - run:
           name: Run e2e tests
-          command: cargo llvm-cov --manifest-path e2e/Cargo.toml --all-features --workspace --lcov --output-path e2e.coverage.info
+          command: |
+            export PATH="/home/circleci/.local/bin:$PATH"
+            cargo llvm-cov --manifest-path e2e/Cargo.toml --all-features --workspace --lcov --output-path e2e.coverage.info
       - codecov/upload:
           fail_on_error: true
           files: e2e.coverage.info
