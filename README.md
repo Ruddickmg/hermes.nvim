@@ -16,7 +16,7 @@ Hermes focuses on:
 - [x] Full implementation of ACP Client
 - [x] Configurable capabilities (filesystem, terminal, etc)
 - [x] Trigger Autocommands for messages/notifications
-- [ ] Speech to text for audio prompting (If no audio cability is present for the agent)
+- [ ] Speech to text for audio prompting (If no audio capability is present for the agent)
 - [ ] Lsp integration
 - [ ] [Recursive language model](https://arxiv.org/abs/2512.24601) integration
 
@@ -96,7 +96,7 @@ hermes.createSession({
 Send prompts to the agent 
 
 There are five types of prompts you can send to an agent
- - [text](https://agentclientprotocol.com/protocol/content#text-content): Human readable promt's
+ - [text](https://agentclientprotocol.com/protocol/content#text-content): Human readable prompts
  - [link](https://agentclientprotocol.com/protocol/content#resource-link): Links to resources (url, file path, etc)
  - [embedded](https://agentclientprotocol.com/protocol/content#embedded-resource): Similar to a link, but including the contents of the resource link (preferred over link if available) 
  - [image](https://agentclientprotocol.com/protocol/content#image-content): An image (encoded as a base64)
@@ -107,13 +107,13 @@ local hermes = require("hermes")
 local sessionId = "current-session-id";
 
 -- single prompt
-hermes.prompt(sessiondId, {
+hermes.prompt(sessionId, {
     type = "text",
     text = "What time is it?"
 })
 
 -- multiple prompts at once
-hermes.prompt(sessiondId, {
+hermes.prompt(sessionId, {
   {
     type = "text",
     text = "What time is it?"
