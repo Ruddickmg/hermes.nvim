@@ -27,7 +27,7 @@ fn required_string(dict: &Dictionary, key: &str) -> Result<String, ConversionErr
 fn optional_string(dict: &Dictionary, key: &str) -> Result<Option<String>, ConversionError> {
     if let Some(result) = dict.get(key).map(|s| {
         let a: Result<nvim_oxi::String, ConversionError> = s.clone().try_into();
-        a.map(|s|s.to_string())
+        a.map(|s| s.to_string())
     }) {
         result.map(Some)
     } else {
@@ -220,7 +220,12 @@ impl Pushable for ContentBlockType {
                             res_dict.insert("mimeType", mt);
                         }
                     }
-                    _ => {}
+                    resource => {
+                        return Err(Error::RuntimeError(format!(
+                            "Unsupported embedded resource type: {:?}",
+                            resource
+                        )));
+                    }
                 }
                 d.insert("resource", res_dict);
                 d
