@@ -81,14 +81,7 @@ pub async fn connect<H: Client + ResponseHandler + 'static>(
     match agent.clone() {
         Assistant::Copilot => {
             trace!("Starting copilot connection");
-            stdio_connection(
-                receiver,
-                client,
-                &agent,
-                "copilot",
-                ["--acp"],
-            )
-            .await
+            stdio_connection(receiver, client, &agent, "copilot", ["--acp"]).await
         }
         Assistant::Opencode => {
             trace!("Starting opencode connection");
