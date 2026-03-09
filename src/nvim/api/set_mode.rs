@@ -1,5 +1,5 @@
 use agent_client_protocol::{Client, SetSessionModeRequest};
-use nvim_oxi::{lua::Error, Function, Object};
+use nvim_oxi::{Function, Object, lua::Error};
 use std::rc::Rc;
 use tokio::sync::Mutex;
 use tracing::{debug, instrument};
