@@ -50,7 +50,9 @@ fn test_set_mode_success() -> Result<(), nvim_oxi::Error> {
 
     let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
     let session_id = session.session_id;
-    let modes = session.modes.unwrap();
+    let modes = session
+        .modes
+        .expect("session did not include modes; mode selection is not supported for this session");
     let current_mode = modes.current_mode_id;
     let mode_id = 
         modes
@@ -58,7 +60,7 @@ fn test_set_mode_success() -> Result<(), nvim_oxi::Error> {
             .into_iter()
             .find(|m| m.id != current_mode)
             .map(|m| m.id)
-            .unwrap_or(current_mode);
+            .expect("Expected at least one available mode different from the current mode for this test");
 
     set_mode.call((session_id.to_string(), mode_id.to_string()))?;
 
