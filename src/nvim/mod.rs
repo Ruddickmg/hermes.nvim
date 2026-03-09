@@ -32,6 +32,7 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     })?;
 
     Ok(Dictionary::from_iter([
+        ("cancel", api::cancel(connection_manager.clone())),
         ("connect", api::connect(connection_manager.clone())),
         (
             "authenticate",
