@@ -174,6 +174,18 @@ hermes.prompt(sessionId, {
 })
 ```
 
+### Set mode
+
+Set what mode the agent is in (the plan/build modes for opencode for example)
+
+```lua
+local hermes = require("hermes")
+local sessionId = 'session-id-from-create-session-response'
+local modeId = 'mode-id-from-create-session-response'
+
+hermes.setMode(sessionId, modeId)
+```
+
 ## Autocommands
 
 Hermes generates autocommands for all communication between agent and client. Here's an example of hooking into one:
@@ -522,8 +534,8 @@ Your options for log formats are:
   - [x] Send images 
   - [x] Send resource links
   - [x] Send audio
+- [x] Allow mode selection
 - [ ] Allow cancel command to stop ai actions
-- [ ] Allow mode selection
 - [ ] Handle sessions
   - [x] Create session
   - [ ] Load session
