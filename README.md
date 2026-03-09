@@ -176,7 +176,7 @@ hermes.prompt(sessionId, {
 
 ### Set mode
 
-Set what mode the agent is in (plan/build mode fore opencode for example)
+Set what mode the agent is in (the plan/build modes for opencode for example)
 
 ```lua
 local hermes = require("hermes")
