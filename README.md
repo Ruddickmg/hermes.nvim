@@ -512,24 +512,33 @@ Your options for log formats are:
   - [x] Via stdio
   - [ ] Via http
   - [ ] Via linux socket
-  - [ ] handle authentication
+- [x] initialize connections
+- [x] handle authentication
+- [x] Allow user to send prompts
+  - [x] Send files
+  - [x] Send text
+  - [x] Send images 
+  - [x] Send resource links
+  - [x] Send audio
+- [ ] Allow cancel command to stop ai actions
 - [ ] Allow mode selection
+- [ ] Handle sessions
+  - [x] Create session
+  - [ ] Load session
+  - [ ] List sessions
+  - [ ] Merge sessions
+  - [ ] Fork sessions
 - [ ] Allow model selection
+
 - [ ] Allow agent to write to files
   - [ ] Automatically refresh open buffers that have been modified
 - [ ] Allow agent to read files
 - [ ] Allow agent to use terminal
   - [ ] Create autocommands for Agent progress in the terminal
 - [ ] Allow user to give permission when needed
+
 - [ ] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
-- [ ] Allow user to send prompts
-  - [ ] Send files
-  - [ ] Send text
-  - [ ] Send images 
-  - [ ] Send resource links
-  - [ ] Send audio
-    - [ ] allow collecting audio input
-  - [ ] Cancel
+
 - [ ] look into ways of improving ai integration
   - [ ] research RLM ([example](https://github.com/JaredStewart/coderlm))
   - [ ] connect agent to lsp (try to set it up as a tool call/connect to neovim lsp)
