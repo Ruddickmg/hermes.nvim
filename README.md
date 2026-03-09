@@ -4,7 +4,7 @@ An ACP (Agent Client Protocol) Client implementation designed for integration wi
 
 ## Overview
 
-Hermes is a messaging layer for Neovim, not a complete AI assistant. It has no built-in UI, instead it provides APIs and hooks for building your own workflow while routing client-agent communication.
+Hermes is a messaging layer for Neovim. It has no built-in UI, instead it provides APIs and hooks for building your own workflow while routing client-agent communication.
 
 Hermes focuses on:
 - APIs for making requests to AI Assistants (prompt, connect, authenticate, etc)
@@ -16,31 +16,9 @@ Hermes focuses on:
 - [x] Full implementation of ACP Client
 - [x] Configurable capabilities (filesystem, terminal, etc)
 - [x] Trigger Autocommands for messages/notifications
-- [x] Allow connecting to Agents
-  - [x] Via stdio
-  - [ ] Via http
-  - [ ] Via linux socket
-  - [x] handle authentication
-- [ ] Allow mode selection
-- [ ] Allow model selection
-- [ ] Allow agent to write to files
-  - [ ] Automatically refresh open buffers that have been modified
-- [ ] Allow agent to read files
-- [ ] Allow agent to use terminal
-  - [ ] Create autocommands for Agent progress in the terminal
-- [ ] Allow user to give permission when needed
-- [ ] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
-- [ ] Allow user to send prompts
-  - [ ] Send files
-  - [ ] Send text
-  - [ ] Send images 
-  - [ ] Send resource links
-  - [ ] Send audio
-    - [ ] allow collecting audio input
-    - [ ] use [whisper.rs](https://crates.io/crates/whisper-rs) to facilitate speech to text
-  - [ ] Cancel
-- [ ] Speech
-  
+- [ ] Speech to text for audio prompting (If no audio capability is present for the agent)
+- [ ] Lsp integration
+- [ ] [Recursive language model](https://arxiv.org/abs/2512.24601) integration
 
 ## API
 
@@ -110,6 +88,67 @@ hermes.createSession({
       },
     },
   },
+})
+```
+
+### Prompt
+
+Send prompts to the agent 
+
+There are five types of prompts you can send to an agent
+ - [text](https://agentclientprotocol.com/protocol/content#text-content): Human readable prompts
+ - [link](https://agentclientprotocol.com/protocol/content#resource-link): Links to resources (url, file path, etc)
+ - [embedded](https://agentclientprotocol.com/protocol/content#embedded-resource): Similar to a link, but including the contents of the resource link (preferred over link if available) 
+ - [image](https://agentclientprotocol.com/protocol/content#image-content): An image (encoded as a base64)
+ - [audio](https://agentclientprotocol.com/protocol/content#audio-content): Audio content for communication (encoded as base64)
+
+```lua
+local hermes = require("hermes")
+local sessionId = "current-session-id";
+
+-- single prompt
+hermes.prompt(sessionId, {
+    type = "text",
+    text = "What time is it?"
+})
+
+-- multiple prompts at once
+hermes.prompt(sessionId, {
+  {
+    type = "text",
+    text = "What time is it?"
+  },
+  {
+    type = "link",
+    name = "Example file",
+    uri = "/path/to/example.txt"
+  },
+  { -- text
+    type = "embedded",
+    resource = {
+      uri = "file:///home/user/script.py",
+      mimeType = "text/x-python",
+      text = "def hello():\n    print('Hello, world!')"
+    }
+  },
+  { -- blob
+    type = "embedded",
+    resource = {
+      uri = "file:///home/user/script.py",
+      mimeType = "application/pdf",
+      blob = "Base64-encoded binary data"
+    }
+  },
+  {
+    type = "image",
+    data = "base64-encoded-image-data",
+    mimeType = "image/png"
+  },
+  {
+    type = "audio",
+    data = "base64-encoded-audio-data",
+    mimeType = "audio/wav"
+  }
 })
 ```
 
@@ -449,6 +488,29 @@ Your options for log formats are:
 
 ## TODO:
 
-- look into ways of improving ai integration
-  - research RLM ([example](https://github.com/JaredStewart/coderlm))
-  - connect agent to lsp (try to set it up as a tool call/connect to neovim lsp)
+- [x] Allow connecting to Agents
+  - [x] Via stdio
+  - [ ] Via http
+  - [ ] Via linux socket
+  - [ ] handle authentication
+- [ ] Allow mode selection
+- [ ] Allow model selection
+- [ ] Allow agent to write to files
+  - [ ] Automatically refresh open buffers that have been modified
+- [ ] Allow agent to read files
+- [ ] Allow agent to use terminal
+  - [ ] Create autocommands for Agent progress in the terminal
+- [ ] Allow user to give permission when needed
+- [ ] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
+- [ ] Allow user to send prompts
+  - [ ] Send files
+  - [ ] Send text
+  - [ ] Send images 
+  - [ ] Send resource links
+  - [ ] Send audio
+    - [ ] allow collecting audio input
+  - [ ] Cancel
+- [ ] look into ways of improving ai integration
+  - [ ] research RLM ([example](https://github.com/JaredStewart/coderlm))
+  - [ ] connect agent to lsp (try to set it up as a tool call/connect to neovim lsp)
+  - [ ] use [whisper.rs](https://crates.io/crates/whisper-rs) to facilitate speech to text

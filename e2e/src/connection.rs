@@ -10,7 +10,7 @@ use nvim_oxi::{
     conversion::FromObject,
 };
 
-use crate::utilities::autocommand;
+use crate::{TIMEOUT_IN_SECONDS, utilities::autocommand};
 
 #[nvim_oxi::test]
 fn test_setup_returns_connect_function() -> Result<(), nvim_oxi::Error> {
@@ -57,7 +57,7 @@ fn test_initialization() -> Result<(), nvim_oxi::Error> {
         protocol: Some(Protocol::Stdio),
     }))?;
 
-    let response = wait_for_response(Duration::from_secs(2))?;
+    let response = wait_for_response(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
     disconnect.call(DisconnectArgs::All)?;
 
