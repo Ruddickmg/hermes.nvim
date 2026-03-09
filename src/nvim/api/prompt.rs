@@ -24,9 +24,15 @@ fn required_string(dict: &Dictionary, key: &str) -> Result<String, ConversionErr
 }
 
 /// Extracts an optional string field from a Lua dictionary.
-fn optional_string(dict: &Dictionary, key: &str) -> Option<String> {
-    let value: nvim_oxi::String = dict.get(key).and_then(|v| v.clone().try_into().ok())?;
-    Some(value.to_string())
+fn optional_string(dict: &Dictionary, key: &str) -> Result<Option<String>, ConversionError> {
+    if let Some(result) = dict.get(key).map(|s| {
+        let a: Result<nvim_oxi::String, ConversionError> = s.clone().try_into();
+        a.map(|s|s.to_string())
+    }) {
+        result.map(Some)
+    } else {
+        Ok(None)
+    }
 }
 
 /// Represents the content block type from Lua
@@ -104,8 +110,8 @@ impl FromObject for ContentBlockType {
             "link" => Ok(ContentBlockType::Link {
                 name: required_string(&dict, "name")?,
                 uri: required_string(&dict, "uri")?,
-                description: optional_string(&dict, "description"),
-                mime_type: optional_string(&dict, "mimeType"),
+                description: optional_string(&dict, "description")?,
+                mime_type: optional_string(&dict, "mimeType")?,
             }),
             "embedded" => {
                 let resource_dict: Dictionary = dict
@@ -119,7 +125,7 @@ impl FromObject for ContentBlockType {
                     .try_into()?;
 
                 let uri = required_string(&resource_dict, "uri")?;
-                let mime_type = optional_string(&resource_dict, "mimeType");
+                let mime_type = optional_string(&resource_dict, "mimeType")?;
 
                 let resource = if let Some(text_obj) = resource_dict.get("text") {
                     let text: nvim_oxi::String = text_obj.clone().try_into()?;
@@ -148,7 +154,7 @@ impl FromObject for ContentBlockType {
             "image" => Ok(ContentBlockType::Image {
                 data: required_string(&dict, "data")?,
                 mime_type: required_string(&dict, "mimeType")?,
-                uri: optional_string(&dict, "uri"),
+                uri: optional_string(&dict, "uri")?,
             }),
             "audio" => Ok(ContentBlockType::Audio {
                 data: required_string(&dict, "data")?,
