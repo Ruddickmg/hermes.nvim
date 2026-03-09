@@ -85,8 +85,8 @@ pub async fn connect<H: Client + ResponseHandler + 'static>(
                 receiver,
                 client,
                 &agent,
-                "node",
-                ["copilot-language-server", "--acp"],
+                "copilot",
+                ["--acp"],
             )
             .await
         }

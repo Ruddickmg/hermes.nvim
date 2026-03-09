@@ -247,6 +247,9 @@ jobs:
           name: Install Opencode
           command: curl -fsSL https://opencode.ai/install | bash
       - run:
+          name: Install Github Copilot
+          command: curl -fsSL https://gh.io/copilot-install | bash
+      - run:
           name: Set up environment
           command: just
       - run:

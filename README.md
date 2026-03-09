@@ -28,6 +28,15 @@ Below are a list of functions that Hermes provides to send requests to ai assist
 
 This method allows you to connect to an agent, it takes the agent name and the protocol for the connection (defaults to `stdio`).
 
+Options for protocol
+- stdio
+- http
+- socket
+
+Options for agent
+- copilot (Github Copilot)
+- opencode
+
 ```lua
 local hermes = require("hermes")
 
@@ -54,6 +63,17 @@ hermes.disconnect({ "copilot", "opencode" })
 hermes.disconnect()
 ```
 
+### Authenticate
+
+Handle agent authentication.
+
+```lua
+local hermes = require("hermes")
+local auth_method_id = "example-auth-method-id"
+
+hermes.authenticate(auth_method_id)
+```
+
 ### Create Session
 
 Create a new session. If no arguments are provided, the session defaults to either the project root or the current directory. 
@@ -64,7 +84,7 @@ local hermes = require("hermes")
 -- use default session configuration
 hermes.createSession()
 
--- customize connection config
+-- customize connection configurtation
 hermes.createSession({
   cwd = ".", -- path to create the session in (optional)
   mcpServers = {
