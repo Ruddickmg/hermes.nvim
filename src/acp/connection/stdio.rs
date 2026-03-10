@@ -87,5 +87,9 @@ pub async fn connect<H: Client + ResponseHandler + 'static>(
             trace!("Starting opencode connection");
             stdio_connection(receiver, client, &agent, "opencode", ["acp"]).await
         }
+        Assistant::Custom { command, args, .. } => {
+            trace!("Starting custom agent connection: {}", agent);
+            stdio_connection(receiver, client, &agent, &command, args).await
+        }
     }
 }

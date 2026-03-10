@@ -1,6 +1,6 @@
-use crate::acp::connection::{Connection, stdio};
+use crate::acp::connection::{stdio, Connection};
 use crate::nvim::autocommands::ResponseHandler;
-use crate::{Handler, acp::error::Error};
+use crate::{acp::error::Error, Handler};
 use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolVersion};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -50,6 +50,11 @@ pub enum Assistant {
     #[default]
     Copilot,
     Opencode,
+    Custom {
+        name: String,
+        command: String,
+        args: Vec<String>,
+    },
 }
 
 impl std::fmt::Display for Assistant {
@@ -57,6 +62,7 @@ impl std::fmt::Display for Assistant {
         match self {
             Assistant::Copilot => write!(f, "copilot"),
             Assistant::Opencode => write!(f, "opencode"),
+            Assistant::Custom { name, .. } => write!(f, "{}", name),
         }
     }
 }
@@ -66,7 +72,11 @@ impl From<&str> for Assistant {
         match s.to_lowercase().as_str() {
             "copilot" => Assistant::Copilot,
             "opencode" => Assistant::Opencode,
-            _ => Assistant::default(),
+            _ => Assistant::Custom {
+                name: s.to_string(),
+                command: String::new(),
+                args: Vec::new(),
+            },
         }
     }
 }
@@ -309,6 +319,34 @@ mod tests {
 
     #[test]
     fn test_assistant_from_str_unknown() {
-        assert_eq!(Assistant::from("unknown"), Assistant::Copilot);
+        let assistant = Assistant::from("unknown");
+        assert!(matches!(assistant, Assistant::Custom { name, .. } if name == "unknown"));
+    }
+
+    #[test]
+    fn test_assistant_display_custom() {
+        let assistant = Assistant::Custom {
+            name: String::from("my-claude"),
+            command: String::from("claude-acp"),
+            args: vec![String::from("--socket")],
+        };
+        assert_eq!(format!("{}", assistant), "my-claude");
+    }
+
+    #[test]
+    fn test_assistant_from_str_creates_custom() {
+        let assistant = Assistant::from("my-custom-agent");
+        match assistant {
+            Assistant::Custom {
+                name,
+                command,
+                args,
+            } => {
+                assert_eq!(name, "my-custom-agent");
+                assert_eq!(command, "");
+                assert!(args.is_empty());
+            }
+            _ => panic!("Expected Custom variant"),
+        }
     }
 }
