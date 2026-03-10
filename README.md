@@ -299,14 +299,20 @@ Respond to agent requests
 ```lua
 local hermes = require("hermes")
 
--- select a response by it's id (included in the "PermissionRequest" autocommand)
-hermes.respond(requestId, {
-    optionId = "option-id-selected-from-permissions-request", -- required if "cancel" is "true"
-})
+-- call signature
+hermes.respond("requestId", "optionId")
 
--- cancel action
-hermes.respond(requestId, {
-    cancel = true,
+-- selected permission option id should be retrieved from the data object from the PermissionReqeust autocommand
+-- example: 
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "PermissionRequested",
+    callback = function(args)
+        local selectedOption = args.data.options[0] -- select id somehow
+        local requestId = args.data.requestId
+
+        hermes.respond(requestId, selectedOption.id)
+    end,
 })
 ```
 

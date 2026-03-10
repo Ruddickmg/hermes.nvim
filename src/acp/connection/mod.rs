@@ -2,7 +2,7 @@ pub mod manager;
 pub mod stdio;
 pub use manager::*;
 
-use crate::acp::{Result, error::Error};
+use crate::{acp::{Result, error::Error}};
 use agent_client_protocol::{
     AuthenticateRequest, CancelNotification, ExtNotification, ExtRequest, ForkSessionRequest,
     InitializeRequest, ListSessionsRequest, LoadSessionRequest, NewSessionRequest, PromptRequest,

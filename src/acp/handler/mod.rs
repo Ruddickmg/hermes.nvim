@@ -2,7 +2,7 @@ pub mod client;
 pub mod message;
 pub mod response;
 
-use crate::{PluginState, acp::connection::Assistant, nvim::autocommands::ResponseHandler};
+use crate::{PluginState, acp::{ connection::Assistant }, nvim::{autocommands::ResponseHandler}};
 use agent_client_protocol::Client;
 use std::sync::Arc;
 use tokio::sync::Mutex;

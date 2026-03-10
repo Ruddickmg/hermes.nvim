@@ -26,7 +26,6 @@ pub struct AutoCommand<R: RequestHandler> {
     handle: AsyncHandle,
     requests: Arc<R>,
     channel: Sender<(String, serde_json::Value)>,
-    pending: Arc<Mutex<HashMap<Uuid, Responder>>>,
 }
 
 impl<R: RequestHandler> AutoCommand<R> {
