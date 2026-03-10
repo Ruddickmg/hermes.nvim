@@ -7,7 +7,7 @@ use agent_client_protocol::{
     WriteTextFileResponse,
 };
 use tokio::sync::oneshot;
-use tracing  ::error;
+use tracing::error;
 
 use crate::nvim::{
     autocommands::{AutoCommand, Commands},
