@@ -6,6 +6,8 @@ use agent_client_protocol::{
     WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
     WriteTextFileResponse,
 };
+use tokio::sync::oneshot;
+use tracing::error;
 
 use crate::nvim::{autocommands::AutoCommand, parse};
 
@@ -15,9 +17,20 @@ impl Client for AutoCommand {
         &self,
         args: RequestPermissionRequest,
     ) -> Result<RequestPermissionResponse> {
-        self.execute_autocommand("AgentPermissionRequest".to_string(), args)
-            .await?;
-        let outcome: RequestPermissionOutcome = RequestPermissionOutcome::Cancelled;
+        let (sender, receiver) =
+            oneshot::channel::<agent_client_protocol::RequestPermissionOutcome>();
+        self.execute_autocommand_request(
+            "AgentPermissionRequest".to_string(),
+            args,
+            super::Responder::PermissionResponse(sender),
+        )
+        .await?;
+
+        let outcome: RequestPermissionOutcome = receiver.await.map_err(|e| {
+            error!("{:?}", e);
+            Error::internal_error()
+        })?;
+
         Ok(RequestPermissionResponse::new(outcome))
     }
 

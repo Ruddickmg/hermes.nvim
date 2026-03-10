@@ -3,10 +3,15 @@ use crate::{
     nvim::GROUP,
 };
 use core::fmt;
+use agent_client_protocol::RequestPermissionOutcome;
 use nvim_oxi::{Object, api::opts::ExecAutocmdsOpts, libuv::AsyncHandle};
-use serde::Serialize;
-use std::fmt::{Debug, Display};
-use tokio::sync::mpsc::{Sender, channel};
+use serde::{Serialize};
+use uuid::Uuid;
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display}, sync::Arc,
+};
+use tokio::sync::{Mutex, mpsc::{Sender, channel}, oneshot};
 use tracing::{debug, error, instrument, trace};
 
 mod event;
@@ -14,20 +19,20 @@ mod response;
 
 pub use response::*;
 
-#[derive(Clone)]
+#[derive(Debug)]
+pub enum Responder {
+    PermissionResponse(oneshot::Sender<RequestPermissionOutcome>),
+}
+
 pub struct AutoCommand {
     handle: AsyncHandle,
     channel: Sender<(String, serde_json::Value)>,
+    pending: Arc<Mutex<HashMap<Uuid, Responder>>>,
 }
 
 impl AutoCommand {
     #[instrument(level = "trace", skip_all)]
-    pub fn producer(channel: Sender<(String, serde_json::Value)>, handle: AsyncHandle) -> Self {
-        Self { channel, handle }
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn listener() -> Result<(AsyncHandle, Sender<(String, serde_json::Value)>)> {
+    pub fn new() -> Result<Self> {
         let (sender, mut receiver) = channel::<(String, serde_json::Value)>(100);
         let handle = nvim_oxi::libuv::AsyncHandle::new(move || {
             while let Ok((command, data)) = receiver.try_recv() {
@@ -55,12 +60,16 @@ impl AutoCommand {
             }
         })
         .map_err(|e| Error::Internal(e.to_string()))?;
-        Ok((handle, sender))
+        Ok(Self {
+            channel: sender,
+            handle,
+            pending: Arc::new(Mutex::new(HashMap::new())),
+        })
     }
 
-    async fn execute_autocommand<T: Debug + ToString, S: Debug + Serialize>(
+    async fn execute_autocommand<C: Debug + ToString, S: Debug + Serialize>(
         &self,
-        command: T,
+        command: C,
         data: S,
     ) -> Result<()> {
         let serialized: serde_json::Value = data.serialize(serde_json::value::Serializer)?;
@@ -74,9 +83,35 @@ impl AutoCommand {
             .send()
             .map_err(|e| Error::Internal(e.to_string()))
     }
+
+    async fn execute_autocommand_request<
+        C: Debug + ToString,
+        S: Debug + Serialize,
+    >(
+        &self,
+        command: C,
+        data: S,
+        sender: Responder,
+    ) -> Result<()> {
+        let request_id = Uuid::new_v4();
+        let mut serialized: serde_json::Value = data.serialize(serde_json::value::Serializer)?;
+        serialized["requestId"] = serde_json::Value::String(request_id.to_string());
+        self.execute_autocommand(command, serialized).await?;
+        let mut pending = self.pending.lock().await;
+        pending.insert(request_id, sender);
+        drop(pending);
+        Ok(())
+    }
+
+    fn get_response_sender(&self, request_id: &Uuid) -> Option<Responder> {
+        let mut pending = self.pending.blocking_lock();
+        let sender = pending.remove(request_id);
+        drop(pending);
+        sender
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Commands {
     ConnectionInitialized,
     CreatedSession,
