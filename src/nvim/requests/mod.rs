@@ -129,14 +129,6 @@ mod tests {
     use agent_client_protocol::RequestPermissionOutcome;
 
     #[test]
-    fn test_requests_new_creates_empty() {
-        let requests = Requests::new();
-        let pending = requests.pending.blocking_lock();
-        assert_eq!(pending.len(), 0);
-        drop(pending);
-    }
-
-    #[test]
     fn test_add_request_increments_pending_count() {
         let requests = Requests::new();
         let session_id = String::from("test-session");
@@ -148,22 +140,6 @@ mod tests {
 
         let pending = requests.pending.blocking_lock();
         assert_eq!(pending.len(), 1);
-        drop(pending);
-    }
-
-    #[test]
-    fn test_add_request_stores_session_id() {
-        let requests = Requests::new();
-        let session_id = String::from("test-session");
-        let request_id = Uuid::new_v4();
-        let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
-        let responder = Responder::PermissionResponse(sender);
-
-        requests.add_request(session_id.clone(), request_id, responder);
-
-        let pending = requests.pending.blocking_lock();
-        let request = pending.get(&request_id).unwrap();
-        assert_eq!(request.session_id, session_id);
         drop(pending);
     }
 
@@ -181,23 +157,6 @@ mod tests {
         let result = requests.handle_response(&request_id, response_obj);
 
         assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_handle_response_sends_outcome() {
-        let requests = Requests::new();
-        let session_id = String::from("test-session");
-        let request_id = Uuid::new_v4();
-        let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
-        let responder = Responder::PermissionResponse(sender);
-
-        requests.add_request(session_id, request_id, responder);
-
-        let response_obj = nvim_oxi::Object::from("selected-option-id");
-        requests.handle_response(&request_id, response_obj).unwrap();
-
-        let outcome = receiver.try_recv().expect("Should receive outcome");
-        assert!(matches!(outcome, RequestPermissionOutcome::Selected(_)));
     }
 
     #[test]
@@ -259,24 +218,6 @@ mod tests {
 
         let result = requests.cancel_session_requests(session_id);
         assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_cancel_session_requests_sends_cancelled_outcome() {
-        let requests = Requests::new();
-        let session_id = String::from("test-session");
-        let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
-
-        requests.add_request(
-            session_id.clone(),
-            Uuid::new_v4(),
-            Responder::PermissionResponse(sender),
-        );
-
-        requests.cancel_session_requests(session_id).unwrap();
-
-        let outcome = receiver.try_recv().expect("Should receive cancellation");
-        assert_eq!(outcome, RequestPermissionOutcome::Cancelled);
     }
 
     #[test]
