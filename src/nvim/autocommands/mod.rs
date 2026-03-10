@@ -94,7 +94,7 @@ impl<R: RequestHandler> AutoCommand<R> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Commands {
     // Permission and tool commands
     PermissionRequest,
@@ -194,5 +194,186 @@ impl From<String> for Commands {
 impl Display for Commands {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Debug::fmt(self, f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Permission and tool commands
+    #[test]
+    fn test_permission_request_from_str() {
+        assert_eq!(Commands::from("PermissionRequest"), Commands::PermissionRequest);
+    }
+
+    #[test]
+    fn test_tool_call_from_str() {
+        assert_eq!(Commands::from("ToolCall"), Commands::ToolCall);
+    }
+
+    #[test]
+    fn test_tool_call_update_from_str() {
+        assert_eq!(Commands::from("ToolCallUpdate"), Commands::ToolCallUpdate);
+    }
+
+    #[test]
+    fn test_plan_from_str() {
+        assert_eq!(Commands::from("Plan"), Commands::Plan);
+    }
+
+    #[test]
+    fn test_available_commands_from_str() {
+        assert_eq!(Commands::from("AvailableCommands"), Commands::AvailableCommands);
+    }
+
+    #[test]
+    fn test_current_mode_from_str() {
+        assert_eq!(Commands::from("CurrentMode"), Commands::CurrentMode);
+    }
+
+    #[test]
+    fn test_configuration_option_from_str() {
+        assert_eq!(Commands::from("ConfigurationOption"), Commands::ConfigurationOption);
+    }
+
+    // Session lifecycle commands
+    #[test]
+    fn test_connection_initialized_from_str() {
+        assert_eq!(Commands::from("ConnectionInitialized"), Commands::ConnectionInitialized);
+    }
+
+    #[test]
+    fn test_created_session_from_str() {
+        assert_eq!(Commands::from("CreatedSession"), Commands::CreatedSession);
+    }
+
+    #[test]
+    fn test_prompted_from_str() {
+        assert_eq!(Commands::from("Prompted"), Commands::Prompted);
+    }
+
+    #[test]
+    fn test_authenticated_from_str() {
+        assert_eq!(Commands::from("Authenticated"), Commands::Authenticated);
+    }
+
+    #[test]
+    fn test_configuration_updated_from_str() {
+        assert_eq!(Commands::from("ConfigUpdated"), Commands::ConfigurationUpdated);
+    }
+
+    #[test]
+    fn test_mode_updated_from_str() {
+        assert_eq!(Commands::from("ModeUpdated"), Commands::ModeUpdated);
+    }
+
+    #[test]
+    fn test_loaded_session_from_str() {
+        assert_eq!(Commands::from("LoadedSession"), Commands::LoadedSession);
+    }
+
+    #[test]
+    fn test_listed_sessions_from_str() {
+        assert_eq!(Commands::from("ListedSessions"), Commands::ListedSessions);
+    }
+
+    #[test]
+    fn test_forked_session_from_str() {
+        assert_eq!(Commands::from("ForkedSession"), Commands::ForkedSession);
+    }
+
+    #[test]
+    fn test_resumed_session_from_str() {
+        assert_eq!(Commands::from("ResumedSession"), Commands::ResumedSession);
+    }
+
+    #[test]
+    fn test_session_model_updated_from_str() {
+        assert_eq!(Commands::from("SessionModelUpdated"), Commands::SessionModelUpdated);
+    }
+
+    // User message commands
+    #[test]
+    fn test_user_resource_message_from_str() {
+        assert_eq!(Commands::from("UserResourceMessage"), Commands::UserResourceMessage);
+    }
+
+    #[test]
+    fn test_user_resource_link_message_from_str() {
+        assert_eq!(Commands::from("UserResourceLinkMessage"), Commands::UserResourceLinkMessage);
+    }
+
+    #[test]
+    fn test_user_image_message_from_str() {
+        assert_eq!(Commands::from("UserImageMessage"), Commands::UserImageMessage);
+    }
+
+    #[test]
+    fn test_user_text_message_from_str() {
+        assert_eq!(Commands::from("UserTextMessage"), Commands::UserTextMessage);
+    }
+
+    // Agent message commands
+    #[test]
+    fn test_agent_resource_message_from_str() {
+        assert_eq!(Commands::from("AgentResourceMessage"), Commands::AgentResourceMessage);
+    }
+
+    #[test]
+    fn test_agent_resource_link_message_from_str() {
+        assert_eq!(Commands::from("AgentResourceLinkMessage"), Commands::AgentResourceLinkMessage);
+    }
+
+    #[test]
+    fn test_agent_image_message_from_str() {
+        assert_eq!(Commands::from("AgentImageMessage"), Commands::AgentImageMessage);
+    }
+
+    #[test]
+    fn test_agent_text_message_from_str() {
+        assert_eq!(Commands::from("AgentTextMessage"), Commands::AgentTextMessage);
+    }
+
+    // Agent thought commands
+    #[test]
+    fn test_agent_resource_thought_from_str() {
+        assert_eq!(Commands::from("AgentResourceThought"), Commands::AgentResourceThought);
+    }
+
+    #[test]
+    fn test_agent_resource_link_thought_from_str() {
+        assert_eq!(Commands::from("AgentResourceLinkThought"), Commands::AgentResourceLinkThought);
+    }
+
+    #[test]
+    fn test_agent_image_thought_from_str() {
+        assert_eq!(Commands::from("AgentImageThought"), Commands::AgentImageThought);
+    }
+
+    #[test]
+    fn test_agent_text_thought_from_str() {
+        assert_eq!(Commands::from("AgentTextThought"), Commands::AgentTextThought);
+    }
+
+    // String and Display trait tests
+    #[test]
+    fn test_commands_from_string_delegates_to_str() {
+        let string_value = String::from("PermissionRequest");
+        assert_eq!(Commands::from(string_value), Commands::PermissionRequest);
+    }
+
+    #[test]
+    fn test_commands_display_outputs_debug_format() {
+        let command = Commands::ToolCall;
+        let display_output = format!("{}", command);
+        let debug_output = format!("{:?}", command);
+        assert_eq!(display_output, debug_output);
+    }
+
+    #[test]
+    #[should_panic(expected = "Unknown command: InvalidCommand")]
+    fn test_commands_from_str_unknown_command_panics() {
+        Commands::from("InvalidCommand");
     }
 }

@@ -100,6 +100,7 @@ We follow the [Testing Pyramid](https://martinfowler.com/articles/practical-test
   - Located alongside source code in `#[cfg(test)]` modules
   - Use `cargo test --lib` to run
   - Should cover all parsing logic, validation, and conversion functions
+  - **Important:** Any test that involves actual message flow between Neovim and ACP (e.g., sending requests, receiving responses, autocommand firing) should be considered an **integration test**, not a unit test
 
 - **E2E Tests** (`e2e/`): Integration tests that verify the full flow from Lua API through to autocommand responses.
   - Run inside a Neovim instance using `#[nvim_oxi::test]`
