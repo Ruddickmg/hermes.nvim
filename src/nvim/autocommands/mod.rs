@@ -6,6 +6,7 @@ use crate::{
     },
 };
 use core::fmt;
+use agent_client_protocol::RequestPermissionOutcome;
 use nvim_oxi::{Object, api::opts::ExecAutocmdsOpts, libuv::AsyncHandle};
 use serde::Serialize;
 use std::{
@@ -25,6 +26,7 @@ pub struct AutoCommand<R: RequestHandler> {
     handle: AsyncHandle,
     requests: Arc<R>,
     channel: Sender<(String, serde_json::Value)>,
+    pending: Arc<Mutex<HashMap<Uuid, Responder>>>,
 }
 
 impl<R: RequestHandler> AutoCommand<R> {
