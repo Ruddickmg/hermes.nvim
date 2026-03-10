@@ -1,4 +1,3 @@
-pub mod requests;
 pub mod api;
 pub mod autocommands;
 pub mod configuration;
