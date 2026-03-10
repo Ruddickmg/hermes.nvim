@@ -2,7 +2,7 @@ pub mod client;
 pub mod message;
 pub mod response;
 
-use crate::{PluginState, acp::{ connection::Assistant }, nvim::{autocommands::ResponseHandler}};
+use crate::{PluginState, acp::connection::Assistant, nvim::autocommands::ResponseHandler};
 use agent_client_protocol::Client;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -63,15 +63,10 @@ impl<H: Client + ResponseHandler> Handler<H> {
         drop(config);
     }
 
-    // TODO: set this up in the configuration
     #[instrument(level = "trace", skip(self))]
-    pub async fn can_request_permissions(
-        &self,
-        agent: Assistant,
-        info: agent_client_protocol::InitializeResponse,
-    ) -> bool {
+    pub async fn can_request_permissions(&self) -> bool {
         let config = self.state.lock().await;
-        let can_request_permissions = true;
+        let can_request_permissions = config.config.permissions.can_request_permissions;
         drop(config);
         can_request_permissions
     }

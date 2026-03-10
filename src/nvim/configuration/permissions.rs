@@ -1,7 +1,7 @@
 use nvim_oxi::{
-    Dictionary, Object,
     conversion::{Error, FromObject},
     lua::{self, Poppable, Pushable},
+    Dictionary, Object,
 };
 
 #[derive(Debug, Clone)]
@@ -9,6 +9,7 @@ pub struct Permissions {
     pub fs_write_access: bool,
     pub fs_read_access: bool,
     pub terminal_access: bool,
+    pub can_request_permissions: bool,
 }
 
 impl Default for Permissions {
@@ -17,6 +18,7 @@ impl Default for Permissions {
             fs_write_access: true,
             fs_read_access: true,
             terminal_access: true,
+            can_request_permissions: true,
         }
     }
 }
@@ -29,6 +31,7 @@ impl Pushable for Permissions {
             table.insert("fs_write_access", self.fs_write_access);
             table.insert("fs_read_access", self.fs_read_access);
             table.insert("terminal_access", self.terminal_access);
+            table.insert("can_request_permissions", self.can_request_permissions);
 
             table.push(state)
         }
@@ -68,10 +71,17 @@ impl FromObject for Permissions {
             .transpose()?
             .unwrap_or(true);
 
+        let can_request_permissions = dict
+            .get("can_request_permissions")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?
+            .unwrap_or(true);
+
         Ok(Self {
             fs_write_access,
             fs_read_access,
             terminal_access,
+            can_request_permissions,
         })
     }
 }
