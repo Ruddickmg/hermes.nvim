@@ -198,6 +198,26 @@ local modeId = 'mode-id-from-create-session-response'
 hermes.setMode(sessionId, modeId)
 ```
 
+### Respond
+
+Respond to agent requests
+
+#### Permission request responses
+
+```lua
+local hermes = require("hermes")
+
+-- select a response by it's id (included in the "PermissionRequest" autocommand)
+hermes.respond(requestId, {
+    optionId = "option-id-selected-from-permissions-request", -- required if "cancel" is "true"
+})
+
+-- cancel action
+hermes.respond(requestId, {
+    cancel = true,
+})
+```
+
 ## Autocommands
 
 Hermes generates autocommands for all communication between agent and client. Here's an example of hooking into one:
