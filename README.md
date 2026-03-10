@@ -29,23 +29,36 @@ Below are a list of functions that Hermes provides to send requests to ai assist
 This method allows you to connect to an agent, it takes the agent name and the protocol for the connection (defaults to `stdio`).
 
 Options for protocol (currently supported)
-- stdio
+- stdio (Default)
 
 Planned future protocols (not yet supported)
 - http
 - socket
 
-Options for agent
+Options for agent (pre-defined)
 - copilot (GitHub Copilot)
 - opencode
 
 ```lua
 local hermes = require("hermes")
 
-hermes.connect({
-    agent = "copilot", -- optional, defaults to "copilot", can be "copilot" | "opencode"
-    protocol = "stdio", -- optional, defaults to "stdio"
+-- connect to pre-defined agent
+hermes.connect("copilot")
+
+-- configure protocol
+hermes.connect("opencode", {
+   protocol = "http",
 })
+
+-- connect to custom agent (not pre-defined)
+hermes.connect(
+    "my-claude", -- this will be the key you use for other methods (disconnect for example) 
+    {
+        protocol = "socket", -- optional (Defaults to "stdio")
+        command = "claude-acp",
+        args = { "--socket", "/tmp/claude.sock" },
+    }
+)
 ```
 
 ### Disconnect
@@ -207,14 +220,20 @@ Respond to agent requests
 ```lua
 local hermes = require("hermes")
 
--- select a response by it's id (included in the "PermissionRequest" autocommand)
-hermes.respond(requestId, {
-    optionId = "option-id-selected-from-permissions-request", -- required if "cancel" is "true"
-})
+-- call signature
+hermes.respond("requestId", "optionId")
 
--- cancel action
-hermes.respond(requestId, {
-    cancel = true,
+-- selected permission option id should be retrieved from the data object from the PermissionReqeust autocommand
+-- example: 
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "PermissionRequested",
+    callback = function(args)
+        local selectedOption = args.data.options[0] -- select id somehow
+        local requestId = args.data.requestId
+
+        hermes.respond(requestId, selectedOption.id)
+    end,
 })
 ```
 

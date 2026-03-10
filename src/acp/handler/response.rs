@@ -65,14 +65,14 @@ impl<H: agent_client_protocol::Client + ResponseHandler> Handler<H> {
     #[instrument(level = "trace", skip(self))]
     pub async fn prompted(&self, response: PromptResponse) -> Result<(), Error> {
         self.handler
-            .schedule_autocommand(Commands::AgentPrompted, response)
+            .schedule_autocommand(Commands::Prompted, response)
             .await
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn authenticated(&self, response: AuthenticateResponse) -> Result<(), Error> {
         self.handler
-            .schedule_autocommand(Commands::ClientAuthenticated, response)
+            .schedule_autocommand(Commands::Authenticated, response)
             .await
     }
 
@@ -82,7 +82,7 @@ impl<H: agent_client_protocol::Client + ResponseHandler> Handler<H> {
         response: SetSessionConfigOptionResponse,
     ) -> Result<(), Error> {
         self.handler
-            .schedule_autocommand(Commands::AgentConfigUpdated, response)
+            .schedule_autocommand(Commands::ConfigurationUpdated, response)
             .await
     }
 

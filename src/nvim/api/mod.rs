@@ -1,4 +1,5 @@
 pub mod authenticate;
+pub mod respond;
 pub mod cancel;
 pub mod connect;
 pub mod create_session;
@@ -13,3 +14,4 @@ pub use create_session::*;
 pub use disconnect::*;
 pub use prompt::*;
 pub use set_mode::*;
+pub use respond::*;

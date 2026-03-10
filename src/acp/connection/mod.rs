@@ -2,7 +2,7 @@ pub mod manager;
 pub mod stdio;
 pub use manager::*;
 
-use crate::acp::{Result, error::Error};
+use crate::{acp::{Result, error::Error}};
 use agent_client_protocol::{
     AuthenticateRequest, CancelNotification, ExtNotification, ExtRequest, ForkSessionRequest,
     InitializeRequest, ListSessionsRequest, LoadSessionRequest, NewSessionRequest, PromptRequest,
@@ -29,7 +29,7 @@ pub enum UserRequest {
     SetSessionModel(SetSessionModelRequest),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Connection {
     sender: Sender<UserRequest>,
 }
@@ -103,13 +103,15 @@ impl Connection {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
     use agent_client_protocol::{InitializeRequest, ProtocolVersion};
 
     #[tokio::test]
     async fn test_connection_initialize() {
         let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
-        let connection = Connection::new(sender);
+        let connection = Arc::new(Connection::new(sender));
         let request = InitializeRequest::new(ProtocolVersion::LATEST);
 
         // Spawn blocking task because Connection uses blocking_send
@@ -132,7 +134,7 @@ mod tests {
     async fn test_connection_create_session() {
         use agent_client_protocol::NewSessionRequest;
         let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
-        let connection = Connection::new(sender);
+        let connection = Arc::new(Connection::new(sender));
 
         let conn_clone = connection.clone();
         let request = NewSessionRequest::new(std::path::PathBuf::from("/"));

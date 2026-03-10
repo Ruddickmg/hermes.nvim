@@ -79,7 +79,7 @@ fn test_authenticate_flow() -> Result<(), nvim_oxi::Error> {
     let wait_for_init =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_authentication = autocommand::listen_for_autocommand::<AuthenticateResponse>(
-        Commands::ClientAuthenticated,
+        Commands::Authenticated,
     );
 
     connect.call(Some(ConnectionArgs {

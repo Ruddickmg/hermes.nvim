@@ -84,7 +84,7 @@ pub struct ConnectionDetails {
 }
 
 #[derive(Clone)]
-pub struct ConnectionManager<H: Client> {
+pub struct ConnectionManager<H: Client + ResponseHandler> {
     handles: Arc<Mutex<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>,
     connection: HashMap<Assistant, Rc<Connection>>,
     handler: Arc<Handler<H>>,
