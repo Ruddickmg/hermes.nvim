@@ -39,15 +39,13 @@ pub fn connect<H: Client + ResponseHandler + Send + Sync + 'static>(
                 }
 
                 // Parse args
-                if let Some(obj) = dict.get("args") {
-                    if obj.kind() == ObjectKind::Array {
-                        let arr: nvim_oxi::Array = unsafe { obj.clone().into_array_unchecked() };
-                        let parsed_args: Vec<String> = arr
-                            .into_iter()
-                            .filter_map(|v| v.try_into().ok().map(|s: nvim_oxi::String| s.to_string()))
-                            .collect();
-                        args = Some(parsed_args);
-                    }
+                if let Some(obj) = dict.get("args") && obj.kind() == ObjectKind::Array {
+                    let arr: nvim_oxi::Array = unsafe { obj.clone().into_array_unchecked() };
+                    let parsed_args: Vec<String> = arr
+                        .into_iter()
+                        .filter_map(|v| v.try_into().ok().map(|s: nvim_oxi::String| s.to_string()))
+                        .collect();
+                    args = Some(parsed_args);
                 }
             }
             let agent = if let Some(ref cmd) = command {
