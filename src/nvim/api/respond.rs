@@ -1,5 +1,5 @@
 use nvim_oxi::{Function, Object};
-use std::{sync::Arc};
+use std::sync::Arc;
 use tracing::{debug, instrument};
 use uuid::Uuid;
 

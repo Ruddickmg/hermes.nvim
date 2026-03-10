@@ -1,6 +1,9 @@
 use crate::{
     acp::{Result, error::Error},
-    nvim::{GROUP, requests::{RequestHandler, Responder}},
+    nvim::{
+        GROUP,
+        requests::{RequestHandler, Responder},
+    },
 };
 use core::fmt;
 use nvim_oxi::{Object, api::opts::ExecAutocmdsOpts, libuv::AsyncHandle};
@@ -82,17 +85,23 @@ impl<R: RequestHandler> AutoCommand<R> {
     /// Uses nvim_oxi::api::get_autocmds to check for existing autocommands
     pub async fn listener_attached<S: Display>(&self, pattern: S) -> Result<bool> {
         use nvim_oxi::api::opts::GetAutocmdsOpts;
-        
+
         let opts = GetAutocmdsOpts::builder()
             .group(GROUP)
             .patterns([pattern.to_string().as_str()])
             .build();
-        
+
         match nvim_oxi::api::get_autocmds(&opts) {
             Ok(autocmds) => Ok(autocmds.len() > 0),
             Err(e) => {
-                error!("Failed to get autocommands for pattern '{}': {:?}", pattern, e);
-                Err(Error::Internal(format!("Failed to check autocommand: {}", e)))
+                error!(
+                    "Failed to get autocommands for pattern '{}': {:?}",
+                    pattern, e
+                );
+                Err(Error::Internal(format!(
+                    "Failed to check autocommand: {}",
+                    e
+                )))
             }
         }
     }
@@ -223,11 +232,20 @@ mod tests {
     #[test]
     fn test_commands_from_str_basic_variants() {
         // Test predefined variants from different categories
-        assert_eq!(Commands::from("PermissionRequest"), Commands::PermissionRequest);
+        assert_eq!(
+            Commands::from("PermissionRequest"),
+            Commands::PermissionRequest
+        );
         assert_eq!(Commands::from("ToolCall"), Commands::ToolCall);
-        assert_eq!(Commands::from("ConnectionInitialized"), Commands::ConnectionInitialized);
+        assert_eq!(
+            Commands::from("ConnectionInitialized"),
+            Commands::ConnectionInitialized
+        );
         assert_eq!(Commands::from("UserTextMessage"), Commands::UserTextMessage);
-        assert_eq!(Commands::from("AgentImageMessage"), Commands::AgentImageMessage);
+        assert_eq!(
+            Commands::from("AgentImageMessage"),
+            Commands::AgentImageMessage
+        );
     }
 
     #[test]

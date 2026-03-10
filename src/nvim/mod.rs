@@ -1,18 +1,15 @@
-pub mod requests;
 pub mod api;
 pub mod autocommands;
 pub mod configuration;
 pub mod parse;
+pub mod requests;
 pub mod state;
 
 use nvim_oxi::{Dictionary, api::opts::CreateAugroupOpts};
 use std::{rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
 
-use crate::{
-    Handler, acp::connection::ConnectionManager,
-    utilities::logging::Logger,
-};
+use crate::{Handler, acp::connection::ConnectionManager, utilities::logging::Logger};
 
 pub const GROUP: &str = "hermes";
 
@@ -33,7 +30,10 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     })?;
 
     Ok(Dictionary::from_iter([
-        ("cancel", api::cancel(connection_manager.clone(), request_handler.clone())),
+        (
+            "cancel",
+            api::cancel(connection_manager.clone(), request_handler.clone()),
+        ),
         ("connect", api::connect(connection_manager.clone())),
         (
             "authenticate",

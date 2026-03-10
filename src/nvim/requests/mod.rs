@@ -1,9 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::acp::{error::Error, Result};
+use crate::acp::{Result, error::Error};
 use agent_client_protocol::{RequestPermissionOutcome, SelectedPermissionOutcome};
 use nvim_oxi::conversion::FromObject;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 use tracing::warn;
 use uuid::Uuid;
 
@@ -60,7 +60,7 @@ impl RequestHandler for Requests {
 
     fn cancel_session_requests(&self, session_id: String) -> Result<()> {
         let mut pending = self.pending.blocking_lock();
-        let cancelled = 
+        let cancelled =
             pending
             .extract_if(|_, request| match request.responder {
                 Responder::PermissionResponse(_) => request.session_id == session_id,

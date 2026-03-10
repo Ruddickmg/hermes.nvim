@@ -4,7 +4,10 @@ use std::{rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{debug, instrument};
 
-use crate::{acp::connection::ConnectionManager, nvim::{autocommands::ResponseHandler, requests::RequestHandler}};
+use crate::{
+    acp::connection::ConnectionManager,
+    nvim::{autocommands::ResponseHandler, requests::RequestHandler},
+};
 
 #[instrument(level = "trace", skip_all)]
 pub fn cancel<H: Client + ResponseHandler + Send + Sync + 'static, R: RequestHandler + 'static>(
