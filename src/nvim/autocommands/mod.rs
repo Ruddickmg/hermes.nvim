@@ -3,8 +3,8 @@ use crate::{
     nvim::GROUP,
 };
 use core::fmt;
-use agent_client_protocol::RequestPermissionOutcome;
-use nvim_oxi::{Object, api::opts::ExecAutocmdsOpts, libuv::AsyncHandle};
+use agent_client_protocol::{RequestPermissionOutcome, SelectedPermissionOutcome};
+use nvim_oxi::{conversion::FromObject, Dictionary, Object, api::opts::ExecAutocmdsOpts, libuv::AsyncHandle};
 use serde::{Serialize};
 use uuid::Uuid;
 use std::{
@@ -108,6 +108,39 @@ impl AutoCommand {
         let sender = pending.remove(request_id);
         drop(pending);
         sender
+    }
+
+
+    pub fn respond(&self, request_id: &Uuid, response: Dictionary) -> Result<()> {
+        match self.get_response_sender(request_id) {
+            Some(Responder::PermissionResponse(sender)) => {
+                let option_id: Option<String> = response.get("optionId")
+                    .map(|obj| String::from_object(obj.clone()))
+                    .transpose()
+                    .map_err(|e| Error::Internal(format!("Failed to parse optionId: {:?}", e)))?;
+                let cancelled: Option<bool> = response.get("cancel")
+                    .map(|obj| bool::from_object(obj.clone()))
+                    .transpose()
+                    .map_err(|e| Error::Internal(format!("Failed to parse cancel: {:?}", e)))?;
+                let outcome: RequestPermissionOutcome = if cancelled.unwrap_or(false) {
+                    RequestPermissionOutcome::Cancelled
+                } else if let Some(id) = option_id {
+                    RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(id))
+                } else {
+                   return Err(Error::Internal(format!("Invalid input for permission response: {:?}", response)))
+                };
+                sender.send(outcome).map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send response for request {}: {:?}",
+                        request_id, e
+                    ))
+                })
+            }
+            None => Err(Error::Internal(format!(
+                "No pending request found for ID: {}. The request may have already been responded to or timed out.",
+                request_id
+            ))),
+        }
     }
 }
 
