@@ -7,9 +7,13 @@ use agent_client_protocol::{
     WriteTextFileResponse,
 };
 use tokio::sync::oneshot;
-use tracing  ::error;
+use tracing::error;
 
-use crate::nvim::{autocommands::{AutoCommand, Commands}, parse, requests::{RequestHandler, Responder}};
+use crate::nvim::{
+    autocommands::{AutoCommand, Commands},
+    parse,
+    requests::{RequestHandler, Responder},
+};
 
 #[async_trait::async_trait(?Send)]
 impl<R: RequestHandler> Client for AutoCommand<R> {
@@ -17,6 +21,11 @@ impl<R: RequestHandler> Client for AutoCommand<R> {
         &self,
         args: RequestPermissionRequest,
     ) -> Result<RequestPermissionResponse> {
+        if !self.listener_attached(Commands::PermissionRequest).await? {
+            // TODO: add default implementation
+            return Err(Error::method_not_found());
+        }
+
         let (sender, receiver) =
             oneshot::channel::<agent_client_protocol::RequestPermissionOutcome>();
         self.execute_autocommand_request(
@@ -37,15 +46,12 @@ impl<R: RequestHandler> Client for AutoCommand<R> {
 
     async fn session_notification(&self, session_notification: SessionNotification) -> Result<()> {
         let command = match session_notification.update.clone() {
-            SessionUpdate::UserMessageChunk(chunk) => {
-                parse::communication(chunk.content).map(|s| Commands::from(format!("User{}Message", s)))
-            }
-            SessionUpdate::AgentMessageChunk(chunk) => {
-                parse::communication(chunk.content).map(|s| Commands::from(format!("Agent{}Message", s)))
-            }
-            SessionUpdate::AgentThoughtChunk(chunk) => {
-                parse::communication(chunk.content).map(|s| Commands::from(format!("Agent{}Thought", s)))
-            }
+            SessionUpdate::UserMessageChunk(chunk) => parse::communication(chunk.content)
+                .map(|s| Commands::from(format!("User{}Message", s))),
+            SessionUpdate::AgentMessageChunk(chunk) => parse::communication(chunk.content)
+                .map(|s| Commands::from(format!("Agent{}Message", s))),
+            SessionUpdate::AgentThoughtChunk(chunk) => parse::communication(chunk.content)
+                .map(|s| Commands::from(format!("Agent{}Thought", s))),
             SessionUpdate::ToolCall(_) => Ok(Commands::ToolCall),
             SessionUpdate::ToolCallUpdate(_) => Ok(Commands::ToolCallUpdate),
             SessionUpdate::Plan(_) => Ok(Commands::Plan),

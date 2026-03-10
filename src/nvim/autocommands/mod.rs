@@ -78,6 +78,25 @@ impl<R: RequestHandler> AutoCommand<R> {
             .map_err(|e| Error::Internal(e.to_string()))
     }
 
+    /// Check if an autocommand is registered for the given pattern
+    /// Uses nvim_oxi::api::get_autocmds to check for existing autocommands
+    pub async fn listener_attached<S: Display>(&self, pattern: S) -> Result<bool> {
+        use nvim_oxi::api::opts::GetAutocmdsOpts;
+        
+        let opts = GetAutocmdsOpts::builder()
+            .group(GROUP)
+            .patterns([pattern.to_string().as_str()])
+            .build();
+        
+        match nvim_oxi::api::get_autocmds(&opts) {
+            Ok(autocmds) => Ok(autocmds.len() > 0),
+            Err(e) => {
+                error!("Failed to get autocommands for pattern '{}': {:?}", pattern, e);
+                Err(Error::Internal(format!("Failed to check autocommand: {}", e)))
+            }
+        }
+    }
+
     async fn execute_autocommand_request<C: Debug + ToString, S: Debug + Serialize>(
         &self,
         session_id: String,
