@@ -275,7 +275,7 @@ vim.api.nvim_create_autocmd("User", {
         local selectedOptionId = table.remove(args.data.options).optionId -- select id somehow
         local requestId = args.data.requestId
 
-        hermes.respond(requestId, selectedIoptionId)
+        hermes.respond(requestId, selectedOptionId)
         
     end,
 })

@@ -59,15 +59,24 @@ pub fn connect<H: Client + ResponseHandler + Send + Sync + 'static>(
                     args = Some(parsed_args);
                 }
             }
-            let agent = if let Some(ref cmd) = command {
+            let mut agent = if let Some(ref cmd) = command {
                 Assistant::Custom {
                     name: agent_name_str,
                     command: cmd.clone(),
                     args: args.clone().unwrap_or_default(),
                 }
             } else {
-                Assistant::from(agent_name_str)
+                Assistant::from(agent_name_str.clone())
             };
+
+            // Validate that unknown agents without an explicit command don't result in an empty command
+            if let Assistant::Custom { ref command, .. } = agent {
+                if command.is_empty() {
+                    return Err(Error::RuntimeError(
+                        "Unknown agent name; please provide 'command' (and optionally 'args') when connecting to a custom assistant".into(),
+                    ));
+                }
+            }
             let details = ConnectionDetails {
                 agent,
                 protocol: protocol.unwrap_or_default(),

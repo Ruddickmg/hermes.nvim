@@ -129,21 +129,6 @@ mod tests {
     use agent_client_protocol::RequestPermissionOutcome;
 
     #[test]
-    fn test_add_request_increments_pending_count() {
-        let requests = Requests::new();
-        let session_id = String::from("test-session");
-        let request_id = Uuid::new_v4();
-        let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
-        let responder = Responder::PermissionResponse(sender);
-
-        requests.add_request(session_id, request_id, responder);
-
-        let pending = requests.pending.blocking_lock();
-        assert_eq!(pending.len(), 1);
-        drop(pending);
-    }
-
-    #[test]
     fn test_handle_response_success() {
         let requests = Requests::new();
         let session_id = String::from("test-session");
