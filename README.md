@@ -234,7 +234,20 @@ Cancel the current operation of the agent (e.g., stop generating text, stop a to
 local hermes = require("hermes")
 local sessionId = 'session-id-from-create-session-response'
 
+-- call signature
 hermes.cancel(sessionId)
+
+-- example
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "CreatedSession",
+    callback = function(args)
+        local sessionId = args.data.sessionId
+
+        hermes.cancel(sessionId)
+        
+    end,
+})
 ```
 
 ### Set mode
@@ -302,16 +315,16 @@ local hermes = require("hermes")
 -- call signature
 hermes.respond("requestId", "optionId")
 
--- selected permission option id should be retrieved from the data object from the PermissionReqeust autocommand
 -- example: 
 vim.api.nvim_create_autocmd("User", {
     group = "hermes",
     pattern = "PermissionRequested",
     callback = function(args)
-        local selectedOption = args.data.options[0] -- select id somehow
+        local selectedOptionId = table.remove(args.data.options).optionId -- select id somehow
         local requestId = args.data.requestId
 
-        hermes.respond(requestId, selectedOption.id)
+        hermes.respond(requestId, selectedIoptionId)
+        
     end,
 })
 ```
