@@ -141,13 +141,13 @@ There are five types of prompts you can send to an agent
 local hermes = require("hermes")
 local sessionId = "current-session-id";
 
--- single prompt
+-- single prompt call signature
 hermes.prompt(sessionId, {
     type = "text",
     text = "What time is it?"
 })
 
--- multiple prompts at once
+-- multiple prompt call signature
 hermes.prompt(sessionId, {
   {
     type = "text",
@@ -199,9 +199,6 @@ vim.api.nvim_create_autocmd("User", {
         })
     end,
 })
-
-
-
 ```
 
 ### Cancel
