@@ -4,7 +4,7 @@ use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
 use agent_client_protocol::{InitializeResponse, NewSessionResponse, PromptResponse, StopReason};
 use hermes::{
     acp::connection::{Assistant, Protocol},
-    api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
+    api::{CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
     nvim::{autocommands::Commands, hermes},
 };
 use nvim_oxi::{conversion::FromObject, Array, Dictionary, Function, Object};
@@ -24,7 +24,7 @@ fn test_setup_returns_prompt_function() -> Result<(), nvim_oxi::Error> {
 #[nvim_oxi::test]
 fn test_prompt_single_content() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;
-    let connect: Function<Option<ConnectionArgs>, ()> =
+    let connect: Function<(nvim_oxi::String, Option<Dictionary>), ()> =
         FromObject::from_object(dict.get("connect").unwrap().clone())?;
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
@@ -37,13 +37,13 @@ fn test_prompt_single_content() -> Result<(), nvim_oxi::Error> {
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
         autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
-    let wait_for_prompt =
-        autocommand::listen_for_autocommand::<PromptResponse>(Commands::AgentPrompted);
+    let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
-    connect.call(Some(ConnectionArgs {
-        agent: Some(Assistant::Opencode),
-        protocol: Some(Protocol::Stdio),
-    }))?;
+    // Create options dictionary with protocol
+    let mut options = Dictionary::new();
+    options.insert("protocol", "stdio");
+
+    connect.call((nvim_oxi::String::from("opencode"), Some(options)))?;
 
     wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
@@ -73,7 +73,7 @@ fn test_prompt_single_content() -> Result<(), nvim_oxi::Error> {
 #[nvim_oxi::test]
 fn test_prompt_multiple_content() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;
-    let connect: Function<Option<ConnectionArgs>, ()> =
+    let connect: Function<(nvim_oxi::String, Option<Dictionary>), ()> =
         FromObject::from_object(dict.get("connect").unwrap().clone())?;
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
@@ -86,13 +86,13 @@ fn test_prompt_multiple_content() -> Result<(), nvim_oxi::Error> {
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
         autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
-    let wait_for_prompt =
-        autocommand::listen_for_autocommand::<PromptResponse>(Commands::AgentPrompted);
+    let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
-    connect.call(Some(ConnectionArgs {
-        agent: Some(Assistant::Opencode),
-        protocol: Some(Protocol::Stdio),
-    }))?;
+    // Create options dictionary with protocol
+    let mut options = Dictionary::new();
+    options.insert("protocol", "stdio");
+
+    connect.call((nvim_oxi::String::from("opencode"), Some(options)))?;
 
     wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 

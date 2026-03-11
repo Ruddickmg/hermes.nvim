@@ -14,6 +14,8 @@ use crate::{
     acp::connection::ConnectionManager, nvim::autocommands::ResponseHandler, utilities::project,
 };
 
+use super::Api;
+
 #[derive(Debug, Clone)]
 pub enum McpServerType {
     Stdio,
@@ -356,13 +358,15 @@ impl Pushable for CreateSessionArgs {
     }
 }
 
-#[instrument(level = "trace", skip_all)]
-pub fn create_session<H: Client + ResponseHandler + Send + Sync + 'static>(
-    connection: Rc<Mutex<ConnectionManager<H>>>,
-) -> Object {
-    let function: Function<CreateSessionArgs, Result<(), nvim_oxi::lua::Error>> =
-        Function::from_fn(move |session: CreateSessionArgs| {
-            debug!("createSession function called with: {:#?}", session);
+impl<H, R> Api<H, R>
+where
+    H: Client + ResponseHandler + Send + Sync + 'static,
+    R: crate::nvim::requests::RequestHandler + 'static,
+{
+    #[instrument(level = "trace", skip_all)]
+    pub fn create_session(&self, session: CreateSessionArgs) -> Result<(), nvim_oxi::lua::Error> {
+        debug!("createSession function called with: {:#?}", session);
+        self.runtime.block_on(async {
             let current_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let root = project::get_project_root(current_directory, vec![".git".to_string()]);
             let request = match session {
@@ -372,17 +376,27 @@ pub fn create_session<H: Client + ResponseHandler + Send + Sync + 'static>(
                         .mcp_servers(mcp_servers.unwrap_or_default())
                 }
             };
-            connection
-                .blocking_lock()
-                .get_current_connection()
-                .ok_or_else(|| {
-                    nvim_oxi::lua::Error::RuntimeError(
-                        "No connection found, call the connect function".to_string(),
-                    )
-                })?
-                .create_session(request)?;
+            let connections = self.connection.lock().await;
+            let connection = connections.get_current_connection().await.ok_or_else(|| {
+                nvim_oxi::lua::Error::RuntimeError(
+                    "No connection found, call the connect function".to_string(),
+                )
+            })?;
+            drop(connections);
+            connection.create_session(request).await?;
             Ok(())
-        });
+        })
+    }
+}
+
+#[instrument(level = "trace", skip_all)]
+pub fn create_session<H, R>(api: Rc<Api<H, R>>) -> Object
+where
+    H: Client + ResponseHandler + Send + Sync + 'static,
+    R: crate::nvim::requests::RequestHandler + 'static,
+{
+    let function: Function<CreateSessionArgs, Result<(), nvim_oxi::lua::Error>> =
+        Function::from_fn(move |session| api.create_session(session));
     function.into()
 }
 

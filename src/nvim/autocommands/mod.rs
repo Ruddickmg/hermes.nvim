@@ -117,7 +117,7 @@ impl<R: RequestHandler> AutoCommand<R> {
         let mut serialized: serde_json::Value = data.serialize(serde_json::value::Serializer)?;
         serialized["requestId"] = serde_json::Value::String(request_id.to_string());
         self.execute_autocommand(command, serialized).await?;
-        self.requests.add_request(session_id, request_id, sender);
+        self.requests.add_request(session_id, request_id, sender).await;
         Ok(())
     }
 }

@@ -35,68 +35,68 @@ pub struct Connection {
 }
 
 impl Connection {
-    fn send(&self, request: UserRequest) -> Result<()> {
+    async fn send(&self, request: UserRequest) -> Result<()> {
         self.sender
-            .blocking_send(request)
+            .send(request).await
             .map_err(|e| Error::Internal(e.to_string()))
     }
     pub fn new(sender: Sender<UserRequest>) -> Self {
         Self { sender }
     }
-    pub fn initialize(&self, request: InitializeRequest) -> Result<()> {
-        self.send(UserRequest::Initialize(request))?;
+    pub async fn initialize(&self, request: InitializeRequest) -> Result<()> {
+        self.send(UserRequest::Initialize(request)).await?;
         Ok(())
     }
-    pub fn create_session(&self, session: NewSessionRequest) -> Result<()> {
-        self.send(UserRequest::CreateSession(session))?;
+    pub async fn create_session(&self, session: NewSessionRequest) -> Result<()> {
+        self.send(UserRequest::CreateSession(session)).await?;
         Ok(())
     }
-    pub fn cancel(&self, notification: CancelNotification) -> Result<()> {
-        self.send(UserRequest::Cancel(notification))?;
+    pub async fn cancel(&self, notification: CancelNotification) -> Result<()> {
+        self.send(UserRequest::Cancel(notification)).await?;
         Ok(())
     }
-    pub fn prompt(&self, request: PromptRequest) -> Result<()> {
-        self.send(UserRequest::Prompt(request))?;
+    pub async fn prompt(&self, request: PromptRequest) -> Result<()> {
+        self.send(UserRequest::Prompt(request)).await?;
         Ok(())
     }
-    pub fn authenticate(&self, request: AuthenticateRequest) -> Result<()> {
-        self.send(UserRequest::Authenticate(request))?;
+    pub async fn authenticate(&self, request: AuthenticateRequest) -> Result<()> {
+        self.send(UserRequest::Authenticate(request)).await?;
         Ok(())
     }
-    pub fn set_config_option(&self, request: SetSessionConfigOptionRequest) -> Result<()> {
-        self.send(UserRequest::SetConfigOption(request))?;
+    pub async fn set_config_option(&self, request: SetSessionConfigOptionRequest) -> Result<()> {
+        self.send(UserRequest::SetConfigOption(request)).await?;
         Ok(())
     }
-    pub fn set_mode(&self, request: SetSessionModeRequest) -> Result<()> {
-        self.send(UserRequest::SetMode(request))?;
+    pub async fn set_mode(&self, request: SetSessionModeRequest) -> Result<()> {
+        self.send(UserRequest::SetMode(request)).await?;
         Ok(())
     }
-    pub fn load_session(&self, request: LoadSessionRequest) -> Result<()> {
-        self.send(UserRequest::LoadSession(request))?;
+    pub async fn load_session(&self, request: LoadSessionRequest) -> Result<()> {
+        self.send(UserRequest::LoadSession(request)).await?;
         Ok(())
     }
-    pub fn custom_command(&self, request: ExtRequest) -> Result<()> {
-        self.send(UserRequest::CustomCommand(request))?;
+    pub async fn custom_command(&self, request: ExtRequest) -> Result<()> {
+        self.send(UserRequest::CustomCommand(request)).await?;
         Ok(())
     }
-    pub fn custom_notification(&self, notification: ExtNotification) -> Result<()> {
-        self.send(UserRequest::CustomNotification(notification))?;
+    pub async fn custom_notification(&self, notification: ExtNotification) -> Result<()> {
+        self.send(UserRequest::CustomNotification(notification)).await?;
         Ok(())
     }
-    pub fn list_sessions(&self, request: ListSessionsRequest) -> Result<()> {
-        self.send(UserRequest::ListSessions(request))?;
+    pub async fn list_sessions(&self, request: ListSessionsRequest) -> Result<()> {
+        self.send(UserRequest::ListSessions(request)).await?;
         Ok(())
     }
-    pub fn fork_session(&self, request: ForkSessionRequest) -> Result<()> {
-        self.send(UserRequest::ForkSession(request))?;
+    pub async fn fork_session(&self, request: ForkSessionRequest) -> Result<()> {
+        self.send(UserRequest::ForkSession(request)).await?;
         Ok(())
     }
-    pub fn resume_session(&self, request: ResumeSessionRequest) -> Result<()> {
-        self.send(UserRequest::ResumeSession(request))?;
+    pub async fn resume_session(&self, request: ResumeSessionRequest) -> Result<()> {
+        self.send(UserRequest::ResumeSession(request)).await?;
         Ok(())
     }
-    pub fn set_session_model(&self, request: SetSessionModelRequest) -> Result<()> {
-        self.send(UserRequest::SetSessionModel(request))?;
+    pub async fn set_session_model(&self, request: SetSessionModelRequest) -> Result<()> {
+        self.send(UserRequest::SetSessionModel(request)).await?;
         Ok(())
     }
 }

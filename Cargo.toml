@@ -14,6 +14,7 @@ agent-client-protocol = { version = "0.9.4", features = [
   "unstable_session_resume"
 ] }
 async-trait = "0.1"
+futures = "0.3"
 mlua = { version = "0.10", features = ["module"] }
 nvim-oxi = { version = "0.6.0", features = ["libuv", "mlua", "neovim-0-11"] }
 serde = { version = "1.0", features = ["derive"] }

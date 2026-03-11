@@ -1,8 +1,14 @@
 use crate::acp::Result;
+use crate::acp::connection::ConnectionManager;
 use crate::nvim::autocommands::AutoCommand;
 use crate::nvim::requests::RequestHandler;
+use agent_client_protocol::Client;
+use nvim_oxi::Object;
 use serde::Serialize;
+use tokio::sync::Mutex;
 use std::fmt::Debug;
+use std::rc::Rc;
+use std::sync::Arc;
 use tracing::instrument;
 
 #[async_trait::async_trait(?Send)]
@@ -25,3 +31,4 @@ impl<R: RequestHandler> ResponseHandler for AutoCommand<R> {
         self.execute_autocommand(command, data).await
     }
 }
+

@@ -1,9 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
+use tokio::sync::Mutex;
 
 use crate::acp::{Result, error::Error};
 use agent_client_protocol::{RequestPermissionOutcome, SelectedPermissionOutcome};
 use nvim_oxi::conversion::FromObject;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::oneshot;
 use tracing::warn;
 use uuid::Uuid;
 
@@ -46,20 +47,20 @@ impl Default for Requests {
 }
 
 pub trait RequestHandler {
-    fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()>;
-    fn cancel_session_requests(&self, session_id: String) -> Result<()>;
-    fn add_request(&self, session_id: String, request_id: Uuid, responder: Responder);
+    async fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()>;
+    async fn cancel_session_requests(&self, session_id: String) -> Result<()>;
+    async fn add_request(&self, session_id: String, request_id: Uuid, responder: Responder);
 }
 
 impl RequestHandler for Requests {
-    fn add_request(&self, session_id: String, request_id: Uuid, responder: Responder) {
-        let mut pending = self.pending.blocking_lock();
+    async fn add_request(&self, session_id: String, request_id: Uuid, responder: Responder) {
+        let mut pending = self.pending.lock().await;
         pending.insert(request_id, Request::new(session_id, responder));
         drop(pending);
     }
 
-    fn cancel_session_requests(&self, session_id: String) -> Result<()> {
-        let mut pending = self.pending.blocking_lock();
+    async fn cancel_session_requests(&self, session_id: String) -> Result<()> {
+        let mut pending = self.pending.lock().await;
         let cancelled =
             pending
             .extract_if(|_, request| match request.responder {
@@ -89,8 +90,8 @@ impl RequestHandler for Requests {
         Ok(())
     }
 
-    fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()> {
-        let mut pending = self.pending.blocking_lock();
+    async fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()> {
+        let mut pending = self.pending.lock().await;
         let retrieved = pending.remove(request_id);
         drop(pending);
         if let Some(request) = retrieved {
@@ -128,49 +129,53 @@ mod tests {
     use super::*;
     use agent_client_protocol::RequestPermissionOutcome;
 
-    #[test]
-    fn test_add_request_increments_pending_count() {
+    #[tokio::test]
+    async fn test_add_request_increments_pending_count() {
         let requests = Requests::new();
         let session_id = String::from("test-session");
         let request_id = Uuid::new_v4();
         let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
         let responder = Responder::PermissionResponse(sender);
 
-        requests.add_request(session_id, request_id, responder);
+        requests
+            .add_request(session_id, request_id, responder)
+            .await;
 
-        let pending = requests.pending.blocking_lock();
+        let pending = requests.pending.lock().await;
         assert_eq!(pending.len(), 1);
         drop(pending);
     }
 
-    #[test]
-    fn test_handle_response_success() {
+    #[tokio::test]
+    async fn test_handle_response_success() {
         let requests = Requests::new();
         let session_id = String::from("test-session");
         let request_id = Uuid::new_v4();
-        let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
+        let (sender, _) = oneshot::channel::<RequestPermissionOutcome>();
         let responder = Responder::PermissionResponse(sender);
 
-        requests.add_request(session_id, request_id, responder);
+        requests.add_request(session_id, request_id, responder).await;
 
         let response_obj = nvim_oxi::Object::from("selected-option-id");
-        let result = requests.handle_response(&request_id, response_obj);
+        let result = requests
+            .handle_response(&request_id, response_obj)
+            .await;
 
         assert!(result.is_ok());
     }
 
-    #[test]
-    fn test_handle_response_outcome_contains_option_id() {
+    #[tokio::test]
+    async fn test_handle_response_outcome_contains_option_id() {
         let requests = Requests::new();
         let session_id = String::from("test-session");
         let request_id = Uuid::new_v4();
         let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
         let responder = Responder::PermissionResponse(sender);
 
-        requests.add_request(session_id, request_id, responder);
+        requests.add_request(session_id, request_id, responder).await;
 
         let response_obj = nvim_oxi::Object::from("selected-option-id");
-        requests.handle_response(&request_id, response_obj).unwrap();
+        requests.handle_response(&request_id, response_obj).await.unwrap();
 
         let outcome = receiver.try_recv().expect("Should receive outcome");
         match outcome {
@@ -181,31 +186,31 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_handle_response_not_found_returns_error() {
+    #[tokio::test]
+    async fn test_handle_response_not_found_returns_error() {
         let requests = Requests::new();
         let request_id = Uuid::new_v4();
         let response_obj = nvim_oxi::Object::from("some-option");
 
-        let result = requests.handle_response(&request_id, response_obj);
+        let result = requests.handle_response(&request_id, response_obj).await;
 
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_handle_response_not_found_error_message() {
+    #[tokio::test]
+    async fn test_handle_response_not_found_error_message() {
         let requests = Requests::new();
         let request_id = Uuid::new_v4();
         let response_obj = nvim_oxi::Object::from("some-option");
 
-        let result = requests.handle_response(&request_id, response_obj);
+        let result = requests.handle_response(&request_id, response_obj).await;
 
         let error_msg = format!("{}", result.unwrap_err());
         assert!(error_msg.contains("No pending request found"));
     }
 
-    #[test]
-    fn test_cancel_session_requests_returns_ok() {
+    #[tokio::test]
+    async fn test_cancel_session_requests_returns_ok() {
         let requests = Requests::new();
         let session_id = String::from("test-session");
         let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
@@ -216,12 +221,12 @@ mod tests {
             Responder::PermissionResponse(sender),
         );
 
-        let result = requests.cancel_session_requests(session_id);
+        let result = requests.cancel_session_requests(session_id).await;
         assert!(result.is_ok());
     }
 
-    #[test]
-    fn test_cancel_session_requests_preserves_cancelled_responder() {
+    #[tokio::test]
+    async fn test_cancel_session_requests_preserves_cancelled_responder() {
         let requests = Requests::new();
         let session_id = String::from("test-session");
         let request_id = Uuid::new_v4();
@@ -231,11 +236,11 @@ mod tests {
             session_id.clone(),
             request_id,
             Responder::PermissionResponse(sender),
-        );
+        ).await;
 
-        requests.cancel_session_requests(session_id).unwrap();
+        requests.cancel_session_requests(session_id).await.unwrap();
 
-        let pending = requests.pending.blocking_lock();
+        let pending = requests.pending.lock().await;
         match pending.get(&request_id).unwrap().responder {
             Responder::Cancelled => {}
             _ => panic!("Request should be Cancelled"),
@@ -243,17 +248,17 @@ mod tests {
         drop(pending);
     }
 
-    #[test]
-    fn test_cancel_session_requests_no_matches_returns_ok() {
+    #[tokio::test]
+    async fn test_cancel_session_requests_no_matches_returns_ok() {
         let requests = Requests::new();
         let session_id = String::from("nonexistent-session");
 
-        let result = requests.cancel_session_requests(session_id);
+        let result = requests.cancel_session_requests(session_id).await;
         assert!(result.is_ok());
     }
 
-    #[test]
-    fn test_cancel_session_requests_only_affects_target_session() {
+    #[tokio::test]
+    async fn test_cancel_session_requests_only_affects_target_session() {
         let requests = Requests::new();
         let session_id = String::from("target-session");
         let other_session_id = String::from("other-session");
@@ -264,14 +269,14 @@ mod tests {
             session_id.clone(),
             Uuid::new_v4(),
             Responder::PermissionResponse(target_sender),
-        );
+        ).await;
         requests.add_request(
             other_session_id.clone(),
             Uuid::new_v4(),
             Responder::PermissionResponse(other_sender),
-        );
+        ).await;
 
-        requests.cancel_session_requests(session_id).unwrap();
+        requests.cancel_session_requests(session_id).await.unwrap();
 
         // Target session should be cancelled
         let target_outcome = target_receiver

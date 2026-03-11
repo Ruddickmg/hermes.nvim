@@ -475,6 +475,7 @@ dependencies = [
  "agent-client-protocol",
  "async-trait",
  "env_logger",
+ "futures",
  "mlua",
  "nvim-oxi",
  "serde",

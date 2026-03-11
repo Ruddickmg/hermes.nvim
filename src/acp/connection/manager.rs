@@ -2,12 +2,13 @@ use crate::acp::connection::{Connection, stdio};
 use crate::nvim::autocommands::ResponseHandler;
 use crate::{Handler, acp::error::Error};
 use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolVersion};
+use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::thread::JoinHandle;
-use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
+use tokio::{sync::Mutex, task};
 use tracing::{debug, info, instrument, trace, warn};
 
 #[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
@@ -111,15 +112,15 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
     }
 
     #[instrument(level = "trace", skip(self))]
-    fn set_agent(&self, agent: Assistant) {
-        let mut config = self.handler.state.blocking_lock();
+    async fn set_agent(&self, agent: Assistant) {
+        let mut config = self.handler.state.lock().await;
         config.set_agent(agent);
         drop(config);
     }
 
     #[instrument(level = "trace", skip(self))]
-    fn get_agent(&self) -> Assistant {
-        let config = self.handler.state.blocking_lock();
+    async fn get_agent(&self) -> Assistant {
+        let config = self.handler.state.lock().await;
         let agent = config.agent.clone();
         drop(config);
         agent
@@ -136,12 +137,12 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn get_current_connection(&self) -> Option<Rc<Connection>> {
-        self.get_connection(&self.get_agent())
+    pub async fn get_current_connection(&self) -> Option<Rc<Connection>> {
+        self.get_connection(&self.get_agent().await)
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn connect(
+    pub async fn connect(
         &mut self,
         ConnectionDetails { agent, protocol }: ConnectionDetails,
     ) -> Result<Rc<Connection>, Error> {
@@ -163,15 +164,15 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
                 );
 
                 trace!("Starting agent communication in new thread");
-                self.handles.blocking_lock().insert(
+                let mut handles = self.handles.lock().await;
+                handles.insert(
                     agent.clone(),
-                    std::thread::spawn(move || {
+                    task::spawn(async move {
                         let runtime = tokio::runtime::Builder::new_current_thread()
                             .enable_all()
                             .build()
                             .map_err(|e| Error::Internal(e.to_string()))?;
 
-                        trace!("Starting tokio runtime");
                         runtime.block_on(match protocol {
                             Protocol::Stdio => stdio::connect(handler, thread_agent, receiver),
                             Protocol::Http => unimplemented!(),
@@ -179,9 +180,10 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
                         })
                     }),
                 );
+                drop(handles);
                 self.add_connection(agent.clone(), connection.clone());
                 debug!("Stored connection to '{}'", agent);
-                connection.initialize(init_config)?;
+                connection.initialize(init_config).await?;
                 info!("Initialized connection to '{}'", agent);
                 self.set_agent(agent.clone());
                 connection
@@ -190,61 +192,31 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn close_all(&mut self) -> Result<(), Error> {
-        self.disconnect(self.connection.keys().cloned().collect())?;
+    pub async fn close_all(&mut self) -> Result<(), Error> {
+        self.disconnect(self.connection.keys().cloned().collect()).await?;
         info!("Successfully disconnected from all agents");
         Ok(())
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn disconnect(&mut self, assistants: Vec<Assistant>) -> Result<(), Error> {
-        let erroneous = assistants
-            .clone()
-            .into_iter()
-            .filter(|assistant| self.disconnect_assistant(assistant).is_err())
-            .map(|assistant| assistant.to_string())
-            .collect::<Vec<String>>();
-        if erroneous.is_empty() {
-            debug!("Disconnected from agent(s), {:#?}", assistants);
-            Ok(())
-        } else {
-            Err(Error::Connection(format!(
-                "A problem occurred while trying to disconnect from agent(s): {}",
-                erroneous.join(", ")
-            )))
-        }
+    pub async fn disconnect(&mut self, assistants: Vec<Assistant>) -> Result<(), Error> {
+        let senders = self.connection.extract_if(|k, _| assistants.contains(k));
+        let mut handles = self.handles.lock().await;
+        let removed = handles.extract_if(|k, _| assistants.contains(k));
+        senders.for_each(|(assistant, sender)| {
+            debug!("Disconnecting from agent {}", assistant);
+            drop(sender);
+        });
+        join_all(removed.into_iter().map(|(_, j)| j))
+            .await;
+        drop(handles);
+        debug!("Disconnected from agent(s), {:#?}", assistants);
+        Ok(())
     }
 
     #[instrument(level = "trace", skip(self))]
-    fn disconnect_assistant(&mut self, assistant: &Assistant) -> Result<(), Error> {
-        let sender = self.connection.remove(assistant).ok_or_else(|| {
-            Error::Connection(format!("No connection found for assistant {}", assistant))
-        })?;
-        let handle = self
-            .handles
-            .blocking_lock()
-            .remove(assistant)
-            .ok_or_else(|| {
-                Error::Connection(format!("No handle found for assistant {}", assistant))
-            })?;
-        debug!("Disconnecting from agent {}", assistant);
-        drop(sender);
-        handle
-            .join()
-            .map_err(|e| {
-                Error::Internal(format!(
-                    "Failed to join thread for assistant {}: {:#?}",
-                    assistant, e
-                ))
-            })?
-            .map_err(|e| {
-                Error::Connection(format!(
-                    "Error in connection thread for assistant {}: {:#?}",
-                    assistant, e
-                ))
-            })?;
-        debug!("Successfully disconnected from agent {}", assistant);
-        Ok(())
+    async fn disconnect_assistant(&mut self, assistant: &Assistant) -> Result<(), Error> {
+        self.disconnect(vec![assistant.clone()]).await
     }
 }
 

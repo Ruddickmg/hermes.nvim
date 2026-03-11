@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use agent_client_protocol::{
     AudioContent, BlobResourceContents, ContentBlock, EmbeddedResource, EmbeddedResourceResource,
     ImageContent, PromptRequest, ResourceLink, TextContent, TextResourceContents,
@@ -7,11 +9,10 @@ use nvim_oxi::{
     conversion::{Error as ConversionError, FromObject},
     lua::{Error, Poppable, Pushable},
 };
-use std::rc::Rc;
-use tokio::sync::Mutex;
 use tracing::{debug, instrument};
+use crate::nvim::autocommands::ResponseHandler;
 
-use crate::{acp::connection::ConnectionManager, nvim::autocommands::ResponseHandler};
+use super::Api;
 
 /// Extracts a required string field from a Lua dictionary.
 fn required_string(dict: &Dictionary, key: &str) -> Result<String, ConversionError> {
@@ -323,32 +324,42 @@ impl Pushable for PromptContent {
 /// Tuple for two positional arguments: (session_id, content)
 pub type PromptArgs = (String, PromptContent);
 
-#[instrument(level = "trace", skip_all)]
-pub fn prompt<H: agent_client_protocol::Client + ResponseHandler + Send + Sync + 'static>(
-    connection: Rc<Mutex<ConnectionManager<H>>>,
-) -> Object {
-    let function: Function<PromptArgs, Result<(), Error>> =
-        Function::from_fn(move |(session_id, content): PromptArgs| {
-            debug!("Prompt function called with session_id: {}", session_id);
-
+impl<H, R> Api<H, R>
+where
+    H: agent_client_protocol::Client + ResponseHandler + Send + Sync + 'static,
+    R: crate::nvim::requests::RequestHandler + 'static,
+{
+    #[instrument(level = "trace", skip_all)]
+    pub fn prompt(&self, session_id: String, content: PromptContent) -> Result<(), Error> {
+        debug!("Prompt function called with session_id: {}", session_id);
+        self.runtime.block_on(async {
             let content_blocks: Vec<ContentBlock> =
                 content.into_vec().into_iter().map(Into::into).collect();
-
             let request = PromptRequest::new(session_id, content_blocks);
-
+            let connections = self.connection.lock().await;
+            let connection = connections.get_current_connection().await.ok_or_else(|| {
+                Error::RuntimeError(
+                    "No connection found, call the connect function first".to_string(),
+                )
+            })?;
+            drop(connections);
             connection
-                .blocking_lock()
-                .get_current_connection()
-                .ok_or_else(|| {
-                    Error::RuntimeError(
-                        "No connection found, call the connect function first".to_string(),
-                    )
-                })?
                 .prompt(request)
+                .await
                 .map_err(|e| Error::RuntimeError(e.to_string()))?;
-
             Ok(())
-        });
+        })
+    }
+}
+
+#[instrument(level = "trace", skip_all)]
+pub fn prompt<H, R>(api: Rc<Api<H, R>>) -> Object
+where
+    H: agent_client_protocol::Client + ResponseHandler + Send + Sync + 'static,
+    R: crate::nvim::requests::RequestHandler + 'static,
+{
+    let function: Function<PromptArgs, Result<(), Error>> =
+        Function::from_fn(move |(session_id, content)| api.prompt(session_id, content));
     function.into()
 }
 

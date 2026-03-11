@@ -389,6 +389,7 @@ version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
  "async-trait",
+ "futures",
  "mlua",
  "nvim-oxi",
  "serde",

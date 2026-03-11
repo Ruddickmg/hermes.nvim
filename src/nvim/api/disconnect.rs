@@ -1,18 +1,11 @@
-use agent_client_protocol::Client;
-use nvim_oxi::{
-    Function, Object, ObjectKind,
-    conversion::{self, FromObject},
-    lua::{self, Error, Poppable, Pushable},
-    serde::SerializeError,
-};
 use std::rc::Rc;
-use tokio::sync::Mutex;
-use tracing::{debug, instrument};
 
-use crate::{
-    acp::connection::{Assistant, ConnectionManager},
-    nvim::autocommands::ResponseHandler,
-};
+use agent_client_protocol::Client;
+use nvim_oxi::{Function, Object, conversion::FromObject, lua::Error};
+use tracing::{debug, instrument};
+use crate::{acp::connection::Assistant, nvim::autocommands::ResponseHandler};
+
+use super::Api;
 
 #[derive(Clone, Debug, Default)]
 pub enum DisconnectArgs {
@@ -22,29 +15,30 @@ pub enum DisconnectArgs {
     All,
 }
 
-#[instrument(level = "trace", skip_all)]
 fn parse_assistant_string(
     assistant: nvim_oxi::String,
 ) -> Result<Assistant, nvim_oxi::conversion::Error> {
     match assistant.to_string().to_lowercase().as_str() {
         "copilot" => Ok(Assistant::Copilot),
         "opencode" => Ok(Assistant::Opencode),
-        other => Err(nvim_oxi::conversion::Error::Serialize(SerializeError {
-            msg: format!(
-                "Invalid input found: {}, Agent name must be one of 'copilot' or 'opencode'",
-                other
-            ),
-        })),
+        other => Err(nvim_oxi::conversion::Error::Serialize(
+            nvim_oxi::serde::SerializeError {
+                msg: format!(
+                    "Invalid input found: {}, Agent name must be one of 'copilot' or 'opencode'",
+                    other
+                ),
+            },
+        )),
     }
 }
 
 const EXPECTED: &str = "Nil, String or Array of Strings";
 
-impl FromObject for DisconnectArgs {
+impl nvim_oxi::conversion::FromObject for DisconnectArgs {
     fn from_object(obj: Object) -> Result<Self, nvim_oxi::conversion::Error> {
         match obj.kind() {
-            ObjectKind::Nil => Ok(Self::All),
-            ObjectKind::String => {
+            nvim_oxi::ObjectKind::Nil => Ok(Self::All),
+            nvim_oxi::ObjectKind::String => {
                 let kind = obj.kind();
                 let assistant = unsafe { obj.into_string_unchecked() };
                 parse_assistant_string(assistant)
@@ -54,12 +48,12 @@ impl FromObject for DisconnectArgs {
                     })
                     .map(Self::Single)
             }
-            ObjectKind::Array => {
+            nvim_oxi::ObjectKind::Array => {
                 let assistants = unsafe { obj.into_array_unchecked() };
                 assistants
                     .into_iter()
                     .map(|obj| {
-                        if let ObjectKind::String = obj.kind() {
+                        if let nvim_oxi::ObjectKind::String = obj.kind() {
                             Ok(unsafe { obj.into_string_unchecked() })
                         } else {
                             Err(nvim_oxi::conversion::Error::FromWrongType {
@@ -82,21 +76,21 @@ impl FromObject for DisconnectArgs {
     }
 }
 
-impl Poppable for DisconnectArgs {
-    unsafe fn pop(lua: *mut nvim_oxi::lua::ffi::State) -> Result<Self, lua::Error> {
+impl nvim_oxi::lua::Poppable for DisconnectArgs {
+    unsafe fn pop(lua: *mut nvim_oxi::lua::ffi::State) -> Result<Self, nvim_oxi::lua::Error> {
         let obj = unsafe { Object::pop(lua)? };
         Self::from_object(obj).map_err(|e| match e {
-            conversion::Error::FromWrongType { actual, .. } => lua::Error::PopError {
+            nvim_oxi::conversion::Error::FromWrongType { actual, .. } => nvim_oxi::lua::Error::PopError {
                 ty: actual,
                 message: Some(format!("Invalid argument passed to \"disconnect\": {}. Expected Nil, String or Array of Strings", actual)),
             },
-            _ => lua::Error::RuntimeError(e.to_string()),
+            _ => nvim_oxi::lua::Error::RuntimeError(e.to_string()),
         })
     }
 }
 
-impl Pushable for DisconnectArgs {
-    unsafe fn push(self, state: *mut lua::ffi::State) -> Result<i32, Error> {
+impl nvim_oxi::lua::Pushable for DisconnectArgs {
+    unsafe fn push(self, state: *mut nvim_oxi::lua::ffi::State) -> Result<i32, Error> {
         unsafe {
             match self {
                 Self::All => ().push(state),
@@ -111,21 +105,34 @@ impl Pushable for DisconnectArgs {
     }
 }
 
-#[instrument(level = "trace", skip_all)]
-pub fn disconnect<H: Client + ResponseHandler + Send + Sync + 'static>(
-    connection: Rc<Mutex<ConnectionManager<H>>>,
-) -> Object {
-    let function: Function<DisconnectArgs, Result<(), Error>> =
-        Function::from_fn(move |args: DisconnectArgs| -> Result<(), Error> {
-            debug!("Disconnect function called with {:#?}", args);
-            let mut manager = connection.blocking_lock();
+impl<H, R> Api<H, R>
+where
+    H: Client + ResponseHandler + Send + Sync + 'static,
+    R: crate::nvim::requests::RequestHandler + 'static,
+{
+    #[instrument(level = "trace", skip_all)]
+    pub fn disconnect(&self, args: DisconnectArgs) -> Result<(), Error> {
+        debug!("Disconnect function called with {:#?}", args);
+        self.runtime.block_on(async {
+            let mut manager = self.connection.lock().await;
             match args {
-                DisconnectArgs::Multiple(agents) => manager.disconnect(agents),
-                DisconnectArgs::Single(agent) => manager.disconnect(vec![agent.clone()]),
-                DisconnectArgs::All => manager.close_all(),
+                DisconnectArgs::Multiple(agents) => manager.disconnect(agents).await,
+                DisconnectArgs::Single(agent) => manager.disconnect(vec![agent.clone()]).await,
+                DisconnectArgs::All => manager.close_all().await,
             }?;
             drop(manager);
             Ok(())
-        });
+        })
+    }
+}
+
+#[instrument(level = "trace", skip_all)]
+pub fn disconnect<H, R>(api: Rc<Api<H, R>>) -> Object
+where
+    H: Client + ResponseHandler + Send + Sync + 'static,
+    R: crate::nvim::requests::RequestHandler + 'static,
+{
+    let function: Function<DisconnectArgs, Result<(), Error>> =
+        Function::from_fn(move |args| api.disconnect(args));
     function.into()
 }
