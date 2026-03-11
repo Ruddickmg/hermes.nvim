@@ -2,10 +2,9 @@ use nvim_oxi::api::{self, opts::OptionOpts};
 use std::sync::OnceLock;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{
-    fmt,
+    EnvFilter, Registry, fmt,
     prelude::*,
     reload::{self, Handle},
-    EnvFilter, Registry,
 };
 
 use crate::acp::error::Error;

@@ -1,9 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::acp::{error::Error, Result};
+use crate::acp::{Result, error::Error};
 use agent_client_protocol::{RequestPermissionOutcome, SelectedPermissionOutcome};
 use nvim_oxi::conversion::FromObject;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 use tracing::warn;
 use uuid::Uuid;
 

@@ -32,6 +32,7 @@ Essential references for development:
 - **ACP SDK:** [Rust SDK documentation](https://docs.rs/agent-client-protocol-schema/latest/agent_client_protocol_schema/index.html)
 - **Protocol:** [Agent Client Protocol documentation](https://agentclientprotocol.com/get-started/introduction)
 - **Testing:** [pretty_assertions documentation](https://docs.rs/pretty_assertions/latest/pretty_assertions/)
+- **Test Runner:** [cargo-nextest documentation](https://nexte.st/)
 
 ## Practices
 
@@ -111,6 +112,63 @@ We follow the [Testing Pyramid](https://martinfowler.com/articles/practical-test
   - Should not duplicate unit test coverage - if a parsing edge case is covered in unit tests, don't repeat it in E2E
 
 **Guideline**: E2E tests verify that "the system works together", unit tests verify that "each component works correctly". Keep E2E tests minimal and focused on integration points.
+
+### Running Tests
+
+We use [cargo-nextest](https://nexte.st/) as our test runner. Nextest provides:
+- **Clear output** with progress bars and readable test listings
+- **Better performance** through parallel test execution
+- **Test filtering** and granular control over test execution
+- **Failure handling** with automatic retries and output capture
+
+**Run all tests:**
+```bash
+cargo nextest run
+```
+
+**Run unit tests only:**
+```bash
+cargo nextest run --lib
+```
+
+**Run E2E tests:**
+```bash
+cd e2e && cargo nextest run
+```
+
+**Run a specific test:**
+```bash
+cargo nextest run test_name
+```
+
+### Writing Tests with Pretty Assertions
+
+When writing tests, use `pretty_assertions::assert_eq!` instead of the standard `assert_eq!`. This provides:
+- **Side-by-side diffs** showing exactly what differs between expected and actual values
+- **Colorized output** making differences easy to spot
+- **Better formatting** for complex nested structures
+
+**Example:**
+```rust
+use pretty_assertions::assert_eq;
+
+#[test]
+fn test_complex_struct() {
+    let expected = vec![1, 2, 3];
+    let actual = vec![1, 2, 4];
+    assert_eq!(expected, actual);  // Shows a clear diff of the difference
+}
+```
+
+**All test modules should import pretty_assertions:**
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    // ... tests
+}
+```
 
 ### Examples
 
