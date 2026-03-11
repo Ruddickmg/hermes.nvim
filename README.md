@@ -198,7 +198,7 @@ vim.api.nvim_create_autocmd("User", {
           text = "What time is it?"
         })
     end,
-}))
+})
 
 
 
@@ -270,7 +270,7 @@ hermes.respond("requestId", "optionId")
 -- example: 
 vim.api.nvim_create_autocmd("User", {
     group = "hermes",
-    pattern = "PermissionRequested",
+    pattern = "PermissionRequest",
     callback = function(args)
         local selectedOptionId = table.remove(args.data.options).optionId -- select id somehow
         local requestId = args.data.requestId
