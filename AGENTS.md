@@ -244,6 +244,67 @@ proptest! {
 }
 ```
 
+### Property-Based Testing for Lua→Rust Conversions
+
+The codebase extensively uses `FromObject` traits to convert Lua objects to Rust types. These conversions are excellent candidates for proptest because they:
+- Are pure functions (no external dependencies)
+- Handle many edge cases (empty strings, unicode, nested structures)
+- Use `unsafe` code that should never panic
+- Should be robust against malformed input
+
+**Current proptest coverage includes:**
+
+1. **Logging utilities** (`src/utilities/logging.rs`):
+   - `LogLevel::from(i64)` - tests all integer inputs
+   - `LogLevel::from(&str)` - tests random strings
+   - `LogFormat::from(&str)` - tests format string parsing
+
+2. **Connection management** (`src/acp/connection/manager.rs`):
+   - `Assistant::from(&str)` - tests agent name parsing
+   - `Protocol::from(&str)` - tests protocol string parsing
+   - Case-insensitive parsing validation
+
+3. **API argument parsing**:
+   - `DisconnectArgs` (`src/nvim/api/disconnect.rs`) - tests agent name list parsing
+   - `Permissions` (`src/nvim/configuration/permissions.rs`) - tests boolean field handling
+   - `ConnectionArgs` (`src/nvim/api/connect.rs`) - tests agent name validation
+   - `McpServerType` (`src/nvim/api/create_session.rs`) - tests server type parsing
+   - `ContentBlockType` (`src/nvim/api/prompt.rs`) - tests text/link content parsing from Lua dictionaries
+   - `PromptContent` (`src/nvim/api/prompt.rs`) - tests single/multiple content parsing from Lua arrays
+
+**Important:** Only test `FromObject` trait implementations (Lua→Rust conversions), not direct Rust type construction. Rust's type system already guarantees struct instantiation works. Proptest is valuable for:
+- Testing `from_object()` methods that parse Lua dictionaries/arrays
+- Validating that malformed Lua input produces proper errors
+- Ensuring `unsafe` conversion code doesn't panic on edge cases
+
+**Example of what NOT to test:**
+```rust
+// BAD: Just testing Rust struct construction
+#[test]
+fn test_create_text_block() {
+    let content = ContentBlockType::Text { text: "hello".to_string() };
+    // This tests nothing useful - Rust guarantees this works
+}
+```
+
+**Example of what TO test:**
+```rust
+// GOOD: Testing FromObject conversion from Lua dictionary
+#[test]
+fn test_parse_text_from_lua_dict() {
+    let dict = create_text_dict("hello");
+    let obj = Object::from(dict);
+    let result = ContentBlockType::from_object(obj);
+    assert!(result.is_ok());
+}
+```
+
+**Benefits of proptest for conversions:**
+- Tests thousands of edge cases automatically
+- Finds panic conditions in `unsafe` code blocks
+- Validates that invalid inputs produce proper errors
+- Catches regressions in parsing logic
+
 ### Examples
 
 **Good Test:** Verifies the *exact output* for a given input.

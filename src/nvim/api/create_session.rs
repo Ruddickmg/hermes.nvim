@@ -2,9 +2,9 @@ use agent_client_protocol::{
     Client, EnvVariable, McpServer, McpServerHttp, McpServerSse, McpServerStdio, NewSessionRequest,
 };
 use nvim_oxi::{
-    Dictionary, Function, Object, ObjectKind,
     conversion::{Error, FromObject},
     lua::{Poppable, Pushable},
+    Dictionary, Function, Object, ObjectKind,
 };
 use std::{path::PathBuf, rc::Rc};
 use tokio::sync::Mutex;
@@ -390,11 +390,57 @@ pub fn create_session<H: Client + ResponseHandler + Send + Sync + 'static>(
 mod session_args_tests {
     use crate::api::McpServerType;
     use agent_client_protocol::McpServer;
-    use nvim_oxi::{Dictionary, Object, conversion::FromObject};
+    use nvim_oxi::{conversion::FromObject, Dictionary, Object};
     use pretty_assertions::assert_eq;
+    use proptest::prelude::*;
     use std::path::PathBuf;
 
     use crate::api::CreateSessionArgs;
+
+    // Strategy for generating MCP server type strings
+    fn arb_mcp_server_type_string() -> impl Strategy<Value = String> {
+        prop_oneof!(
+            Just("stdio".to_string()),
+            Just("http".to_string()),
+            Just("sse".to_string()),
+            Just("unknown".to_string()),
+            "[a-z]+".prop_map(|s| s.to_string())
+        )
+    }
+
+    proptest! {
+        #[test]
+        fn test_mcp_server_type_from_str_never_panics(server_type_str in arb_mcp_server_type_string()) {
+            // Property: converting any string to McpServerType should never panic
+            let _ = McpServerType::from(server_type_str);
+        }
+
+        #[test]
+        fn test_mcp_server_type_known_values_parsed_correctly(
+            server_type in prop_oneof!(
+                Just("stdio"),
+                Just("http"),
+                Just("sse")
+            )
+        ) {
+            let result = McpServerType::from(server_type.to_string());
+            match server_type {
+                "stdio" => prop_assert!(matches!(result, McpServerType::Stdio)),
+                "http" => prop_assert!(matches!(result, McpServerType::Http)),
+                "sse" => prop_assert!(matches!(result, McpServerType::Sse)),
+                _ => unreachable!(),
+            }
+        }
+
+        #[test]
+        fn test_mcp_server_type_unknown_defaults_to_stdio(unknown in "[0-9a-zA-Z_]*") {
+            // Property: Unknown types should default to Stdio
+            let result = McpServerType::from(unknown.to_string());
+            if !matches!(unknown.as_str(), "http" | "sse") {
+                prop_assert!(matches!(result, McpServerType::Stdio), "Unknown type should default to Stdio");
+            }
+        }
+    }
 
     // McpServerType Tests
 

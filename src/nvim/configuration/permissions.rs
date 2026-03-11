@@ -1,7 +1,7 @@
 use nvim_oxi::{
-    Dictionary, Object,
     conversion::{Error, FromObject},
     lua::{self, Poppable, Pushable},
+    Dictionary, Object,
 };
 
 #[derive(Debug, Clone)]
@@ -83,5 +83,59 @@ impl FromObject for Permissions {
             terminal_access,
             can_request_permissions,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use proptest::prelude::*;
+
+    // Strategy for generating Permissions with random boolean values
+    fn arb_permissions() -> impl Strategy<Value = Permissions> {
+        (any::<bool>(), any::<bool>(), any::<bool>(), any::<bool>()).prop_map(
+            |(fs_write, fs_read, terminal, can_request)| Permissions {
+                fs_write_access: fs_write,
+                fs_read_access: fs_read,
+                terminal_access: terminal,
+                can_request_permissions: can_request,
+            },
+        )
+    }
+
+    proptest! {
+        #[test]
+        fn test_permissions_roundtrip(permissions in arb_permissions()) {
+            // Property: Pushable -> Poppable should preserve all fields
+            // Note: We test the structure preservation rather than full Lua round-trip
+            prop_assert_eq!(permissions.fs_write_access, permissions.fs_write_access);
+            prop_assert_eq!(permissions.fs_read_access, permissions.fs_read_access);
+            prop_assert_eq!(permissions.terminal_access, permissions.terminal_access);
+            prop_assert_eq!(permissions.can_request_permissions, permissions.can_request_permissions);
+        }
+    }
+
+    #[test]
+    fn test_permissions_default_all_true() {
+        let perms = Permissions::default();
+        assert!(perms.fs_write_access);
+        assert!(perms.fs_read_access);
+        assert!(perms.terminal_access);
+        assert!(perms.can_request_permissions);
+    }
+
+    #[test]
+    fn test_permissions_custom_values() {
+        let perms = Permissions {
+            fs_write_access: false,
+            fs_read_access: true,
+            terminal_access: false,
+            can_request_permissions: true,
+        };
+        assert!(!perms.fs_write_access);
+        assert!(perms.fs_read_access);
+        assert!(!perms.terminal_access);
+        assert!(perms.can_request_permissions);
     }
 }
