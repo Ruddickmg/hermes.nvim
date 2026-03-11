@@ -1,18 +1,17 @@
 use std::time::Duration;
 
-use crate::{TIMEOUT_IN_SECONDS, utilities::autocommand};
+use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
 use agent_client_protocol::{InitializeResponse, NewSessionResponse, PromptResponse, StopReason};
 use hermes::{
-    acp::connection::{Assistant, Protocol},
     api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
     nvim::{autocommands::Commands, hermes},
 };
-use nvim_oxi::{Array, Dictionary, Function, Object, conversion::FromObject};
+use nvim_oxi::{conversion::FromObject, Array, Dictionary, Function, Object};
 
 #[nvim_oxi::test]
 fn test_default_session_creation() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;
-    let connect: Function<Option<ConnectionArgs>, ()> =
+    let connect: Function<ConnectionArgs, ()> =
         FromObject::from_object(dict.get("connect").unwrap().clone())?;
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
@@ -24,10 +23,7 @@ fn test_default_session_creation() -> Result<(), nvim_oxi::Error> {
     let wait_for_session =
         autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
 
-    connect.call(Some(ConnectionArgs {
-        agent: Some(Assistant::Opencode),
-        protocol: Some(Protocol::Stdio),
-    }))?;
+    connect.call((nvim_oxi::String::from("opencode"), None))?;
 
     wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
@@ -45,7 +41,7 @@ fn test_default_session_creation() -> Result<(), nvim_oxi::Error> {
 #[nvim_oxi::test]
 fn test_custom_session_creation() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;
-    let connect: Function<Option<ConnectionArgs>, ()> =
+    let connect: Function<ConnectionArgs, ()> =
         FromObject::from_object(dict.get("connect").unwrap().clone())?;
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
@@ -57,10 +53,7 @@ fn test_custom_session_creation() -> Result<(), nvim_oxi::Error> {
     let wait_for_session =
         autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
 
-    connect.call(Some(ConnectionArgs {
-        agent: Some(Assistant::Opencode),
-        protocol: Some(Protocol::Stdio),
-    }))?;
+    connect.call((nvim_oxi::String::from("opencode"), None))?;
 
     wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
@@ -79,10 +72,12 @@ fn test_custom_session_creation() -> Result<(), nvim_oxi::Error> {
     Ok(())
 }
 
+// TODO: Figure out how to test this
 #[nvim_oxi::test]
+#[ignore = "Cancel is optional and I haven't been able to find an agent that supports it in a testable way. Will retry in a more targeted effort."]
 fn test_cancel_during_prompt() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;
-    let connect: Function<Option<ConnectionArgs>, ()> =
+    let connect: Function<ConnectionArgs, ()> =
         FromObject::from_object(dict.get("connect").unwrap().clone())?;
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
@@ -97,13 +92,9 @@ fn test_cancel_during_prompt() -> Result<(), nvim_oxi::Error> {
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
         autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
-    let wait_for_prompt =
-        autocommand::listen_for_autocommand::<PromptResponse>(Commands::AgentPrompted);
+    let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
-    connect.call(Some(ConnectionArgs {
-        agent: Some(Assistant::Opencode),
-        protocol: Some(Protocol::Stdio),
-    }))?;
+    connect.call((nvim_oxi::String::from("opencode"), None))?;
 
     wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
@@ -136,10 +127,12 @@ fn test_cancel_during_prompt() -> Result<(), nvim_oxi::Error> {
 
     disconnect.call(DisconnectArgs::All)?;
 
-    assert!(
-        matches!(response.stop_reason, StopReason::Cancelled),
-        "Prompt should complete as cancelled"
-    );
+    if !matches!(response.stop_reason, StopReason::Cancelled) {
+        return Err(nvim_oxi::Error::Api(nvim_oxi::api::Error::Other(format!(
+            "Expected stop_reason to be Cancelled, got {:?}",
+            response.stop_reason
+        ))));
+    }
 
     Ok(())
 }

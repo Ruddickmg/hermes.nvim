@@ -27,13 +27,10 @@ async fn test_connect_function() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;
 
     let connect_obj = dict.get("connect").expect("connect function not found");
-    let connect: Function<Option<ConnectionArgs>, ()> =
+    let connect: Function<ConnectionArgs, ()> =
         FromObject::from_object(connect_obj.clone())?;
 
-    connect.call(Some(ConnectionArgs {
-        agent: Some(Assistant::Opencode),
-        protocol: Some(Protocol::Stdio),
-    }))?;
+    connect.call((nvim_oxi::String::from("opencode"), None))?;
 
     Ok(())
 }
@@ -41,7 +38,7 @@ async fn test_connect_function() -> Result<(), nvim_oxi::Error> {
 #[nvim_oxi::test]
 fn test_initialization() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;
-    let connect: Function<Option<ConnectionArgs>, ()> =
+    let connect: Function<ConnectionArgs, ()> =
         FromObject::from_object(dict.get("connect").unwrap().clone())?;
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
@@ -49,10 +46,7 @@ fn test_initialization() -> Result<(), nvim_oxi::Error> {
     let wait_for_response =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
 
-    connect.call(Some(ConnectionArgs {
-        agent: Some(Assistant::Opencode),
-        protocol: Some(Protocol::Stdio),
-    }))?;
+    connect.call((nvim_oxi::String::from("opencode"), None))?;
 
     let response = wait_for_response(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
@@ -69,7 +63,7 @@ fn test_initialization() -> Result<(), nvim_oxi::Error> {
 #[nvim_oxi::test]
 fn test_authenticate_flow() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;
-    let connect: Function<Option<ConnectionArgs>, ()> =
+    let connect: Function<ConnectionArgs, ()> =
         FromObject::from_object(dict.get("connect").unwrap().clone())?;
     let authenticate: Function<String, ()> =
         FromObject::from_object(dict.get("authenticate").unwrap().clone())?;
@@ -82,10 +76,7 @@ fn test_authenticate_flow() -> Result<(), nvim_oxi::Error> {
         Commands::Authenticated,
     );
 
-    connect.call(Some(ConnectionArgs {
-        agent: Some(Assistant::Copilot),
-        protocol: Some(Protocol::Stdio),
-    }))?;
+    connect.call((nvim_oxi::String::from("copilot"), None))?;
 
     let mut init_response = wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 

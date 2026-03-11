@@ -23,7 +23,7 @@ fn test_setup_returns_set_mode_function() -> Result<(), nvim_oxi::Error> {
 #[nvim_oxi::test]
 fn test_set_mode_success() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;
-    let connect: Function<Option<ConnectionArgs>, ()> =
+    let connect: Function<ConnectionArgs, ()> =
         FromObject::from_object(dict.get("connect").unwrap().clone())?;
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
@@ -39,10 +39,7 @@ fn test_set_mode_success() -> Result<(), nvim_oxi::Error> {
     let wait_for_mode_update =
         autocommand::listen_for_autocommand::<SetSessionModeResponse>(Commands::ModeUpdated);
 
-    connect.call(Some(ConnectionArgs {
-        agent: Some(Assistant::Opencode),
-        protocol: Some(Protocol::Stdio),
-    }))?;
+    connect.call((nvim_oxi::String::from("opencode"), None))?;
 
     wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 

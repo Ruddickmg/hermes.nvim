@@ -8,13 +8,18 @@ use std::rc::Rc;
 use tokio::sync::Mutex;
 use tracing::{debug, instrument};
 
+pub type ConnectionArgs = (nvim_oxi::String, Option<Dictionary>);
+
 #[instrument(level = "trace", skip_all)]
 pub fn connect<H: Client + ResponseHandler + Send + Sync + 'static>(
     connection: Rc<Mutex<ConnectionManager<H>>>,
 ) -> Object {
-    let function: Function<(nvim_oxi::String, Option<Dictionary>), Result<(), Error>> =
-        Function::from_fn(move |(agent_name, options): (nvim_oxi::String, Option<Dictionary>)| -> Result<(), Error> {
-            debug!("Connect function called with agent: {:?}, options: {:?}", agent_name, options);
+    let function: Function<ConnectionArgs, Result<(), Error>> = Function::from_fn(
+        move |(agent_name, options): ConnectionArgs| -> Result<(), Error> {
+            debug!(
+                "Connect function called with agent: {:?}, options: {:?}",
+                agent_name, options
+            );
 
             let agent_name_str = agent_name.to_string();
 
@@ -26,20 +31,26 @@ pub fn connect<H: Client + ResponseHandler + Send + Sync + 'static>(
             if let Some(dict) = options {
                 // Parse protocol
                 if let Some(obj) = dict.get("protocol") {
-                    let s: nvim_oxi::String = obj.clone().try_into()
+                    let s: nvim_oxi::String = obj
+                        .clone()
+                        .try_into()
                         .map_err(|e| Error::RuntimeError(format!("Invalid protocol: {}", e)))?;
                     protocol = Some(Protocol::from(s.to_string()));
                 }
 
                 // Parse command
                 if let Some(obj) = dict.get("command") {
-                    let s: nvim_oxi::String = obj.clone().try_into()
+                    let s: nvim_oxi::String = obj
+                        .clone()
+                        .try_into()
                         .map_err(|e| Error::RuntimeError(format!("Invalid command: {}", e)))?;
                     command = Some(s.to_string());
                 }
 
                 // Parse args
-                if let Some(obj) = dict.get("args") && obj.kind() == ObjectKind::Array {
+                if let Some(obj) = dict.get("args")
+                    && obj.kind() == ObjectKind::Array
+                {
                     let arr: nvim_oxi::Array = unsafe { obj.clone().into_array_unchecked() };
                     let parsed_args: Vec<String> = arr
                         .into_iter()
@@ -63,6 +74,7 @@ pub fn connect<H: Client + ResponseHandler + Send + Sync + 'static>(
             };
             connection.blocking_lock().connect(details)?;
             Ok(())
-        });
+        },
+    );
     function.into()
 }
