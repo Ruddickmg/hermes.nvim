@@ -34,6 +34,7 @@ Essential references for development:
 - **Testing:** [pretty_assertions documentation](https://docs.rs/pretty_assertions/latest/pretty_assertions/)
 - **Test Runner:** [cargo-nextest documentation](https://nexte.st/)
 - **Property Testing:** [proptest documentation](https://docs.rs/proptest/latest/proptest/)
+- **Mocking:** [mockall documentation](https://docs.rs/mockall/latest/mockall/)
 
 ## Practices
 
@@ -141,6 +142,75 @@ cd e2e && cargo nextest run
 ```bash
 cargo nextest run test_name
 ```
+
+### Mocking with Mockall
+
+Use [mockall](https://docs.rs/mockall/latest/mockall/) for creating mock objects in unit tests. Mockall provides powerful mocking capabilities for traits and structs.
+
+**When to use mockall:**
+- Testing code that depends on external traits (e.g., Client trait, ResponseHandler trait)
+- Isolating units under test from their dependencies
+- Verifying that certain methods were called with expected arguments
+- Simulating error conditions from dependencies
+
+**Basic usage with `#[automock]`:**
+```rust
+use mockall::*;
+use mockall::predicate::*;
+
+#[automock]
+trait MyTrait {
+    fn foo(&self, x: u32) -> u32;
+}
+
+#[test]
+fn test_with_mock() {
+    let mut mock = MockMyTrait::new();
+    mock.expect_foo()
+        .with(eq(4))
+        .times(1)
+        .returning(|x| x + 1);
+    
+    assert_eq!(5, call_with_four(&mock));
+}
+```
+
+**Key features:**
+- **`#[automock]` attribute**: Automatically generates mock implementations for traits
+- **Expectations**: Set required call counts, argument matchers, and return values
+- **Argument matching**: Use `with()` or `withf()` to verify arguments
+- **Return values**: Use `returning()` for closures or `return_const()` for constants
+- **Sequences**: Enforce call order with `in_sequence()`
+- **Async support**: Works with async traits using `#[async_trait]`
+
+**Example with async trait:**
+```rust
+#[automock]
+#[async_trait]
+trait MyAsyncTrait {
+    async fn foo(&self) -> u32;
+}
+
+#[tokio::test]
+async fn test_async_mock() {
+    let mut mock = MockMyAsyncTrait::new();
+    mock.expect_foo()
+        .times(1)
+        .returning(|| 42);
+    
+    assert_eq!(42, mock.foo().await);
+}
+```
+
+**Important:** Mockall is already included in dev-dependencies. Use `#[automock]` on traits that need mocking rather than writing manual mock implementations.
+
+**When NOT to use mockall:**
+- **Complex trait bounds with multiple traits**: When a type parameter requires multiple traits (e.g., `T: Client + ResponseHandler`), mockall's `mock!` macro can struggle with the complexity, especially when traits have:
+  - Generic methods with complex lifetime bounds
+  - Conflicting method names between traits
+  - Associated types or async methods with different constraints
+  
+In such cases, a simple manual mock struct may be more practical than fighting with macro limitations. For example, in `src/acp/handler/client.rs`, we use a manual `MockClient` instead of mockall because the handler requires `Client + ResponseHandler` bounds that are difficult to mock together.
 
 ### Writing Tests with Pretty Assertions
 
