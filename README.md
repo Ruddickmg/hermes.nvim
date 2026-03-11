@@ -22,7 +22,9 @@ Hermes focuses on:
 
 ## API
 
-Below are a list of functions that Hermes provides to send requests to ai assistants.
+Hermes exposes the following functions for sending requests to AI assistants. However, not all assistants support every method, and the level of support may vary by agent.
+
+Methods marked “Optional” are implemented by Hermes but are not mandatory for agent implementations.
 
 ### Connect
 
@@ -126,6 +128,54 @@ hermes.createSession({
 })
 ```
 
+### Load Session (**Optional**)
+
+Load an existing session
+
+```lua
+local hermes = require("hermes")
+
+-- call signature (uses defaults)
+hermes.loadSession(sessionId)
+
+-- call signature (with further configuration)
+hermes.loadSession(sessionId, {
+    cwd = ".", -- path to load the session from (optional, defaults to either project root or current directory)
+    mcpServers = {
+        { -- Http or Sse MCP server definition
+          type = "http", -- or "sse"
+          name = "Human readable name for MCP server",
+          url = "http://url-to-mcp-server.com",
+          headers = {
+            { ["Content-Type"] = "application/json" },
+            { headerName = "header value" },
+          },
+        },
+        {  -- Stdio MCP server definition
+          type = "stdio",
+          name = "Human readable name for MCP server",
+          command = "/path/to/the/MCP/server/executable",
+          args = { "run", "--flag", "something" },
+          -- Environment variables to set when launching the MCP server.
+          env = {
+            { name = "ENVIRONMENT_VAR_NAME", value = "value" },
+          },
+        },
+    },
+})
+
+-- example
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "CreatedSession",
+    callback = function(args)
+        local sessionId = args.data.sessionId
+
+        hermes.loadSession(sessionId)
+    end,
+})
+```
+
 ### Prompt
 
 Send prompts to the agent 
@@ -201,7 +251,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-### Cancel
+### Cancel (**Optional**)
 
 Cancel the current operation of the agent (e.g., stop generating text, stop a tool call in progress, etc)
 
@@ -250,7 +300,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-### Set mode
+### Set mode (**Optional**)
 
 Set what mode the agent is in (the plan/build modes for opencode for example)
 
