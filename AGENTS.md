@@ -31,6 +31,7 @@ Essential references for development:
 - **Neovim Bindings:** [nvim-oxi documentation](https://docs.rs/nvim-oxi/latest/nvim_oxi/)
 - **ACP SDK:** [Rust SDK documentation](https://docs.rs/agent-client-protocol-schema/latest/agent_client_protocol_schema/index.html)
 - **Protocol:** [Agent Client Protocol documentation](https://agentclientprotocol.com/get-started/introduction)
+- **Testing:** [pretty_assertions documentation](https://docs.rs/pretty_assertions/latest/pretty_assertions/)
 
 ## Practices
 

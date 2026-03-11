@@ -1,4 +1,3 @@
-use std::time::Duration;
 use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
 use agent_client_protocol::{InitializeResponse, NewSessionResponse, SetSessionModeResponse};
 use hermes::{
@@ -7,6 +6,8 @@ use hermes::{
     nvim::{autocommands::Commands, hermes},
 };
 use nvim_oxi::{conversion::FromObject, Dictionary, Function};
+use pretty_assertions::assert_eq;
+use std::time::Duration;
 
 #[nvim_oxi::test]
 fn test_setup_returns_set_mode_function() -> Result<(), nvim_oxi::Error> {
@@ -51,13 +52,14 @@ fn test_set_mode_success() -> Result<(), nvim_oxi::Error> {
         .modes
         .expect("session did not include modes; mode selection is not supported for this session");
     let current_mode = modes.current_mode_id;
-    let mode_id = 
-        modes
-            .available_modes
-            .into_iter()
-            .find(|m| m.id != current_mode)
-            .map(|m| m.id)
-            .expect("Expected at least one available mode different from the current mode for this test");
+    let mode_id = modes
+        .available_modes
+        .into_iter()
+        .find(|m| m.id != current_mode)
+        .map(|m| m.id)
+        .expect(
+            "Expected at least one available mode different from the current mode for this test",
+        );
 
     set_mode.call((session_id.to_string(), mode_id.to_string()))?;
 

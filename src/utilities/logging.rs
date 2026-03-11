@@ -2,9 +2,10 @@ use nvim_oxi::api::{self, opts::OptionOpts};
 use std::sync::OnceLock;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{
-    EnvFilter, Registry, fmt,
+    fmt,
     prelude::*,
     reload::{self, Handle},
+    EnvFilter, Registry,
 };
 
 use crate::acp::error::Error;
@@ -157,6 +158,7 @@ impl Logger {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
     use tracing::level_filters::LevelFilter;
 
     #[test]

@@ -3,9 +3,9 @@ use agent_client_protocol::{
     ImageContent, PromptRequest, ResourceLink, TextContent, TextResourceContents,
 };
 use nvim_oxi::{
-    Array, Dictionary, Function, Object, ObjectKind,
     conversion::{Error as ConversionError, FromObject},
     lua::{Error, Poppable, Pushable},
+    Array, Dictionary, Function, Object, ObjectKind,
 };
 use std::rc::Rc;
 use tokio::sync::Mutex;
@@ -355,6 +355,7 @@ pub fn prompt<H: agent_client_protocol::Client + ResponseHandler + Send + Sync +
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     // Helper function to create a text content dictionary
     fn create_text_dict(text: &str) -> Dictionary {

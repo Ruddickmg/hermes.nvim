@@ -7,6 +7,7 @@ use hermes::{
     nvim::{autocommands::Commands, hermes},
 };
 use nvim_oxi::{conversion::FromObject, Array, Dictionary, Function, Object};
+use pretty_assertions::assert_eq;
 
 #[nvim_oxi::test]
 fn test_default_session_creation() -> Result<(), nvim_oxi::Error> {

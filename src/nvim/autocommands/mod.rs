@@ -229,6 +229,7 @@ impl Display for Commands {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_commands_from_str_basic_variants() {

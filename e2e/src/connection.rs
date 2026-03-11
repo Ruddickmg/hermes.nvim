@@ -5,6 +5,7 @@ use hermes::{
     nvim::{autocommands::Commands, hermes},
 };
 use nvim_oxi::{Dictionary, Function, conversion::FromObject};
+use pretty_assertions::assert_eq;
 use std::time::Duration;
 use tracing::warn;
 

@@ -1,9 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::acp::{Result, error::Error};
+use crate::acp::{error::Error, Result};
 use agent_client_protocol::{RequestPermissionOutcome, SelectedPermissionOutcome};
 use nvim_oxi::conversion::FromObject;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use tracing::warn;
 use uuid::Uuid;
 
@@ -128,6 +128,7 @@ impl RequestHandler for Requests {
 mod tests {
     use super::*;
     use agent_client_protocol::RequestPermissionOutcome;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_handle_response_success() {

@@ -25,6 +25,7 @@ pub fn get_project_root(current_directory: PathBuf, root_markers: Vec<String>) -
 #[cfg(test)]
 mod get_project_root_tests {
     use super::*;
+    use pretty_assertions::assert_eq;
     use std::fs::File;
     use tempfile::tempdir;
 
