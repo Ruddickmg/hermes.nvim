@@ -682,7 +682,7 @@ Your options for log formats are:
 - [x] Allow cancel command to stop ai actions
 - [ ] Handle sessions
   - [x] Create session
-  - [ ] Load session
+  - [x] Load session
   - [ ] List sessions
   - [ ] Merge sessions
   - [ ] Fork sessions
@@ -696,7 +696,7 @@ Your options for log formats are:
 - [ ] Allow agent to use terminal
   - [ ] Create autocommands for Agent progress in the terminal
 
-- [ ] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
+- [x] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
 
 - [ ] look into ways of improving ai integration
   - [ ] research RLM ([example](https://github.com/JaredStewart/coderlm))
