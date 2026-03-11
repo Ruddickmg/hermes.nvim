@@ -84,6 +84,7 @@ impl RequestHandler for Requests {
                 ))
             })
             .collect::<Result<Vec<(Uuid, Request)>>>()?;
+        // TODO: figure out a solution for cleaning up cancelled requests (potential memory leak)
         pending.extend(cancelled);
         drop(pending);
         Ok(())
