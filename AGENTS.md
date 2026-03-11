@@ -33,6 +33,7 @@ Essential references for development:
 - **Protocol:** [Agent Client Protocol documentation](https://agentclientprotocol.com/get-started/introduction)
 - **Testing:** [pretty_assertions documentation](https://docs.rs/pretty_assertions/latest/pretty_assertions/)
 - **Test Runner:** [cargo-nextest documentation](https://nexte.st/)
+- **Property Testing:** [proptest documentation](https://docs.rs/proptest/latest/proptest/)
 
 ## Practices
 
@@ -167,6 +168,79 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
     // ... tests
+}
+```
+
+### Property-Based Testing
+
+For testing functions with many possible inputs, use [proptest](https://docs.rs/proptest/latest/proptest/) for property-based testing. Proptest generates random test cases and automatically finds minimal failing examples.
+
+**Use proptest for:**
+- Round-trip conversions (parsing then serializing should yield original value)
+- Input validation functions
+- String parsing and formatting
+- Any function with many valid input combinations
+
+**Example:**
+```rust
+use proptest::prelude::*;
+
+proptest! {
+    #[test]
+    fn test_log_level_roundtrip(level in 0i64..10) {
+        let log_level = LogLevel::from(level);
+        // Property: converting from i64 should never panic
+        // and should map unknown values to LogLevel::Off
+    }
+
+    #[test]
+    fn test_string_case_insensitive(name in "[a-zA-Z]+") {
+        let lower = name.to_lowercase();
+        let upper = name.to_uppercase();
+        // Property: case-insensitive parsing should yield same result
+        assert_eq!(Assistant::from(&lower), Assistant::from(&upper));
+    }
+}
+```
+
+**Benefits:**
+- **More coverage** with less test code
+- **Automatic shrinking** finds minimal failing cases
+- **Regression testing** saves failing cases for future runs
+
+**Do NOT use proptest for:**
+- **E2E tests** - Property-based testing with random inputs can:
+  - Hit API rate limits by generating thousands of requests
+  - Incur costs for external agent API calls
+  - Cause non-deterministic test failures due to timing or external state
+  - Create unpredictable load on external services
+- **Tests with side effects** - Tests that modify files, databases, or external state
+- **Tests with external dependencies** - Tests that require specific network conditions or external services to be available
+
+**Where proptest IS appropriate:**
+- Pure parsing/validation functions with no external dependencies
+- String formatting and conversion utilities
+- Mathematical operations on simple data types
+- Round-trip conversions where input and output are deterministic
+- Functions where the only "side effect" is CPU/memory usage
+
+**Example of appropriate proptest use:**
+```rust
+// GOOD: Pure string→enum conversion with no external deps
+proptest! {
+    #[test]
+    fn test_assistant_parsing(input in "[a-zA-Z0-9_]*") {
+        let _ = Assistant::from(input.as_str()); // Never panics
+    }
+}
+
+// BAD: Would generate thousands of agent API calls
+proptest! {
+    #[test]
+    fn test_prompt_response(prompt in "[a-zA-Z]*") {
+        // DON'T DO THIS - hits rate limits, costs money
+        agent.prompt(prompt).await.unwrap(); 
+    }
 }
 ```
 

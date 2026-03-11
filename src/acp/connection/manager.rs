@@ -1,6 +1,6 @@
-use crate::acp::connection::{Connection, stdio};
+use crate::acp::connection::{stdio, Connection};
 use crate::nvim::autocommands::ResponseHandler;
-use crate::{Handler, acp::error::Error};
+use crate::{acp::error::Error, Handler};
 use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolVersion};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -252,6 +252,21 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn test_assistant_from_str_roundtrip(name in "[a-zA-Z0-9_]*") {
+            // Property: converting string to Assistant should never panic
+            let _ = Assistant::from(name.as_str());
+        }
+
+        #[test]
+        fn test_protocol_from_str_roundtrip(name in "[a-zA-Z0-9_]*") {
+            // Property: converting string to Protocol should never panic
+            let _ = Protocol::from(name.as_str());
+        }
+    }
 
     #[test]
     fn test_protocol_display_socket() {

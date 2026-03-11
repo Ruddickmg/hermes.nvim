@@ -2,9 +2,10 @@ use nvim_oxi::api::{self, opts::OptionOpts};
 use std::sync::OnceLock;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{
-    EnvFilter, Registry, fmt,
+    fmt,
     prelude::*,
     reload::{self, Handle},
+    EnvFilter, Registry,
 };
 
 use crate::acp::error::Error;
@@ -158,7 +159,28 @@ impl Logger {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+    use proptest::prelude::*;
     use tracing::level_filters::LevelFilter;
+
+    proptest! {
+        #[test]
+        fn test_log_level_from_i64_roundtrip(level in any::<i64>()) {
+            // Property: converting i64 to LogLevel should never panic
+            let _ = LogLevel::from(level);
+        }
+
+        #[test]
+        fn test_log_level_from_str_roundtrip(name in "[a-zA-Z0-9_]*") {
+            // Property: converting string to LogLevel should never panic
+            let _ = LogLevel::from(name.as_str());
+        }
+
+        #[test]
+        fn test_log_format_from_str_roundtrip(name in "[a-zA-Z0-9_]*") {
+            // Property: converting string to LogFormat should never panic
+            let _ = LogFormat::from(name.as_str());
+        }
+    }
 
     #[test]
     fn test_log_level_from_i64_trace() {
