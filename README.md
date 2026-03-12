@@ -30,6 +30,8 @@ Methods marked “Optional” are implemented by Hermes but are not mandatory fo
 
 This method allows you to connect to an agent, it takes the agent name and the protocol for the connection (defaults to `stdio`).
 
+> **Triggers:** [ConnectionInitialized](#connectioninitialized) autocommand upon completion.
+
 Options for protocol (currently supported)
 - stdio (Default)
 
@@ -84,6 +86,8 @@ hermes.disconnect()
 
 Handle agent authentication.
 
+> **Triggers:** [Authenticated](#authenticated) autocommand upon completion.
+
 ```lua
 local hermes = require("hermes")
 local auth_method_id = "example-auth-method-id"
@@ -95,7 +99,7 @@ hermes.authenticate(auth_method_id)
 
 Create a new session. If no arguments are provided, the session defaults to either the project root or the current directory. 
 
-When the session has been created the <a href="#createdsession">`CreatedSession`</a> autocommand will be triggered.
+> **Triggers:** [CreatedSession](#createdsession) autocommand upon completion.
 
 ```lua
 local hermes = require("hermes")
@@ -133,6 +137,14 @@ hermes.createSession({
 ### Load Session (**Optional**)
 
 Load an existing session
+
+> **Triggers:** Session-related autocommands:
+> - `loadSession()` → [LoadedSession](#loadedsession)
+> - `setSessionConfigOption()` → [ConfigurationUpdated](#configurationupdated)
+> - `listSessions()` → [ListedSessions](#listedsessions)
+> - `forkSession()` → [ForkedSession](#forkedsession)
+> - `resumeSession()` → [ResumedSession](#resumedsession)
+> - `setSessionModel()` → [SessionModelUpdated](#sessionmodelupdated)
 
 ```lua
 local hermes = require("hermes")
@@ -188,6 +200,8 @@ There are five types of prompts you can send to an agent
  - [embedded](https://agentclientprotocol.com/protocol/content#embedded-resource): Similar to a link, but including the contents of the resource link (preferred over link if available) 
  - [image](https://agentclientprotocol.com/protocol/content#image-content): An image (encoded as a base64)
  - [audio](https://agentclientprotocol.com/protocol/content#audio-content): Audio content for communication (encoded as base64)
+
+> **Triggers:** [Prompted](#prompted) autocommand upon completion.
 
 ```lua
 local hermes = require("hermes")
@@ -306,6 +320,8 @@ vim.api.nvim_create_autocmd("User", {
 
 Set what mode the agent is in (the plan/build modes for opencode for example)
 
+> **Triggers:** [ModeUpdated](#modeupdated) autocommand upon completion.
+
 ```lua
 local hermes = require("hermes")
 
@@ -396,29 +412,6 @@ vim.api.nvim_create_autocmd("User", {
 ```
 
 Below is a list of all autocommands and their associated data (passed to the callback in the `args.data` field). Hermes will only trigger autocommands if there is a listener defined for it (I.E. You have created one like the example above)
-
-### Autocommands Requiring User Response
-
-The following autocommands require you to send a response back to the agent using `hermes.respond()`:
-
-```lua
--- Example: Handling a permission request
-vim.api.nvim_create_autocmd("User", {
-  pattern = "PermissionRequest",
-  callback = function(args)
-    local requestId = args.data.requestId
-    local options = args.data.options
-    
-    -- Show options to user, get their choice
-    local selectedOptionId = show_permission_dialog(options)
-    
-    -- Send response back to agent
-    hermes.respond(requestId, selectedOptionId)
-  end,
-})
-```
-
-### Autocommands
 
 <table>
   <thead>
@@ -535,7 +528,7 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>Authenticated</code></td>
+      <td><a id="authenticated"></a><code>Authenticated</code></td>
       <td>Authentication completed</td>
       <td>⚡ <a href="#authenticate">authenticate()</a></td>
       <td><pre><code class="language-json">{
@@ -587,7 +580,7 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>ConfigurationUpdated</code></td>
+      <td><a id="configurationupdated"></a><code>ConfigurationUpdated</code></td>
       <td>Session configuration updated</td>
       <td>⚡ <a href="#load-session-optional">setSessionConfigOption()</a></td>
       <td><pre><code class="language-json">{
@@ -616,7 +609,7 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>ConnectionInitialized</code></td>
+      <td><a id="connectioninitialized"></a><code>ConnectionInitialized</code></td>
       <td>Connection established with agent</td>
       <td>⚡ <a href="#connect">connect()</a></td>
       <td><pre><code class="language-json">{
@@ -653,7 +646,7 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>CreatedSession</code></td>
+      <td><a id="createdsession"></a><code>CreatedSession</code></td>
       <td>New session created</td>
       <td>⚡ <a href="#create-session">createSession()</a></td>
       <td><pre><code class="language-json">{
@@ -702,7 +695,7 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>ForkedSession</code></td>
+      <td><a id="forkedsession"></a><code>ForkedSession</code></td>
       <td>Session forked successfully</td>
       <td>⚡ <a href="#load-session-optional">forkSession()</a></td>
       <td><pre><code class="language-json">{
@@ -742,7 +735,7 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>ListedSessions</code></td>
+      <td><a id="listedsessions"></a><code>ListedSessions</code></td>
       <td>Session list received</td>
       <td>⚡ <a href="#load-session-optional">listSessions()</a></td>
       <td><pre><code class="language-json">{
@@ -758,7 +751,7 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>LoadedSession</code></td>
+      <td><a id="loadedsession"></a><code>LoadedSession</code></td>
       <td>Session loaded successfully</td>
       <td>⚡ <a href="#load-session-optional">loadSession()</a></td>
       <td><pre><code class="language-json">{
@@ -797,7 +790,7 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>ModeUpdated</code></td>
+      <td><a id="modeupdated"></a><code>ModeUpdated</code></td>
       <td>Session mode changed</td>
       <td>⚡ <a href="#set-mode-optional">setMode()</a></td>
       <td><pre><code class="language-json">{
@@ -806,7 +799,7 @@ vim.api.nvim_create_autocmd("User", {
     <tr>
       <td><code>PermissionRequest</code></td>
       <td>Agent requests permission to execute a tool</td>
-      <td>Agent (requires response) -> <a href="#permission-response">respond()</a></td>
+      <td>🤖 Agent (requires -> <a href="#permission-response">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "toolCall": {
@@ -854,7 +847,7 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>Prompted</code></td>
+      <td><a id="prompted"></a><code>Prompted</code></td>
       <td>Agent response received</td>
       <td>⚡ <a href="#prompt">prompt()</a></td>
       <td><pre><code class="language-json">{
@@ -862,7 +855,7 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>ResumedSession</code></td>
+      <td><a id="resumedsession"></a><code>ResumedSession</code></td>
       <td>Session resumed successfully</td>
       <td>⚡ <a href="#load-session-optional">resumeSession()</a></td>
       <td><pre><code class="language-json">{
@@ -901,7 +894,7 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>SessionModelUpdated</code></td>
+      <td><a id="sessionmodelupdated"></a><code>SessionModelUpdated</code></td>
       <td>Session model updated</td>
       <td>⚡ <a href="#load-session-optional">setSessionModel()</a></td>
       <td><pre><code class="language-json">{
