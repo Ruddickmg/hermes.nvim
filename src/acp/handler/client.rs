@@ -86,7 +86,7 @@ impl<H: Client + ResponseHandler> Client for Handler<H> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::nvim::state::PluginState;
     use agent_client_protocol::{
@@ -101,18 +101,20 @@ mod tests {
     use tokio::sync::Mutex;
 
     #[derive(Clone)]
-    struct MockClient {
+    pub struct MockClient {
         write_called: Arc<Mutex<bool>>,
         read_called: Arc<Mutex<bool>>,
         terminal_create_called: Arc<Mutex<bool>>,
+        pub notification_called: Arc<Mutex<bool>>,
     }
 
     impl MockClient {
-        fn new() -> Self {
+        pub fn new() -> Self {
             Self {
                 write_called: Arc::new(Mutex::new(false)),
                 read_called: Arc::new(Mutex::new(false)),
                 terminal_create_called: Arc::new(Mutex::new(false)),
+                notification_called: Arc::new(Mutex::new(false)),
             }
         }
     }
@@ -163,6 +165,7 @@ mod tests {
             ))
         }
         async fn session_notification(&self, _args: SessionNotification) -> Result<()> {
+            *self.notification_called.lock().await = true;
             Ok(())
         }
         async fn terminal_output(

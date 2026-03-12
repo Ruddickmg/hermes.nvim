@@ -79,3 +79,90 @@ impl<H: Client + ResponseHandler> Handler<H> {
         allow_notifications
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::acp::handler::client::tests::MockClient;
+    use crate::nvim::state::PluginState;
+    use agent_client_protocol::{
+        ContentBlock, ContentChunk, SessionNotification, SessionUpdate, TextContent,
+    };
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    fn create_test_notification() -> SessionNotification {
+        let chunk = ContentChunk::new(ContentBlock::Text(TextContent::new("test message")));
+        SessionNotification::new("session_id", SessionUpdate::UserMessageChunk(chunk))
+    }
+
+    #[tokio::test]
+    async fn test_can_receive_notifications_returns_true_by_default() {
+        let state = Arc::new(Mutex::new(PluginState::default()));
+        let handler = Handler::new(state.clone(), MockClient::new());
+
+        let result = handler.can_receive_notifications().await;
+        assert_eq!(result, true);
+    }
+
+    #[tokio::test]
+    async fn test_can_receive_notifications_returns_false_when_disabled() {
+        let state = Arc::new(Mutex::new(PluginState::default()));
+        state.lock().await.config.permissions.allow_notifications = false;
+
+        let handler = Handler::new(state.clone(), MockClient::new());
+
+        let result = handler.can_receive_notifications().await;
+        assert_eq!(result, false);
+    }
+
+    #[tokio::test]
+    async fn test_session_notification_permissions_allowed() {
+        let mock = MockClient::new();
+        let state = Arc::new(Mutex::new(PluginState::default()));
+
+        let handler = Handler::new(state.clone(), mock.clone());
+
+        let notification = create_test_notification();
+        let res: Result<(), agent_client_protocol::Error> = handler.session_notification(notification).await;
+        assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_session_notification_calls_handler() {
+        let mock = MockClient::new();
+        let state = Arc::new(Mutex::new(PluginState::default()));
+
+        let handler = Handler::new(state.clone(), mock.clone());
+
+        let notification = create_test_notification();
+        let _ = handler.session_notification(notification).await;
+        assert!(*mock.notification_called.lock().await);
+    }
+
+    #[tokio::test]
+    async fn test_session_notification_permissions_denied() {
+        let mock = MockClient::new();
+        let state = Arc::new(Mutex::new(PluginState::default()));
+        state.lock().await.config.permissions.allow_notifications = false;
+
+        let handler = Handler::new(state.clone(), mock.clone());
+
+        let notification = create_test_notification();
+        let res = handler.session_notification(notification).await;
+        assert_eq!(res, Err(agent_client_protocol::Error::method_not_found()));
+    }
+
+    #[tokio::test]
+    async fn test_session_notification_permissions_denied_does_not_call_handler() {
+        let mock = MockClient::new();
+        let state = Arc::new(Mutex::new(PluginState::default()));
+        state.lock().await.config.permissions.allow_notifications = false;
+
+        let handler = Handler::new(state.clone(), mock.clone());
+
+        let notification = create_test_notification();
+        let _ = handler.session_notification(notification).await;
+        assert!(!*mock.notification_called.lock().await);
+    }
+}
