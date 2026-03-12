@@ -56,7 +56,7 @@ impl<R: RequestHandler> Client for AutoCommand<R> {
             SessionUpdate::ToolCallUpdate(_) => Ok(Commands::ToolCallUpdate),
             SessionUpdate::Plan(_) => Ok(Commands::Plan),
             SessionUpdate::AvailableCommandsUpdate(_) => Ok(Commands::AvailableCommands),
-            SessionUpdate::CurrentModeUpdate(_) => Ok(Commands::CurrentMode),
+            SessionUpdate::CurrentModeUpdate(_) => Ok(Commands::ModeCurrent),
             SessionUpdate::ConfigOptionUpdate(_) => Ok(Commands::ConfigurationOption),
             _ => return Err(Error::method_not_found()),
         }?;

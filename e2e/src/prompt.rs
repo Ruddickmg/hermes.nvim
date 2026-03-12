@@ -3,11 +3,11 @@ use std::time::Duration;
 use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
 use agent_client_protocol::{InitializeResponse, NewSessionResponse, PromptResponse, StopReason};
 use hermes::{
-    acp::connection::{Assistant, Protocol},
     api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
     nvim::{autocommands::Commands, hermes},
 };
 use nvim_oxi::{conversion::FromObject, Array, Dictionary, Function, Object};
+use pretty_assertions::assert_eq;
 
 #[nvim_oxi::test]
 fn test_setup_returns_prompt_function() -> Result<(), nvim_oxi::Error> {
@@ -36,9 +36,8 @@ fn test_prompt_single_content() -> Result<(), nvim_oxi::Error> {
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
-        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
-    let wait_for_prompt =
-        autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
+    let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     connect.call((nvim_oxi::String::from("opencode"), None))?;
 
@@ -82,9 +81,8 @@ fn test_prompt_multiple_content() -> Result<(), nvim_oxi::Error> {
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
-        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
-    let wait_for_prompt =
-        autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
+    let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     connect.call((nvim_oxi::String::from("opencode"), None))?;
 
@@ -143,7 +141,7 @@ fn test_prompt_multiple_content() -> Result<(), nvim_oxi::Error> {
     let content = PromptContent::Multiple(
         content_array
             .into_iter()
-            .map(|obj| FromObject::from_object(obj))
+            .map(FromObject::from_object)
             .collect::<Result<Vec<_>, _>>()?,
     );
 

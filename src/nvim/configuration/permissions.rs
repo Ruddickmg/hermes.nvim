@@ -85,3 +85,65 @@ impl FromObject for Permissions {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    // Strategy for generating Permissions with random boolean values
+    fn arb_permissions() -> impl Strategy<Value = Permissions> {
+        (any::<bool>(), any::<bool>(), any::<bool>(), any::<bool>()).prop_map(
+            |(fs_write, fs_read, terminal, can_request)| Permissions {
+                fs_write_access: fs_write,
+                fs_read_access: fs_read,
+                terminal_access: terminal,
+                can_request_permissions: can_request,
+            },
+        )
+    }
+
+    proptest! {
+        #[test]
+        fn test_permissions_roundtrip(permissions in arb_permissions()) {
+            // Build a Dictionary/Object and ensure Permissions::from_object
+            // reconstructs the original Permissions value.
+            let mut dict = Dictionary::new();
+            dict.insert("fs_write_access", permissions.fs_write_access);
+            dict.insert("fs_read_access", permissions.fs_read_access);
+            dict.insert("terminal_access", permissions.terminal_access);
+            dict.insert("can_request_permissions", permissions.can_request_permissions);
+
+            let obj = Object::from(dict);
+            let parsed = Permissions::from_object(obj).expect("Permissions::from_object failed");
+
+            prop_assert_eq!(parsed.fs_write_access, permissions.fs_write_access);
+            prop_assert_eq!(parsed.fs_read_access, permissions.fs_read_access);
+            prop_assert_eq!(parsed.terminal_access, permissions.terminal_access);
+            prop_assert_eq!(parsed.can_request_permissions, permissions.can_request_permissions);
+        }
+    }
+
+    #[test]
+    fn test_permissions_default_all_true() {
+        let perms = Permissions::default();
+        assert!(perms.fs_write_access);
+        assert!(perms.fs_read_access);
+        assert!(perms.terminal_access);
+        assert!(perms.can_request_permissions);
+    }
+
+    #[test]
+    fn test_permissions_custom_values() {
+        let perms = Permissions {
+            fs_write_access: false,
+            fs_read_access: true,
+            terminal_access: false,
+            can_request_permissions: true,
+        };
+        assert!(!perms.fs_write_access);
+        assert!(perms.fs_read_access);
+        assert!(!perms.terminal_access);
+        assert!(perms.can_request_permissions);
+    }
+}

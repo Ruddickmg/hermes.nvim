@@ -22,22 +22,13 @@ Hermes focuses on:
 
 ## API
 
-Below are a list of functions that Hermes provides to send requests to ai assistants.
+Hermes exposes the following functions for sending requests to AI assistants. However, not all assistants support every method, and the level of support may vary by agent.
+
+Methods marked “Optional” are implemented by Hermes but are not mandatory for agent implementations.
 
 ### Connect
 
 This method allows you to connect to an agent, it takes the agent name and the protocol for the connection (defaults to `stdio`).
-
-Options for protocol (currently supported)
-- stdio (Default)
-
-Planned future protocols (not yet supported)
-- http
-- socket
-
-Options for agent (pre-defined)
-- copilot (GitHub Copilot)
-- opencode
 
 ```lua
 local hermes = require("hermes")
@@ -60,6 +51,8 @@ hermes.connect(
     }
 )
 ```
+
+> **Triggers:** [ConnectionInitialized](#connectioninitialized) autocommand upon completion.
 
 ### Disconnect
 
@@ -88,6 +81,8 @@ local auth_method_id = "example-auth-method-id"
 
 hermes.authenticate(auth_method_id)
 ```
+
+> **Triggers:** [Authenticated](#authenticated) autocommand upon completion.
 
 ### Create Session
 
@@ -125,6 +120,58 @@ hermes.createSession({
   },
 })
 ```
+
+> **Triggers:** [SessionCreated](#sessioncreated) autocommand upon completion.
+
+### Load Session (**Optional**)
+
+Load an existing session
+
+```lua
+local hermes = require("hermes")
+
+-- call signature (uses defaults)
+hermes.loadSession(sessionId)
+
+-- call signature (with further configuration)
+hermes.loadSession({sessionId, {
+    cwd = ".", -- path to load the session from (optional, defaults to either project root or current directory)
+    mcpServers = {
+        { -- Http or Sse MCP server definition
+          type = "http", -- or "sse"
+          name = "Human readable name for MCP server",
+          url = "http://url-to-mcp-server.com",
+          headers = {
+            { ["Content-Type"] = "application/json" },
+            { headerName = "header value" },
+          },
+        },
+        {  -- Stdio MCP server definition
+          type = "stdio",
+          name = "Human readable name for MCP server",
+          command = "/path/to/the/MCP/server/executable",
+          args = { "run", "--flag", "something" },
+          -- Environment variables to set when launching the MCP server.
+          env = {
+            { name = "ENVIRONMENT_VAR_NAME", value = "value" },
+          },
+        },
+    },
+}})
+
+-- example
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "SessionCreated",
+    callback = function(args)
+        local sessionId = args.data.sessionId
+
+        hermes.loadSession(sessionId)
+    end,
+})
+```
+
+> **Triggers:** [SessionLoaded](#sessionloaded) autocommand upon completion
 
 ### Prompt
 
@@ -189,7 +236,7 @@ hermes.prompt(sessionId, {
 -- example
 vim.api.nvim_create_autocmd("User", {
     group = "hermes",
-    pattern = "CreatedSession",
+    pattern = "SessionCreated",
     callback = function(args)
         local sessionId = args.data.sessionId
 
@@ -201,7 +248,9 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-### Cancel
+> **Triggers:** [Prompted](#prompted) autocommand upon completion.
+
+### Cancel (**Optional**)
 
 Cancel the current operation of the agent (e.g., stop generating text, stop a tool call in progress, etc)
 
@@ -215,7 +264,7 @@ hermes.cancel(sessionId)
 -- example
 vim.api.nvim_create_autocmd("User", {
     group = "hermes",
-    pattern = "CreatedSession",
+    pattern = "SessionCreated",
     callback = function(args)
         local sessionId = args.data.sessionId
 
@@ -225,7 +274,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-### Set mode
+### Set mode (**Optional**)
 
 Set what mode the agent is in (the plan/build modes for opencode for example)
 
@@ -238,7 +287,7 @@ hermes.setMode(sessionId, modeId)
 -- example
 vim.api.nvim_create_autocmd("User", {
     group = "hermes",
-    pattern = "CreatedSession",
+    pattern = "SessionCreated",
     callback = function(args)
         local modes = args.data.modes
         -- modes is optional for an agent, some may not have different modes to select
@@ -252,11 +301,13 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
+> **Triggers:** [ModeUpdated](#modeupdated) autocommand upon completion.
+
 ### Respond
 
-Respond to agent requests
+When an agent makes a request that requires user input (such as a permission request), it triggers an autocommand and pauses until the user responds. Use the `respond` method with the request ID to resume the agent's operation.
 
-#### Permission request responses
+#### Permission response
 
 ```lua
 local hermes = require("hermes")
@@ -277,6 +328,7 @@ vim.api.nvim_create_autocmd("User", {
     end,
 })
 ```
+> **Responds to:** [PermissionRequest](#permissionrequest) autocommand.
 
 ## Autocommands
 
@@ -299,106 +351,39 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <th>Autocommand</th>
       <th>Description</th>
-      <th>Message Schema (args.data)</th>
+      <th>Source</th>
+      <th>Schema</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><code>ClientTextMessage</code></td>
-      <td>Message text sent from the client</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "text": "string",
-  "annotations": {
-    "audience": ["Role1", "Role2"],
-    "lastModified": "ISO8601 string",
-    "priority": "number"
-  },
-  "meta": "JSON value"
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>ClientImageMessage</code></td>
-      <td>An image sent from the client</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "data": "base64 string",
-  "mimeType": "string",
-  "uri": "string (optional)",
-  "annotations": { "audience": [], "priority": 1 },
-  "meta": "JSON value"
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>ClientResourceMessage</code></td>
-      <td>A resource sent from the client</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "resource": {
-    "text": "string (if text resource)",
-    "blob": "string (if blob resource)",
-    "uri": "string",
-    "mimeType": "string (optional)"
-  },
-  "annotations": { "audience": [], "lastModified": "string" },
-  "meta": "JSON value"
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>ClientResourceLinkMessage</code></td>
-      <td>A resource link from the client</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "name": "string",
-  "uri": "string",
-  "description": "string (optional)",
-  "mimeType": "string (optional)",
-  "size": "number (optional)",
-  "title": "string (optional)",
-  "annotations": { "audience": [], "priority": 1 },
-  "meta": "JSON value"
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>AgentTextMessage</code></td>
-      <td>A text message from the agent</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "text": "string",
-  "annotations": { "audience": [], "priority": 1 },
-  "meta": "JSON value"
-}</code></pre></td>
-    </tr>
-    <tr>
       <td><code>AgentImageMessage</code></td>
       <td>An image from the agent</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "data": "base64 string",
   "mimeType": "string",
   "uri": "string (optional)",
-  "annotations": { "audience": [], "priority": 1 },
-  "meta": "JSON value"
+  "annotations": { "audience": [], "priority": 1 }
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>AgentResourceMessage</code></td>
-      <td>A resource from the agent</td>
+      <td><code>AgentImageThought</code></td>
+      <td>Visual reasoning/thought from the agent</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
-  "resource": {
-    "text": "string (if text resource)",
-    "blob": "string (if blob resource)",
-    "uri": "string",
-    "mimeType": "string (optional)"
-  },
-  "annotations": { "audience": [], "lastModified": "string" },
-  "meta": "JSON value"
+  "data": "base64 string",
+  "mimeType": "string",
+  "uri": "string (optional)",
+  "annotations": { "audience": [], "priority": 1 }
 }</code></pre></td>
     </tr>
     <tr>
       <td><code>AgentResourceLinkMessage</code></td>
       <td>A resource link from the agent</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "name": "string",
@@ -407,35 +392,28 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "mimeType": "string (optional)",
   "size": "number (optional)",
   "title": "string (optional)",
-  "annotations": { "audience": [], "priority": 1 },
-  "meta": "JSON value"
+  "annotations": { "audience": [], "priority": 1 }
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>AgentTextThought</code></td>
-      <td>Text-based reasoning from the agent</td>
+      <td><code>AgentResourceLinkThought</code></td>
+      <td>Resource link thought from the agent</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
-  "text": "string",
-  "annotations": { "audience": [], "priority": 1 },
-  "meta": "JSON value"
+  "name": "string",
+  "uri": "string",
+  "description": "string (optional)",
+  "mimeType": "string (optional)",
+  "size": "number (optional)",
+  "title": "string (optional)",
+  "annotations": { "audience": [], "priority": 1 }
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>AgentImageThought</code></td>
-      <td>Image-based reasoning from the agent</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "data": "base64 string",
-  "mimeType": "string",
-  "uri": "string (optional)",
-  "annotations": { "audience": [], "priority": 1 },
-  "meta": "JSON value"
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>AgentResourceThought</code></td>
-      <td>Resource-based reasoning from the agent</td>
+      <td><code>AgentResourceMessage</code></td>
+      <td>A resource from the agent</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "resource": {
@@ -444,109 +422,70 @@ Below is a list of all autocommands and their associated data (passed to the cal
     "uri": "string",
     "mimeType": "string (optional)"
   },
-  "annotations": { "audience": [], "lastModified": "string" },
-  "meta": "JSON value"
+  "annotations": { "audience": [], "lastModified": "string" }
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>AgentResourceLinkThought</code></td>
-      <td>Resource link reasoning from the agent</td>
+      <td><code>AgentResourceThought</code></td>
+      <td>Resource-based thought from the agent</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
-  "name": "string",
-  "uri": "string",
-  "description": "string (optional)",
-  "mimeType": "string (optional)",
-  "size": "number (optional)",
-  "title": "string (optional)",
-  "annotations": { "audience": [], "priority": 1 },
-  "meta": "JSON value"
+  "resource": {
+    "text": "string (if text resource)",
+    "blob": "string (if blob resource)",
+    "uri": "string",
+    "mimeType": "string (optional)"
+  },
+  "annotations": { "audience": [], "lastModified": "string" }
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>AgentToolCall</code></td>
-      <td>Agent makes a tool call</td>
+      <td><code>AgentTextMessage</code></td>
+      <td>A text message from the agent</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
-  "id": "string",
-  "title": "string",
-  "kind": "Read | Edit | EditFile | Browser | Terminal | Command | MultiEdit | ReadWithEdits | WebFetch | StrReplaceEdit",
-  "status": "Pending | InProgress | Completed",
-  "content": [
-    { "type": "text", "text": "string" },
-    { "type": "image", "data": "base64", "mimeType": "image/png" },
-    { "type": "resource", "resource": { "text": "string", "uri": "string" } },
-    { "type": "resourcelink", "name": "string", "uri": "string" },
-    { "type": "terminal", "id": "string" },
-    { "type": "diff", "path": "string", "new_text": "string", "old_text": "string (optional)" }
-  ],
-  "locations": [
-    { "path": "string", "line": "number (optional)" }
-  ],
-  "input": "JSON string (optional)",
-  "output": "JSON string (optional)"
+  "text": "string",
+  "annotations": { "audience": [], "priority": 1 }
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>AgentToolCallUpdate</code></td>
-      <td>Tool call is updated (e.g., progress, output)</td>
+      <td><code>AgentTextThought</code></td>
+      <td>Textual thought/reasoning from the agent</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
-  "id": "string",
-  "fields": [
-    { "type": "text", "text": "string" },
-    { "type": "image", "data": "base64", "mimeType": "image/png" },
-    { "type": "resource", "resource": { "text": "string", "uri": "string" } },
-    { "type": "resourcelink", "name": "string", "uri": "string" },
-    { "type": "terminal", "id": "string" },
-    { "type": "diff", "path": "string", "new_text": "string", "old_text": "string (optional)" }
-  ],
-  "meta": "JSON value (optional)"
+  "text": "string",
+  "annotations": { "audience": [], "priority": 1 }
+}</code></pre></td>
+    </tr>
+    <tr id="authenticated">
+      <td><code>Authenticated</code></td>
+      <td>Authentication completed</td>
+      <td>⚡ <a href="#authenticate">authenticate()</a></td>
+      <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>AgentAvailableCommands</code></td>
+      <td><code>AvailableCommands</code></td>
       <td>Available commands are updated</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "commands": [
     {
+      "id": "string",
       "name": "string",
-      "description": "string",
-      "input": { "hint": "string" }
-    },
-    {
-      "name": "string",
-      "description": "string"
+      "description": "string (optional)"
     }
-  ],
-  "meta": "JSON value (optional)"
+  ]
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>AgentPlan</code></td>
-      <td>Agent generates a plan</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "entries": [
-    { "content": "string", "priority": "High | Medium | Low" },
-    { "content": "string", "priority": "High | Medium | Low" }
-  ],
-  "meta": "JSON value (optional)"
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>AgentCurrentMode</code></td>
-      <td>Current mode changes</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "id": "string",
-  "meta": "JSON value (optional)"
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>AgentConfigOption</code></td>
+      <td><code>ConfigurationOption</code></td>
       <td>Configuration option updates</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "options": [
@@ -569,9 +508,470 @@ Below is a list of all autocommands and their associated data (passed to the cal
           }
         ]
       }
+    }
+  ]
+}</code></pre></td>
+    </tr>
+    <tr id="configurationupdated">
+      <td><code>ConfigurationUpdated</code></td>
+      <td>Session configuration updated</td>
+      <td>⚡ <a href="#load-session-optional">setSessionConfigOption()</a></td>
+      <td><pre><code class="language-json">{
+  "configOptions": [
+    {
+      "id": "string",
+      "name": "string",
+      "description": "string (optional)",
+      "category": "string (optional)",
+      "kind": {
+        "currentValue": "string",
+        "options": [
+          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
+          {
+            "type": "grouped",
+            "group": "string",
+            "name": "string",
+            "options": [
+              { "value": "string", "name": "string", "description": "string (optional)" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}</code></pre></td>
+    </tr>
+    <tr id="connectioninitialized">
+      <td><code>ConnectionInitialized</code></td>
+      <td>Connection established with agent</td>
+      <td>⚡ <a href="#connect">connect()</a></td>
+      <td><pre><code class="language-json">{
+  "protocolVersion": "string",
+  "agentCapabilities": {
+    "loadSession": "boolean",
+    "promptCapabilities": {
+      "image": "boolean",
+      "audio": "boolean",
+      "embeddedContext": "boolean"
     },
+    "mcpCapabilities": {
+      "http": "boolean",
+      "sse": "boolean"
+    },
+    "sessionCapabilities": {
+      "list": "boolean",
+      "fork": "boolean",
+      "resume": "boolean"
+    }
+  },
+  "authMethods": [
+    {
+      "id": "string",
+      "name": "string",
+      "description": "string (optional)"
+    }
   ],
-  "meta": "JSON value (optional)"
+  "agentInfo": {
+    "name": "string",
+    "version": "string",
+    "title": "string (optional)"
+  }
+}</code></pre></td>
+    </tr>
+    <tr id="modecurrent">
+      <td><code>ModeCurrent</code></td>
+      <td>Current mode changes</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "id": "string"
+}</code></pre></td>
+    </tr>
+    <tr id="modeupdated">
+      <td><code>ModeUpdated</code></td>
+      <td>Session mode changed</td>
+      <td>⚡ <a href="#set-mode-optional">setMode()</a></td>
+      <td><pre><code class="language-json">{
+}</code></pre></td>
+    </tr>
+    <tr id="permissionrequest">
+      <td><code>PermissionRequest</code></td>
+      <td>Agent requests permission to execute a tool</td>
+      <td>🤖 Agent (requires -> <a href="#permission-response">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "toolCall": {
+    "toolCallId": "string",
+    "fields": {
+      "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other (optional)",
+      "status": "Pending | InProgress | Completed | Cancelled | Error (optional)",
+      "title": "string (optional)",
+      "content": [{
+        "type": "text | image | resource | resourcelink | terminal | diff",
+        "text": "string (if text type)",
+        "data": "base64 string (if image type)",
+        "mimeType": "string (if image type)",
+        "uri": "string (if image/resource/resourcelink type)",
+        "resource": {
+          "text": "string (if text resource)",
+          "blob": "string (if blob resource)",
+          "uri": "string",
+          "mimeType": "string (optional)"
+        },
+        "name": "string (if resourcelink type)",
+        "description": "string (optional, if resourcelink type)",
+        "terminalId": "string (if terminal type)",
+        "path": "string (if diff type)",
+        "newText": "string (if diff type)",
+        "oldText": "string (optional, if diff type)"
+      }],
+      "locations": [{ "path": "string", "line": "number (optional)" }],
+      "rawInput": "JSON value (optional)",
+      "rawOutput": "JSON value (optional)"
+    }
+  },
+  "options": [{ "id": "string", "label": "string", "description": "string (optional)" }]
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>Plan</code></td>
+      <td>Agent generates a plan</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "entries": [
+    { "content": "string", "priority": "High | Medium | Low" }
+  ]
+}</code></pre></td>
+    </tr>
+    <tr id="prompted">
+      <td><code>Prompted</code></td>
+      <td>Agent response received</td>
+      <td>⚡ <a href="#prompt">prompt()</a></td>
+      <td><pre><code class="language-json">{
+  "stopReason": "string (e.g., 'Stop', 'Cancelled', 'Error')"
+}</code></pre></td>
+    </tr>
+    <tr id="sessioncreated">
+      <td><code>SessionCreated</code></td>
+      <td>New session created</td>
+      <td>⚡ <a href="#create-session">createSession()</a></td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "modes": {
+    "currentModeId": "string",
+    "availableModes": [
+      {
+        "id": "string",
+        "name": "string",
+        "description": "string (optional)"
+      }
+    ]
+  },
+  "configOptions": [
+    {
+      "id": "string",
+      "name": "string",
+      "description": "string (optional)",
+      "category": "string (optional)",
+      "kind": {
+        "currentValue": "string",
+        "options": [
+          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
+          {
+            "type": "grouped",
+            "group": "string",
+            "name": "string",
+            "options": [
+              { "value": "string", "name": "string", "description": "string (optional)" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}</code></pre></td>
+    </tr>
+    <tr id="sessionforked">
+      <td><code>SessionForked</code></td>
+      <td>Session forked successfully</td>
+      <td>⚡ <a href="#load-session-optional">forkSession()</a></td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "modes": {
+    "currentModeId": "string",
+    "availableModes": [
+      {
+        "id": "string",
+        "name": "string",
+        "description": "string (optional)"
+      }
+    ]
+  },
+  "configOptions": [
+    {
+      "id": "string",
+      "name": "string",
+      "description": "string (optional)",
+      "category": "string (optional)",
+      "kind": {
+        "currentValue": "string",
+        "options": [
+          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
+          {
+            "type": "grouped",
+            "group": "string",
+            "name": "string",
+            "options": [
+              { "value": "string", "name": "string", "description": "string (optional)" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}</code></pre></td>
+    </tr>
+    <tr id="sessionloaded">
+      <td><code>SessionLoaded</code></td>
+      <td>Session loaded successfully</td>
+      <td>⚡ <a href="#load-session-optional">loadSession()</a></td>
+      <td><pre><code class="language-json">{
+  "modes": {
+    "currentModeId": "string",
+    "availableModes": [
+      {
+        "id": "string",
+        "name": "string",
+        "description": "string (optional)"
+      }
+    ]
+  },
+  "configOptions": [
+    {
+      "id": "string",
+      "name": "string",
+      "description": "string (optional)",
+      "category": "string (optional)",
+      "kind": {
+        "currentValue": "string",
+        "options": [
+          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
+          {
+            "type": "grouped",
+            "group": "string",
+            "name": "string",
+            "options": [
+              { "value": "string", "name": "string", "description": "string (optional)" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}</code></pre></td>
+    </tr>
+    <tr id="sessionmodelupdated">
+      <td><code>SessionModelUpdated</code></td>
+      <td>Session model updated</td>
+      <td>⚡ <a href="#load-session-optional">setSessionModel()</a></td>
+      <td><pre><code class="language-json">{
+}</code></pre></td>
+    </tr>
+    <tr id="sessionresumed">
+      <td><code>SessionResumed</code></td>
+      <td>Session resumed successfully</td>
+      <td>⚡ <a href="#load-session-optional">resumeSession()</a></td>
+      <td><pre><code class="language-json">{
+  "modes": {
+    "currentModeId": "string",
+    "availableModes": [
+      {
+        "id": "string",
+        "name": "string",
+        "description": "string (optional)"
+      }
+    ]
+  },
+  "configOptions": [
+    {
+      "id": "string",
+      "name": "string",
+      "description": "string (optional)",
+      "category": "string (optional)",
+      "kind": {
+        "currentValue": "string",
+        "options": [
+          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
+          {
+            "type": "grouped",
+            "group": "string",
+            "name": "string",
+            "options": [
+              { "value": "string", "name": "string", "description": "string (optional)" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}</code></pre></td>
+    </tr>
+    <tr id="sessionslisted">
+      <td><code>SessionsListed</code></td>
+      <td>Session list received</td>
+      <td>⚡ <a href="#load-session-optional">listSessions()</a></td>
+      <td><pre><code class="language-json">{
+  "sessions": [
+    {
+      "sessionId": "string",
+      "cwd": "string",
+      "title": "string (optional)",
+      "updatedAt": "string (optional)"
+    }
+  ],
+  "nextCursor": "string (optional)"
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>ToolCall</code></td>
+      <td>Agent makes a tool call</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "id": "string",
+  "title": "string",
+  "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other",
+  "status": "Pending | InProgress | Completed | Cancelled | Error",
+  "content": [
+    {
+      "type": "text | image | resource | resourcelink | terminal | diff",
+      "text": "string (if text type)",
+      "data": "base64 string (if image type)",
+      "mimeType": "string (if image type)",
+      "uri": "string (if image/resource/resourcelink type)",
+      "resource": {
+        "text": "string (if text resource)",
+        "blob": "string (if blob resource)",
+        "uri": "string",
+        "mimeType": "string (optional)"
+      },
+      "name": "string (if resourcelink type)",
+      "description": "string (optional, if resourcelink type)",
+      "terminalId": "string (if terminal type)",
+      "path": "string (if diff type)",
+      "newText": "string (if diff type)",
+      "oldText": "string (optional, if diff type)"
+    }
+  ],
+  "locations": [
+    {
+      "path": "string",
+      "line": "number (optional)"
+    }
+  ],
+  "rawInput": "JSON value (optional)",
+  "rawOutput": "JSON value (optional)"
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>ToolCallUpdate</code></td>
+      <td>Tool call is updated (e.g., progress, output)</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "toolCallId": "string",
+  "fields": {
+    "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other (optional)",
+    "status": "Pending | InProgress | Completed | Cancelled | Error (optional)",
+    "title": "string (optional)",
+    "content": [
+      {
+        "type": "text | image | resource | resourcelink | terminal | diff",
+        "text": "string (if text type)",
+        "data": "base64 string (if image type)",
+        "mimeType": "string (if image type)",
+        "uri": "string (if image/resource/resourcelink type)",
+        "resource": {
+          "text": "string (if text resource)",
+          "blob": "string (if blob resource)",
+          "uri": "string",
+          "mimeType": "string (optional)"
+        },
+        "name": "string (if resourcelink type)",
+        "description": "string (optional, if resourcelink type)",
+        "terminalId": "string (if terminal type)",
+        "path": "string (if diff type)",
+        "newText": "string (if diff type)",
+        "oldText": "string (optional, if diff type)"
+      }
+    ],
+    "locations": [
+      {
+        "path": "string",
+        "line": "number (optional)"
+      }
+    ],
+    "rawInput": "JSON value (optional)",
+    "rawOutput": "JSON value (optional)"
+  }
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>UserImageMessage</code></td>
+      <td>An image sent from the client</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "data": "base64 string",
+  "mimeType": "string",
+  "uri": "string (optional)",
+  "annotations": { "audience": [], "priority": 1 }
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>UserResourceLinkMessage</code></td>
+      <td>A resource link from the client</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "name": "string",
+  "uri": "string",
+  "description": "string (optional)",
+  "mimeType": "string (optional)",
+  "size": "number (optional)",
+  "title": "string (optional)",
+  "annotations": { "audience": [], "priority": 1 }
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>UserResourceMessage</code></td>
+      <td>A resource sent from the client</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "resource": {
+    "text": "string (if text resource)",
+    "blob": "string (if blob resource)",
+    "uri": "string",
+    "mimeType": "string (optional)"
+  },
+  "annotations": { "audience": [], "lastModified": "string" }
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>UserTextMessage</code></td>
+      <td>Message text sent from the client</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "text": "string",
+  "annotations": {
+    "audience": ["Role1", "Role2"],
+    "lastModified": "ISO8601 string",
+    "priority": "number"
+  }
 }</code></pre></td>
     </tr>
   </tbody>
@@ -631,7 +1031,7 @@ Your options for log formats are:
 - [x] Allow cancel command to stop ai actions
 - [ ] Handle sessions
   - [x] Create session
-  - [ ] Load session
+  - [x] Load session
   - [ ] List sessions
   - [ ] Merge sessions
   - [ ] Fork sessions
@@ -645,7 +1045,7 @@ Your options for log formats are:
 - [ ] Allow agent to use terminal
   - [ ] Create autocommands for Agent progress in the terminal
 
-- [ ] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
+- [x] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
 
 - [ ] look into ways of improving ai integration
   - [ ] research RLM ([example](https://github.com/JaredStewart/coderlm))

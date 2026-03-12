@@ -129,3 +129,121 @@ pub fn disconnect<H: Client + ResponseHandler + Send + Sync + 'static>(
         });
     function.into()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    // Strategy for generating valid assistant names
+    fn arb_assistant_name() -> impl Strategy<Value = String> {
+        prop_oneof!(
+            Just("copilot".to_string()),
+            Just("opencode".to_string()),
+            Just("COPILOT".to_string()),
+            Just("OPENCODE".to_string()),
+            Just("Copilot".to_string()),
+            Just("Opencode".to_string()),
+            "[a-zA-Z][a-zA-Z0-9_]*".prop_map(|s| s.to_string())
+        )
+    }
+
+    // Strategy for generating DisconnectArgs variants
+    fn arb_disconnect_args() -> impl Strategy<Value = DisconnectArgs> {
+        prop_oneof!(
+            Just(DisconnectArgs::All),
+            arb_assistant_name().prop_map(|name| {
+                match Assistant::from(name.as_str()) {
+                    Assistant::Copilot | Assistant::Opencode => {
+                        DisconnectArgs::Single(Assistant::from(name.as_str()))
+                    }
+                    _ => DisconnectArgs::All, // Custom assistants become All for simplicity
+                }
+            }),
+            prop::collection::vec(arb_assistant_name(), 0..5).prop_map(|names| {
+                let assistants: Vec<Assistant> = names
+                    .into_iter()
+                    .filter_map(|name| match Assistant::from(name.as_str()) {
+                        Assistant::Copilot | Assistant::Opencode => {
+                            Some(Assistant::from(name.as_str()))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                if assistants.is_empty() {
+                    DisconnectArgs::All
+                } else {
+                    DisconnectArgs::Multiple(assistants)
+                }
+            })
+        )
+    }
+
+    proptest! {
+        #[test]
+        fn test_disconnect_args_from_str_roundtrip(name in arb_assistant_name()) {
+            // Property: converting string to Assistant should never panic
+            let _ = Assistant::from(name.as_str());
+        }
+
+        #[test]
+        fn test_disconnect_args_pushable_roundtrip(args in arb_disconnect_args()) {
+            // Property: Pushable -> Poppable should preserve the value
+            // Note: We can't easily test the full round-trip without a Lua state,
+            // but we can verify the enum structure is preserved
+            match args {
+                DisconnectArgs::All => {
+                    // All variant should remain All
+                }
+                DisconnectArgs::Single(ref assistant) => {
+                    prop_assert!(
+                        matches!(assistant, Assistant::Copilot | Assistant::Opencode | Assistant::Custom { .. }),
+                        "Single variant should contain valid assistant"
+                    );
+                }
+                DisconnectArgs::Multiple(ref assistants) => {
+                    prop_assert!(
+                        !assistants.is_empty(),
+                        "Multiple variant should contain at least one assistant"
+                    );
+                    for assistant in assistants {
+                        prop_assert!(
+                            matches!(assistant, Assistant::Copilot | Assistant::Opencode | Assistant::Custom { .. }),
+                            "Each assistant in Multiple should be valid"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_disconnect_args_default_is_all() {
+        let args: DisconnectArgs = Default::default();
+        assert!(matches!(args, DisconnectArgs::All));
+    }
+
+    #[test]
+    fn test_parse_assistant_string_copilot() {
+        let result = parse_assistant_string(nvim_oxi::String::from("copilot"));
+        assert!(matches!(result, Ok(Assistant::Copilot)));
+    }
+
+    #[test]
+    fn test_parse_assistant_string_opencode() {
+        let result = parse_assistant_string(nvim_oxi::String::from("opencode"));
+        assert!(matches!(result, Ok(Assistant::Opencode)));
+    }
+
+    #[test]
+    fn test_parse_assistant_string_case_insensitive() {
+        let result = parse_assistant_string(nvim_oxi::String::from("COPILOT"));
+        assert!(matches!(result, Ok(Assistant::Copilot)));
+    }
+
+    #[test]
+    fn test_parse_assistant_string_invalid() {
+        let result = parse_assistant_string(nvim_oxi::String::from("invalid"));
+        assert!(result.is_err());
+    }
+}

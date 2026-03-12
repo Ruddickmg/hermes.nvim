@@ -1,9 +1,14 @@
 use std::time::Duration;
 
 use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
-use agent_client_protocol::{InitializeResponse, NewSessionResponse, PromptResponse, StopReason};
+use agent_client_protocol::{
+    InitializeResponse, LoadSessionResponse, NewSessionResponse, PromptResponse, StopReason,
+};
 use hermes::{
-    api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
+    api::{
+        ConnectionArgs, CreateSessionArgs, DisconnectArgs, LoadSessionConfig, PromptArgs,
+        PromptContent,
+    },
     nvim::{autocommands::Commands, hermes},
 };
 use nvim_oxi::{conversion::FromObject, Array, Dictionary, Function, Object};
@@ -21,7 +26,7 @@ fn test_default_session_creation() -> Result<(), nvim_oxi::Error> {
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
-        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
 
     connect.call((nvim_oxi::String::from("opencode"), None))?;
 
@@ -51,7 +56,7 @@ fn test_custom_session_creation() -> Result<(), nvim_oxi::Error> {
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
-        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
 
     connect.call((nvim_oxi::String::from("opencode"), None))?;
 
@@ -91,7 +96,7 @@ fn test_cancel_during_prompt() -> Result<(), nvim_oxi::Error> {
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
-        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     connect.call((nvim_oxi::String::from("opencode"), None))?;
@@ -113,7 +118,7 @@ fn test_cancel_during_prompt() -> Result<(), nvim_oxi::Error> {
     let content = PromptContent::Multiple(
         content_array
             .into_iter()
-            .map(|obj| FromObject::from_object(obj))
+            .map(FromObject::from_object)
             .collect::<Result<Vec<_>, _>>()?,
     );
 
@@ -133,6 +138,62 @@ fn test_cancel_during_prompt() -> Result<(), nvim_oxi::Error> {
             response.stop_reason
         ))));
     }
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_load_session() -> Result<(), nvim_oxi::Error> {
+    let dict: Dictionary = hermes()?;
+    let connect: Function<ConnectionArgs, ()> =
+        FromObject::from_object(dict.get("connect").unwrap().clone())?;
+    let disconnect: Function<DisconnectArgs, ()> =
+        FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
+    let create_session: Function<CreateSessionArgs, ()> =
+        FromObject::from_object(dict.get("createSession").unwrap().clone())?;
+    let load_session: Function<(String, Option<LoadSessionConfig>), ()> =
+        FromObject::from_object(dict.get("loadSession").unwrap().clone())?;
+
+    let wait_for_initialization =
+        autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
+    let wait_for_session =
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
+
+    connect.call((nvim_oxi::String::from("opencode"), None))?;
+
+    wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+
+    // Create a session first
+    create_session.call(CreateSessionArgs::Default)?;
+
+    let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+    let session_id = session.session_id.to_string();
+
+    // Disconnect
+    disconnect.call(DisconnectArgs::All)?;
+
+    // Reconnect to load the session
+    let wait_for_initialization2 =
+        autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
+    let wait_for_loaded_session =
+        autocommand::listen_for_autocommand::<LoadSessionResponse>(Commands::SessionLoaded);
+
+    connect.call((nvim_oxi::String::from("opencode"), None))?;
+
+    wait_for_initialization2(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+
+    // Load the session
+    let config = LoadSessionConfig {
+        cwd: Some(std::path::PathBuf::from(".")),
+        mcp_servers: Vec::new(),
+    };
+    load_session.call((session_id.clone(), Some(config)))?;
+
+    let loaded_session = wait_for_loaded_session(Duration::from_secs(TIMEOUT_IN_SECONDS));
+
+    disconnect.call(DisconnectArgs::All)?;
+
+    assert!(loaded_session.is_ok());
 
     Ok(())
 }

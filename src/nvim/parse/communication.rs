@@ -15,6 +15,7 @@ pub fn communication(content: ContentBlock) -> Result<String> {
 mod tests {
     use super::*;
     use agent_client_protocol::{ContentBlock, TextContent};
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_communication_text() {

@@ -59,7 +59,7 @@ pub fn connect<H: Client + ResponseHandler + Send + Sync + 'static>(
                     args = Some(parsed_args);
                 }
             }
-            let mut agent = if let Some(ref cmd) = command {
+            let agent = if let Some(ref cmd) = command {
                 Assistant::Custom {
                     name: agent_name_str,
                     command: cmd.clone(),
@@ -70,12 +70,12 @@ pub fn connect<H: Client + ResponseHandler + Send + Sync + 'static>(
             };
 
             // Validate that unknown agents without an explicit command don't result in an empty command
-            if let Assistant::Custom { ref command, .. } = agent {
-                if command.is_empty() {
-                    return Err(Error::RuntimeError(
-                        "Unknown agent name; please provide 'command' (and optionally 'args') when connecting to a custom assistant".into(),
-                    ));
-                }
+            if let Assistant::Custom { ref command, .. } = agent
+                && command.is_empty()
+            {
+                return Err(Error::RuntimeError(
+                    "Unknown agent name; please provide 'command' (and optionally 'args') when connecting to a custom assistant".into(),
+                ));
             }
             let details = ConnectionDetails {
                 agent,
@@ -86,4 +86,71 @@ pub fn connect<H: Client + ResponseHandler + Send + Sync + 'static>(
         },
     );
     function.into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    // Strategy for generating agent names
+    fn arb_agent_name() -> impl Strategy<Value = String> {
+        prop_oneof!(
+            Just("copilot".to_string()),
+            Just("opencode".to_string()),
+            Just("COPILOT".to_string()),
+            Just("OPENCODE".to_string()),
+            Just("Copilot".to_string()),
+            Just("Opencode".to_string()),
+            "[a-zA-Z][a-zA-Z0-9_-]*".prop_map(|s| s.to_string())
+        )
+    }
+
+    proptest! {
+        #[test]
+        fn test_assistant_from_str_never_panics(name in arb_agent_name()) {
+            // Property: converting any string to Assistant should never panic
+            let _ = Assistant::from(name.as_str());
+        }
+
+        #[test]
+        fn test_known_agents_parsed_correctly(name in prop_oneof!(
+            Just("copilot"),
+            Just("opencode"),
+            Just("COPILOT"),
+            Just("OPENCODE")
+        )) {
+            // Property: Known agents should parse to their respective variants
+            let assistant = Assistant::from(name);
+            let name_lower = name.to_lowercase();
+
+            if name_lower == "copilot" {
+                prop_assert!(matches!(assistant, Assistant::Copilot), "Expected Copilot variant");
+            } else if name_lower == "opencode" {
+                prop_assert!(matches!(assistant, Assistant::Opencode), "Expected Opencode variant");
+            }
+        }
+    }
+
+    #[test]
+    fn test_assistant_from_str_copilot() {
+        assert!(matches!(Assistant::from("copilot"), Assistant::Copilot));
+    }
+
+    #[test]
+    fn test_assistant_from_str_opencode() {
+        assert!(matches!(Assistant::from("opencode"), Assistant::Opencode));
+    }
+
+    #[test]
+    fn test_assistant_from_str_case_insensitive() {
+        assert!(matches!(Assistant::from("COPILOT"), Assistant::Copilot));
+        assert!(matches!(Assistant::from("OpEnCoDe"), Assistant::Opencode));
+    }
+
+    #[test]
+    fn test_assistant_custom_with_command() {
+        let assistant = Assistant::from("custom-agent");
+        assert!(matches!(assistant, Assistant::Custom { name, .. } if name == "custom-agent"));
+    }
 }

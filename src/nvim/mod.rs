@@ -44,6 +44,7 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
             "createSession",
             api::create_session(connection_manager.clone()),
         ),
+        ("loadSession", api::load_session(connection_manager.clone())),
         ("prompt", api::prompt(connection_manager.clone())),
         ("setMode", api::set_mode(connection_manager)),
         ("respond", api::respond(request_handler)),
