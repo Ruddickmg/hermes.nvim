@@ -3,96 +3,87 @@ use crate::{
     nvim::autocommands::ResponseHandler,
 };
 use agent_client_protocol::Client;
-use nvim_oxi::{
-    Dictionary, Function, Object,
-    lua::{Error, Poppable, Pushable, ffi::State},
-};
+use nvim_oxi::{Dictionary, Function, Object, ObjectKind, lua::Error};
 use std::rc::Rc;
 use tokio::sync::Mutex;
 use tracing::{debug, instrument};
 
-#[derive(Clone, Debug)]
-pub struct ConnectionArgs {
-    pub agent: Option<Assistant>,
-    pub protocol: Option<Protocol>,
-}
-
-impl From<ConnectionArgs> for ConnectionDetails {
-    fn from(args: ConnectionArgs) -> Self {
-        ConnectionDetails {
-            agent: args.agent.unwrap_or_default(),
-            protocol: args.protocol.unwrap_or_default(),
-        }
-    }
-}
-
-impl Poppable for ConnectionArgs {
-    unsafe fn pop(state: *mut State) -> Result<Self, Error> {
-        use nvim_oxi::{Object, ObjectKind};
-
-        let table = unsafe { Dictionary::pop(state)? };
-
-        let agent = table
-            .get("agent")
-            .map(|v: &Object| {
-                if v.kind() != ObjectKind::String {
-                    return Err(Error::RuntimeError(
-                        "Invalid input for \"agent\", must be a string".to_string(),
-                    ));
-                }
-                let s: nvim_oxi::NvimStr = unsafe { v.as_nvim_str_unchecked() };
-                Ok(Assistant::from(s.to_string()))
-            })
-            .transpose()?;
-
-        let protocol = table
-            .get("protocol")
-            .map(|v: &Object| {
-                if v.kind() != ObjectKind::String {
-                    return Err(Error::RuntimeError(
-                        "Invalid input for \"protocol\", must be a string".to_string(),
-                    ));
-                }
-                let s: nvim_oxi::NvimStr = unsafe { v.as_nvim_str_unchecked() };
-                Ok(Protocol::from(s.to_string()))
-            })
-            .transpose()?;
-
-        Ok(Self { agent, protocol })
-    }
-}
-
-impl Pushable for ConnectionArgs {
-    unsafe fn push(self, state: *mut State) -> Result<i32, Error> {
-        let dict = nvim_oxi::Object::from({
-            let mut dict = Dictionary::new();
-
-            if let Some(agent) = self.agent {
-                dict.insert("agent", agent.to_string());
-            }
-
-            if let Some(protocol) = self.protocol {
-                dict.insert("protocol", protocol.to_string());
-            }
-
-            dict
-        });
-
-        // SAFETY: Caller must ensure valid state pointer
-        unsafe { dict.push(state) }
-    }
-}
+pub type ConnectionArgs = (nvim_oxi::String, Option<Dictionary>);
 
 #[instrument(level = "trace", skip_all)]
 pub fn connect<H: Client + ResponseHandler + Send + Sync + 'static>(
     connection: Rc<Mutex<ConnectionManager<H>>>,
 ) -> Object {
-    let function: Function<Option<ConnectionArgs>, Result<(), Error>> =
-        Function::from_fn(move |arg: Option<ConnectionArgs>| -> Result<(), Error> {
-            debug!("Connect function called with: {:#?}", arg);
-            let details = arg.map(ConnectionDetails::from).unwrap_or_default();
-            connection.blocking_lock().connect(details.clone())?;
+    let function: Function<ConnectionArgs, Result<(), Error>> = Function::from_fn(
+        move |(agent_name, options): ConnectionArgs| -> Result<(), Error> {
+            debug!(
+                "Connect function called with agent: {:?}, options: {:?}",
+                agent_name, options
+            );
+
+            let agent_name_str = agent_name.to_string();
+
+            // Parse options
+            let mut protocol = None;
+            let mut command = None;
+            let mut args = None;
+
+            if let Some(dict) = options {
+                // Parse protocol
+                if let Some(obj) = dict.get("protocol") {
+                    let s: nvim_oxi::String = obj
+                        .clone()
+                        .try_into()
+                        .map_err(|e| Error::RuntimeError(format!("Invalid protocol: {}", e)))?;
+                    protocol = Some(Protocol::from(s.to_string()));
+                }
+
+                // Parse command
+                if let Some(obj) = dict.get("command") {
+                    let s: nvim_oxi::String = obj
+                        .clone()
+                        .try_into()
+                        .map_err(|e| Error::RuntimeError(format!("Invalid command: {}", e)))?;
+                    command = Some(s.to_string());
+                }
+
+                // Parse args
+                if let Some(obj) = dict.get("args")
+                    && obj.kind() == ObjectKind::Array
+                {
+                    let arr: nvim_oxi::Array = unsafe { obj.clone().into_array_unchecked() };
+                    let parsed_args: Vec<String> = arr
+                        .into_iter()
+                        .filter_map(|v| v.try_into().ok().map(|s: nvim_oxi::String| s.to_string()))
+                        .collect();
+                    args = Some(parsed_args);
+                }
+            }
+            let mut agent = if let Some(ref cmd) = command {
+                Assistant::Custom {
+                    name: agent_name_str,
+                    command: cmd.clone(),
+                    args: args.clone().unwrap_or_default(),
+                }
+            } else {
+                Assistant::from(agent_name_str.clone())
+            };
+
+            // Validate that unknown agents without an explicit command don't result in an empty command
+            if let Assistant::Custom { ref command, .. } = agent {
+                if command.is_empty() {
+                    return Err(Error::RuntimeError(
+                        "Unknown agent name; please provide 'command' (and optionally 'args') when connecting to a custom assistant".into(),
+                    ));
+                }
+            }
+            let details = ConnectionDetails {
+                agent,
+                protocol: protocol.unwrap_or_default(),
+            };
+            connection.blocking_lock().connect(details)?;
             Ok(())
-        });
+        },
+    );
     function.into()
 }

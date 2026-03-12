@@ -29,23 +29,36 @@ Below are a list of functions that Hermes provides to send requests to ai assist
 This method allows you to connect to an agent, it takes the agent name and the protocol for the connection (defaults to `stdio`).
 
 Options for protocol (currently supported)
-- stdio
+- stdio (Default)
 
 Planned future protocols (not yet supported)
 - http
 - socket
 
-Options for agent
+Options for agent (pre-defined)
 - copilot (GitHub Copilot)
 - opencode
 
 ```lua
 local hermes = require("hermes")
 
-hermes.connect({
-    agent = "copilot", -- optional, defaults to "copilot", can be "copilot" | "opencode"
-    protocol = "stdio", -- optional, defaults to "stdio"
+-- connect to pre-defined agent
+hermes.connect("copilot")
+
+-- configure protocol
+hermes.connect("opencode", {
+   protocol = "http",
 })
+
+-- connect to custom agent (not pre-defined)
+hermes.connect(
+    "my-claude", -- this will be the key you use for other methods (disconnect for example) 
+    {
+        protocol = "socket", -- optional (Defaults to "stdio")
+        command = "claude-acp",
+        args = { "--socket", "/tmp/claude.sock" },
+    }
+)
 ```
 
 ### Disconnect
@@ -128,13 +141,13 @@ There are five types of prompts you can send to an agent
 local hermes = require("hermes")
 local sessionId = "current-session-id";
 
--- single prompt
+-- single prompt call signature
 hermes.prompt(sessionId, {
     type = "text",
     text = "What time is it?"
 })
 
--- multiple prompts at once
+-- multiple prompt call signature
 hermes.prompt(sessionId, {
   {
     type = "text",
@@ -171,6 +184,44 @@ hermes.prompt(sessionId, {
     data = "base64-encoded-audio-data",
     mimeType = "audio/wav"
   }
+}
+
+-- example
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "CreatedSession",
+    callback = function(args)
+        local sessionId = args.data.sessionId
+
+        hermes.prompt(sessionId, {
+          type = "text",
+          text = "What time is it?"
+        })
+    end,
+})
+```
+
+### Cancel
+
+Cancel the current operation of the agent (e.g., stop generating text, stop a tool call in progress, etc)
+
+```lua
+local hermes = require("hermes")
+local sessionId = 'session-id-from-create-session-response'
+
+-- call signature
+hermes.cancel(sessionId)
+
+-- example
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "CreatedSession",
+    callback = function(args)
+        local sessionId = args.data.sessionId
+
+        hermes.cancel(sessionId)
+        
+    end,
 })
 ```
 
@@ -180,10 +231,51 @@ Set what mode the agent is in (the plan/build modes for opencode for example)
 
 ```lua
 local hermes = require("hermes")
-local sessionId = 'session-id-from-create-session-response'
-local modeId = 'mode-id-from-create-session-response'
 
+-- call signature
 hermes.setMode(sessionId, modeId)
+
+-- example
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "CreatedSession",
+    callback = function(args)
+        local modes = args.data.modes
+        -- modes is optional for an agent, some may not have different modes to select
+        if modes ~= nil then
+            local selectedModeId = table.remove(modes.availableModes).id -- select mode id somehow
+            local sessionId = args.data.sessionId
+
+            hermes.setMode(sessionId, selectedModeId)
+        end
+    end,
+})
+```
+
+### Respond
+
+Respond to agent requests
+
+#### Permission request responses
+
+```lua
+local hermes = require("hermes")
+
+-- call signature
+hermes.respond("requestId", "optionId")
+
+-- example: 
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "PermissionRequest",
+    callback = function(args)
+        local selectedOptionId = table.remove(args.data.options).optionId -- select id somehow
+        local requestId = args.data.requestId
+
+        hermes.respond(requestId, selectedOptionId)
+        
+    end,
+})
 ```
 
 ## Autocommands
@@ -200,7 +292,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-Below is a list of all autocommands and their associated data (passed to the callback in the `args.data` field).
+Below is a list of all autocommands and their associated data (passed to the callback in the `args.data` field). Hermes will only trigger autocommands if there is a listener defined for it (I.E. You have created one like the example above)
 
 <table>
   <thead>
@@ -522,6 +614,7 @@ Your options for log formats are:
 
 ## TODO:
 
+-- user requests
 - [x] Allow connecting to Agents
   - [x] Via stdio
   - [ ] Via http
@@ -535,7 +628,7 @@ Your options for log formats are:
   - [x] Send resource links
   - [x] Send audio
 - [x] Allow mode selection
-- [ ] Allow cancel command to stop ai actions
+- [x] Allow cancel command to stop ai actions
 - [ ] Handle sessions
   - [x] Create session
   - [ ] Load session
@@ -544,12 +637,13 @@ Your options for log formats are:
   - [ ] Fork sessions
 - [ ] Allow model selection
 
+-- agent requests
+- [x] Allow permission request
 - [ ] Allow agent to write to files
   - [ ] Automatically refresh open buffers that have been modified
 - [ ] Allow agent to read files
 - [ ] Allow agent to use terminal
   - [ ] Create autocommands for Agent progress in the terminal
-- [ ] Allow user to give permission when needed
 
 - [ ] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
 

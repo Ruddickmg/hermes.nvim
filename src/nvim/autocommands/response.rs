@@ -1,5 +1,6 @@
 use crate::acp::Result;
 use crate::nvim::autocommands::AutoCommand;
+use crate::nvim::requests::RequestHandler;
 use serde::Serialize;
 use std::fmt::Debug;
 use tracing::instrument;
@@ -14,7 +15,7 @@ pub trait ResponseHandler {
 }
 
 #[async_trait::async_trait(?Send)]
-impl ResponseHandler for AutoCommand {
+impl<R: RequestHandler> ResponseHandler for AutoCommand<R> {
     #[instrument(level = "trace", skip(self))]
     async fn schedule_autocommand<T: Debug + ToString, S: Debug + Serialize>(
         &self,

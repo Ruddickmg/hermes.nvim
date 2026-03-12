@@ -14,7 +14,11 @@ impl<H: Client + ResponseHandler> Client for Handler<H> {
         &self,
         args: RequestPermissionRequest,
     ) -> Result<RequestPermissionResponse> {
-        self.handler.request_permission(args).await
+        if self.can_request_permissions().await {
+            self.handler.request_permission(args).await
+        } else {
+            Err(Error::method_not_found())
+        }
     }
 
     async fn session_notification(&self, args: SessionNotification) -> Result<()> {
