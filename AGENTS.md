@@ -38,6 +38,29 @@ Essential references for development:
 
 ## Practices
 
+### ⚠️ CRITICAL: Git Safety - DO NOT MAKE DESTRUCTIVE CHANGES WITHOUT EXPLICIT PERMISSION ⚠️
+
+**NEVER execute any git commands that modify repository state without explicit user permission. This includes:**
+- `git checkout -- .` or `git checkout` (destructive reset of working directory)
+- `git reset` (destructive reset of commits or staging area)
+- `git clean` (removes untracked files permanently)
+- `git stash` or `git stash pop` (can cause work to be lost)
+- `git rebase` (rewrites commit history)
+- `git push --force` or `git push -f` (destructive remote history rewrite)
+- `git cherry-pick` (modifies commit history)
+- `git branch -d` or `git branch -D` (deletes branches)
+- `git merge` (without explicit permission)
+- Any branch switching (`git checkout <branch>` or `git switch`)
+
+**ALLOWED git operations (read-only):**
+- `git status` - checking repository status
+- `git log` - viewing commit history
+- `git diff` - viewing changes
+- `git show` - viewing specific commits
+- `git branch` - listing branches (without `-d` or `-D`)
+
+**The user MUST explicitly state they want destructive git operations before executing them. Loss of uncommitted work due to unauthorized git operations is UNACCEPTABLE and CRITICAL.**
+
 ### Tool Usage
 
 **Always use the LSP tool when available and appropriate.** It provides:

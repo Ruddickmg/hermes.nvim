@@ -1,8 +1,8 @@
 // TODO: refine these error conversions to be more meaningful
-use nvim_oxi::{api, lua};
-use std::sync::{PoisonError, mpsc::SendError};
-use agent_client_protocol::Error as AcpError;
 use crate::nvim::autocommands::Commands;
+use agent_client_protocol::Error as AcpError;
+use nvim_oxi::{api, lua};
+use std::sync::{mpsc::SendError, PoisonError};
 
 #[derive(Debug, Clone)]
 pub enum Error {
@@ -45,12 +45,6 @@ impl From<Error> for agent_client_protocol::Error {
 impl From<Error> for lua::Error {
     fn from(e: Error) -> Self {
         lua::Error::RuntimeError(e.to_string())
-    }
-}
-
-impl From<Error> for agent_client_protocol::Error {
-    fn from(value: Error) -> Self {
-        agent_client_protocol::Error::into_internal_error(value)
     }
 }
 

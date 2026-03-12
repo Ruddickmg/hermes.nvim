@@ -1,6 +1,6 @@
-use crate::acp::connection::{Connection, stdio};
+use crate::acp::connection::{stdio, Connection};
 use crate::nvim::autocommands::ResponseHandler;
-use crate::{Handler, acp::error::AcpError};
+use crate::{acp::error::Error, Handler};
 use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolVersion};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -10,7 +10,7 @@ use std::thread::JoinHandle;
 use tokio::sync::Mutex;
 use tracing::{debug, info, instrument, trace, warn};
 
-type ConnectionHandles = Arc<Mutex<HashMap<Assistant, JoinHandle<Result<(), AcpError>>>>>;
+type ConnectionHandles = Arc<Mutex<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>;
 
 #[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
 pub enum Protocol {
@@ -146,7 +146,7 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
     pub fn connect(
         &mut self,
         ConnectionDetails { agent, protocol }: ConnectionDetails,
-    ) -> Result<Rc<Connection>, AcpError> {
+    ) -> Result<Rc<Connection>, Error> {
         Ok(match self.get_connection(&agent) {
             Some(connection) => {
                 warn!(
@@ -171,7 +171,7 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
                         let runtime = tokio::runtime::Builder::new_current_thread()
                             .enable_all()
                             .build()
-                            .map_err(|e| AcpError::Internal(e.to_string()))?;
+                            .map_err(|e| Error::Internal(e.to_string()))?;
 
                         trace!("Starting tokio runtime");
                         runtime.block_on(match protocol {
@@ -192,14 +192,14 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn close_all(&mut self) -> Result<(), AcpError> {
+    pub fn close_all(&mut self) -> Result<(), Error> {
         self.disconnect(self.connection.keys().cloned().collect())?;
         info!("Successfully disconnected from all agents");
         Ok(())
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn disconnect(&mut self, assistants: Vec<Assistant>) -> Result<(), AcpError> {
+    pub fn disconnect(&mut self, assistants: Vec<Assistant>) -> Result<(), Error> {
         let erroneous = assistants
             .clone()
             .into_iter()
@@ -210,7 +210,7 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
             debug!("Disconnected from agent(s), {:#?}", assistants);
             Ok(())
         } else {
-            Err(AcpError::Connection(format!(
+            Err(Error::Connection(format!(
                 "A problem occurred while trying to disconnect from agent(s): {}",
                 erroneous.join(", ")
             )))
@@ -218,29 +218,29 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
     }
 
     #[instrument(level = "trace", skip(self))]
-    fn disconnect_assistant(&mut self, assistant: &Assistant) -> Result<(), AcpError> {
+    fn disconnect_assistant(&mut self, assistant: &Assistant) -> Result<(), Error> {
         let sender = self.connection.remove(assistant).ok_or_else(|| {
-            AcpError::Connection(format!("No connection found for assistant {}", assistant))
+            Error::Connection(format!("No connection found for assistant {}", assistant))
         })?;
         let handle = self
             .handles
             .blocking_lock()
             .remove(assistant)
             .ok_or_else(|| {
-                AcpError::Connection(format!("No handle found for assistant {}", assistant))
+                Error::Connection(format!("No handle found for assistant {}", assistant))
             })?;
         debug!("Disconnecting from agent {}", assistant);
         drop(sender);
         handle
             .join()
             .map_err(|e| {
-                AcpError::Internal(format!(
+                Error::Internal(format!(
                     "Failed to join thread for assistant {}: {:#?}",
                     assistant, e
                 ))
             })?
             .map_err(|e| {
-                AcpError::Connection(format!(
+                Error::Connection(format!(
                     "Error in connection thread for assistant {}: {:#?}",
                     assistant, e
                 ))

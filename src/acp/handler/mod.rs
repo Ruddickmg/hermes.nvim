@@ -70,4 +70,12 @@ impl<H: Client + ResponseHandler> Handler<H> {
         drop(config);
         can_request_permissions
     }
+
+    #[instrument(level = "trace", skip(self))]
+    pub async fn can_receive_notifications(&self) -> bool {
+        let config = self.state.lock().await;
+        let allow_notifications = config.config.permissions.allow_notifications;
+        drop(config);
+        allow_notifications
+    }
 }

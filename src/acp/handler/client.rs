@@ -22,7 +22,11 @@ impl<H: Client + ResponseHandler> Client for Handler<H> {
     }
 
     async fn session_notification(&self, args: SessionNotification) -> Result<()> {
-        self.handler.session_notification(args).await
+        if self.can_receive_notifications().await {
+            self.handler.session_notification(args).await
+        } else {
+            Err(Error::method_not_found())
+        }
     }
 
     async fn write_text_file(&self, args: WriteTextFileRequest) -> Result<WriteTextFileResponse> {
