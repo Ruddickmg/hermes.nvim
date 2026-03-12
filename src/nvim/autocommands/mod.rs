@@ -131,20 +131,20 @@ pub enum Commands {
     ToolCallUpdate,
     Plan,
     AvailableCommands,
-    CurrentMode,
+    ModeCurrent,
     ConfigurationOption,
 
     // Session lifecycle commands
     ConnectionInitialized,
-    CreatedSession,
+    SessionCreated,
     Prompted,
     Authenticated,
     ConfigurationUpdated,
     ModeUpdated,
-    LoadedSession,
-    ListedSessions,
-    ForkedSession,
-    ResumedSession,
+    SessionLoaded,
+    SessionsListed,
+    SessionForked,
+    SessionResumed,
     SessionModelUpdated,
 
     // User message commands (format: User{ContentType}Message)
@@ -175,20 +175,20 @@ impl From<&str> for Commands {
             "ToolCallUpdate" => Commands::ToolCallUpdate,
             "Plan" => Commands::Plan,
             "AvailableCommands" => Commands::AvailableCommands,
-            "CurrentMode" => Commands::CurrentMode,
+            "ModeCurrent" => Commands::ModeCurrent,
             "ConfigurationOption" => Commands::ConfigurationOption,
 
             // Session lifecycle commands
             "ConnectionInitialized" => Commands::ConnectionInitialized,
-            "CreatedSession" => Commands::CreatedSession,
+            "SessionCreated" => Commands::SessionCreated,
             "Prompted" => Commands::Prompted,
             "Authenticated" => Commands::Authenticated,
             "ConfigUpdated" => Commands::ConfigurationUpdated,
             "ModeUpdated" => Commands::ModeUpdated,
-            "LoadedSession" => Commands::LoadedSession,
-            "ListedSessions" => Commands::ListedSessions,
-            "ForkedSession" => Commands::ForkedSession,
-            "ResumedSession" => Commands::ResumedSession,
+            "SessionLoaded" => Commands::SessionLoaded,
+            "SessionsListed" => Commands::SessionsListed,
+            "SessionForked" => Commands::SessionForked,
+            "SessionResumed" => Commands::SessionResumed,
             "SessionModelUpdated" => Commands::SessionModelUpdated,
 
             // User message commands

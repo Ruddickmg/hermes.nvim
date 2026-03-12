@@ -58,7 +58,7 @@ impl<H: agent_client_protocol::Client + ResponseHandler> Handler<H> {
     #[instrument(level = "trace", skip(self))]
     pub async fn session_created(&self, session: NewSessionResponse) -> Result<(), Error> {
         self.handler
-            .schedule_autocommand(Commands::CreatedSession, session)
+            .schedule_autocommand(Commands::SessionCreated, session)
             .await
     }
 
@@ -96,7 +96,7 @@ impl<H: agent_client_protocol::Client + ResponseHandler> Handler<H> {
     #[instrument(level = "trace", skip(self))]
     pub async fn session_loaded(&self, response: LoadSessionResponse) -> Result<(), Error> {
         self.handler
-            .schedule_autocommand(Commands::LoadedSession, response)
+            .schedule_autocommand(Commands::SessionLoaded, response)
             .await
     }
 
@@ -108,21 +108,21 @@ impl<H: agent_client_protocol::Client + ResponseHandler> Handler<H> {
     #[instrument(level = "trace", skip(self))]
     pub async fn sessions_listed(&self, response: ListSessionsResponse) -> Result<(), Error> {
         self.handler
-            .schedule_autocommand(Commands::ListedSessions, response)
+            .schedule_autocommand(Commands::SessionsListed, response)
             .await
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn session_forked(&self, response: ForkSessionResponse) -> Result<(), Error> {
         self.handler
-            .schedule_autocommand(Commands::ForkedSession, response)
+            .schedule_autocommand(Commands::SessionForked, response)
             .await
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn session_resumed(&self, response: ResumeSessionResponse) -> Result<(), Error> {
         self.handler
-            .schedule_autocommand(Commands::ResumedSession, response)
+            .schedule_autocommand(Commands::SessionResumed, response)
             .await
     }
 

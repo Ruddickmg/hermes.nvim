@@ -37,7 +37,7 @@ fn test_prompt_single_content() -> Result<(), nvim_oxi::Error> {
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
-        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     connect.call((nvim_oxi::String::from("opencode"), None))?;
@@ -82,7 +82,7 @@ fn test_prompt_multiple_content() -> Result<(), nvim_oxi::Error> {
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
-        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     connect.call((nvim_oxi::String::from("opencode"), None))?;

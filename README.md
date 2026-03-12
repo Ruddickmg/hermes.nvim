@@ -99,7 +99,7 @@ hermes.authenticate(auth_method_id)
 
 Create a new session. If no arguments are provided, the session defaults to either the project root or the current directory. 
 
-> **Triggers:** [CreatedSession](#createdsession) autocommand upon completion.
+> **Triggers:** [SessionCreated](#sessioncreated) autocommand upon completion.
 
 ```lua
 local hermes = require("hermes")
@@ -139,11 +139,11 @@ hermes.createSession({
 Load an existing session
 
 > **Triggers:** Session-related autocommands:
-> - `loadSession()` → [LoadedSession](#loadedsession)
+> - `loadSession()` → [SessionLoaded](#sessionloaded)
 > - `setSessionConfigOption()` → [ConfigurationUpdated](#configurationupdated)
-> - `listSessions()` → [ListedSessions](#listedsessions)
-> - `forkSession()` → [ForkedSession](#forkedsession)
-> - `resumeSession()` → [ResumedSession](#resumedsession)
+> - `listSessions()` → [SessionsListed](#sessionslisted)
+> - `forkSession()` → [SessionForked](#sessionforked)
+> - `resumeSession()` → [SessionResumed](#sessionresumed)
 > - `setSessionModel()` → [SessionModelUpdated](#sessionmodelupdated)
 
 ```lua
@@ -181,7 +181,7 @@ hermes.loadSession(sessionId, {
 -- example
 vim.api.nvim_create_autocmd("User", {
     group = "hermes",
-    pattern = "CreatedSession",
+    pattern = "SessionCreated",
     callback = function(args)
         local sessionId = args.data.sessionId
 
@@ -255,7 +255,7 @@ hermes.prompt(sessionId, {
 -- example
 vim.api.nvim_create_autocmd("User", {
     group = "hermes",
-    pattern = "CreatedSession",
+    pattern = "SessionCreated",
     callback = function(args)
         local sessionId = args.data.sessionId
 
@@ -281,7 +281,7 @@ hermes.cancel(sessionId)
 -- example
 vim.api.nvim_create_autocmd("User", {
     group = "hermes",
-    pattern = "CreatedSession",
+    pattern = "SessionCreated",
     callback = function(args)
         local sessionId = args.data.sessionId
 
@@ -306,7 +306,7 @@ hermes.cancel(sessionId)
 -- example
 vim.api.nvim_create_autocmd("User", {
     group = "hermes",
-    pattern = "CreatedSession",
+    pattern = "SessionCreated",
     callback = function(args)
         local sessionId = args.data.sessionId
 
@@ -331,7 +331,7 @@ hermes.setMode(sessionId, modeId)
 -- example
 vim.api.nvim_create_autocmd("User", {
     group = "hermes",
-    pattern = "CreatedSession",
+    pattern = "SessionCreated",
     callback = function(args)
         local modes = args.data.modes
         -- modes is optional for an agent, some may not have different modes to select
@@ -528,7 +528,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
 }</code></pre></td>
     </tr>
     <tr id="authenticated">
-      <td><code>Authenticated<\/code><\/td>
+      <td><code>Authenticated</code></td>
       <td>Authentication completed</td>
       <td>⚡ <a href="#authenticate">authenticate()</a></td>
       <td><pre><code class="language-json">{
@@ -580,7 +580,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
 }</code></pre></td>
     </tr>
     <tr id="configurationupdated">
-      <td><code>ConfigurationUpdated<\/code><\/td>
+      <td><code>ConfigurationUpdated</code></td>
       <td>Session configuration updated</td>
       <td>⚡ <a href="#load-session-optional">setSessionConfigOption()</a></td>
       <td><pre><code class="language-json">{
@@ -609,7 +609,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
 }</code></pre></td>
     </tr>
     <tr id="connectioninitialized">
-      <td><code>ConnectionInitialized<\/code><\/td>
+      <td><code>ConnectionInitialized</code></td>
       <td>Connection established with agent</td>
       <td>⚡ <a href="#connect">connect()</a></td>
       <td><pre><code class="language-json">{
@@ -645,48 +645,8 @@ Below is a list of all autocommands and their associated data (passed to the cal
   }
 }</code></pre></td>
     </tr>
-    <tr id="createdsession">
-      <td><code>CreatedSession<\/code><\/td>
-      <td>New session created</td>
-      <td>⚡ <a href="#create-session">createSession()</a></td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "modes": {
-    "currentModeId": "string",
-    "availableModes": [
-      {
-        "id": "string",
-        "name": "string",
-        "description": "string (optional)"
-      }
-    ]
-  },
-  "configOptions": [
-    {
-      "id": "string",
-      "name": "string",
-      "description": "string (optional)",
-      "category": "string (optional)",
-      "kind": {
-        "currentValue": "string",
-        "options": [
-          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
-          {
-            "type": "grouped",
-            "group": "string",
-            "name": "string",
-            "options": [
-              { "value": "string", "name": "string", "description": "string (optional)" }
-            ]
-          }
-        ]
-      }
-    }
-  ]
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>CurrentMode</code></td>
+    <tr id="modecurrent">
+      <td><code>ModeCurrent</code></td>
       <td>Current mode changes</td>
       <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
@@ -694,103 +654,8 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "id": "string"
 }</code></pre></td>
     </tr>
-    <tr id="forkedsession">
-      <td><code>ForkedSession<\/code><\/td>
-      <td>Session forked successfully</td>
-      <td>⚡ <a href="#load-session-optional">forkSession()</a></td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "modes": {
-    "currentModeId": "string",
-    "availableModes": [
-      {
-        "id": "string",
-        "name": "string",
-        "description": "string (optional)"
-      }
-    ]
-  },
-  "configOptions": [
-    {
-      "id": "string",
-      "name": "string",
-      "description": "string (optional)",
-      "category": "string (optional)",
-      "kind": {
-        "currentValue": "string",
-        "options": [
-          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
-          {
-            "type": "grouped",
-            "group": "string",
-            "name": "string",
-            "options": [
-              { "value": "string", "name": "string", "description": "string (optional)" }
-            ]
-          }
-        ]
-      }
-    }
-  ]
-}</code></pre></td>
-    </tr>
-    <tr id="listedsessions">
-      <td><code>ListedSessions<\/code><\/td>
-      <td>Session list received</td>
-      <td>⚡ <a href="#load-session-optional">listSessions()</a></td>
-      <td><pre><code class="language-json">{
-  "sessions": [
-    {
-      "sessionId": "string",
-      "cwd": "string",
-      "title": "string (optional)",
-      "updatedAt": "string (optional)"
-    }
-  ],
-  "nextCursor": "string (optional)"
-}</code></pre></td>
-    </tr>
-    <tr id="loadedsession">
-      <td><code>LoadedSession<\/code><\/td>
-      <td>Session loaded successfully</td>
-      <td>⚡ <a href="#load-session-optional">loadSession()</a></td>
-      <td><pre><code class="language-json">{
-  "modes": {
-    "currentModeId": "string",
-    "availableModes": [
-      {
-        "id": "string",
-        "name": "string",
-        "description": "string (optional)"
-      }
-    ]
-  },
-  "configOptions": [
-    {
-      "id": "string",
-      "name": "string",
-      "description": "string (optional)",
-      "category": "string (optional)",
-      "kind": {
-        "currentValue": "string",
-        "options": [
-          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
-          {
-            "type": "grouped",
-            "group": "string",
-            "name": "string",
-            "options": [
-              { "value": "string", "name": "string", "description": "string (optional)" }
-            ]
-          }
-        ]
-      }
-    }
-  ]
-}</code></pre></td>
-    </tr>
     <tr id="modeupdated">
-      <td><code>ModeUpdated<\/code><\/td>
+      <td><code>ModeUpdated</code></td>
       <td>Session mode changed</td>
       <td>⚡ <a href="#set-mode-optional">setMode()</a></td>
       <td><pre><code class="language-json">{
@@ -847,15 +712,141 @@ Below is a list of all autocommands and their associated data (passed to the cal
 }</code></pre></td>
     </tr>
     <tr id="prompted">
-      <td><code>Prompted<\/code><\/td>
+      <td><code>Prompted</code></td>
       <td>Agent response received</td>
       <td>⚡ <a href="#prompt">prompt()</a></td>
       <td><pre><code class="language-json">{
   "stopReason": "string (e.g., 'Stop', 'Cancelled', 'Error')"
 }</code></pre></td>
     </tr>
-    <tr id="resumedsession">
-      <td><code>ResumedSession<\/code><\/td>
+    <tr id="sessioncreated">
+      <td><code>SessionCreated</code></td>
+      <td>New session created</td>
+      <td>⚡ <a href="#create-session">createSession()</a></td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "modes": {
+    "currentModeId": "string",
+    "availableModes": [
+      {
+        "id": "string",
+        "name": "string",
+        "description": "string (optional)"
+      }
+    ]
+  },
+  "configOptions": [
+    {
+      "id": "string",
+      "name": "string",
+      "description": "string (optional)",
+      "category": "string (optional)",
+      "kind": {
+        "currentValue": "string",
+        "options": [
+          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
+          {
+            "type": "grouped",
+            "group": "string",
+            "name": "string",
+            "options": [
+              { "value": "string", "name": "string", "description": "string (optional)" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}</code></pre></td>
+    </tr>
+    <tr id="sessionforked">
+      <td><code>SessionForked</code></td>
+      <td>Session forked successfully</td>
+      <td>⚡ <a href="#load-session-optional">forkSession()</a></td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "modes": {
+    "currentModeId": "string",
+    "availableModes": [
+      {
+        "id": "string",
+        "name": "string",
+        "description": "string (optional)"
+      }
+    ]
+  },
+  "configOptions": [
+    {
+      "id": "string",
+      "name": "string",
+      "description": "string (optional)",
+      "category": "string (optional)",
+      "kind": {
+        "currentValue": "string",
+        "options": [
+          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
+          {
+            "type": "grouped",
+            "group": "string",
+            "name": "string",
+            "options": [
+              { "value": "string", "name": "string", "description": "string (optional)" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}</code></pre></td>
+    </tr>
+    <tr id="sessionloaded">
+      <td><code>SessionLoaded</code></td>
+      <td>Session loaded successfully</td>
+      <td>⚡ <a href="#load-session-optional">loadSession()</a></td>
+      <td><pre><code class="language-json">{
+  "modes": {
+    "currentModeId": "string",
+    "availableModes": [
+      {
+        "id": "string",
+        "name": "string",
+        "description": "string (optional)"
+      }
+    ]
+  },
+  "configOptions": [
+    {
+      "id": "string",
+      "name": "string",
+      "description": "string (optional)",
+      "category": "string (optional)",
+      "kind": {
+        "currentValue": "string",
+        "options": [
+          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
+          {
+            "type": "grouped",
+            "group": "string",
+            "name": "string",
+            "options": [
+              { "value": "string", "name": "string", "description": "string (optional)" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}</code></pre></td>
+    </tr>
+    <tr id="sessionmodelupdated">
+      <td><code>SessionModelUpdated</code></td>
+      <td>Session model updated</td>
+      <td>⚡ <a href="#load-session-optional">setSessionModel()</a></td>
+      <td><pre><code class="language-json">{
+}</code></pre></td>
+    </tr>
+    <tr id="sessionresumed">
+      <td><code>SessionResumed</code></td>
       <td>Session resumed successfully</td>
       <td>⚡ <a href="#load-session-optional">resumeSession()</a></td>
       <td><pre><code class="language-json">{
@@ -893,11 +884,20 @@ Below is a list of all autocommands and their associated data (passed to the cal
   ]
 }</code></pre></td>
     </tr>
-    <tr id="sessionmodelupdated">
-      <td><code>SessionModelUpdated<\/code><\/td>
-      <td>Session model updated</td>
-      <td>⚡ <a href="#load-session-optional">setSessionModel()</a></td>
+    <tr id="sessionslisted">
+      <td><code>SessionsListed</code></td>
+      <td>Session list received</td>
+      <td>⚡ <a href="#load-session-optional">listSessions()</a></td>
       <td><pre><code class="language-json">{
+  "sessions": [
+    {
+      "sessionId": "string",
+      "cwd": "string",
+      "title": "string (optional)",
+      "updatedAt": "string (optional)"
+    }
+  ],
+  "nextCursor": "string (optional)"
 }</code></pre></td>
     </tr>
     <tr>

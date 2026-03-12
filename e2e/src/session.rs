@@ -27,7 +27,7 @@ fn test_default_session_creation() -> Result<(), nvim_oxi::Error> {
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
-        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
 
     connect.call((nvim_oxi::String::from("opencode"), None))?;
 
@@ -57,7 +57,7 @@ fn test_custom_session_creation() -> Result<(), nvim_oxi::Error> {
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
-        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
 
     connect.call((nvim_oxi::String::from("opencode"), None))?;
 
@@ -97,7 +97,7 @@ fn test_cancel_during_prompt() -> Result<(), nvim_oxi::Error> {
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
-        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     connect.call((nvim_oxi::String::from("opencode"), None))?;
@@ -158,7 +158,7 @@ fn test_load_session() -> Result<(), nvim_oxi::Error> {
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
-        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
 
     connect.call((nvim_oxi::String::from("opencode"), None))?;
 
@@ -177,7 +177,7 @@ fn test_load_session() -> Result<(), nvim_oxi::Error> {
     let wait_for_initialization2 =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_loaded_session =
-        autocommand::listen_for_autocommand::<LoadSessionResponse>(Commands::LoadedSession);
+        autocommand::listen_for_autocommand::<LoadSessionResponse>(Commands::SessionLoaded);
 
     connect.call((nvim_oxi::String::from("opencode"), None))?;
 

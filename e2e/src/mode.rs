@@ -36,7 +36,7 @@ fn test_set_mode_success() -> Result<(), nvim_oxi::Error> {
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
-        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::CreatedSession);
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
     let wait_for_mode_update =
         autocommand::listen_for_autocommand::<SetSessionModeResponse>(Commands::ModeUpdated);
 
