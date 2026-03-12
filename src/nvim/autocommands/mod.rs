@@ -12,7 +12,10 @@ use std::{
     fmt::{Debug, Display},
     sync::Arc,
 };
-use tokio::sync::mpsc::{Sender, channel};
+use tokio::sync::{
+    mpsc::{Sender, channel},
+    oneshot,
+};
 use tracing::{debug, error, instrument, trace};
 use uuid::Uuid;
 
@@ -69,16 +72,23 @@ impl<R: RequestHandler> AutoCommand<R> {
         command: C,
         data: S,
     ) -> Result<()> {
-        let serialized: serde_json::Value = data.serialize(serde_json::value::Serializer)?;
-        debug!("Serialized data: {:#?}", serialized);
-        self.channel
-            .send((command.to_string(), serialized))
-            .await
-            .map_err(|e| Error::Internal(e.to_string()))?;
-        trace!("Triggering callback in Neovim thread");
-        self.handle
-            .send()
-            .map_err(|e| Error::Internal(e.to_string()))
+        if self.listener_attached(command.to_string()).await? {
+            let serialized: serde_json::Value = data.serialize(serde_json::value::Serializer)?;
+            debug!("Serialized data: {:#?}", serialized);
+            self.channel
+                .send((command.to_string(), serialized))
+                .await
+                .map_err(|e| Error::Internal(e.to_string()))?;
+            trace!("Triggering callback in Neovim thread");
+            self.handle
+                .send()
+                .map_err(|e| Error::Internal(e.to_string()))
+        } else {
+            Err(Error::Internal(format!(
+                "No autocommand listener attached for command: {}",
+                command.to_string()
+            )))
+        }
     }
 
     /// Check if an autocommand is registered for the given pattern
