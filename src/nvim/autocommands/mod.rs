@@ -84,15 +84,10 @@ impl<R: RequestHandler> AutoCommand<R> {
                 .send()
                 .map_err(|e| Error::Internal(e.to_string()))
         } else {
-            Err(Error::Internal(format!(
-                "No autocommand listener attached for command: {}",
-                command.to_string()
-            )))
+            Err(Error::NoListenerAttached(Commands::from(command.to_string())))
         }
     }
 
-    /// Check if an autocommand is registered for the given pattern
-    /// Uses nvim_oxi::api::get_autocmds to check for existing autocommands
     pub async fn listener_attached<S: Display>(&self, pattern: S) -> Result<bool> {
         use nvim_oxi::api::opts::GetAutocmdsOpts;
 
