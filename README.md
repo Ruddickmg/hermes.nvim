@@ -527,8 +527,8 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "annotations": { "audience": [], "priority": 1 }
 }</code></pre></td>
     </tr>
-    <tr>
-      <td><a id="authenticated"></a><code>Authenticated</code></td>
+    <tr id="authenticated">
+      <td><code>Authenticated<\/code><\/td>
       <td>Authentication completed</td>
       <td>⚡ <a href="#authenticate">authenticate()</a></td>
       <td><pre><code class="language-json">{
@@ -579,8 +579,8 @@ Below is a list of all autocommands and their associated data (passed to the cal
   ]
 }</code></pre></td>
     </tr>
-    <tr>
-      <td><a id="configurationupdated"></a><code>ConfigurationUpdated</code></td>
+    <tr id="configurationupdated">
+      <td><code>ConfigurationUpdated<\/code><\/td>
       <td>Session configuration updated</td>
       <td>⚡ <a href="#load-session-optional">setSessionConfigOption()</a></td>
       <td><pre><code class="language-json">{
@@ -608,8 +608,8 @@ Below is a list of all autocommands and their associated data (passed to the cal
   ]
 }</code></pre></td>
     </tr>
-    <tr>
-      <td><a id="connectioninitialized"></a><code>ConnectionInitialized</code></td>
+    <tr id="connectioninitialized">
+      <td><code>ConnectionInitialized<\/code><\/td>
       <td>Connection established with agent</td>
       <td>⚡ <a href="#connect">connect()</a></td>
       <td><pre><code class="language-json">{
@@ -645,8 +645,8 @@ Below is a list of all autocommands and their associated data (passed to the cal
   }
 }</code></pre></td>
     </tr>
-    <tr>
-      <td><a id="createdsession"></a><code>CreatedSession</code></td>
+    <tr id="createdsession">
+      <td><code>CreatedSession<\/code><\/td>
       <td>New session created</td>
       <td>⚡ <a href="#create-session">createSession()</a></td>
       <td><pre><code class="language-json">{
@@ -694,8 +694,8 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "id": "string"
 }</code></pre></td>
     </tr>
-    <tr>
-      <td><a id="forkedsession"></a><code>ForkedSession</code></td>
+    <tr id="forkedsession">
+      <td><code>ForkedSession<\/code><\/td>
       <td>Session forked successfully</td>
       <td>⚡ <a href="#load-session-optional">forkSession()</a></td>
       <td><pre><code class="language-json">{
@@ -734,8 +734,8 @@ Below is a list of all autocommands and their associated data (passed to the cal
   ]
 }</code></pre></td>
     </tr>
-    <tr>
-      <td><a id="listedsessions"></a><code>ListedSessions</code></td>
+    <tr id="listedsessions">
+      <td><code>ListedSessions<\/code><\/td>
       <td>Session list received</td>
       <td>⚡ <a href="#load-session-optional">listSessions()</a></td>
       <td><pre><code class="language-json">{
@@ -750,8 +750,8 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "nextCursor": "string (optional)"
 }</code></pre></td>
     </tr>
-    <tr>
-      <td><a id="loadedsession"></a><code>LoadedSession</code></td>
+    <tr id="loadedsession">
+      <td><code>LoadedSession<\/code><\/td>
       <td>Session loaded successfully</td>
       <td>⚡ <a href="#load-session-optional">loadSession()</a></td>
       <td><pre><code class="language-json">{
@@ -789,8 +789,8 @@ Below is a list of all autocommands and their associated data (passed to the cal
   ]
 }</code></pre></td>
     </tr>
-    <tr>
-      <td><a id="modeupdated"></a><code>ModeUpdated</code></td>
+    <tr id="modeupdated">
+      <td><code>ModeUpdated<\/code><\/td>
       <td>Session mode changed</td>
       <td>⚡ <a href="#set-mode-optional">setMode()</a></td>
       <td><pre><code class="language-json">{
@@ -846,16 +846,16 @@ Below is a list of all autocommands and their associated data (passed to the cal
   ]
 }</code></pre></td>
     </tr>
-    <tr>
-      <td><a id="prompted"></a><code>Prompted</code></td>
+    <tr id="prompted">
+      <td><code>Prompted<\/code><\/td>
       <td>Agent response received</td>
       <td>⚡ <a href="#prompt">prompt()</a></td>
       <td><pre><code class="language-json">{
   "stopReason": "string (e.g., 'Stop', 'Cancelled', 'Error')"
 }</code></pre></td>
     </tr>
-    <tr>
-      <td><a id="resumedsession"></a><code>ResumedSession</code></td>
+    <tr id="resumedsession">
+      <td><code>ResumedSession<\/code><\/td>
       <td>Session resumed successfully</td>
       <td>⚡ <a href="#load-session-optional">resumeSession()</a></td>
       <td><pre><code class="language-json">{
@@ -893,8 +893,8 @@ Below is a list of all autocommands and their associated data (passed to the cal
   ]
 }</code></pre></td>
     </tr>
-    <tr>
-      <td><a id="sessionmodelupdated"></a><code>SessionModelUpdated</code></td>
+    <tr id="sessionmodelupdated">
+      <td><code>SessionModelUpdated<\/code><\/td>
       <td>Session model updated</td>
       <td>⚡ <a href="#load-session-optional">setSessionModel()</a></td>
       <td><pre><code class="language-json">{
