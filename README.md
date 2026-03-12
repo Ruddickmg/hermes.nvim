@@ -357,7 +357,7 @@ vim.api.nvim_create_autocmd("User", {
 
 Respond to agent requests
 
-#### Permission request responses
+#### Permission response
 
 ```lua
 local hermes = require("hermes")
@@ -431,7 +431,7 @@ vim.api.nvim_create_autocmd("User", {
     <tr>
       <td><code>PermissionRequest</code></td>
       <td>Agent requests permission to execute a tool</td>
-      <td>🤖 Agent</td>
+      <td>Agent (requires response) -> <a href="#permission-response">respond()</a></td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "toolCall": {
