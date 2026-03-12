@@ -30,19 +30,6 @@ Methods marked “Optional” are implemented by Hermes but are not mandatory fo
 
 This method allows you to connect to an agent, it takes the agent name and the protocol for the connection (defaults to `stdio`).
 
-> **Triggers:** [ConnectionInitialized](#connectioninitialized) autocommand upon completion.
-
-Options for protocol (currently supported)
-- stdio (Default)
-
-Planned future protocols (not yet supported)
-- http
-- socket
-
-Options for agent (pre-defined)
-- copilot (GitHub Copilot)
-- opencode
-
 ```lua
 local hermes = require("hermes")
 
@@ -65,6 +52,8 @@ hermes.connect(
 )
 ```
 
+> **Triggers:** [ConnectionInitialized](#connectioninitialized) autocommand upon completion.
+
 ### Disconnect
 
 Below are examples of how you can disconnect from agent(s).
@@ -86,8 +75,6 @@ hermes.disconnect()
 
 Handle agent authentication.
 
-> **Triggers:** [Authenticated](#authenticated) autocommand upon completion.
-
 ```lua
 local hermes = require("hermes")
 local auth_method_id = "example-auth-method-id"
@@ -95,11 +82,11 @@ local auth_method_id = "example-auth-method-id"
 hermes.authenticate(auth_method_id)
 ```
 
+> **Triggers:** [Authenticated](#authenticated) autocommand upon completion.
+
 ### Create Session
 
 Create a new session. If no arguments are provided, the session defaults to either the project root or the current directory. 
-
-> **Triggers:** [SessionCreated](#sessioncreated) autocommand upon completion.
 
 ```lua
 local hermes = require("hermes")
@@ -134,17 +121,11 @@ hermes.createSession({
 })
 ```
 
+> **Triggers:** [SessionCreated](#sessioncreated) autocommand upon completion.
+
 ### Load Session (**Optional**)
 
 Load an existing session
-
-> **Triggers:** Session-related autocommands:
-> - `loadSession()` → [SessionLoaded](#sessionloaded)
-> - `setSessionConfigOption()` → [ConfigurationUpdated](#configurationupdated)
-> - `listSessions()` → [SessionsListed](#sessionslisted)
-> - `forkSession()` → [SessionForked](#sessionforked)
-> - `resumeSession()` → [SessionResumed](#sessionresumed)
-> - `setSessionModel()` → [SessionModelUpdated](#sessionmodelupdated)
 
 ```lua
 local hermes = require("hermes")
@@ -190,6 +171,14 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
+> **Triggers:** Session-related autocommands:
+> - `loadSession()` → [SessionLoaded](#sessionloaded)
+> - `setSessionConfigOption()` → [ConfigurationUpdated](#configurationupdated)
+> - `listSessions()` → [SessionsListed](#sessionslisted)
+> - `forkSession()` → [SessionForked](#sessionforked)
+> - `resumeSession()` → [SessionResumed](#sessionresumed)
+> - `setSessionModel()` → [SessionModelUpdated](#sessionmodelupdated)
+
 ### Prompt
 
 Send prompts to the agent 
@@ -200,8 +189,6 @@ There are five types of prompts you can send to an agent
  - [embedded](https://agentclientprotocol.com/protocol/content#embedded-resource): Similar to a link, but including the contents of the resource link (preferred over link if available) 
  - [image](https://agentclientprotocol.com/protocol/content#image-content): An image (encoded as a base64)
  - [audio](https://agentclientprotocol.com/protocol/content#audio-content): Audio content for communication (encoded as base64)
-
-> **Triggers:** [Prompted](#prompted) autocommand upon completion.
 
 ```lua
 local hermes = require("hermes")
@@ -267,6 +254,8 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
+> **Triggers:** [Prompted](#prompted) autocommand upon completion.
+
 ### Cancel (**Optional**)
 
 Cancel the current operation of the agent (e.g., stop generating text, stop a tool call in progress, etc)
@@ -320,8 +309,6 @@ vim.api.nvim_create_autocmd("User", {
 
 Set what mode the agent is in (the plan/build modes for opencode for example)
 
-> **Triggers:** [ModeUpdated](#modeupdated) autocommand upon completion.
-
 ```lua
 local hermes = require("hermes")
 
@@ -344,6 +331,8 @@ vim.api.nvim_create_autocmd("User", {
     end,
 })
 ```
+
+> **Triggers:** [ModeUpdated](#modeupdated) autocommand upon completion.
 
 ### Respond
 
