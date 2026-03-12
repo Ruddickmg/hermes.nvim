@@ -3,9 +3,9 @@ use agent_client_protocol::{
     ImageContent, PromptRequest, ResourceLink, TextContent, TextResourceContents,
 };
 use nvim_oxi::{
+    Array, Dictionary, Function, Object, ObjectKind,
     conversion::{Error as ConversionError, FromObject},
     lua::{Error, Poppable, Pushable},
-    Array, Dictionary, Function, Object, ObjectKind,
 };
 use std::rc::Rc;
 use tokio::sync::Mutex;

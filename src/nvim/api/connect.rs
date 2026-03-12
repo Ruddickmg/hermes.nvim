@@ -124,7 +124,7 @@ mod tests {
             // Property: Known agents should parse to their respective variants
             let assistant = Assistant::from(name);
             let name_lower = name.to_lowercase();
-            
+
             if name_lower == "copilot" {
                 prop_assert!(matches!(assistant, Assistant::Copilot), "Expected Copilot variant");
             } else if name_lower == "opencode" {
@@ -152,8 +152,6 @@ mod tests {
     #[test]
     fn test_assistant_custom_with_command() {
         let assistant = Assistant::from("custom-agent");
-        assert!(
-            matches!(assistant, Assistant::Custom { name, .. } if name == "custom-agent")
-        );
+        assert!(matches!(assistant, Assistant::Custom { name, .. } if name == "custom-agent"));
     }
 }
