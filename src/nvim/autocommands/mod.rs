@@ -5,7 +5,6 @@ use crate::{
         requests::{RequestHandler, Responder},
     },
 };
-use agent_client_protocol::RequestPermissionOutcome;
 use core::fmt;
 use nvim_oxi::{Object, api::opts::ExecAutocmdsOpts, libuv::AsyncHandle};
 use serde::Serialize;

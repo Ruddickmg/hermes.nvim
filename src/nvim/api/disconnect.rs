@@ -133,7 +133,6 @@ pub fn disconnect<H: Client + ResponseHandler + Send + Sync + 'static>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::assert_eq;
     use proptest::prelude::*;
 
     // Strategy for generating valid assistant names

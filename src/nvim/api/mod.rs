@@ -17,6 +17,4 @@ pub use disconnect::*;
 pub use load_session::*;
 pub use prompt::*;
 pub use respond::*;
-pub use respond::*;
-pub use set_mode::*;
 pub use set_mode::*;

@@ -89,7 +89,6 @@ impl FromObject for Permissions {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::assert_eq;
     use proptest::prelude::*;
 
     // Strategy for generating Permissions with random boolean values
@@ -107,12 +106,21 @@ mod tests {
     proptest! {
         #[test]
         fn test_permissions_roundtrip(permissions in arb_permissions()) {
-            // Property: Pushable -> Poppable should preserve all fields
-            // Note: We test the structure preservation rather than full Lua round-trip
-            prop_assert_eq!(permissions.fs_write_access, permissions.fs_write_access);
-            prop_assert_eq!(permissions.fs_read_access, permissions.fs_read_access);
-            prop_assert_eq!(permissions.terminal_access, permissions.terminal_access);
-            prop_assert_eq!(permissions.can_request_permissions, permissions.can_request_permissions);
+            // Build a Dictionary/Object and ensure Permissions::from_object
+            // reconstructs the original Permissions value.
+            let mut dict = Dictionary::new();
+            dict.insert("fs_write_access".into(), permissions.fs_write_access.into());
+            dict.insert("fs_read_access".into(), permissions.fs_read_access.into());
+            dict.insert("terminal_access".into(), permissions.terminal_access.into());
+            dict.insert("can_request_permissions".into(), permissions.can_request_permissions.into());
+
+            let obj = Object::from(dict);
+            let parsed = Permissions::from_object(obj).expect("Permissions::from_object failed");
+
+            prop_assert_eq!(parsed.fs_write_access, permissions.fs_write_access);
+            prop_assert_eq!(parsed.fs_read_access, permissions.fs_read_access);
+            prop_assert_eq!(parsed.terminal_access, permissions.terminal_access);
+            prop_assert_eq!(parsed.can_request_permissions, permissions.can_request_permissions);
         }
     }
 
