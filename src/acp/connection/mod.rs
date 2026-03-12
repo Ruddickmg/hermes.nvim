@@ -107,6 +107,7 @@ mod tests {
 
     use super::*;
     use agent_client_protocol::{InitializeRequest, ProtocolVersion};
+    use pretty_assertions::assert_eq;
 
     #[tokio::test]
     async fn test_connection_initialize() {

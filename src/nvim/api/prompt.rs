@@ -355,6 +355,7 @@ pub fn prompt<H: agent_client_protocol::Client + ResponseHandler + Send + Sync +
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     // Helper function to create a text content dictionary
     fn create_text_dict(text: &str) -> Dictionary {
@@ -440,6 +441,85 @@ mod tests {
         dict.insert("data", data);
         dict.insert("mimeType", mime_type);
         dict
+    }
+
+    // Helper function to create a single prompt content array
+    fn create_single_content_array(text: &str) -> Array {
+        Array::from_iter(vec![Object::from(create_text_dict(text))])
+    }
+
+    // Helper function to create a multiple prompt content array
+    fn create_multiple_content_array(texts: &[&str]) -> Array {
+        let objects: Vec<Object> = texts
+            .iter()
+            .map(|text| Object::from(create_text_dict(text)))
+            .collect();
+        Array::from_iter(objects)
+    }
+
+    #[cfg(test)]
+    mod proptest_conversions {
+        use super::*;
+        use proptest::prelude::*;
+
+        // Strategy for generating valid text strings
+        fn arb_text_string() -> impl Strategy<Value = String> {
+            "[a-zA-Z0-9.,;:!?\\s]*".prop_map(|s| s.to_string())
+        }
+
+        // Strategy for generating valid uri strings
+        fn arb_uri_string() -> impl Strategy<Value = String> {
+            "file:///[a-zA-Z0-9._/-]*".prop_map(|s| s.to_string())
+        }
+
+        // Strategy for generating valid name strings
+        fn arb_name_string() -> impl Strategy<Value = String> {
+            "[a-zA-Z][a-zA-Z0-9_-]*".prop_map(|s| s.to_string())
+        }
+
+        proptest! {
+            #[test]
+            fn test_parse_text_from_lua_never_panics(text in arb_text_string()) {
+                // Property: Parsing text content from Lua dict never panics
+                let dict = create_text_dict(&text);
+                let obj = Object::from(dict);
+                let _result = ContentBlockType::from_object(obj);
+                // Test passes if no panic occurs
+            }
+
+            #[test]
+            fn test_parse_link_from_lua_never_panics(
+                name in arb_name_string(),
+                uri in arb_uri_string()
+            ) {
+                // Property: Parsing link content from Lua dict never panics
+                let dict = create_link_dict(&name, &uri);
+                let obj = Object::from(dict);
+                let _result = ContentBlockType::from_object(obj);
+                // Test passes if no panic occurs
+            }
+
+            #[test]
+            fn test_parse_single_content_from_lua_never_panics(text in arb_text_string()) {
+                // Property: Parsing single prompt content from Lua array never panics
+                let arr = create_single_content_array(&text);
+                let obj = Object::from(arr);
+                let _result = PromptContent::from_object(obj);
+                // Test passes if no panic occurs
+            }
+
+            #[test]
+            fn test_parse_multiple_content_from_lua_never_panics(
+                texts in prop::collection::vec(arb_text_string(), 1..5)
+            ) {
+                // Property: Parsing multiple prompt content from Lua array never panics
+                let texts_ref: Vec<&str> = texts.iter().map(|s| s.as_str()).collect();
+                let arr = create_multiple_content_array(&texts_ref);
+                let obj = Object::from(arr);
+                let _result = PromptContent::from_object(obj);
+                // Test passes if no panic occurs
+            }
+        }
     }
 
     // ContentBlockType::FromObject Tests - Text

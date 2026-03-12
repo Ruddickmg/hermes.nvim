@@ -10,6 +10,8 @@ use std::thread::JoinHandle;
 use tokio::sync::Mutex;
 use tracing::{debug, info, instrument, trace, warn};
 
+type ConnectionHandles = Arc<Mutex<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>;
+
 #[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
 pub enum Protocol {
     Socket,
@@ -95,7 +97,7 @@ pub struct ConnectionDetails {
 
 #[derive(Clone)]
 pub struct ConnectionManager<H: Client + ResponseHandler> {
-    handles: Arc<Mutex<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>,
+    handles: ConnectionHandles,
     connection: HashMap<Assistant, Rc<Connection>>,
     handler: Arc<Handler<H>>,
 }
@@ -251,6 +253,22 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn test_assistant_from_str_roundtrip(name in "[a-zA-Z0-9_]*") {
+            // Property: converting string to Assistant should never panic
+            let _ = Assistant::from(name.as_str());
+        }
+
+        #[test]
+        fn test_protocol_from_str_roundtrip(name in "[a-zA-Z0-9_]*") {
+            // Property: converting string to Protocol should never panic
+            let _ = Protocol::from(name.as_str());
+        }
+    }
 
     #[test]
     fn test_protocol_display_socket() {
