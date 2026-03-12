@@ -1,17 +1,17 @@
 use std::time::Duration;
 
-use crate::{TIMEOUT_IN_SECONDS, utilities::autocommand};
+use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
 use agent_client_protocol::{
     InitializeResponse, LoadSessionResponse, NewSessionResponse, PromptResponse, StopReason,
 };
 use hermes::{
     api::{
-        ConnectionArgs, CreateSessionArgs, DisconnectArgs, LoadSessionArgs, PromptArgs,
+        ConnectionArgs, CreateSessionArgs, DisconnectArgs, LoadSessionConfig, PromptArgs,
         PromptContent,
     },
     nvim::{autocommands::Commands, hermes},
 };
-use nvim_oxi::{Array, Dictionary, Function, Object, conversion::FromObject};
+use nvim_oxi::{conversion::FromObject, Array, Dictionary, Function, Object};
 use tracing::info;
 
 #[nvim_oxi::test]
@@ -119,7 +119,7 @@ fn test_cancel_during_prompt() -> Result<(), nvim_oxi::Error> {
     let content = PromptContent::Multiple(
         content_array
             .into_iter()
-            .map(|obj| FromObject::from_object(obj))
+            .map(FromObject::from_object)
             .collect::<Result<Vec<_>, _>>()?,
     );
 
@@ -152,7 +152,7 @@ fn test_load_session() -> Result<(), nvim_oxi::Error> {
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
     let create_session: Function<CreateSessionArgs, ()> =
         FromObject::from_object(dict.get("createSession").unwrap().clone())?;
-    let load_session: Function<LoadSessionArgs, ()> =
+    let load_session: Function<(String, Option<LoadSessionConfig>), ()> =
         FromObject::from_object(dict.get("loadSession").unwrap().clone())?;
 
     let wait_for_initialization =
@@ -184,9 +184,11 @@ fn test_load_session() -> Result<(), nvim_oxi::Error> {
     wait_for_initialization2(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
     // Load the session
-    load_session.call(LoadSessionArgs::Minimal {
-        session_id: session_id.clone(),
-    })?;
+    let config = LoadSessionConfig {
+        cwd: Some(std::path::PathBuf::from(".")),
+        mcp_servers: Vec::new(),
+    };
+    load_session.call((session_id.clone(), Some(config)))?;
 
     let loaded_session = wait_for_loaded_session(Duration::from_secs(TIMEOUT_IN_SECONDS));
 

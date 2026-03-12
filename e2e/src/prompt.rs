@@ -3,7 +3,6 @@ use std::time::Duration;
 use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
 use agent_client_protocol::{InitializeResponse, NewSessionResponse, PromptResponse, StopReason};
 use hermes::{
-    acp::connection::{Assistant, Protocol},
     api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
     nvim::{autocommands::Commands, hermes},
 };
@@ -142,7 +141,7 @@ fn test_prompt_multiple_content() -> Result<(), nvim_oxi::Error> {
     let content = PromptContent::Multiple(
         content_array
             .into_iter()
-            .map(|obj| FromObject::from_object(obj))
+            .map(FromObject::from_object)
             .collect::<Result<Vec<_>, _>>()?,
     );
 

@@ -1,12 +1,10 @@
 use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
 use agent_client_protocol::{InitializeResponse, NewSessionResponse, SetSessionModeResponse};
 use hermes::{
-    acp::connection::{Assistant, Protocol},
     api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, SetModeArgs},
     nvim::{autocommands::Commands, hermes},
 };
 use nvim_oxi::{conversion::FromObject, Dictionary, Function};
-use pretty_assertions::assert_eq;
 use std::time::Duration;
 
 #[nvim_oxi::test]

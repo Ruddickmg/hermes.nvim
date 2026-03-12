@@ -1,6 +1,5 @@
 use agent_client_protocol::{AuthenticateResponse, InitializeResponse};
 use hermes::{
-    acp::connection::{Assistant, Protocol},
     api::{ConnectionArgs, DisconnectArgs},
     nvim::{autocommands::Commands, hermes},
 };

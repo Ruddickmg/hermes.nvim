@@ -1,7 +1,7 @@
 use nvim_oxi::{
-    Dictionary, Object,
     conversion::{Error, FromObject},
     lua::{self, Poppable, Pushable},
+    Dictionary, Object,
 };
 
 #[derive(Debug, Clone)]
@@ -109,10 +109,10 @@ mod tests {
             // Build a Dictionary/Object and ensure Permissions::from_object
             // reconstructs the original Permissions value.
             let mut dict = Dictionary::new();
-            dict.insert("fs_write_access".into(), permissions.fs_write_access.into());
-            dict.insert("fs_read_access".into(), permissions.fs_read_access.into());
-            dict.insert("terminal_access".into(), permissions.terminal_access.into());
-            dict.insert("can_request_permissions".into(), permissions.can_request_permissions.into());
+            dict.insert("fs_write_access", permissions.fs_write_access);
+            dict.insert("fs_read_access", permissions.fs_read_access);
+            dict.insert("terminal_access", permissions.terminal_access);
+            dict.insert("can_request_permissions", permissions.can_request_permissions);
 
             let obj = Object::from(dict);
             let parsed = Permissions::from_object(obj).expect("Permissions::from_object failed");
