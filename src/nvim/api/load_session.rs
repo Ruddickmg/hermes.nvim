@@ -1,8 +1,8 @@
 use agent_client_protocol::{Client, LoadSessionRequest, SessionId};
 use nvim_oxi::{
+    Dictionary, Function, Object,
     conversion::{Error, FromObject},
     lua::{Error as LuaError, Poppable, Pushable},
-    Dictionary, Function, Object,
 };
 use std::{path::PathBuf, rc::Rc};
 use tokio::sync::Mutex;

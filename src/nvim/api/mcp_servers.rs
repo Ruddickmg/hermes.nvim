@@ -2,8 +2,8 @@ use agent_client_protocol::{
     EnvVariable, HttpHeader, McpServer, McpServerHttp, McpServerSse, McpServerStdio,
 };
 use nvim_oxi::{Dictionary, Object, ObjectKind};
-use tracing::debug;
 use std::path::PathBuf;
+use tracing::debug;
 
 #[derive(Debug, Clone)]
 pub enum McpServerType {
@@ -62,10 +62,7 @@ pub fn parse_mcp_servers(servers_obj: &Object) -> Option<Vec<McpServer>> {
 
         Some(servers)
     } else {
-        debug!(
-            "mcpServers is not an array, kind: {:?}",
-            servers_obj.kind()
-        );
+        debug!("mcpServers is not an array, kind: {:?}", servers_obj.kind());
         None
     }
 }

@@ -1,7 +1,7 @@
 use nvim_oxi::{
+    Dictionary, Object,
     conversion::{Error, FromObject},
     lua::{self, Poppable, Pushable},
-    Dictionary, Object,
 };
 
 #[derive(Debug, Clone)]
