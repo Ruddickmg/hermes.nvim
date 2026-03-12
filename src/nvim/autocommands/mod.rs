@@ -125,6 +125,7 @@ impl<R: RequestHandler> AutoCommand<R> {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Commands {
     // Permission and tool commands
+    WriteTextFile,
     PermissionRequest,
     ToolCall,
     ToolCallUpdate,

@@ -61,13 +61,34 @@ impl<R: RequestHandler> Client for AutoCommand<R> {
             _ => return Err(Error::method_not_found()),
         }?;
 
-        Ok(self
-            .execute_autocommand(command, session_notification)
-            .await?)
+        if self.listener_attached(command).await? {
+            Ok(self
+                .execute_autocommand(command, session_notification)
+                .await?)
+        } else {
+            // TODO: add default implementation
+            Err(Error::method_not_found())
+        }
     }
 
-    async fn write_text_file(&self, _args: WriteTextFileRequest) -> Result<WriteTextFileResponse> {
-        Err(Error::method_not_found())
+    async fn write_text_file(&self, args: WriteTextFileRequest) -> Result<WriteTextFileResponse> {
+        if self.listener_attached(Commands::WriteTextFile).await? {
+            let (sender, receiver) = oneshot::channel::<WriteTextFileResponse>();
+            self.execute_autocommand_request(
+                args.session_id.to_string(),
+                Commands::WriteTextFile,
+                args,
+                Responder::WriteFileResponse(sender),
+            )
+            .await?;
+            receiver.await.map_err(|e| {
+                error!("{:?}", e);
+                Error::internal_error()
+            })
+        } else {
+            // TODO: add default implementation
+            Err(Error::method_not_found())
+        }
     }
 
     async fn read_text_file(&self, _args: ReadTextFileRequest) -> Result<ReadTextFileResponse> {

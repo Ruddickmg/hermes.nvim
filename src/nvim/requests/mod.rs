@@ -1,7 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::acp::{Result, error::Error};
-use agent_client_protocol::{RequestPermissionOutcome, SelectedPermissionOutcome};
+use agent_client_protocol::{
+    RequestPermissionOutcome, SelectedPermissionOutcome, WriteTextFileResponse,
+};
 use nvim_oxi::conversion::FromObject;
 use tokio::sync::{Mutex, oneshot};
 use tracing::warn;
@@ -11,6 +13,7 @@ use uuid::Uuid;
 pub enum Responder {
     Cancelled,
     PermissionResponse(oneshot::Sender<RequestPermissionOutcome>),
+    WriteFileResponse(oneshot::Sender<WriteTextFileResponse>),
 }
 
 pub struct Request {
@@ -96,10 +99,15 @@ impl RequestHandler for Requests {
         drop(pending);
         if let Some(request) = retrieved {
             match request.responder {
-                Responder::Cancelled => warn!(
-                    "Request was responded to after it was cancelled. request id: '{}', session id: '{}'",
-                    request_id, request.session_id
-                ),
+                Responder::WriteFileResponse(sender) => {
+                    sender.send(WriteTextFileResponse::new()).map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send response for request '{}': {:?}",
+                            request_id, e
+                        ))
+                    })?;
+                    Ok(())
+                },
                 Responder::PermissionResponse(sender) => {
                     let option_id: String = String::from_object(response)
                         .map_err(|e| Error::Internal(e.to_string()))?;
@@ -112,9 +120,13 @@ impl RequestHandler for Requests {
                             request_id, e
                         ))
                     })?;
-                }
-            };
-            Ok(())
+                    Ok(())
+                },
+                Responder::Cancelled => Err(Error::Internal(format!(
+                    "Request was responded to after it was cancelled. request id: '{}', session id: '{}'",
+                    request_id, request.session_id
+                ))),
+            }
         } else {
             Err(Error::Internal(format!(
                 "No pending request found for ID: '{}'",
