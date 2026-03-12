@@ -134,7 +134,7 @@ local hermes = require("hermes")
 hermes.loadSession(sessionId)
 
 -- call signature (with further configuration)
-hermes.loadSession(sessionId, {
+hermes.loadSession({sessionId, {
     cwd = ".", -- path to load the session from (optional, defaults to either project root or current directory)
     mcpServers = {
         { -- Http or Sse MCP server definition
@@ -157,7 +157,7 @@ hermes.loadSession(sessionId, {
           },
         },
     },
-})
+}})
 
 -- example
 vim.api.nvim_create_autocmd("User", {
@@ -314,6 +314,8 @@ vim.api.nvim_create_autocmd("User", {
 Respond to agent requests
 
 #### Permission request responses
+
+
 
 ```lua
 local hermes = require("hermes")
@@ -1012,7 +1014,22 @@ Below is a list of all autocommands and their associated data (passed to the cal
 ## Logging
 
 ### Level
-Hermes defaults
+Hermes defaults to the global neovim log level, or to `INFO` if there is no global log level set.
+
+Global log level example:
+```lua
+vim.opt.verbose = vim.log.levels.DEBUG;
+```
+
+ You can also use the neovim log levels to configure Hermes logging which will override the default behavior.
+
+Example: 
+```lua
+require("hermes").setup({
+    logLevel: vim.log.levels.DEBUG,
+})
+```
+
 ### Format
 
 Logging defaults to pretty formatting, but you can change that format by setting a global variable in vim
