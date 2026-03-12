@@ -9,7 +9,7 @@ use tokio::sync::Mutex;
 use tracing::instrument;
 
 #[derive(Clone)]
-pub struct Handler<H: Client> {
+pub struct Handler<H: Client + ResponseHandler> {
     pub state: Arc<Mutex<PluginState>>,
     handler: H,
 }
@@ -22,17 +22,26 @@ impl<H: Client + ResponseHandler> Handler<H> {
 
     #[instrument(level = "trace", skip(self))]
     pub async fn can_write(&self) -> bool {
-        self.state.lock().await.config.permissions.fs_write_access
+        let state = self.state.lock().await;
+        let write_access = state.config.permissions.fs_write_access;
+        drop(state);
+        write_access
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn can_read(&self) -> bool {
-        self.state.lock().await.config.permissions.fs_read_access
+        let state = self.state.lock().await;
+        let read_access = state.config.permissions.fs_read_access;
+        drop(state);
+        read_access
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn can_access_terminal(&self) -> bool {
-        self.state.lock().await.config.permissions.terminal_access
+        let state = self.state.lock().await;
+        let terminal_access = state.config.permissions.terminal_access;
+        drop(state);
+        terminal_access
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -52,5 +61,13 @@ impl<H: Client + ResponseHandler> Handler<H> {
         let mut config = self.state.lock().await;
         config.set_agent_info(agent.clone(), info.clone());
         drop(config);
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub async fn can_request_permissions(&self) -> bool {
+        let config = self.state.lock().await;
+        let can_request_permissions = config.config.permissions.can_request_permissions;
+        drop(config);
+        can_request_permissions
     }
 }

@@ -2,25 +2,23 @@ pub mod api;
 pub mod autocommands;
 pub mod configuration;
 pub mod parse;
+pub mod requests;
 pub mod state;
 
 use nvim_oxi::{Dictionary, api::opts::CreateAugroupOpts};
 use std::{rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
 
-use crate::{
-    Handler, acp::connection::ConnectionManager, nvim::autocommands::AutoCommand,
-    utilities::logging::Logger,
-};
+use crate::{Handler, acp::connection::ConnectionManager, utilities::logging::Logger};
 
 pub const GROUP: &str = "hermes";
 
 #[nvim_oxi::plugin]
 pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     let _logger = Logger::inititalize();
-    let (handle, sender) = AutoCommand::listener()?;
     let plugin_state = Arc::new(Mutex::new(state::PluginState::new()));
-    let auto_command = autocommands::AutoCommand::producer(sender, handle);
+    let request_handler = Arc::new(requests::Requests::new());
+    let auto_command = autocommands::AutoCommand::new(request_handler.clone())?;
     let event_handler = Arc::new(Handler::new(plugin_state.clone(), auto_command));
     let connection_manager = Rc::new(Mutex::new(ConnectionManager::new(event_handler.clone())));
 
@@ -32,6 +30,10 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     })?;
 
     Ok(Dictionary::from_iter([
+        (
+            "cancel",
+            api::cancel(connection_manager.clone(), request_handler.clone()),
+        ),
         ("connect", api::connect(connection_manager.clone())),
         (
             "authenticate",
@@ -43,6 +45,7 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
             api::create_session(connection_manager.clone()),
         ),
         ("prompt", api::prompt(connection_manager.clone())),
-        ("setMode", api::set_mode(connection_manager.clone())),
+        ("setMode", api::set_mode(connection_manager)),
+        ("respond", api::respond(request_handler)),
     ]))
 }

@@ -80,6 +80,7 @@ Aim for the **minimum number of tests that cover all code paths**. Avoid testing
 
 **Examples of redundancy to avoid:**
 
+- **Language features:** Do not test Rust's built-in functionality (e.g., auto-derived traits like `PartialEq`, `Clone`, `Debug`, field access, Arc/Mutex usage). Assume the Rust compiler and standard library work correctly. Only test your own logic and custom trait implementations. Reading a field from a struct through an Arc/Mutex is standard Rust - don't test it.
 - **Shared validation logic:** If multiple types share the same initial validation (e.g., checking for a required "type" field), test it once for one type, not for every type.
 - **Trivial accessors:** Enum variant extraction methods (e.g., `into_vec()` on a simple wrapper) may not need dedicated tests if the logic is obvious and covered indirectly.
 - **Collection iteration:** If individual elements are thoroughly tested, you typically need only one test for the collection wrapper to verify iteration works.
@@ -100,6 +101,7 @@ We follow the [Testing Pyramid](https://martinfowler.com/articles/practical-test
   - Located alongside source code in `#[cfg(test)]` modules
   - Use `cargo test --lib` to run
   - Should cover all parsing logic, validation, and conversion functions
+  - **Important:** Any test that involves actual message flow between Neovim and ACP (e.g., sending requests, receiving responses, autocommand firing) should be considered an **integration test**, not a unit test
 
 - **E2E Tests** (`e2e/`): Integration tests that verify the full flow from Lua API through to autocommand responses.
   - Run inside a Neovim instance using `#[nvim_oxi::test]`
