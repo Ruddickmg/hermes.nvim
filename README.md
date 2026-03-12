@@ -311,35 +311,7 @@ vim.api.nvim_create_autocmd("User", {
 
 ### Respond
 
-Respond to agent requests
-
-#### Permission request responses
-
-
-
-```lua
-local hermes = require("hermes")
-
--- call signature
-hermes.respond("requestId", "optionId")
-
--- example: 
-vim.api.nvim_create_autocmd("User", {
-    group = "hermes",
-    pattern = "PermissionRequest",
-    callback = function(args)
-        local selectedOptionId = table.remove(args.data.options).optionId -- select id somehow
-        local requestId = args.data.requestId
-
-        hermes.respond(requestId, selectedOptionId)
-        
-    end,
-})
-```
-
-### Respond
-
-Respond to agent requests
+When an agent makes a request that requires a response, it will trigger an autocommand and wait for a response from the user. The `respond` method takes a request id and responds to agent requests at the user's convenience.
 
 #### Permission response
 
@@ -361,6 +333,8 @@ vim.api.nvim_create_autocmd("User", {
         
     end,
 })
+
+> **Responds to:** [PermissionRequest](#permissionrequest) autocommand upon completion.
 ```
 
 ## Autocommands
@@ -627,7 +601,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
-    <tr>
+    <tr id="permissionrequest">
       <td><code>PermissionRequest</code></td>
       <td>Agent requests permission to execute a tool</td>
       <td>🤖 Agent (requires -> <a href="#permission-response">respond()</a>)</td>
