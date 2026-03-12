@@ -416,13 +416,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-| Autocommand | Description | Expected Response |
-|-------------|-------------|-------------------|
-| `PermissionRequest` | Agent requests permission to execute a tool. Contains full ToolCall structure with `toolCall` object including `toolCallId`, `fields` with optional `kind`, `status`, `title`, `content` array, `locations`, `rawInput`, and `rawOutput`. | `optionId` (string) - The ID of the selected permission option from the `options` array |
-
-### Standard Autocommands (Informational)
-
-These autocommands notify you of events but don't require a response:
+### Autocommands
 
 <table>
   <thead>
@@ -434,6 +428,45 @@ These autocommands notify you of events but don't require a response:
     </tr>
   </thead>
   <tbody>
+    <tr>
+      <td><code>PermissionRequest</code></td>
+      <td>Agent requests permission to execute a tool</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "toolCall": {
+    "toolCallId": "string",
+    "fields": {
+      "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other (optional)",
+      "status": "Pending | InProgress | Completed | Cancelled | Error (optional)",
+      "title": "string (optional)",
+      "content": [{
+        "type": "text | image | resource | resourcelink | terminal | diff",
+        "text": "string (if text type)",
+        "data": "base64 string (if image type)",
+        "mimeType": "string (if image type)",
+        "uri": "string (if image/resource/resourcelink type)",
+        "resource": {
+          "text": "string (if text resource)",
+          "blob": "string (if blob resource)",
+          "uri": "string",
+          "mimeType": "string (optional)"
+        },
+        "name": "string (if resourcelink type)",
+        "description": "string (optional, if resourcelink type)",
+        "terminalId": "string (if terminal type)",
+        "path": "string (if diff type)",
+        "newText": "string (if diff type)",
+        "oldText": "string (optional, if diff type)"
+      }],
+      "locations": [{ "path": "string", "line": "number (optional)" }],
+      "rawInput": "JSON value (optional)",
+      "rawOutput": "JSON value (optional)"
+    }
+  },
+  "options": [{ "id": "string", "label": "string", "description": "string (optional)" }]
+}</code></pre></td>
+    </tr>
     <tr>
       <td><code>UserTextMessage</code></td>
       <td>Message text sent from the client</td>
@@ -744,61 +777,9 @@ These autocommands notify you of events but don't require a response:
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>PermissionRequest</code></td>
-      <td>Request permission from the user</td>
-      <td>⚡ `hermes.requestPermission()`</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "toolCall": {
-    "toolCallId": "string",
-    "fields": {
-      "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other (optional)",
-      "status": "Pending | InProgress | Completed | Cancelled | Error (optional)",
-      "title": "string (optional)",
-      "content": [
-        {
-          "type": "text | image | resource | resourcelink | terminal | diff",
-          "text": "string (if text type)",
-          "data": "base64 string (if image type)",
-          "mimeType": "string (if image type)",
-          "uri": "string (if image/resource/resourcelink type)",
-          "resource": {
-            "text": "string (if text resource)",
-            "blob": "string (if blob resource)",
-            "uri": "string",
-            "mimeType": "string (optional)"
-          },
-          "name": "string (if resourcelink type)",
-          "description": "string (optional, if resourcelink type)",
-          "terminalId": "string (if terminal type)",
-          "path": "string (if diff type)",
-          "newText": "string (if diff type)",
-          "oldText": "string (optional, if diff type)"
-        }
-      ],
-      "locations": [
-        {
-          "path": "string",
-          "line": "number (optional)"
-        }
-      ],
-      "rawInput": "JSON value (optional)",
-      "rawOutput": "JSON value (optional)"
-    }
-  },
-  "options": [
-    {
-      "id": "string",
-      "label": "string",
-      "description": "string (optional)"
-    }
-  ]
-}</code></pre></td>
-    </tr>
-    <tr>
       <td><code>ConnectionInitialized</code></td>
       <td>Connection established with agent</td>
-      <td>⚡ [`connect()`](#connect)</td>
+      <td>⚡ [connect()](#connect)</td>
       <td><pre><code class="language-json">{
   "protocolVersion": "string",
   "agentCapabilities": {
@@ -835,7 +816,7 @@ These autocommands notify you of events but don't require a response:
     <tr>
       <td><code>CreatedSession</code></td>
       <td>New session created</td>
-      <td>⚡ [`createSession()`](#create-session)</td>
+      <td>⚡ [createSession()](#create-session)</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "modes": {
@@ -875,7 +856,7 @@ These autocommands notify you of events but don't require a response:
     <tr>
       <td><code>Prompted</code></td>
       <td>Agent response received</td>
-      <td>⚡ [`prompt()`](#prompt)</td>
+      <td>⚡ [prompt()](#prompt)</td>
       <td><pre><code class="language-json">{
   "stopReason": "string (e.g., 'Stop', 'Cancelled', 'Error')"
 }</code></pre></td>
@@ -883,14 +864,14 @@ These autocommands notify you of events but don't require a response:
     <tr>
       <td><code>Authenticated</code></td>
       <td>Authentication completed</td>
-      <td>⚡ [`authenticate()`](#authenticate)</td>
+      <td>⚡ [authenticate()](#authenticate)</td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
     <tr>
       <td><code>ConfigurationUpdated</code></td>
       <td>Session configuration updated</td>
-      <td>⚡ [`setSessionConfigOption()`](#load-session-optional)</td>
+      <td>⚡ [setSessionConfigOption()](#load-session-optional)</td>
       <td><pre><code class="language-json">{
   "configOptions": [
     {
@@ -919,14 +900,14 @@ These autocommands notify you of events but don't require a response:
     <tr>
       <td><code>ModeUpdated</code></td>
       <td>Session mode changed</td>
-      <td>⚡ [`setMode()`](#set-mode-optional)</td>
+      <td>⚡ [setMode()](#set-mode-optional)</td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
     <tr>
       <td><code>LoadedSession</code></td>
       <td>Session loaded successfully</td>
-      <td>⚡ [`loadSession()`](#load-session-optional)</td>
+      <td>⚡ [loadSession()](#load-session-optional)</td>
       <td><pre><code class="language-json">{
   "modes": {
     "currentModeId": "string",
@@ -965,7 +946,7 @@ These autocommands notify you of events but don't require a response:
     <tr>
       <td><code>ListedSessions</code></td>
       <td>Session list received</td>
-      <td>⚡ [`listSessions()`](#load-session-optional)</td>
+      <td>⚡ [listSessions()](#load-session-optional)</td>
       <td><pre><code class="language-json">{
   "sessions": [
     {
@@ -981,7 +962,7 @@ These autocommands notify you of events but don't require a response:
     <tr>
       <td><code>ForkedSession</code></td>
       <td>Session forked successfully</td>
-      <td>⚡ [`forkSession()`](#load-session-optional)</td>
+      <td>⚡ [forkSession()](#load-session-optional)</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "modes": {
@@ -1021,7 +1002,7 @@ These autocommands notify you of events but don't require a response:
     <tr>
       <td><code>ResumedSession</code></td>
       <td>Session resumed successfully</td>
-      <td>⚡ [`resumeSession()`](#load-session-optional)</td>
+      <td>⚡ [resumeSession()](#load-session-optional)</td>
       <td><pre><code class="language-json">{
   "modes": {
     "currentModeId": "string",
@@ -1060,7 +1041,7 @@ These autocommands notify you of events but don't require a response:
     <tr>
       <td><code>SessionModelUpdated</code></td>
       <td>Session model updated</td>
-      <td>⚡ [`setSessionModel()`](#load-session-optional)</td>
+      <td>⚡ [setSessionModel()](#load-session-optional)</td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
