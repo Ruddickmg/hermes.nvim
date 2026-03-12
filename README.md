@@ -171,13 +171,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-> **Triggers:** Session-related autocommands:
-> - `loadSession()` → [SessionLoaded](#sessionloaded)
-> - `setSessionConfigOption()` → [ConfigurationUpdated](#configurationupdated)
-> - `listSessions()` → [SessionsListed](#sessionslisted)
-> - `forkSession()` → [SessionForked](#sessionforked)
-> - `resumeSession()` → [SessionResumed](#sessionresumed)
-> - `setSessionModel()` → [SessionModelUpdated](#sessionmodelupdated)
+> **Triggers:** [SessionLoaded](#sessionloaded) autocommand upon completion
 
 ### Prompt
 
@@ -311,7 +305,7 @@ vim.api.nvim_create_autocmd("User", {
 
 ### Respond
 
-When an agent makes a request that requires a response, it will trigger an autocommand and wait for a response from the user. The `respond` method takes a request id and responds to agent requests at the user's convenience.
+When an agent makes a request that requires user input (such as a permission request), it triggers an autocommand and pauses until the user responds. Use the `respond` method with the request ID to resume the agent's operation.
 
 #### Permission response
 
@@ -334,7 +328,7 @@ vim.api.nvim_create_autocmd("User", {
     end,
 })
 ```
-> **Responds to:** [PermissionRequest](#permissionrequest) autocommand upon completion.
+> **Responds to:** [PermissionRequest](#permissionrequest) autocommand.
 
 ## Autocommands
 
