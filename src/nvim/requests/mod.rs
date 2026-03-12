@@ -135,7 +135,7 @@ mod tests {
         let requests = Requests::new();
         let session_id = String::from("test-session");
         let request_id = Uuid::new_v4();
-        let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
+        let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
         let responder = Responder::PermissionResponse(sender);
 
         requests.add_request(session_id, request_id, responder);

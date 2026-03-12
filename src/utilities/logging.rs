@@ -10,10 +10,11 @@ use tracing_subscriber::{
 use crate::acp::error::Error;
 static LOGGER: OnceLock<Logger> = OnceLock::new();
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LogLevel {
     Trace = 0,
     Debug = 1,
+    #[default]
     Info = 2,
     Warn = 3,
     Error = 4,
@@ -65,24 +66,13 @@ impl From<String> for LogLevel {
     }
 }
 
-impl Default for LogLevel {
-    fn default() -> Self {
-        LogLevel::Info
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LogFormat {
+    #[default]
     Pretty,
     Compact,
     Full,
     Json,
-}
-
-impl Default for LogFormat {
-    fn default() -> Self {
-        LogFormat::Pretty
-    }
 }
 
 impl From<&str> for LogFormat {
@@ -113,6 +103,7 @@ impl From<String> for LogFormat {
 }
 
 pub struct Logger {
+    #[allow(dead_code)]
     filter: Handle<EnvFilter, Registry>,
 }
 
@@ -146,6 +137,7 @@ impl Logger {
         })
     }
 
+    #[allow(dead_code)]
     pub fn set_log_level(&self, level: LogLevel) -> Result<(), Error> {
         let filter: EnvFilter = level.into();
         self.filter

@@ -356,7 +356,6 @@ pub fn prompt<H: agent_client_protocol::Client + ResponseHandler + Send + Sync +
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
-    use proptest::prelude::*;
 
     // Helper function to create a text content dictionary
     fn create_text_dict(text: &str) -> Dictionary {

@@ -38,9 +38,8 @@ impl FromObject for CreateSessionArgs {
         });
 
         // Updated key to "mcpServers" to match README
-        let mcp_servers: Option<Vec<McpServer>> = dict
-            .get("mcpServers")
-            .and_then(|servers_obj| parse_mcp_servers(&servers_obj));
+        let mcp_servers: Option<Vec<McpServer>> =
+            dict.get("mcpServers").and_then(parse_mcp_servers);
 
         Ok(Self::Configuration { cwd, mcp_servers })
     }
@@ -276,7 +275,7 @@ mod session_args_tests {
         let obj = Object::nil();
         let args = CreateSessionArgs::from_object(obj).unwrap();
         match args {
-            CreateSessionArgs::Default => assert!(true),
+            CreateSessionArgs::Default => (),
             _ => panic!("Expected Default variant"),
         }
     }
@@ -299,7 +298,7 @@ mod session_args_tests {
     fn test_stdio_defaults_is_configuration() {
         let args = create_stdio_default_args();
         match args {
-            CreateSessionArgs::Configuration { .. } => assert!(true),
+            CreateSessionArgs::Configuration { .. } => (),
             _ => panic!("Expected Configuration variant"),
         }
     }

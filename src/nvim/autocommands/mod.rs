@@ -252,6 +252,6 @@ mod tests {
     #[test]
     #[should_panic(expected = "Unknown command: InvalidCommand")]
     fn test_commands_from_str_unknown_command_panics() {
-        Commands::from("InvalidCommand");
+        let _ = Commands::from("InvalidCommand");
     }
 }

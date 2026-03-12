@@ -10,6 +10,8 @@ use std::thread::JoinHandle;
 use tokio::sync::Mutex;
 use tracing::{debug, info, instrument, trace, warn};
 
+type ConnectionHandles = Arc<Mutex<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>;
+
 #[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
 pub enum Protocol {
     Socket,
@@ -95,7 +97,7 @@ pub struct ConnectionDetails {
 
 #[derive(Clone)]
 pub struct ConnectionManager<H: Client + ResponseHandler> {
-    handles: Arc<Mutex<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>,
+    handles: ConnectionHandles,
     connection: HashMap<Assistant, Rc<Connection>>,
     handler: Arc<Handler<H>>,
 }

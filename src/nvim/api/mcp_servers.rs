@@ -70,22 +70,22 @@ pub fn parse_mcp_servers(servers_obj: &Object) -> Option<Vec<McpServer>> {
 }
 
 fn parse_http_headers(server_dict: &Dictionary) -> Vec<HttpHeader> {
-    if let Some(headers_obj) = server_dict.get("headers") {
-        if let ObjectKind::Array = headers_obj.kind() {
-            let headers_array = unsafe { headers_obj.clone().into_array_unchecked() };
-            return headers_array
-                .into_iter()
-                .filter_map(|header_obj| {
-                    let header_dict: Dictionary = header_obj.try_into().ok()?;
-                    // Expect single key-value pair per object in array: { "Key": "Value" }
-                    header_dict.into_iter().next().map(|(k, v)| {
-                        let k_str: nvim_oxi::String = k.try_into().unwrap_or_default();
-                        let v_str: nvim_oxi::String = v.try_into().unwrap_or_default();
-                        HttpHeader::new(k_str.to_string(), v_str.to_string())
-                    })
+    if let Some(headers_obj) = server_dict.get("headers")
+        && let ObjectKind::Array = headers_obj.kind()
+    {
+        let headers_array = unsafe { headers_obj.clone().into_array_unchecked() };
+        return headers_array
+            .into_iter()
+            .filter_map(|header_obj| {
+                let header_dict: Dictionary = header_obj.try_into().ok()?;
+                // Expect single key-value pair per object in array: { "Key": "Value" }
+                header_dict.into_iter().next().map(|(k, v)| {
+                    let k_str = k;
+                    let v_str: nvim_oxi::String = v.try_into().unwrap_or_default();
+                    HttpHeader::new(k_str.to_string(), v_str.to_string())
                 })
-                .collect();
-        }
+            })
+            .collect();
     }
     Vec::new()
 }
@@ -281,7 +281,7 @@ mod tests {
     fn test_parse_stdio_defaults_is_configuration() {
         let obj = create_stdio_dict();
         let dict: Dictionary = obj.try_into().unwrap();
-        let servers = parse_mcp_servers(&dict.get("mcpServers").unwrap());
+        let servers = parse_mcp_servers(dict.get("mcpServers").unwrap());
         assert!(servers.is_some());
         assert_eq!(servers.unwrap().len(), 1);
     }
@@ -290,7 +290,7 @@ mod tests {
     fn test_parse_stdio_name() {
         let obj = create_stdio_dict();
         let dict: Dictionary = obj.try_into().unwrap();
-        let servers = parse_mcp_servers(&dict.get("mcpServers").unwrap()).unwrap();
+        let servers = parse_mcp_servers(dict.get("mcpServers").unwrap()).unwrap();
         match &servers[0] {
             McpServer::Stdio(s) => assert_eq!(s.name, "test-server"),
             _ => panic!("Expected Stdio server"),
@@ -301,7 +301,7 @@ mod tests {
     fn test_parse_stdio_command() {
         let obj = create_stdio_dict();
         let dict: Dictionary = obj.try_into().unwrap();
-        let servers = parse_mcp_servers(&dict.get("mcpServers").unwrap()).unwrap();
+        let servers = parse_mcp_servers(dict.get("mcpServers").unwrap()).unwrap();
         match &servers[0] {
             McpServer::Stdio(s) => assert_eq!(s.command, PathBuf::from("test-cmd")),
             _ => panic!("Expected Stdio server"),
@@ -342,7 +342,7 @@ mod tests {
     fn test_parse_explicit_sse_name() {
         let obj = create_explicit_servers_dict();
         let dict: Dictionary = obj.try_into().unwrap();
-        let servers = parse_mcp_servers(&dict.get("mcpServers").unwrap()).unwrap();
+        let servers = parse_mcp_servers(dict.get("mcpServers").unwrap()).unwrap();
         match &servers[0] {
             McpServer::Sse(s) => assert_eq!(s.name, "sse-srv"),
             _ => panic!("Expected SSE server at index 0"),
@@ -353,7 +353,7 @@ mod tests {
     fn test_parse_explicit_sse_url() {
         let obj = create_explicit_servers_dict();
         let dict: Dictionary = obj.try_into().unwrap();
-        let servers = parse_mcp_servers(&dict.get("mcpServers").unwrap()).unwrap();
+        let servers = parse_mcp_servers(dict.get("mcpServers").unwrap()).unwrap();
         match &servers[0] {
             McpServer::Sse(s) => assert_eq!(s.url, "http://localhost:8080"),
             _ => panic!("Expected SSE server at index 0"),
@@ -364,7 +364,7 @@ mod tests {
     fn test_parse_explicit_http_name() {
         let obj = create_explicit_servers_dict();
         let dict: Dictionary = obj.try_into().unwrap();
-        let servers = parse_mcp_servers(&dict.get("mcpServers").unwrap()).unwrap();
+        let servers = parse_mcp_servers(dict.get("mcpServers").unwrap()).unwrap();
         match &servers[1] {
             McpServer::Http(h) => assert_eq!(h.name, "http-srv"),
             _ => panic!("Expected HTTP server at index 1"),
@@ -375,7 +375,7 @@ mod tests {
     fn test_parse_explicit_http_url() {
         let obj = create_explicit_servers_dict();
         let dict: Dictionary = obj.try_into().unwrap();
-        let servers = parse_mcp_servers(&dict.get("mcpServers").unwrap()).unwrap();
+        let servers = parse_mcp_servers(dict.get("mcpServers").unwrap()).unwrap();
         match &servers[1] {
             McpServer::Http(h) => assert_eq!(h.url, "http://remote.com"),
             _ => panic!("Expected HTTP server at index 1"),
@@ -386,7 +386,7 @@ mod tests {
     fn test_parse_explicit_stdio_name() {
         let obj = create_explicit_servers_dict();
         let dict: Dictionary = obj.try_into().unwrap();
-        let servers = parse_mcp_servers(&dict.get("mcpServers").unwrap()).unwrap();
+        let servers = parse_mcp_servers(dict.get("mcpServers").unwrap()).unwrap();
         match &servers[2] {
             McpServer::Stdio(s) => assert_eq!(s.name, "stdio-srv"),
             _ => panic!("Expected Stdio server at index 2"),
@@ -397,7 +397,7 @@ mod tests {
     fn test_parse_explicit_stdio_command() {
         let obj = create_explicit_servers_dict();
         let dict: Dictionary = obj.try_into().unwrap();
-        let servers = parse_mcp_servers(&dict.get("mcpServers").unwrap()).unwrap();
+        let servers = parse_mcp_servers(dict.get("mcpServers").unwrap()).unwrap();
         match &servers[2] {
             McpServer::Stdio(s) => assert_eq!(s.command, PathBuf::from("bin")),
             _ => panic!("Expected Stdio server at index 2"),
