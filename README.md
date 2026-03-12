@@ -429,61 +429,8 @@ vim.api.nvim_create_autocmd("User", {
   </thead>
   <tbody>
     <tr>
-      <td><code>PermissionRequest</code></td>
-      <td>Agent requests permission to execute a tool</td>
-      <td>Agent (requires response) -> <a href="#permission-response">respond()</a></td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "toolCall": {
-    "toolCallId": "string",
-    "fields": {
-      "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other (optional)",
-      "status": "Pending | InProgress | Completed | Cancelled | Error (optional)",
-      "title": "string (optional)",
-      "content": [{
-        "type": "text | image | resource | resourcelink | terminal | diff",
-        "text": "string (if text type)",
-        "data": "base64 string (if image type)",
-        "mimeType": "string (if image type)",
-        "uri": "string (if image/resource/resourcelink type)",
-        "resource": {
-          "text": "string (if text resource)",
-          "blob": "string (if blob resource)",
-          "uri": "string",
-          "mimeType": "string (optional)"
-        },
-        "name": "string (if resourcelink type)",
-        "description": "string (optional, if resourcelink type)",
-        "terminalId": "string (if terminal type)",
-        "path": "string (if diff type)",
-        "newText": "string (if diff type)",
-        "oldText": "string (optional, if diff type)"
-      }],
-      "locations": [{ "path": "string", "line": "number (optional)" }],
-      "rawInput": "JSON value (optional)",
-      "rawOutput": "JSON value (optional)"
-    }
-  },
-  "options": [{ "id": "string", "label": "string", "description": "string (optional)" }]
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>UserTextMessage</code></td>
-      <td>Message text sent from the client</td>
-      <td>🤖 Agent</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "text": "string",
-  "annotations": {
-    "audience": ["Role1", "Role2"],
-    "lastModified": "ISO8601 string",
-    "priority": "number"
-  }
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>UserImageMessage</code></td>
-      <td>An image sent from the client</td>
+      <td><code>AgentImageMessage</code></td>
+      <td>An image from the agent</td>
       <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
@@ -494,23 +441,20 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>UserResourceMessage</code></td>
-      <td>A resource sent from the client</td>
+      <td><code>AgentImageThought</code></td>
+      <td>Visual reasoning/thought from the agent</td>
       <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
-  "resource": {
-    "text": "string (if text resource)",
-    "blob": "string (if blob resource)",
-    "uri": "string",
-    "mimeType": "string (optional)"
-  },
-  "annotations": { "audience": [], "lastModified": "string" }
+  "data": "base64 string",
+  "mimeType": "string",
+  "uri": "string (optional)",
+  "annotations": { "audience": [], "priority": 1 }
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>UserResourceLinkMessage</code></td>
-      <td>A resource link from the client</td>
+      <td><code>AgentResourceLinkMessage</code></td>
+      <td>A resource link from the agent</td>
       <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
@@ -524,24 +468,17 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>AgentTextMessage</code></td>
-      <td>A text message from the agent</td>
+      <td><code>AgentResourceLinkThought</code></td>
+      <td>Resource link thought from the agent</td>
       <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
-  "text": "string",
-  "annotations": { "audience": [], "priority": 1 }
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>AgentImageMessage</code></td>
-      <td>An image from the agent</td>
-      <td>🤖 Agent</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "data": "base64 string",
-  "mimeType": "string",
-  "uri": "string (optional)",
+  "name": "string",
+  "uri": "string",
+  "description": "string (optional)",
+  "mimeType": "string (optional)",
+  "size": "number (optional)",
+  "title": "string (optional)",
   "annotations": { "audience": [], "priority": 1 }
 }</code></pre></td>
     </tr>
@@ -561,43 +498,6 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>AgentResourceLinkMessage</code></td>
-      <td>A resource link from the agent</td>
-      <td>🤖 Agent</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "name": "string",
-  "uri": "string",
-  "description": "string (optional)",
-  "mimeType": "string (optional)",
-  "size": "number (optional)",
-  "title": "string (optional)",
-  "annotations": { "audience": [], "priority": 1 }
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>AgentTextThought</code></td>
-      <td>Textual thought/reasoning from the agent</td>
-      <td>🤖 Agent</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "text": "string",
-  "annotations": { "audience": [], "priority": 1 }
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>AgentImageThought</code></td>
-      <td>Visual reasoning/thought from the agent</td>
-      <td>🤖 Agent</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "data": "base64 string",
-  "mimeType": "string",
-  "uri": "string (optional)",
-  "annotations": { "audience": [], "priority": 1 }
-}</code></pre></td>
-    </tr>
-    <tr>
       <td><code>AgentResourceThought</code></td>
       <td>Resource-based thought from the agent</td>
       <td>🤖 Agent</td>
@@ -613,102 +513,30 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>AgentResourceLinkThought</code></td>
-      <td>Resource link thought from the agent</td>
+      <td><code>AgentTextMessage</code></td>
+      <td>A text message from the agent</td>
       <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
-  "name": "string",
-  "uri": "string",
-  "description": "string (optional)",
-  "mimeType": "string (optional)",
-  "size": "number (optional)",
-  "title": "string (optional)",
+  "text": "string",
   "annotations": { "audience": [], "priority": 1 }
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>ToolCall</code></td>
-      <td>Agent makes a tool call</td>
+      <td><code>AgentTextThought</code></td>
+      <td>Textual thought/reasoning from the agent</td>
       <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
-  "id": "string",
-  "title": "string",
-  "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other",
-  "status": "Pending | InProgress | Completed | Cancelled | Error",
-  "content": [
-    {
-      "type": "text | image | resource | resourcelink | terminal | diff",
-      "text": "string (if text type)",
-      "data": "base64 string (if image type)",
-      "mimeType": "string (if image type)",
-      "uri": "string (if image/resource/resourcelink type)",
-      "resource": {
-        "text": "string (if text resource)",
-        "blob": "string (if blob resource)",
-        "uri": "string",
-        "mimeType": "string (optional)"
-      },
-      "name": "string (if resourcelink type)",
-      "description": "string (optional, if resourcelink type)",
-      "terminalId": "string (if terminal type)",
-      "path": "string (if diff type)",
-      "newText": "string (if diff type)",
-      "oldText": "string (optional, if diff type)"
-    }
-  ],
-  "locations": [
-    {
-      "path": "string",
-      "line": "number (optional)"
-    }
-  ],
-  "rawInput": "JSON value (optional)",
-  "rawOutput": "JSON value (optional)"
+  "text": "string",
+  "annotations": { "audience": [], "priority": 1 }
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>ToolCallUpdate</code></td>
-      <td>Tool call is updated (e.g., progress, output)</td>
-      <td>🤖 Agent</td>
+      <td><code>Authenticated</code></td>
+      <td>Authentication completed</td>
+      <td>⚡ <a href="#authenticate">authenticate()</a></td>
       <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "toolCallId": "string",
-  "fields": {
-    "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other (optional)",
-    "status": "Pending | InProgress | Completed | Cancelled | Error (optional)",
-    "title": "string (optional)",
-    "content": [
-      {
-        "type": "text | image | resource | resourcelink | terminal | diff",
-        "text": "string (if text type)",
-        "data": "base64 string (if image type)",
-        "mimeType": "string (if image type)",
-        "uri": "string (if image/resource/resourcelink type)",
-        "resource": {
-          "text": "string (if text resource)",
-          "blob": "string (if blob resource)",
-          "uri": "string",
-          "mimeType": "string (optional)"
-        },
-        "name": "string (if resourcelink type)",
-        "description": "string (optional, if resourcelink type)",
-        "terminalId": "string (if terminal type)",
-        "path": "string (if diff type)",
-        "newText": "string (if diff type)",
-        "oldText": "string (optional, if diff type)"
-      }
-    ],
-    "locations": [
-      {
-        "path": "string",
-        "line": "number (optional)"
-      }
-    ],
-    "rawInput": "JSON value (optional)",
-    "rawOutput": "JSON value (optional)"
-  }
 }</code></pre></td>
     </tr>
     <tr>
@@ -727,32 +555,41 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>Plan</code></td>
-      <td>Agent generates a plan</td>
-      <td>🤖 Agent</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "entries": [
-    { "content": "string", "priority": "High | Medium | Low" }
-  ]
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>CurrentMode</code></td>
-      <td>Current mode changes</td>
-      <td>🤖 Agent</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "id": "string"
-}</code></pre></td>
-    </tr>
-    <tr>
       <td><code>ConfigurationOption</code></td>
       <td>Configuration option updates</td>
       <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "options": [
+    {
+      "id": "string",
+      "name": "string",
+      "description": "string (optional)",
+      "category": "string (optional)",
+      "kind": {
+        "currentValue": "string",
+        "options": [
+          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
+          {
+            "type": "grouped",
+            "group": "string",
+            "name": "string",
+            "options": [
+              { "value": "string", "name": "string", "description": "string (optional)" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>ConfigurationUpdated</code></td>
+      <td>Session configuration updated</td>
+      <td>⚡ <a href="#load-session-optional">setSessionConfigOption()</a></td>
+      <td><pre><code class="language-json">{
+  "configOptions": [
     {
       "id": "string",
       "name": "string",
@@ -854,61 +691,20 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>Prompted</code></td>
-      <td>Agent response received</td>
-      <td>⚡ <a href="#prompt">prompt()</a></td>
+      <td><code>CurrentMode</code></td>
+      <td>Current mode changes</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
-  "stopReason": "string (e.g., 'Stop', 'Cancelled', 'Error')"
+  "sessionId": "string",
+  "id": "string"
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>Authenticated</code></td>
-      <td>Authentication completed</td>
-      <td>⚡ <a href="#authenticate">authenticate()</a></td>
+      <td><code>ForkedSession</code></td>
+      <td>Session forked successfully</td>
+      <td>⚡ <a href="#load-session-optional">forkSession()</a></td>
       <td><pre><code class="language-json">{
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>ConfigurationUpdated</code></td>
-      <td>Session configuration updated</td>
-      <td>⚡ <a href="#load-session-optional">setSessionConfigOption()</a></td>
-      <td><pre><code class="language-json">{
-  "configOptions": [
-    {
-      "id": "string",
-      "name": "string",
-      "description": "string (optional)",
-      "category": "string (optional)",
-      "kind": {
-        "currentValue": "string",
-        "options": [
-          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
-          {
-            "type": "grouped",
-            "group": "string",
-            "name": "string",
-            "options": [
-              { "value": "string", "name": "string", "description": "string (optional)" }
-            ]
-          }
-        ]
-      }
-    }
-  ]
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>ModeUpdated</code></td>
-      <td>Session mode changed</td>
-      <td>⚡ <a href="#set-mode-optional">setMode()</a></td>
-      <td><pre><code class="language-json">{
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>LoadedSession</code></td>
-      <td>Session loaded successfully</td>
-      <td>⚡ <a href="#load-session-optional">loadSession()</a></td>
-      <td><pre><code class="language-json">{
+  "sessionId": "string",
   "modes": {
     "currentModeId": "string",
     "availableModes": [
@@ -960,11 +756,10 @@ vim.api.nvim_create_autocmd("User", {
 }</code></pre></td>
     </tr>
     <tr>
-      <td><code>ForkedSession</code></td>
-      <td>Session forked successfully</td>
-      <td>⚡ <a href="#load-session-optional">forkSession()</a></td>
+      <td><code>LoadedSession</code></td>
+      <td>Session loaded successfully</td>
+      <td>⚡ <a href="#load-session-optional">loadSession()</a></td>
       <td><pre><code class="language-json">{
-  "sessionId": "string",
   "modes": {
     "currentModeId": "string",
     "availableModes": [
@@ -997,6 +792,71 @@ vim.api.nvim_create_autocmd("User", {
       }
     }
   ]
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>ModeUpdated</code></td>
+      <td>Session mode changed</td>
+      <td>⚡ <a href="#set-mode-optional">setMode()</a></td>
+      <td><pre><code class="language-json">{
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>PermissionRequest</code></td>
+      <td>Agent requests permission to execute a tool</td>
+      <td>Agent (requires response) -> <a href="#permission-response">respond()</a></td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "toolCall": {
+    "toolCallId": "string",
+    "fields": {
+      "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other (optional)",
+      "status": "Pending | InProgress | Completed | Cancelled | Error (optional)",
+      "title": "string (optional)",
+      "content": [{
+        "type": "text | image | resource | resourcelink | terminal | diff",
+        "text": "string (if text type)",
+        "data": "base64 string (if image type)",
+        "mimeType": "string (if image type)",
+        "uri": "string (if image/resource/resourcelink type)",
+        "resource": {
+          "text": "string (if text resource)",
+          "blob": "string (if blob resource)",
+          "uri": "string",
+          "mimeType": "string (optional)"
+        },
+        "name": "string (if resourcelink type)",
+        "description": "string (optional, if resourcelink type)",
+        "terminalId": "string (if terminal type)",
+        "path": "string (if diff type)",
+        "newText": "string (if diff type)",
+        "oldText": "string (optional, if diff type)"
+      }],
+      "locations": [{ "path": "string", "line": "number (optional)" }],
+      "rawInput": "JSON value (optional)",
+      "rawOutput": "JSON value (optional)"
+    }
+  },
+  "options": [{ "id": "string", "label": "string", "description": "string (optional)" }]
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>Plan</code></td>
+      <td>Agent generates a plan</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "entries": [
+    { "content": "string", "priority": "High | Medium | Low" }
+  ]
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>Prompted</code></td>
+      <td>Agent response received</td>
+      <td>⚡ <a href="#prompt">prompt()</a></td>
+      <td><pre><code class="language-json">{
+  "stopReason": "string (e.g., 'Stop', 'Cancelled', 'Error')"
 }</code></pre></td>
     </tr>
     <tr>
@@ -1045,28 +905,154 @@ vim.api.nvim_create_autocmd("User", {
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
-  </tbody></table>
+    <tr>
+      <td><code>ToolCall</code></td>
+      <td>Agent makes a tool call</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "id": "string",
+  "title": "string",
+  "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other",
+  "status": "Pending | InProgress | Completed | Cancelled | Error",
+  "content": [
+    {
+      "type": "text | image | resource | resourcelink | terminal | diff",
+      "text": "string (if text type)",
+      "data": "base64 string (if image type)",
+      "mimeType": "string (if image type)",
+      "uri": "string (if image/resource/resourcelink type)",
+      "resource": {
+        "text": "string (if text resource)",
+        "blob": "string (if blob resource)",
+        "uri": "string",
+        "mimeType": "string (optional)"
+      },
+      "name": "string (if resourcelink type)",
+      "description": "string (optional, if resourcelink type)",
+      "terminalId": "string (if terminal type)",
+      "path": "string (if diff type)",
+      "newText": "string (if diff type)",
+      "oldText": "string (optional, if diff type)"
+    }
+  ],
+  "locations": [
+    {
+      "path": "string",
+      "line": "number (optional)"
+    }
+  ],
+  "rawInput": "JSON value (optional)",
+  "rawOutput": "JSON value (optional)"
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>ToolCallUpdate</code></td>
+      <td>Tool call is updated (e.g., progress, output)</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "toolCallId": "string",
+  "fields": {
+    "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other (optional)",
+    "status": "Pending | InProgress | Completed | Cancelled | Error (optional)",
+    "title": "string (optional)",
+    "content": [
+      {
+        "type": "text | image | resource | resourcelink | terminal | diff",
+        "text": "string (if text type)",
+        "data": "base64 string (if image type)",
+        "mimeType": "string (if image type)",
+        "uri": "string (if image/resource/resourcelink type)",
+        "resource": {
+          "text": "string (if text resource)",
+          "blob": "string (if blob resource)",
+          "uri": "string",
+          "mimeType": "string (optional)"
+        },
+        "name": "string (if resourcelink type)",
+        "description": "string (optional, if resourcelink type)",
+        "terminalId": "string (if terminal type)",
+        "path": "string (if diff type)",
+        "newText": "string (if diff type)",
+        "oldText": "string (optional, if diff type)"
+      }
+    ],
+    "locations": [
+      {
+        "path": "string",
+        "line": "number (optional)"
+      }
+    ],
+    "rawInput": "JSON value (optional)",
+    "rawOutput": "JSON value (optional)"
+  }
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>UserImageMessage</code></td>
+      <td>An image sent from the client</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "data": "base64 string",
+  "mimeType": "string",
+  "uri": "string (optional)",
+  "annotations": { "audience": [], "priority": 1 }
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>UserResourceLinkMessage</code></td>
+      <td>A resource link from the client</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "name": "string",
+  "uri": "string",
+  "description": "string (optional)",
+  "mimeType": "string (optional)",
+  "size": "number (optional)",
+  "title": "string (optional)",
+  "annotations": { "audience": [], "priority": 1 }
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>UserResourceMessage</code></td>
+      <td>A resource sent from the client</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "resource": {
+    "text": "string (if text resource)",
+    "blob": "string (if blob resource)",
+    "uri": "string",
+    "mimeType": "string (optional)"
+  },
+  "annotations": { "audience": [], "lastModified": "string" }
+}</code></pre></td>
+    </tr>
+    <tr>
+      <td><code>UserTextMessage</code></td>
+      <td>Message text sent from the client</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "text": "string",
+  "annotations": {
+    "audience": ["Role1", "Role2"],
+    "lastModified": "ISO8601 string",
+    "priority": "number"
+  }
+}</code></pre></td>
+    </tr>
+  </tbody>
+</table>
 
 
 ## Logging
 
 ### Level
-Hermes defaults to the global neovim log level, or to `INFO` if there is no global log level set.
-
-Global log level example:
-```lua
-vim.opt.verbose = vim.log.levels.DEBUG;
-```
-
- You can also use the neovim log levels to configure Hermes logging which will override the default behavior.
-
-Example: 
-```lua
-require("hermes").setup({
-    logLevel: vim.log.levels.DEBUG,
-})
-```
-
+Hermes defaults
 ### Format
 
 Logging defaults to pretty formatting, but you can change that format by setting a global variable in vim
