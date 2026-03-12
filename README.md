@@ -26,7 +26,7 @@ Hermes exposes the following functions for sending requests to AI assistants. Ho
 
 Methods marked “Optional” are implemented by Hermes but are not mandatory for agent implementations.
 
-### <a id="connect"></a>Connect
+### Connect
 
 This method allows you to connect to an agent, it takes the agent name and the protocol for the connection (defaults to `stdio`).
 
@@ -63,7 +63,7 @@ hermes.connect(
 )
 ```
 
-### <a id="disconnect"></a>Disconnect
+### Disconnect
 
 Below are examples of how you can disconnect from agent(s).
 
@@ -80,7 +80,7 @@ hermes.disconnect({ "copilot", "opencode" })
 hermes.disconnect()
 ```
 
-### <a id="authenticate"></a>Authenticate
+### Authenticate
 
 Handle agent authentication.
 
@@ -91,7 +91,7 @@ local auth_method_id = "example-auth-method-id"
 hermes.authenticate(auth_method_id)
 ```
 
-### <a id="createsession"></a>Create Session
+### Create Session
 
 Create a new session. If no arguments are provided, the session defaults to either the project root or the current directory. 
 
@@ -128,7 +128,7 @@ hermes.createSession({
 })
 ```
 
-### <a id="loadsession"></a>Load Session (**Optional**)
+### Load Session (**Optional**)
 
 Load an existing session
 
@@ -176,7 +176,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-### <a id="prompt"></a>Prompt
+### Prompt
 
 Send prompts to the agent 
 
@@ -251,7 +251,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-### <a id="cancel"></a>Cancel (**Optional**)
+### Cancel (**Optional**)
 
 Cancel the current operation of the agent (e.g., stop generating text, stop a tool call in progress, etc)
 
@@ -300,7 +300,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-### <a id="setmode"></a>Set mode (**Optional**)
+### Set mode (**Optional**)
 
 Set what mode the agent is in (the plan/build modes for opencode for example)
 
@@ -327,7 +327,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-### <a id="respond"></a>Respond
+### Respond
 
 Respond to agent requests
 
@@ -835,7 +835,7 @@ These autocommands notify you of events but don't require a response:
     <tr>
       <td><code>CreatedSession</code></td>
       <td>New session created</td>
-      <td>⚡ [`createSession()`](#createsession)</td>
+      <td>⚡ [`createSession()`](#create-session)</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "modes": {
@@ -890,7 +890,7 @@ These autocommands notify you of events but don't require a response:
     <tr>
       <td><code>ConfigurationUpdated</code></td>
       <td>Session configuration updated</td>
-      <td>⚡ [`setSessionConfigOption()`](#setsessionconfigoption)</td>
+      <td>⚡ [`setSessionConfigOption()`](#load-session-optional)</td>
       <td><pre><code class="language-json">{
   "configOptions": [
     {
@@ -919,14 +919,14 @@ These autocommands notify you of events but don't require a response:
     <tr>
       <td><code>ModeUpdated</code></td>
       <td>Session mode changed</td>
-      <td>⚡ [`setMode()`](#setmode)</td>
+      <td>⚡ [`setMode()`](#set-mode-optional)</td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
     <tr>
       <td><code>LoadedSession</code></td>
       <td>Session loaded successfully</td>
-      <td>⚡ [`loadSession()`](#loadsession)</td>
+      <td>⚡ [`loadSession()`](#load-session-optional)</td>
       <td><pre><code class="language-json">{
   "modes": {
     "currentModeId": "string",
@@ -965,7 +965,7 @@ These autocommands notify you of events but don't require a response:
     <tr>
       <td><code>ListedSessions</code></td>
       <td>Session list received</td>
-      <td>⚡ [`listSessions()`](#listsessions)</td>
+      <td>⚡ [`listSessions()`](#load-session-optional)</td>
       <td><pre><code class="language-json">{
   "sessions": [
     {
@@ -981,7 +981,7 @@ These autocommands notify you of events but don't require a response:
     <tr>
       <td><code>ForkedSession</code></td>
       <td>Session forked successfully</td>
-      <td>⚡ [`forkSession()`](#forksession)</td>
+      <td>⚡ [`forkSession()`](#load-session-optional)</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "modes": {
@@ -1021,7 +1021,7 @@ These autocommands notify you of events but don't require a response:
     <tr>
       <td><code>ResumedSession</code></td>
       <td>Session resumed successfully</td>
-      <td>⚡ [`resumeSession()`](#resumesession)</td>
+      <td>⚡ [`resumeSession()`](#load-session-optional)</td>
       <td><pre><code class="language-json">{
   "modes": {
     "currentModeId": "string",
@@ -1060,7 +1060,7 @@ These autocommands notify you of events but don't require a response:
     <tr>
       <td><code>SessionModelUpdated</code></td>
       <td>Session model updated</td>
-      <td>⚡ [`setSessionModel()`](#setsessionmodel)</td>
+      <td>⚡ [`setSessionModel()`](#load-session-optional)</td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
