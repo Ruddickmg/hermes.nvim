@@ -779,7 +779,7 @@ vim.api.nvim_create_autocmd("User", {
     <tr>
       <td><code>ConnectionInitialized</code></td>
       <td>Connection established with agent</td>
-      <td>⚡ [connect()](#connect)</td>
+      <td>⚡ <a href="#connect">connect()</a></td>
       <td><pre><code class="language-json">{
   "protocolVersion": "string",
   "agentCapabilities": {
@@ -816,7 +816,7 @@ vim.api.nvim_create_autocmd("User", {
     <tr>
       <td><code>CreatedSession</code></td>
       <td>New session created</td>
-      <td>⚡ [createSession()](#create-session)</td>
+      <td>⚡ <a href="#create-session">createSession()</a></td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "modes": {
@@ -856,7 +856,7 @@ vim.api.nvim_create_autocmd("User", {
     <tr>
       <td><code>Prompted</code></td>
       <td>Agent response received</td>
-      <td>⚡ [prompt()](#prompt)</td>
+      <td>⚡ <a href="#prompt">prompt()</a></td>
       <td><pre><code class="language-json">{
   "stopReason": "string (e.g., 'Stop', 'Cancelled', 'Error')"
 }</code></pre></td>
@@ -864,14 +864,14 @@ vim.api.nvim_create_autocmd("User", {
     <tr>
       <td><code>Authenticated</code></td>
       <td>Authentication completed</td>
-      <td>⚡ [authenticate()](#authenticate)</td>
+      <td>⚡ <a href="#authenticate">authenticate()</a></td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
     <tr>
       <td><code>ConfigurationUpdated</code></td>
       <td>Session configuration updated</td>
-      <td>⚡ [setSessionConfigOption()](#load-session-optional)</td>
+      <td>⚡ <a href="#load-session-optional">setSessionConfigOption()</a></td>
       <td><pre><code class="language-json">{
   "configOptions": [
     {
@@ -900,14 +900,14 @@ vim.api.nvim_create_autocmd("User", {
     <tr>
       <td><code>ModeUpdated</code></td>
       <td>Session mode changed</td>
-      <td>⚡ [setMode()](#set-mode-optional)</td>
+      <td>⚡ <a href="#set-mode-optional">setMode()</a></td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
     <tr>
       <td><code>LoadedSession</code></td>
       <td>Session loaded successfully</td>
-      <td>⚡ [loadSession()](#load-session-optional)</td>
+      <td>⚡ <a href="#load-session-optional">loadSession()</a></td>
       <td><pre><code class="language-json">{
   "modes": {
     "currentModeId": "string",
@@ -946,7 +946,7 @@ vim.api.nvim_create_autocmd("User", {
     <tr>
       <td><code>ListedSessions</code></td>
       <td>Session list received</td>
-      <td>⚡ [listSessions()](#load-session-optional)</td>
+      <td>⚡ <a href="#load-session-optional">listSessions()</a></td>
       <td><pre><code class="language-json">{
   "sessions": [
     {
@@ -962,7 +962,7 @@ vim.api.nvim_create_autocmd("User", {
     <tr>
       <td><code>ForkedSession</code></td>
       <td>Session forked successfully</td>
-      <td>⚡ [forkSession()](#load-session-optional)</td>
+      <td>⚡ <a href="#load-session-optional">forkSession()</a></td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "modes": {
@@ -1002,7 +1002,7 @@ vim.api.nvim_create_autocmd("User", {
     <tr>
       <td><code>ResumedSession</code></td>
       <td>Session resumed successfully</td>
-      <td>⚡ [resumeSession()](#load-session-optional)</td>
+      <td>⚡ <a href="#load-session-optional">resumeSession()</a></td>
       <td><pre><code class="language-json">{
   "modes": {
     "currentModeId": "string",
@@ -1041,7 +1041,7 @@ vim.api.nvim_create_autocmd("User", {
     <tr>
       <td><code>SessionModelUpdated</code></td>
       <td>Session model updated</td>
-      <td>⚡ [setSessionModel()](#load-session-optional)</td>
+      <td>⚡ <a href="#load-session-optional">setSessionModel()</a></td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
