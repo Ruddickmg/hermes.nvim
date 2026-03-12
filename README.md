@@ -333,9 +333,8 @@ vim.api.nvim_create_autocmd("User", {
         
     end,
 })
-
-> **Responds to:** [PermissionRequest](#permissionrequest) autocommand upon completion.
 ```
+> **Responds to:** [PermissionRequest](#permissionrequest) autocommand upon completion.
 
 ## Autocommands
 
