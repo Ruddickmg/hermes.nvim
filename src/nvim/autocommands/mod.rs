@@ -182,7 +182,7 @@ impl From<&str> for Commands {
             "SessionCreated" => Commands::SessionCreated,
             "Prompted" => Commands::Prompted,
             "Authenticated" => Commands::Authenticated,
-            "ConfigUpdated" => Commands::ConfigurationUpdated,
+            "ConfigurationUpdated" => Commands::ConfigurationUpdated,
             "ModeUpdated" => Commands::ModeUpdated,
             "SessionLoaded" => Commands::SessionLoaded,
             "SessionsListed" => Commands::SessionsListed,
