@@ -16,7 +16,7 @@ use tokio::sync::{
     mpsc::{Sender, channel},
     oneshot,
 };
-use tracing::{debug, error, instrument, trace};
+use tracing::{debug, error, instrument, trace, warn};
 use uuid::Uuid;
 
 mod event;
@@ -84,6 +84,7 @@ impl<R: RequestHandler> AutoCommand<R> {
                 .send()
                 .map_err(|e| Error::Internal(e.to_string()))
         } else {
+            warn!("No listener attached for command '{:?}'", command);
             Err(Error::NoListenerAttached(Commands::from(command.to_string())))
         }
     }
