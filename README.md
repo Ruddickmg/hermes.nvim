@@ -95,6 +95,8 @@ hermes.authenticate(auth_method_id)
 
 Create a new session. If no arguments are provided, the session defaults to either the project root or the current directory. 
 
+When the session has been created the <a href="#createdsession">`CreatedSession`</a> autocommand will be triggered.
+
 ```lua
 local hermes = require("hermes")
 
