@@ -666,6 +666,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
       <td>Agent requests permission to execute a tool</td>
       <td>🤖 Agent (requires -> <a href="#permission-response">respond()</a>)</td>
       <td><pre><code class="language-json">{
+  "requestId": "uuid string",
   "sessionId": "string",
   "toolCall": {
     "toolCallId": "string",
