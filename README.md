@@ -26,7 +26,7 @@ Hermes exposes the following functions for sending requests to AI assistants. Ho
 
 Methods marked “Optional” are implemented by Hermes but are not mandatory for agent implementations.
 
-### Connect
+### <a id="connect"></a>Connect
 
 This method allows you to connect to an agent, it takes the agent name and the protocol for the connection (defaults to `stdio`).
 
@@ -63,7 +63,7 @@ hermes.connect(
 )
 ```
 
-### Disconnect
+### <a id="disconnect"></a>Disconnect
 
 Below are examples of how you can disconnect from agent(s).
 
@@ -80,7 +80,7 @@ hermes.disconnect({ "copilot", "opencode" })
 hermes.disconnect()
 ```
 
-### Authenticate
+### <a id="authenticate"></a>Authenticate
 
 Handle agent authentication.
 
@@ -91,7 +91,7 @@ local auth_method_id = "example-auth-method-id"
 hermes.authenticate(auth_method_id)
 ```
 
-### Create Session
+### <a id="createsession"></a>Create Session
 
 Create a new session. If no arguments are provided, the session defaults to either the project root or the current directory. 
 
@@ -128,7 +128,7 @@ hermes.createSession({
 })
 ```
 
-### Load Session (**Optional**)
+### <a id="loadsession"></a>Load Session (**Optional**)
 
 Load an existing session
 
@@ -176,7 +176,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-### Prompt
+### <a id="prompt"></a>Prompt
 
 Send prompts to the agent 
 
@@ -251,7 +251,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-### Cancel (**Optional**)
+### <a id="cancel"></a>Cancel (**Optional**)
 
 Cancel the current operation of the agent (e.g., stop generating text, stop a tool call in progress, etc)
 
@@ -300,7 +300,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-### Set mode (**Optional**)
+### <a id="setmode"></a>Set mode (**Optional**)
 
 Set what mode the agent is in (the plan/build modes for opencode for example)
 
@@ -327,7 +327,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-### Respond
+### <a id="respond"></a>Respond
 
 Respond to agent requests
 
@@ -395,18 +395,49 @@ vim.api.nvim_create_autocmd("User", {
 
 Below is a list of all autocommands and their associated data (passed to the callback in the `args.data` field). Hermes will only trigger autocommands if there is a listener defined for it (I.E. You have created one like the example above)
 
+### Autocommands Requiring User Response
+
+The following autocommands require you to send a response back to the agent using `hermes.respond()`:
+
+```lua
+-- Example: Handling a permission request
+vim.api.nvim_create_autocmd("User", {
+  pattern = "PermissionRequest",
+  callback = function(args)
+    local requestId = args.data.requestId
+    local options = args.data.options
+    
+    -- Show options to user, get their choice
+    local selectedOptionId = show_permission_dialog(options)
+    
+    -- Send response back to agent
+    hermes.respond(requestId, selectedOptionId)
+  end,
+})
+```
+
+| Autocommand | Description | Expected Response |
+|-------------|-------------|-------------------|
+| `PermissionRequest` | Agent requests permission to execute a tool. Contains full ToolCall structure with `toolCall` object including `toolCallId`, `fields` with optional `kind`, `status`, `title`, `content` array, `locations`, `rawInput`, and `rawOutput`. | `optionId` (string) - The ID of the selected permission option from the `options` array |
+
+### Standard Autocommands (Informational)
+
+These autocommands notify you of events but don't require a response:
+
 <table>
   <thead>
     <tr>
       <th>Autocommand</th>
       <th>Description</th>
-      <th>Message Schema (args.data)</th>
+      <th>Source</th>
+      <th>Schema</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>UserTextMessage</code></td>
       <td>Message text sent from the client</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "text": "string",
@@ -420,6 +451,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>UserImageMessage</code></td>
       <td>An image sent from the client</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "data": "base64 string",
@@ -431,6 +463,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>UserResourceMessage</code></td>
       <td>A resource sent from the client</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "resource": {
@@ -445,6 +478,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>UserResourceLinkMessage</code></td>
       <td>A resource link from the client</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "name": "string",
@@ -459,6 +493,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>AgentTextMessage</code></td>
       <td>A text message from the agent</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "text": "string",
@@ -468,6 +503,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>AgentImageMessage</code></td>
       <td>An image from the agent</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "data": "base64 string",
@@ -479,6 +515,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>AgentResourceMessage</code></td>
       <td>A resource from the agent</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "resource": {
@@ -493,6 +530,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>AgentResourceLinkMessage</code></td>
       <td>A resource link from the agent</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "name": "string",
@@ -507,6 +545,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>AgentTextThought</code></td>
       <td>Textual thought/reasoning from the agent</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "text": "string",
@@ -516,6 +555,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>AgentImageThought</code></td>
       <td>Visual reasoning/thought from the agent</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "data": "base64 string",
@@ -527,6 +567,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>AgentResourceThought</code></td>
       <td>Resource-based thought from the agent</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "resource": {
@@ -541,6 +582,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>AgentResourceLinkThought</code></td>
       <td>Resource link thought from the agent</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "name": "string",
@@ -555,6 +597,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>ToolCall</code></td>
       <td>Agent makes a tool call</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "id": "string",
@@ -595,6 +638,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>ToolCallUpdate</code></td>
       <td>Tool call is updated (e.g., progress, output)</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "toolCallId": "string",
@@ -637,6 +681,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>AvailableCommands</code></td>
       <td>Available commands are updated</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "commands": [
@@ -651,6 +696,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>Plan</code></td>
       <td>Agent generates a plan</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "entries": [
@@ -661,6 +707,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>CurrentMode</code></td>
       <td>Current mode changes</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "id": "string"
@@ -669,6 +716,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>ConfigurationOption</code></td>
       <td>Configuration option updates</td>
+      <td>🤖 Agent</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "options": [
@@ -698,6 +746,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>PermissionRequest</code></td>
       <td>Request permission from the user</td>
+      <td>⚡ `hermes.requestPermission()`</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "toolCall": {
@@ -749,6 +798,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>ConnectionInitialized</code></td>
       <td>Connection established with agent</td>
+      <td>⚡ [`connect()`](#connect)</td>
       <td><pre><code class="language-json">{
   "protocolVersion": "string",
   "agentCapabilities": {
@@ -785,6 +835,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>CreatedSession</code></td>
       <td>New session created</td>
+      <td>⚡ [`createSession()`](#createsession)</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "modes": {
@@ -824,6 +875,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>Prompted</code></td>
       <td>Agent response received</td>
+      <td>⚡ [`prompt()`](#prompt)</td>
       <td><pre><code class="language-json">{
   "stopReason": "string (e.g., 'Stop', 'Cancelled', 'Error')"
 }</code></pre></td>
@@ -831,12 +883,14 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>Authenticated</code></td>
       <td>Authentication completed</td>
+      <td>⚡ [`authenticate()`](#authenticate)</td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
     <tr>
       <td><code>ConfigurationUpdated</code></td>
       <td>Session configuration updated</td>
+      <td>⚡ [`setSessionConfigOption()`](#setsessionconfigoption)</td>
       <td><pre><code class="language-json">{
   "configOptions": [
     {
@@ -865,12 +919,14 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>ModeUpdated</code></td>
       <td>Session mode changed</td>
+      <td>⚡ [`setMode()`](#setmode)</td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
     <tr>
       <td><code>LoadedSession</code></td>
       <td>Session loaded successfully</td>
+      <td>⚡ [`loadSession()`](#loadsession)</td>
       <td><pre><code class="language-json">{
   "modes": {
     "currentModeId": "string",
@@ -909,6 +965,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>ListedSessions</code></td>
       <td>Session list received</td>
+      <td>⚡ [`listSessions()`](#listsessions)</td>
       <td><pre><code class="language-json">{
   "sessions": [
     {
@@ -924,6 +981,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>ForkedSession</code></td>
       <td>Session forked successfully</td>
+      <td>⚡ [`forkSession()`](#forksession)</td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "modes": {
@@ -963,6 +1021,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>ResumedSession</code></td>
       <td>Session resumed successfully</td>
+      <td>⚡ [`resumeSession()`](#resumesession)</td>
       <td><pre><code class="language-json">{
   "modes": {
     "currentModeId": "string",
@@ -1001,6 +1060,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr>
       <td><code>SessionModelUpdated</code></td>
       <td>Session model updated</td>
+      <td>⚡ [`setSessionModel()`](#setsessionmodel)</td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
