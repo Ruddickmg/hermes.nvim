@@ -4,6 +4,9 @@ default:
 e2e:
   cargo nextest run --manifest-path e2e/Cargo.toml
 
+log_e2e:
+  cargo nextest run --manifest-path e2e/Cargo.toml --no-capture
+
 integration:
   cargo nextest run --test '*'
   

@@ -12,7 +12,6 @@ use hermes::{
     nvim::{autocommands::Commands, hermes},
 };
 use nvim_oxi::{conversion::FromObject, Array, Dictionary, Function, Object};
-use tracing::info;
 
 #[nvim_oxi::test]
 fn test_default_session_creation() -> Result<(), nvim_oxi::Error> {
@@ -193,8 +192,6 @@ fn test_load_session() -> Result<(), nvim_oxi::Error> {
     let loaded_session = wait_for_loaded_session(Duration::from_secs(TIMEOUT_IN_SECONDS));
 
     disconnect.call(DisconnectArgs::All)?;
-
-    info!("Session loaded: {:?}", loaded_session);
 
     assert!(loaded_session.is_ok());
 
