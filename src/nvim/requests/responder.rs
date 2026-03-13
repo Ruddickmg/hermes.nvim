@@ -33,35 +33,40 @@ impl Responder {
                 // if no file is open then open it or create it
                 nvim_oxi::api::command(&format!("badd {}", path.to_string_lossy()))
                     .map_err(|e| Error::Internal(e.to_string()))?;
+
                 // check for an open file buffer
-                if let Some(mut buffer) = nvim_oxi::api::list_bufs()
+                let mut buffer = nvim_oxi::api::list_bufs()
                     .into_iter()
                     .find(|b| b.get_name().map(|p| p == path).unwrap_or(false))
-                {
-                    buffer
-                        .set_lines(
-                            0..,
-                            false,
-                            data.content
-                                .lines()
-                                .map(String::from)
-                                .collect::<Vec<String>>(),
-                        )
-                        .map_err(|e| Error::Internal(e.to_string()))?;
-                    buffer
-                        .call(|_| {
-                            nvim_oxi::api::command("write")
-                                .map_err(|e| {
-                                    error!(
-                                        "Error occurred while attempting to write to file: {:?}",
-                                        e
-                                    );
-                                    e
-                                })
-                                .ok();
-                        })
-                        .map_err(|e| Error::Internal(e.to_string()))?;
-                }
+                    .ok_or_else(|| {
+                        Error::Internal(format!(
+                            "Buffer for file '{}' not found after badd",
+                            path.display()
+                        ))
+                    })?;
+
+                buffer
+                    .set_lines(
+                        0..,
+                        false,
+                        data.content
+                            .lines()
+                            .map(String::from)
+                            .collect::<Vec<String>>(),
+                    )
+                    .map_err(|e| Error::Internal(e.to_string()))?;
+
+                buffer
+                    .call(|()| {
+                        nvim_oxi::api::command("write")
+                            .map_err(|e| {
+                                error!("Error occurred while attempting to write to file: {:?}", e);
+                                e
+                            })
+                            .ok();
+                    })
+                    .map_err(|e| Error::Internal(e.to_string()))?;
+
                 responder.send(WriteTextFileResponse::new()).map_err(|_| {
                     Error::Internal(
                         "Failed to respond to ACP about successful file write".to_string(),

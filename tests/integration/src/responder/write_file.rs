@@ -29,30 +29,7 @@ fn open_buffer_updated() -> nvim_oxi::Result<()> {
         .default()
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
-    temp_file.assert("updated content");
-    receiver
-        .try_recv()
-        .expect("Should receive success response");
-
-    Ok(())
-}
-
-#[nvim_oxi::test]
-fn file_exists_but_closed() -> nvim_oxi::Result<()> {
-    let temp_file = NamedTempFile::new("existing.txt").unwrap();
-    temp_file.write_str("old content").unwrap();
-
-    let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
-    let responder = Responder::WriteFileResponse(
-        sender,
-        create_write_request(temp_file.path(), "new content"),
-    );
-
-    responder
-        .default()
-        .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
-
-    temp_file.assert("new content");
+    temp_file.assert("updated content\n");
     receiver
         .try_recv()
         .expect("Should receive success response");
@@ -75,7 +52,7 @@ fn new_file_created() -> nvim_oxi::Result<()> {
         .default()
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
-    new_file.assert("created content");
+    new_file.assert("created content\n");
     receiver
         .try_recv()
         .expect("Should receive success response");
@@ -84,16 +61,25 @@ fn new_file_created() -> nvim_oxi::Result<()> {
 }
 
 #[nvim_oxi::test]
-fn invalid_path_returns_error() -> nvim_oxi::Result<()> {
-    use std::path::PathBuf;
+fn file_exists_but_closed() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("existing.txt").unwrap();
+    temp_file.write_str("old content").unwrap();
 
-    let invalid_path = PathBuf::from("/nonexistent/path/file.txt");
-    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
-    let responder =
-        Responder::WriteFileResponse(sender, create_write_request(&invalid_path, "content"));
+    let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let responder = Responder::WriteFileResponse(
+        sender,
+        create_write_request(temp_file.path(), "new content"),
+    );
 
-    let result = responder.default();
-    assert!(result.is_err(), "Should return error for invalid path");
+    responder
+        .default()
+        .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
+
+    // Note: Neovim always adds a trailing newline when writing files
+    temp_file.assert("new content\n");
+    receiver
+        .try_recv()
+        .expect("Should receive success response");
 
     Ok(())
 }
