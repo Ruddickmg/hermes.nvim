@@ -7,9 +7,8 @@ use crate::{
 };
 use core::fmt;
 use nvim_oxi::{
-    Object, Dictionary, Array,
-    api::opts::ExecAutocmdsOpts,
-    conversion::FromObject,
+    Array, Dictionary, Object,
+    api::{opts::ExecAutocmdsOpts},
     libuv::AsyncHandle,
 };
 use serde::Serialize;
@@ -18,7 +17,7 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::mpsc::{Sender, channel};
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, error, instrument, trace, warn};
 use uuid::Uuid;
 
 mod event;
@@ -73,6 +72,7 @@ impl<R: RequestHandler> AutoCommand<R> {
         })
     }
 
+    #[instrument(level = "trace", skip(self))]
     pub async fn execute_autocommand<C: Debug + ToString, S: Debug + Serialize>(
         &self,
         command: C,
@@ -90,9 +90,9 @@ impl<R: RequestHandler> AutoCommand<R> {
             .map_err(|e| Error::Internal(e.to_string()))
     }
 
-    pub fn listener_attached<S: Display>(pattern: S) -> bool {
+    #[instrument(level = "trace")]
+    pub fn listener_attached<S: Display + Debug>(pattern: S) -> bool {
         let command = pattern.to_string();
-        info!("Checking for listeners for command '{}'", command);
 
         // Workaround for nvim-oxi bug: use call_function with properly constructed arguments
         // The builder pattern sends buffer=nil which Neovim rejects
@@ -101,23 +101,17 @@ impl<R: RequestHandler> AutoCommand<R> {
         opts_dict.insert("event", Array::from((Object::from("User"),)));
         opts_dict.insert("pattern", Array::from((Object::from(command.clone()),)));
 
-        if let Ok(result) = nvim_oxi::api::call_function::<(Object,), Array>("nvim_get_autocmds", (opts_dict.into(),)).map_err(|e| {
-            error!("Error calling nvim_get_autocmds: {:?}", e);
-            e
-        }) {
-            let commands: Vec<nvim_oxi::api::types::AutocmdInfos> = result
-                .into_iter()
-                .filter_map(|obj| <nvim_oxi::api::types::AutocmdInfos as FromObject>::from_object(obj).ok())
-                .collect();
-            commands
-                .into_iter()
-                .any(|autocmd| autocmd.pattern == command)
-        } else {
-            error!("Failed to get autocommands for command '{}'", command);
-            true
-        }
+        nvim_oxi::api::call_function::<(Object,), Array>("nvim_get_autocmds", (opts_dict.into(),))
+            .map(|commands| !commands.is_empty())
+            .map_err(|e| {
+                error!("Error calling nvim_get_autocmds: {:?}", e);
+                e
+            })
+            // if we can't tell whether an autocommand is registered, we might as well try to trigger it just in case.
+            .unwrap_or(true)
     }
 
+    #[instrument(level = "trace", skip(self, sender))]
     pub async fn execute_autocommand_request<C: Debug + ToString, S: Debug + Serialize>(
         &self,
         session_id: String,

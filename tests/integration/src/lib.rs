@@ -36,7 +36,7 @@ fn test_listener_attached_no_listener() -> nvim_oxi::Result<()> {
     Ok(())
 }
 
-// #[tracing_test::traced_test]
+#[tracing_test::traced_test]
 #[nvim_oxi::test]
 fn test_listener_attached_with_listener() -> nvim_oxi::Result<()> {
     create_test_autogroup()?;
