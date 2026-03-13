@@ -1,3 +1,5 @@
+pub mod responder;
+pub use responder::*;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::acp::{Result, error::Error};
@@ -5,15 +7,8 @@ use agent_client_protocol::{
     RequestPermissionOutcome, SelectedPermissionOutcome, WriteTextFileResponse,
 };
 use nvim_oxi::conversion::FromObject;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::Mutex;
 use uuid::Uuid;
-
-#[derive(Debug)]
-pub enum Responder {
-    Cancelled,
-    PermissionResponse(oneshot::Sender<RequestPermissionOutcome>),
-    WriteFileResponse(oneshot::Sender<WriteTextFileResponse>),
-}
 
 pub struct Request {
     session_id: String,
@@ -48,12 +43,26 @@ impl Default for Requests {
 }
 
 pub trait RequestHandler {
+    fn default_response(&self, request_id: &Uuid) -> Result<()>;
     fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()>;
     fn cancel_session_requests(&self, session_id: String) -> Result<()>;
     fn add_request(&self, session_id: String, request_id: Uuid, responder: Responder);
-}
+} 
 
 impl RequestHandler for Requests {
+    fn default_response(&self, request_id: &Uuid) -> Result<()> {
+        let mut pending = self.pending.blocking_lock();
+        let retrieved = pending.remove(request_id);
+        drop(pending);
+        if let Some(request) = retrieved {
+            request.responder.default()
+        } else {
+            Err(Error::Internal(format!(
+                "No pending request found for ID: '{}'",
+                request_id
+            )))
+        }
+    }
     fn add_request(&self, session_id: String, request_id: Uuid, responder: Responder) {
         let mut pending = self.pending.blocking_lock();
         pending.insert(request_id, Request::new(session_id, responder));
@@ -65,12 +74,12 @@ impl RequestHandler for Requests {
         let cancelled =
             pending
             .extract_if(|_, request| match request.responder {
-                Responder::PermissionResponse(_) => request.session_id == session_id,
+                Responder::PermissionResponse(..) => request.session_id == session_id,
                 _ => false,
             })
             .map(|(id, request)| {
                 match request.responder {
-                    Responder::PermissionResponse(sender) => {
+                    Responder::PermissionResponse(sender, _) => {
                         if let Err(e) = sender.send(RequestPermissionOutcome::Cancelled) {
                             return Err(Error::Internal(format!(
                                 "Failed to send cancellation for request '{}': {:?}",
@@ -98,7 +107,7 @@ impl RequestHandler for Requests {
         drop(pending);
         if let Some(request) = retrieved {
             match request.responder {
-                Responder::WriteFileResponse(sender) => {
+                Responder::WriteFileResponse(sender, _) => {
                     sender.send(WriteTextFileResponse::new()).map_err(|e| {
                         Error::Internal(format!(
                             "Failed to send response for request '{}': {:?}",
@@ -107,7 +116,7 @@ impl RequestHandler for Requests {
                     })?;
                     Ok(())
                 }
-                Responder::PermissionResponse(sender) => {
+                Responder::PermissionResponse(sender, _) => {
                     let option_id: String = String::from_object(response)
                         .map_err(|e| Error::Internal(e.to_string()))?;
                     let outcome = RequestPermissionOutcome::Selected(

@@ -16,15 +16,15 @@ use tracing::error;
 impl From<Responder> for Commands {
     fn from(responder: Responder) -> Self {
         match responder {
-            Responder::PermissionResponse(_) => Commands::PermissionRequest,
-            Responder::WriteFileResponse(_) => Commands::WriteTextFile,
+            Responder::PermissionResponse(..) => Commands::PermissionRequest,
+            Responder::WriteFileResponse(..) => Commands::WriteTextFile,
             _ => panic!("Unsupported responder type for command conversion"),
         }
     }
 }
 
 #[async_trait::async_trait(?Send)]
-impl<R: RequestHandler> Client for AutoCommand<R> {
+impl<R: RequestHandler + 'static> Client for AutoCommand<R> {
     async fn request_permission(
         &self,
         args: RequestPermissionRequest,
@@ -35,8 +35,8 @@ impl<R: RequestHandler> Client for AutoCommand<R> {
         self.execute_autocommand_request(
             args.session_id.to_string(),
             Commands::PermissionRequest,
-            args,
-            Responder::PermissionResponse(sender),
+            args.clone(),
+            Responder::PermissionResponse(sender, args),
         )
         .await?;
         receiver
@@ -75,8 +75,8 @@ impl<R: RequestHandler> Client for AutoCommand<R> {
         self.execute_autocommand_request(
             args.session_id.to_string(),
             Commands::WriteTextFile,
-            args,
-            Responder::WriteFileResponse(sender),
+            args.clone(),
+            Responder::WriteFileResponse(sender, args),
         )
         .await?;
         receiver.await.map_err(|e| {
