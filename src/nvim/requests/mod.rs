@@ -2,7 +2,7 @@ pub mod responder;
 pub use responder::*;
 use std::{collections::HashMap, sync::Arc};
 
-use crate::acp::{Result, error::Error};
+use crate::acp::{error::Error, Result};
 use agent_client_protocol::{
     RequestPermissionOutcome, SelectedPermissionOutcome, WriteTextFileResponse,
 };
@@ -47,7 +47,7 @@ pub trait RequestHandler {
     fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()>;
     fn cancel_session_requests(&self, session_id: String) -> Result<()>;
     fn add_request(&self, session_id: String, request_id: Uuid, responder: Responder);
-} 
+}
 
 impl RequestHandler for Requests {
     fn default_response(&self, request_id: &Uuid) -> Result<()> {
@@ -147,8 +147,23 @@ impl RequestHandler for Requests {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol::RequestPermissionOutcome;
+    use agent_client_protocol::{
+        RequestPermissionOutcome, RequestPermissionRequest, SessionId, ToolCallUpdate,
+    };
     use pretty_assertions::assert_eq;
+    use tokio::sync::oneshot;
+
+    fn create_test_permission_request(session_id: impl Into<String>) -> RequestPermissionRequest {
+        use agent_client_protocol::{ToolCallId, ToolCallUpdateFields};
+        RequestPermissionRequest::new(
+            SessionId::from(session_id.into()),
+            ToolCallUpdate::new(
+                ToolCallId::from("test-call-id"),
+                ToolCallUpdateFields::default(),
+            ),
+            vec![],
+        )
+    }
 
     #[test]
     fn test_handle_response_success() {
@@ -156,7 +171,8 @@ mod tests {
         let session_id = String::from("test-session");
         let request_id = Uuid::new_v4();
         let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
-        let responder = Responder::PermissionResponse(sender);
+        let responder =
+            Responder::PermissionResponse(sender, create_test_permission_request("test-session"));
 
         requests.add_request(session_id, request_id, responder);
 
@@ -172,7 +188,8 @@ mod tests {
         let session_id = String::from("test-session");
         let request_id = Uuid::new_v4();
         let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
-        let responder = Responder::PermissionResponse(sender);
+        let responder =
+            Responder::PermissionResponse(sender, create_test_permission_request("test-session"));
 
         requests.add_request(session_id, request_id, responder);
 
@@ -220,7 +237,7 @@ mod tests {
         requests.add_request(
             session_id.clone(),
             Uuid::new_v4(),
-            Responder::PermissionResponse(sender),
+            Responder::PermissionResponse(sender, create_test_permission_request("test-session")),
         );
 
         let result = requests.cancel_session_requests(session_id);
@@ -237,7 +254,7 @@ mod tests {
         requests.add_request(
             session_id.clone(),
             request_id,
-            Responder::PermissionResponse(sender),
+            Responder::PermissionResponse(sender, create_test_permission_request("test-session")),
         );
 
         requests.cancel_session_requests(session_id).unwrap();
@@ -270,12 +287,18 @@ mod tests {
         requests.add_request(
             session_id.clone(),
             Uuid::new_v4(),
-            Responder::PermissionResponse(target_sender),
+            Responder::PermissionResponse(
+                target_sender,
+                create_test_permission_request("target-session"),
+            ),
         );
         requests.add_request(
             other_session_id.clone(),
             Uuid::new_v4(),
-            Responder::PermissionResponse(other_sender),
+            Responder::PermissionResponse(
+                other_sender,
+                create_test_permission_request("other-session"),
+            ),
         );
 
         requests.cancel_session_requests(session_id).unwrap();

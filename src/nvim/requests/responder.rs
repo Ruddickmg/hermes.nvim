@@ -1,4 +1,4 @@
-use crate::acp::{Result, error::Error};
+use crate::acp::{error::Error, Result};
 use agent_client_protocol::{
     RequestPermissionOutcome, RequestPermissionRequest, WriteTextFileRequest, WriteTextFileResponse,
 };
@@ -49,10 +49,15 @@ impl Responder {
                         .map_err(|e| Error::Internal(e.to_string()))?;
                     buffer
                         .call(|_| {
-                            nvim_oxi::api::command("write").map_err(|e| {
-                                error!("Error occurred while attempting to write to file: {:?}", e);
-                                e
-                            }).ok();
+                            nvim_oxi::api::command("write")
+                                .map_err(|e| {
+                                    error!(
+                                        "Error occurred while attempting to write to file: {:?}",
+                                        e
+                                    );
+                                    e
+                                })
+                                .ok();
                         })
                         .map_err(|e| Error::Internal(e.to_string()))?;
                 }
