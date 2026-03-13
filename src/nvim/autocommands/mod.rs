@@ -6,15 +6,13 @@ use crate::{
     },
 };
 use core::fmt;
-use nvim_oxi::{Object, api::opts::ExecAutocmdsOpts, libuv::AsyncHandle};
+use nvim_oxi::{Object, api::opts::{ExecAutocmdsOpts, GetAutocmdsOpts}, libuv::AsyncHandle};
 use serde::Serialize;
 use std::{
     fmt::{Debug, Display},
     sync::Arc,
 };
-use tokio::sync::{
-    mpsc::{Sender, channel},
-};
+use tokio::sync::mpsc::{Sender, channel};
 use tracing::{debug, error, instrument, trace, warn};
 use uuid::Uuid;
 
@@ -36,25 +34,29 @@ impl<R: RequestHandler> AutoCommand<R> {
         let handle = nvim_oxi::libuv::AsyncHandle::new(move || {
             while let Ok((command, data)) = receiver.try_recv() {
                 debug!("Received autocommand: {}, with data: {:#?}", command, data);
-                match serde_json::from_value::<Object>(data) {
-                    Ok(obj) => {
-                        let opts = ExecAutocmdsOpts::builder()
-                            .patterns(command.to_string())
-                            .data(obj)
-                            .group(GROUP)
-                            .build();
-                        debug!(
-                            "Executing autocommand: {} with options: {:#?}",
-                            command, opts
-                        );
-                        if let Err(err) = nvim_oxi::api::exec_autocmds(["User"], &opts) {
-                            error!("Error executing autocommand: '{}': {:#?}", command, err);
+                if Self::listener_attached(command.to_string()) {
+                    match serde_json::from_value::<Object>(data) {
+                        Ok(obj) => {
+                            let opts = ExecAutocmdsOpts::builder()
+                                .patterns(command.to_string())
+                                .data(obj)
+                                .group(GROUP)
+                                .build();
+                            debug!(
+                                "Executing autocommand: {} with options: {:#?}",
+                                command, opts
+                            );
+                            if let Err(err) = nvim_oxi::api::exec_autocmds(["User"], &opts) {
+                                error!("Error executing autocommand: '{}': {:#?}", command, err);
+                            }
                         }
+                        Err(e) => error!(
+                            "Failed to deserialize autocommand data for '{}': {:#?}",
+                            command, e
+                        ),
                     }
-                    Err(e) => error!(
-                        "Failed to deserialize autocommand data for '{}': {:#?}",
-                        command, e
-                    ),
+                } else {
+                    warn!("No listener attached for command '{}'", command);
                 }
             }
         })
@@ -66,52 +68,39 @@ impl<R: RequestHandler> AutoCommand<R> {
         })
     }
 
-    async fn execute_autocommand<C: Debug + ToString, S: Debug + Serialize>(
+    pub async fn execute_autocommand<C: Debug + ToString, S: Debug + Serialize>(
         &self,
         command: C,
         data: S,
     ) -> Result<()> {
-        if self.listener_attached(command.to_string()).await? {
-            let serialized: serde_json::Value = data.serialize(serde_json::value::Serializer)?;
-            debug!("Serialized data: {:#?}", serialized);
-            self.channel
-                .send((command.to_string(), serialized))
-                .await
-                .map_err(|e| Error::Internal(e.to_string()))?;
-            trace!("Triggering callback in Neovim thread");
-            self.handle
-                .send()
-                .map_err(|e| Error::Internal(e.to_string()))
-        } else {
-            warn!("No listener attached for command '{:?}'", command);
-            Err(Error::NoListenerAttached(Commands::from(command.to_string())))
-        }
+        let serialized: serde_json::Value = data.serialize(serde_json::value::Serializer)?;
+        debug!("Serialized data: {:#?}", serialized);
+        self.channel
+            .send((command.to_string(), serialized))
+            .await
+            .map_err(|e| Error::Internal(e.to_string()))?;
+        trace!("Triggering callback in Neovim thread");
+        self.handle
+            .send()
+            .map_err(|e| Error::Internal(e.to_string()))
     }
 
-    pub async fn listener_attached<S: Display>(&self, pattern: S) -> Result<bool> {
-        use nvim_oxi::api::opts::GetAutocmdsOpts;
-
+    pub fn listener_attached<S: Display>(pattern: S) -> bool {
+        let command = pattern.to_string();
         let opts = GetAutocmdsOpts::builder()
             .group(GROUP)
-            .patterns([pattern.to_string().as_str()])
+            .events(["User"])
+            .patterns(vec![command.clone().as_str()])
             .build();
 
-        match nvim_oxi::api::get_autocmds(&opts) {
-            Ok(autocmds) => Ok(autocmds.len() > 0),
-            Err(e) => {
-                error!(
-                    "Failed to get autocommands for pattern '{}': {:?}",
-                    pattern, e
-                );
-                Err(Error::Internal(format!(
-                    "Failed to check autocommand: {}",
-                    e
-                )))
-            }
+        if let Ok(commands) = nvim_oxi::api::get_autocmds(&opts) {
+            commands.into_iter().any(|autocmd| autocmd.pattern == command)
+        } else {
+            true
         }
     }
 
-    async fn execute_autocommand_request<C: Debug + ToString, S: Debug + Serialize>(
+    pub async fn execute_autocommand_request<C: Debug + ToString, S: Debug + Serialize>(
         &self,
         session_id: String,
         command: C,

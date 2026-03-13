@@ -6,7 +6,6 @@ use agent_client_protocol::{
 };
 use nvim_oxi::conversion::FromObject;
 use tokio::sync::{Mutex, oneshot};
-use tracing::warn;
 use uuid::Uuid;
 
 #[derive(Debug)]

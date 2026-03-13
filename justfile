@@ -1,14 +1,17 @@
 default:
     echo "Just is running!"
 
-e2e:
-  cargo nextest run --manifest-path e2e/Cargo.toml
+silent_e2e:
+  cargo nextest run --manifest-path tests/e2e/Cargo.toml
 
-log_e2e:
-  cargo nextest run --manifest-path e2e/Cargo.toml --no-capture
+e2e:
+  cargo nextest run --manifest-path tests/e2e/Cargo.toml --no-capture
+
+silent_integration:
+  cargo nextest run --manifest-path tests/integration/Cargo.toml --no-capture
 
 integration:
-  cargo nextest run --test '*'
+  cargo nextest run --manifest-path tests/integration/Cargo.toml
   
 unit:
   cargo nextest run --lib
