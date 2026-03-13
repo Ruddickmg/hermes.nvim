@@ -7,8 +7,9 @@ use crate::{
 };
 use core::fmt;
 use nvim_oxi::{
-    Object,
-    api::opts::{ExecAutocmdsOpts, GetAutocmdsOpts},
+    Object, Dictionary, Array,
+    api::opts::ExecAutocmdsOpts,
+    conversion::FromObject,
     libuv::AsyncHandle,
 };
 use serde::Serialize;
@@ -91,22 +92,23 @@ impl<R: RequestHandler> AutoCommand<R> {
 
     pub fn listener_attached<S: Display>(pattern: S) -> bool {
         let command = pattern.to_string();
-        let opts = GetAutocmdsOpts::builder()
-            .group(GROUP)
-            .events(["User"])
-            .patterns(vec![command.clone().as_str()])
-            .build();
         info!("Checking for listeners for command '{}'", command);
 
-        if let Ok(commands) = nvim_oxi::api::get_autocmds(&opts).map_err(|e| {
-            error!("Error: {:?}", e);
+        // Workaround for nvim-oxi bug: use call_function with properly constructed arguments
+        // The builder pattern sends buffer=nil which Neovim rejects
+        let mut opts_dict = Dictionary::default();
+        opts_dict.insert("group", GROUP);
+        opts_dict.insert("event", Array::from((Object::from("User"),)));
+        opts_dict.insert("pattern", Array::from((Object::from(command.clone()),)));
+
+        if let Ok(result) = nvim_oxi::api::call_function::<(Object,), Array>("nvim_get_autocmds", (opts_dict.into(),)).map_err(|e| {
+            error!("Error calling nvim_get_autocmds: {:?}", e);
             e
         }) {
-            info!(
-                "Checking for listeners for command '{}', found {} matching autocommands",
-                command,
-                commands.len()
-            );
+            let commands: Vec<nvim_oxi::api::types::AutocmdInfos> = result
+                .into_iter()
+                .filter_map(|obj| <nvim_oxi::api::types::AutocmdInfos as FromObject>::from_object(obj).ok())
+                .collect();
             commands
                 .into_iter()
                 .any(|autocmd| autocmd.pattern == command)
