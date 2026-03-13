@@ -29,7 +29,27 @@ fn open_buffer_updated() -> nvim_oxi::Result<()> {
         .default()
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
-    temp_file.assert("updated content\n");
+    // Verify buffer is marked as modified
+    let buffer = nvim_oxi::api::list_bufs()
+        .into_iter()
+        .find(|b| b.get_name().map(|p| p == temp_file.path()).unwrap_or(false))
+        .expect("Buffer should exist");
+
+    let is_modified: bool = buffer
+        .get_option("modified")
+        .expect("Should get modified option");
+    assert!(
+        is_modified,
+        "Buffer should be marked as modified after agent update"
+    );
+
+    // Verify file on disk is NOT updated (buffer only, not saved)
+    let disk_content = std::fs::read_to_string(temp_file.path()).unwrap();
+    assert_eq!(
+        disk_content, "initial content",
+        "File on disk should NOT be updated when buffer is already open"
+    );
+
     receiver
         .try_recv()
         .expect("Should receive success response");
@@ -99,6 +119,50 @@ fn responder_send_failure_handled() -> nvim_oxi::Result<()> {
         .unwrap_err()
         .to_string()
         .contains("Failed to respond to ACP"));
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn buffer_already_open_not_written_to_disk() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("open_file.txt").unwrap();
+    temp_file.write_str("original disk content").unwrap();
+
+    // Open the file in Neovim
+    nvim_oxi::api::command(&format!("edit {}", temp_file.path().display()))?;
+
+    // Agent writes new content
+    let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let responder = Responder::WriteFileResponse(
+        sender,
+        create_write_request(temp_file.path(), "agent updated content"),
+    );
+
+    responder.default().expect("Responder should succeed");
+
+    // Verify: Buffer should be updated and marked modified
+    let updated_buffer = nvim_oxi::api::list_bufs()
+        .into_iter()
+        .find(|b| b.get_name().map(|p| p == temp_file.path()).unwrap_or(false))
+        .expect("Buffer should still exist");
+
+    let is_modified: bool = updated_buffer
+        .get_option("modified")
+        .expect("Should get modified option");
+    assert!(is_modified, "Buffer should be marked as modified");
+
+    // Verify: File on disk should NOT be changed
+    let disk_content = std::fs::read_to_string(temp_file.path()).unwrap();
+    assert_eq!(
+        disk_content, "original disk content",
+        "Disk file should remain unchanged when buffer is open"
+    );
+
+    // Verify: Response was sent
+    assert!(
+        receiver.try_recv().is_ok(),
+        "Should receive success response"
+    );
 
     Ok(())
 }
