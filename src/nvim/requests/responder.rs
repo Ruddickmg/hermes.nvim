@@ -29,6 +29,7 @@ impl Responder {
             }
             Self::WriteFileResponse(responder, data) => {
                 let path = data.path.clone();
+
                 // if no file is open then open it or create it
                 nvim_oxi::api::command(&format!("badd {}", path.to_string_lossy()))
                     .map_err(|e| Error::Internal(e.to_string()))?;

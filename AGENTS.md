@@ -138,7 +138,15 @@ We follow the [Testing Pyramid](https://martinfowler.com/articles/practical-test
   - Test representative scenarios rather than exhaustive coverage
   - Should not duplicate unit test coverage - if a parsing edge case is covered in unit tests, don't repeat it in E2E
 
-**Guideline**: E2E tests verify that "the system works together", unit tests verify that "each component works correctly". Keep E2E tests minimal and focused on integration points.
+- **Integration Tests** (`tests/integration/`): Tests for isolated component integration that requires Neovim but not full system flow.
+  - Run inside a Neovim instance using `#[nvim_oxi::test]`
+  - Test individual components that interact with Neovim APIs (e.g., file operations, buffer manipulation)
+  - Use when you need to test code that makes direct Neovim API calls but doesn't require full ACP message flow
+  - Focus on verifying that Neovim-interacting code works correctly in isolation
+  - Use `assert_fs` for filesystem assertions in file-related tests
+  - Example: Testing `Responder::WriteFileResponse` which uses `nvim_oxi::api::command` and buffer operations
+
+**Guideline**: E2E tests verify that "the system works together", unit tests verify that "each component works correctly", integration tests verify that "Neovim-interacting components work correctly". Keep E2E tests minimal and focused on integration points.
 
 ### Running Tests
 

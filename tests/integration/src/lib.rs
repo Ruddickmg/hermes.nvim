@@ -90,3 +90,5 @@ fn test_execute_autocommand_sends_to_channel() -> nvim_oxi::Result<()> {
 // This is an architectural issue where synchronous lock acquisition
 // happens inside async contexts. The integration is tested indirectly
 // through the working execute_autocommand test above.
+
+pub mod responder;
