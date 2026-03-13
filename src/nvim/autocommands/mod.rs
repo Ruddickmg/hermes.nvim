@@ -6,14 +6,18 @@ use crate::{
     },
 };
 use core::fmt;
-use nvim_oxi::{Object, api::opts::{ExecAutocmdsOpts, GetAutocmdsOpts}, libuv::AsyncHandle};
+use nvim_oxi::{
+    Object,
+    api::opts::{ExecAutocmdsOpts, GetAutocmdsOpts},
+    libuv::AsyncHandle,
+};
 use serde::Serialize;
 use std::{
     fmt::{Debug, Display},
     sync::Arc,
 };
 use tokio::sync::mpsc::{Sender, channel};
-use tracing::{debug, error, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 use uuid::Uuid;
 
 mod event;
@@ -92,10 +96,22 @@ impl<R: RequestHandler> AutoCommand<R> {
             .events(["User"])
             .patterns(vec![command.clone().as_str()])
             .build();
+        info!("Checking for listeners for command '{}'", command);
 
-        if let Ok(commands) = nvim_oxi::api::get_autocmds(&opts) {
-            commands.into_iter().any(|autocmd| autocmd.pattern == command)
+        if let Ok(commands) = nvim_oxi::api::get_autocmds(&opts).map_err(|e| {
+            error!("Error: {:?}", e);
+            e
+        }) {
+            info!(
+                "Checking for listeners for command '{}', found {} matching autocommands",
+                command,
+                commands.len()
+            );
+            commands
+                .into_iter()
+                .any(|autocmd| autocmd.pattern == command)
         } else {
+            error!("Failed to get autocommands for command '{}'", command);
             true
         }
     }
