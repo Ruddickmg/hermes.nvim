@@ -1039,8 +1039,8 @@ Your options for log formats are:
 
 -- agent requests
 - [x] Allow permission request
-- [ ] Allow agent to write to files
-  - [ ] Automatically refresh open buffers that have been modified
+- [x] Allow agent to write to files
+  - [x] Automatically refresh open buffers that have been modified
 - [ ] Allow agent to read files
 - [ ] Allow agent to use terminal
   - [ ] Create autocommands for Agent progress in the terminal

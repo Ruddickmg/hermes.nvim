@@ -32,7 +32,13 @@ impl Responder {
                 // Check for existing buffer that is also listed (visible to user)
                 let existing_buffer = nvim_oxi::api::list_bufs().into_iter().find(|b| {
                     b.get_name().map(|p| p == path).unwrap_or(false)
-                        && b.get_option::<bool>("buflisted").unwrap_or(false)
+                        && nvim_oxi::api::get_option_value::<bool>(
+                            "buflisted",
+                            &nvim_oxi::api::opts::OptionOpts::builder()
+                                .buffer(b.clone())
+                                .build(),
+                        )
+                        .unwrap_or(false)
                 });
 
                 let was_already_open = existing_buffer.is_some();
@@ -50,8 +56,14 @@ impl Responder {
                     .map_err(|e| Error::Internal(e.to_string()))?;
 
                     // Mark buffer as modified so user knows there are unsaved changes
-                    buf.set_option("modified", true)
-                        .map_err(|e| Error::Internal(e.to_string()))?;
+                    nvim_oxi::api::set_option_value(
+                        "modified",
+                        true,
+                        &nvim_oxi::api::opts::OptionOpts::builder()
+                            .buffer(buf.clone())
+                            .build(),
+                    )
+                    .map_err(|e| Error::Internal(e.to_string()))?;
 
                     // TODO: Future enhancement - check if buffer has unsaved changes before updating
                     // and make this behavior configurable (prompt user, auto-merge, or overwrite)

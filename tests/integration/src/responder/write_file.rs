@@ -35,9 +35,13 @@ fn open_buffer_updated() -> nvim_oxi::Result<()> {
         .find(|b| b.get_name().map(|p| p == temp_file.path()).unwrap_or(false))
         .expect("Buffer should exist");
 
-    let is_modified: bool = buffer
-        .get_option("modified")
-        .expect("Should get modified option");
+    let is_modified: bool = nvim_oxi::api::get_option_value::<bool>(
+        "modified",
+        &nvim_oxi::api::opts::OptionOpts::builder()
+            .buffer(buffer.clone())
+            .build(),
+    )
+    .expect("Should get modified option");
     assert!(
         is_modified,
         "Buffer should be marked as modified after agent update"
@@ -146,9 +150,13 @@ fn buffer_already_open_not_written_to_disk() -> nvim_oxi::Result<()> {
         .find(|b| b.get_name().map(|p| p == temp_file.path()).unwrap_or(false))
         .expect("Buffer should still exist");
 
-    let is_modified: bool = updated_buffer
-        .get_option("modified")
-        .expect("Should get modified option");
+    let is_modified: bool = nvim_oxi::api::get_option_value::<bool>(
+        "modified",
+        &nvim_oxi::api::opts::OptionOpts::builder()
+            .buffer(updated_buffer.clone())
+            .build(),
+    )
+    .expect("Should get modified option");
     assert!(is_modified, "Buffer should be marked as modified");
 
     // Verify: File on disk should NOT be changed
