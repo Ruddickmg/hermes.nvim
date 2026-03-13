@@ -124,7 +124,8 @@ mod tests {
         let handler = Handler::new(state.clone(), mock.clone());
 
         let notification = create_test_notification();
-        let res: Result<(), agent_client_protocol::Error> = handler.session_notification(notification).await;
+        let res: Result<(), agent_client_protocol::Error> =
+            handler.session_notification(notification).await;
         assert!(res.is_ok());
     }
 

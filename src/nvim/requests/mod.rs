@@ -106,7 +106,7 @@ impl RequestHandler for Requests {
                         ))
                     })?;
                     Ok(())
-                },
+                }
                 Responder::PermissionResponse(sender) => {
                     let option_id: String = String::from_object(response)
                         .map_err(|e| Error::Internal(e.to_string()))?;
@@ -120,7 +120,7 @@ impl RequestHandler for Requests {
                         ))
                     })?;
                     Ok(())
-                },
+                }
                 Responder::Cancelled => Err(Error::Internal(format!(
                     "Request was responded to after it was cancelled. request id: '{}', session id: '{}'",
                     request_id, request.session_id

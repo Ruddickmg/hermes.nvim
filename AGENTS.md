@@ -9,6 +9,8 @@ The architecture separates Neovim logic from Rust ACP interactions:
 - **Directory Structure:**
   - `src/acp`: Contains all direct interactions with the ACP SDK.
   - `src/nvim`: Contains Neovim-specific bindings and logic.
+  - tests/integration: Contains integration tests.
+  - tests/e2e: Contains end to end tests.
 
 - **Concurrency Model:** The ACP SDK is single-threaded and async. We spawn a dedicated thread for each connection, each running a single-threaded Tokio runtime. This ensures every Agent has its own [independent](https://docs.rs/tokio/latest/tokio/task/struct.JoinHandle.html) environment. Thread handles are stored to be joined and dropped upon disconnection.
 
@@ -130,7 +132,7 @@ We follow the [Testing Pyramid](https://martinfowler.com/articles/practical-test
   - Should cover all parsing logic, validation, and conversion functions
   - **Important:** Any test that involves actual message flow between Neovim and ACP (e.g., sending requests, receiving responses, autocommand firing) should be considered an **integration test**, not a unit test
 
-- **E2E Tests** (`e2e/`): Integration tests that verify the full flow from Lua API through to autocommand responses.
+- **E2E Tests** (`tests/e2e/`): Integration tests that verify the full flow from Lua API through to autocommand responses.
   - Run inside a Neovim instance using `#[nvim_oxi::test]`
   - Focus on verifying that components integrate correctly
   - Test representative scenarios rather than exhaustive coverage

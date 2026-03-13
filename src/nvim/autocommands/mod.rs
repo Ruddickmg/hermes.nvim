@@ -6,11 +6,7 @@ use crate::{
     },
 };
 use core::fmt;
-use nvim_oxi::{
-    Array, Dictionary, Object,
-    api::{opts::ExecAutocmdsOpts},
-    libuv::AsyncHandle,
-};
+use nvim_oxi::{Array, Dictionary, Object, api::opts::ExecAutocmdsOpts, libuv::AsyncHandle};
 use serde::Serialize;
 use std::{
     fmt::{Debug, Display},
