@@ -140,10 +140,9 @@ impl<R: RequestHandler + 'static> AutoCommand<R> {
         data: S,
         responder: Responder,
     ) -> Result<()> {
-        let request_id = Uuid::new_v4();
         let mut serialized: serde_json::Value = data.serialize(serde_json::value::Serializer)?;
+        let request_id = self.requests.add_request(session_id, responder);
         serialized["requestId"] = serde_json::Value::String(request_id.to_string());
-        self.requests.add_request(session_id, request_id, responder);
         self.send_autocommand(command, serialized, Some(request_id))
             .await?;
         Ok(())

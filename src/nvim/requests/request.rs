@@ -1,111 +1,136 @@
+use std::sync::Arc;
+
 use agent_client_protocol::{
     RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
     WriteTextFileResponse,
 };
 use nvim_oxi::conversion::FromObject;
+use tokio::sync::Mutex;
 use tracing::error;
 use uuid::Uuid;
 
-use crate::acp::Result;
 use crate::acp::error::Error;
+use crate::acp::Result;
 use crate::nvim::requests::{
-    Responder, acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
-    show_permission_ui, update_buffer_content,
+    acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
+    show_permission_ui, update_buffer_content, Responder,
 };
+use crate::utilities::prompt::get_permission_prompt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Request {
     id: Uuid,
     session_id: String,
-    responder: Option<Responder>,
+    responder: Arc<Mutex<Option<Responder>>>,
 }
 
 impl Request {
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
     pub fn new(session_id: String, responder: Responder) -> Self {
         Self {
             id: Uuid::new_v4(),
             session_id,
-            responder: Some(responder),
+            responder: Arc::new(Mutex::new(Some(responder))),
         }
     }
 
     pub fn is_permission_request(&self) -> bool {
-        matches!(self.responder, Some(Responder::PermissionResponse(..)))
+        let responder = self.responder.blocking_lock();
+        let is_permission = matches!(*responder, Some(Responder::PermissionResponse(..)));
+        drop(responder);
+        is_permission
     }
 
     pub fn is_session(&self, session_id: String) -> bool {
         self.session_id == session_id
     }
 
-    pub fn cancel(&mut self) -> Result<()> {
+    fn get_responder(&self) -> Result<Responder> {
+        let mut lock = self.responder.blocking_lock();
+        let responder = lock.take();
+        drop(lock);
+        responder.ok_or_else(|| {
+            Error::Internal(format!(
+                "No responder found for request '{}', in session '{}'",
+                self.id, self.session_id
+            ))
+        })
+    }
+
+    pub fn cancel(&self) -> Result<()> {
         let session_id = self.session_id.clone();
-        if let Some(Responder::PermissionResponse(sender, ..)) = self.responder.take() {
-            if let Err(e) = sender.send(RequestPermissionOutcome::Cancelled) {
-                return Err(Error::Internal(format!(
-                    "Failed to send cancellation for request '{}', in session '{}': {:?}",
-                    self.id, session_id, e
-                )));
-            };
+        if let Responder::PermissionResponse(sender, ..) = self.get_responder()? {
+            sender
+                .send(RequestPermissionOutcome::Cancelled)
+                .map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send cancellation for request '{}', in session '{}': {:?}",
+                        self.id, session_id, e
+                    ))
+                })?;
         }
         Ok(())
     }
 
-    pub fn respond(&mut self, response: nvim_oxi::Object) -> Result<()> {
+    pub fn respond(&self, response: nvim_oxi::Object) -> Result<()> {
         let session_id = self.session_id.clone();
-        if let Some(responder) = self.responder.take() {
-            match responder {
-                Responder::WriteFileResponse(sender, _) => {
-                    sender.send(WriteTextFileResponse::new()).map_err(|e| {
-                        Error::Internal(format!(
-                            "Failed to send response for request '{}': {:?}",
-                            self.id, e
-                        ))
-                    })?;
-                    Ok(())
-                }
-                Responder::PermissionResponse(sender, ..) => {
-                    let option_id: String = String::from_object(response)
-                        .map_err(|e| Error::Internal(e.to_string()))?;
-                    let outcome = RequestPermissionOutcome::Selected(
-                        SelectedPermissionOutcome::new(option_id),
-                    );
-                    sender.send(outcome).map_err(|e| {
-                        Error::Internal(format!(
-                            "Failed to send response for request '{}': {:?}",
-                            self.id, e
-                        ))
-                    })?;
-                    Ok(())
-                }
-                Responder::Cancelled => Err(Error::Internal(format!(
-                    "Request was responded to after it was cancelled. request id: '{}', session id: '{}'",
-                    self.id, session_id
-                ))),
+        let responder = self.get_responder()?;
+        match responder {
+            Responder::WriteFileResponse(sender, _) => {
+                sender.send(WriteTextFileResponse::new()).map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send response for request '{}': {:?}",
+                        self.id, e
+                    ))
+                })?;
+                Ok(())
             }
-        } else {
-            Err(Error::Internal(format!(
-                "No responder found for request '{}', in session; {}",
+            Responder::PermissionResponse(sender, ..) => {
+                let option_id: String =
+                    String::from_object(response).map_err(|e| Error::Internal(e.to_string()))?;
+                let outcome =
+                    RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(option_id));
+                sender.send(outcome).map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send response for request '{}': {:?}",
+                        self.id, e
+                    ))
+                })?;
+                Ok(())
+            }
+            Responder::Cancelled => Err(Error::Internal(format!(
+                "Request was responded to after it was cancelled. request id: '{}', session id: '{}'",
                 self.id, session_id
-            )))
+            ))),
         }
     }
 
-    pub fn default(mut self, data: serde_json::Value) -> Result<()> {
+    fn ask_user_for_permission(&self, data: serde_json::Value) -> Result<()> {
+        let data: RequestPermissionRequest = serde_json::from_value(data)?;
+        let request_id = self.id.to_string();
+        let session_id = self.session_id.clone();
+        let other = self.clone();
+        let prompt = get_permission_prompt();
+        show_permission_ui(&data.options, &prompt, move |option_id| {
+            other.respond(option_id.into()).unwrap_or_else(|e| {
+                error!(
+                    "Failed to send permission response for request '{}', session '{}': {:?}",
+                    request_id, session_id, e
+                )
+            });
+        })
+    }
+
+    pub fn default(&self, data: serde_json::Value) -> Result<()> {
         if self.is_permission_request() {
-            let data: RequestPermissionRequest = serde_json::from_value(data)?;
-            let request_id = self.id.to_string();
-            let session_id = self.session_id.clone();
-            show_permission_ui(&data.options, "Do the thing!", move |option_id| {
-                self.respond(option_id.into()).unwrap_or_else(|e| {
-                    error!(
-                        "Failed to send permission response for request '{}', session '{}': {:?}",
-                        request_id, session_id, e
-                    )
-                });
-            })?;
-        } else if let Some(responder) = self.responder.take() {
-            match responder {
-                Responder::PermissionResponse(..) => panic!("Permission requests should have been handled in the if branch above"),
+            self.ask_user_for_permission(data)?;
+        } else {
+            match self.get_responder()? {
+                Responder::PermissionResponse(..) => {
+                    panic!("Permission requests should have been handled in the if branch above")
+                }
                 Responder::WriteFileResponse(responder, data) => {
                     let path = data.path.clone();
                     let (mut buffer, was_already_open) = acquire_or_create_buffer(&path)?;

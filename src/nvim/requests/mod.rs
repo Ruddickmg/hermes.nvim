@@ -1,11 +1,12 @@
 pub mod request;
 pub mod responder;
 use crate::{
-    acp::{error::Error, Result},
+    acp::{Result, error::Error},
     nvim::requests::request::Request,
 };
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
+use tracing::error;
 use uuid::Uuid;
 
 pub use responder::*;
@@ -32,13 +33,13 @@ pub trait RequestHandler {
     fn default_response(&self, request_id: &Uuid, data: serde_json::Value) -> Result<()>;
     fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()>;
     fn cancel_session_requests(&self, session_id: String) -> Result<()>;
-    fn add_request(&self, session_id: String, request_id: Uuid, responder: Responder);
+    fn add_request(&self, session_id: String, responder: Responder) -> Uuid;
 }
 
 impl RequestHandler for Requests {
     fn default_response(&self, request_id: &Uuid, data: serde_json::Value) -> Result<()> {
-        let mut pending = self.pending.blocking_lock();
-        let retrieved = pending.remove(request_id);
+        let pending = self.pending.blocking_lock();
+        let retrieved = pending.get(request_id).cloned();
         drop(pending);
         if let Some(request) = retrieved {
             request.default(data)
@@ -49,25 +50,23 @@ impl RequestHandler for Requests {
             )))
         }
     }
-    fn add_request(&self, session_id: String, request_id: Uuid, responder: Responder) {
+    fn add_request(&self, session_id: String, responder: Responder) -> Uuid {
         let mut pending = self.pending.blocking_lock();
-        pending.insert(request_id, Request::new(session_id, responder));
+        let request = Request::new(session_id, responder);
+        let request_id = request.id();
+        pending.insert(request_id, request);
         drop(pending);
+        request_id
     }
 
     fn cancel_session_requests(&self, session_id: String) -> Result<()> {
         let mut pending = self.pending.blocking_lock();
-        let cancelled = pending
+        pending
             .extract_if(|_, request| {
                 request.is_permission_request() && request.is_session(session_id.clone())
             })
-            .map(|(id, mut request)| {
-                request.cancel()?;
-                Ok((id, Request::new(session_id.clone(), Responder::Cancelled)))
-            })
-            .collect::<Result<Vec<(Uuid, Request)>>>()?;
-        // TODO: figure out a solution for cleaning up cancelled requests (potential memory leak)
-        pending.extend(cancelled);
+            .map(|(_, request)| request.cancel())
+            .collect::<Result<Vec<()>>>()?;
         drop(pending);
         Ok(())
     }
@@ -77,17 +76,17 @@ impl RequestHandler for Requests {
         let retrieved = pending.remove(request_id);
         drop(pending);
 
-        match retrieved {
-            Some(mut request) => {
-                request
-                    .respond(response)
-                    .map_err(|e| Error::Internal(format!("Failed to respond to request: {}", e)))?;
-                Ok(())
-            }
-            None => Err(Error::Internal(format!(
-                "No pending request found for ID: '{}'",
-                request_id
-            ))),
+        if let Some(request) = retrieved {
+            request
+                .respond(response)
+                .map_err(|e| Error::Internal(format!("Failed to respond to request: {}", e)))?;
+            Ok(())
+        } else {
+            error!("No pending request found for ID: '{}'", request_id);
+            Err(Error::Internal(
+                "No matching request found: This usually means the request was cancelled before your response could be made."
+                    .to_string(),
+            ))
         }
     }
 }
