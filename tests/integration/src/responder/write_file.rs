@@ -1,8 +1,8 @@
-//! Integration tests for Responder::WriteFileResponse::default()
+//! Integration tests for Responder::WriteFileResponse via Request
 use agent_client_protocol::{SessionId, WriteTextFileRequest, WriteTextFileResponse};
 use assert_fs::prelude::*;
 use assert_fs::{NamedTempFile, TempDir};
-use hermes::nvim::requests::Responder;
+use hermes::nvim::requests::{Request, Responder};
 use std::path::Path;
 use tokio::sync::oneshot;
 
@@ -24,9 +24,10 @@ fn open_buffer_updated() -> nvim_oxi::Result<()> {
         sender,
         create_write_request(temp_file.path(), "updated content"),
     );
+    let request = Request::new("test-session".to_string(), responder);
 
-    responder
-        .default()
+    request
+        .default(serde_json::Value::Null)
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     // Verify buffer is marked as modified
@@ -71,9 +72,10 @@ fn new_file_created() -> nvim_oxi::Result<()> {
         sender,
         create_write_request(new_file.path(), "created content"),
     );
+    let request = Request::new("test-session".to_string(), responder);
 
-    responder
-        .default()
+    request
+        .default(serde_json::Value::Null)
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     new_file.assert("created content\n");
@@ -94,9 +96,10 @@ fn file_exists_but_closed() -> nvim_oxi::Result<()> {
         sender,
         create_write_request(temp_file.path(), "new content"),
     );
+    let request = Request::new("test-session".to_string(), responder);
 
-    responder
-        .default()
+    request
+        .default(serde_json::Value::Null)
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     // Note: Neovim always adds a trailing newline when writing files
@@ -114,10 +117,11 @@ fn responder_send_failure_handled() -> nvim_oxi::Result<()> {
     let (sender, receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder =
         Responder::WriteFileResponse(sender, create_write_request(temp_file.path(), "content"));
+    let request = Request::new("test-session".to_string(), responder);
 
     drop(receiver);
 
-    let result = responder.default();
+    let result = request.default(serde_json::Value::Null);
     assert!(result.is_err(), "Should return error when send fails");
     assert!(result
         .unwrap_err()
@@ -141,8 +145,11 @@ fn buffer_already_open_not_written_to_disk() -> nvim_oxi::Result<()> {
         sender,
         create_write_request(temp_file.path(), "agent updated content"),
     );
+    let request = Request::new("test-session".to_string(), responder);
 
-    responder.default().expect("Responder should succeed");
+    request
+        .default(serde_json::Value::Null)
+        .expect("Request should succeed");
 
     // Verify: Buffer should be updated and marked modified
     let updated_buffer = nvim_oxi::api::list_bufs()
