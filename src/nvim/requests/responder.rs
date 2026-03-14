@@ -1,12 +1,11 @@
 use crate::acp::{Result, error::Error};
 use agent_client_protocol::{
-    PermissionOption, RequestPermissionOutcome, RequestPermissionRequest,
-    SelectedPermissionOutcome, WriteTextFileRequest, WriteTextFileResponse,
+    PermissionOption, RequestPermissionOutcome, RequestPermissionRequest, WriteTextFileRequest,
+    WriteTextFileResponse,
 };
-use nvim_oxi::{Function, mlua};
+use nvim_oxi::mlua;
 use std::path::Path;
 use tokio::sync::oneshot;
-use uuid::Uuid;
 
 #[derive(Debug)]
 pub enum Responder {
@@ -92,14 +91,14 @@ pub fn refresh_view() -> Result<()> {
     nvim_oxi::api::command("redraw").map_err(|e| Error::Internal(e.to_string()))
 }
 
-/// Show permission request UI with vim.ui.select (non-blocking)
-/// The Lua callback will call hermes.respond(request_id, option_id)
-pub fn show_permission_ui<A, R>(
-    options: &[PermissionOption],
-    prompt: &str,
-    callback: Function<A, R>,
-) -> Result<()> {
-    let lua = nvim_oxi::mlua::Lua::new();
+/// Show permission request UI with vim.ui.select
+/// The callback will be invoked with the selected option_id when user makes a selection
+/// Callback is FnOnce since it should only be called once
+pub fn show_permission_ui<F>(options: &[PermissionOption], prompt: &str, callback: F) -> Result<()>
+where
+    F: FnOnce(String) + 'static,
+{
+    let lua = nvim_oxi::mlua::lua();
 
     // Create array of {label, id} tables for Lua
     let items: Vec<mlua::Table> = options
@@ -116,7 +115,26 @@ pub fn show_permission_ui<A, R>(
         .create_sequence_from(items)
         .map_err(|e| Error::Internal(format!("Failed to create Lua array: {}", e)))?;
 
-    // Execute vim.ui.select with callback
+    // Wrap FnOnce in RefCell<Option> so we can take() and consume it once
+    let callback_opt = std::cell::RefCell::new(Some(callback));
+
+    // Create Lua function from the Rust closure
+    // take() removes the callback from Option and consumes it
+    let lua_callback = lua
+        .create_function(move |_, option_id: String| {
+            if let Some(cb) = callback_opt.borrow_mut().take() {
+                cb(option_id);
+            }
+            Ok(())
+        })
+        .map_err(|e| Error::Internal(format!("Failed to create callback: {}", e)))?;
+
+    // Store callback in a global variable so Lua can access it
+    lua.globals()
+        .set("__hermes_permission_callback", lua_callback)
+        .map_err(|e| Error::Internal(format!("Failed to set callback: {}", e)))?;
+
+    // Execute vim.ui.select - callback is accessed via global
     lua.load(format!(
         r#"
         local items = ...
@@ -127,7 +145,7 @@ pub fn show_permission_ui<A, R>(
             end,
         }}, function(choice, idx)
             if choice then
-                print()
+                __hermes_permission_callback(choice.id)
             end
         end)
     "#,
@@ -138,5 +156,3 @@ pub fn show_permission_ui<A, R>(
 
     Ok(())
 }
-
-

@@ -12,7 +12,6 @@ use agent_client_protocol::{
 };
 use tokio::sync::oneshot;
 use tracing::error;
-use uuid::Uuid;
 
 impl From<Responder> for Commands {
     fn from(responder: Responder) -> Self {
@@ -33,7 +32,6 @@ impl<R: RequestHandler + 'static> Client for AutoCommand<R> {
         let (sender, receiver) =
             oneshot::channel::<agent_client_protocol::RequestPermissionOutcome>();
 
-        let request_id = Uuid::new_v4();
         self.execute_autocommand_request(
             args.session_id.to_string(),
             Commands::PermissionRequest,

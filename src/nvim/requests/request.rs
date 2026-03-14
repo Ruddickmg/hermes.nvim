@@ -1,10 +1,9 @@
-use std::rc::Rc;
-use std::sync::Arc;
-
 use agent_client_protocol::{
-    RequestPermissionOutcome, SelectedPermissionOutcome, WriteTextFileResponse,
+    RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
+    WriteTextFileResponse,
 };
 use nvim_oxi::conversion::FromObject;
+use tracing::error;
 use uuid::Uuid;
 
 use crate::acp::Result;
@@ -39,26 +38,19 @@ impl Request {
     }
 
     pub fn cancel(&mut self) -> Result<()> {
-        let request_id = self.id.clone();
         let session_id = self.session_id.clone();
-        if let Some(responder) = self.responder.take() {
-            match responder {
-                Responder::PermissionResponse(sender, ..) => {
-                    if let Err(e) = sender.send(RequestPermissionOutcome::Cancelled) {
-                        return Err(Error::Internal(format!(
-                            "Failed to send cancellation for request '{}', in session '{}': {:?}",
-                            request_id, session_id, e
-                        )));
-                    };
-                }
-                _ => {},
-            }
+        if let Some(Responder::PermissionResponse(sender, ..)) = self.responder.take() {
+            if let Err(e) = sender.send(RequestPermissionOutcome::Cancelled) {
+                return Err(Error::Internal(format!(
+                    "Failed to send cancellation for request '{}', in session '{}': {:?}",
+                    self.id, session_id, e
+                )));
+            };
         }
         Ok(())
     }
 
     pub fn respond(&mut self, response: nvim_oxi::Object) -> Result<()> {
-        let request_id = self.id.clone();
         let session_id = self.session_id.clone();
         if let Some(responder) = self.responder.take() {
             match responder {
@@ -66,7 +58,7 @@ impl Request {
                     sender.send(WriteTextFileResponse::new()).map_err(|e| {
                         Error::Internal(format!(
                             "Failed to send response for request '{}': {:?}",
-                            request_id, e
+                            self.id, e
                         ))
                     })?;
                     Ok(())
@@ -80,32 +72,40 @@ impl Request {
                     sender.send(outcome).map_err(|e| {
                         Error::Internal(format!(
                             "Failed to send response for request '{}': {:?}",
-                            request_id, e
+                            self.id, e
                         ))
                     })?;
                     Ok(())
                 }
                 Responder::Cancelled => Err(Error::Internal(format!(
                     "Request was responded to after it was cancelled. request id: '{}', session id: '{}'",
-                    request_id, session_id
+                    self.id, session_id
                 ))),
             }
         } else {
             Err(Error::Internal(format!(
                 "No responder found for request '{}', in session; {}",
-                request_id, session_id
+                self.id, session_id
             )))
         }
     }
 
-    pub fn default(self) -> Result<()> {
-        if let Some(responder) = self.responder {
+    pub fn default(mut self, data: serde_json::Value) -> Result<()> {
+        if self.is_permission_request() {
+            let data: RequestPermissionRequest = serde_json::from_value(data)?;
+            let request_id = self.id.to_string();
+            let session_id = self.session_id.clone();
+            show_permission_ui(&data.options, "Do the thing!", move |option_id| {
+                self.respond(option_id.into()).unwrap_or_else(|e| {
+                    error!(
+                        "Failed to send permission response for request '{}', session '{}': {:?}",
+                        request_id, session_id, e
+                    )
+                });
+            })?;
+        } else if let Some(responder) = self.responder.take() {
             match responder {
-                Responder::PermissionResponse(_responder, data) => {
-                    let _prompt = "Permission required".to_string();
-                    // show_permission_ui(&data.options, &prompt))?;
-                    // responder.send(RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(id));
-                }
+                Responder::PermissionResponse(..) => panic!("Permission requests should have been handled in the if branch above"),
                 Responder::WriteFileResponse(responder, data) => {
                     let path = data.path.clone();
                     let (mut buffer, was_already_open) = acquire_or_create_buffer(&path)?;

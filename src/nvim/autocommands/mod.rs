@@ -62,7 +62,7 @@ impl<R: RequestHandler + 'static> AutoCommand<R> {
                         command
                     );
                     nvim_requests
-                        .default_response(&id)
+                        .default_response(&id, data)
                         .map_err(|e| {
                             error!(
                                 "Failed to send default response for command '{}': {:#?}",
