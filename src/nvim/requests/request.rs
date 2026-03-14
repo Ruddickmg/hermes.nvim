@@ -14,7 +14,7 @@ use crate::utilities::{
     acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
     show_permission_ui, update_buffer_content
 };
-use crate::utilities::prompt::get_permission_prompt;
+use crate::utilities::get_permission_prompt;
 
 #[derive(Debug)]
 pub enum Responder {

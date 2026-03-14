@@ -9,7 +9,7 @@ use nvim_oxi::{Dictionary, api::opts::CreateAugroupOpts};
 use std::{rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
 
-use crate::{Handler, acp::connection::ConnectionManager, utilities::logging::Logger};
+use crate::{Handler, acp::connection::ConnectionManager, utilities::Logger};
 
 pub const GROUP: &str = "hermes";
 

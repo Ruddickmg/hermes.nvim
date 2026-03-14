@@ -1,7 +1,6 @@
 pub mod request;
 use crate::{
     acp::{Result, error::Error},
-    nvim::requests::Request,
 };
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
@@ -115,12 +114,11 @@ mod tests {
     fn test_handle_response_success() {
         let requests = Requests::new();
         let session_id = String::from("test-session");
-        let request_id = Uuid::new_v4();
         let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
         let responder =
             Responder::PermissionResponse(sender, create_test_permission_request("test-session"));
 
-        requests.add_request(session_id, request_id, responder);
+        let request_id = requests.add_request(session_id, responder);
 
         let response_obj = nvim_oxi::Object::from("selected-option-id");
         let result = requests.handle_response(&request_id, response_obj);
@@ -132,12 +130,11 @@ mod tests {
     fn test_handle_response_outcome_contains_option_id() {
         let requests = Requests::new();
         let session_id = String::from("test-session");
-        let request_id = Uuid::new_v4();
         let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
         let responder =
             Responder::PermissionResponse(sender, create_test_permission_request("test-session"));
 
-        requests.add_request(session_id, request_id, responder);
+        let request_id = requests.add_request(session_id, responder);
 
         let response_obj = nvim_oxi::Object::from("selected-option-id");
         requests.handle_response(&request_id, response_obj).unwrap();
@@ -182,7 +179,6 @@ mod tests {
 
         requests.add_request(
             session_id.clone(),
-            Uuid::new_v4(),
             Responder::PermissionResponse(sender, create_test_permission_request("test-session")),
         );
 
@@ -234,7 +230,6 @@ mod tests {
 
         requests.add_request(
             session_id.clone(),
-            Uuid::new_v4(),
             Responder::PermissionResponse(
                 target_sender,
                 create_test_permission_request("target-session"),
@@ -242,7 +237,6 @@ mod tests {
         );
         requests.add_request(
             other_session_id.clone(),
-            Uuid::new_v4(),
             Responder::PermissionResponse(
                 other_sender,
                 create_test_permission_request("other-session"),
