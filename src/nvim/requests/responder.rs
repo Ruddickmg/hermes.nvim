@@ -1,7 +1,7 @@
-use crate::acp::{error::Error, Result};
+use crate::acp::{Result, error::Error};
 use agent_client_protocol::{
-    PermissionOption, RequestPermissionOutcome, RequestPermissionRequest, WriteTextFileRequest,
-    WriteTextFileResponse,
+    PermissionOption, RequestPermissionOutcome, RequestPermissionRequest,
+    SelectedPermissionOutcome, WriteTextFileRequest, WriteTextFileResponse,
 };
 use nvim_oxi::mlua;
 use std::path::Path;
@@ -142,10 +142,10 @@ pub fn show_permission_ui(
 impl Responder {
     pub fn default(self) -> Result<()> {
         match self {
-            Self::PermissionResponse(_, data, request_id) => {
+            Self::PermissionResponse(responder, data, request_id) => {
                 let prompt = format!("Permission required (session: {})", data.session_id);
                 show_permission_ui(&data.options, &prompt, &request_id.to_string())?;
-                // Callback handles sending the response via hermes.respond
+                // responder.send(RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(id));
             }
             Self::WriteFileResponse(responder, data) => {
                 let path = data.path.clone();

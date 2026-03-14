@@ -1,12 +1,11 @@
 pub mod responder;
-pub use responder::*;
-use std::{collections::HashMap, sync::Arc};
-
-use crate::acp::{error::Error, Result};
+use crate::acp::{Result, error::Error};
 use agent_client_protocol::{
     RequestPermissionOutcome, SelectedPermissionOutcome, WriteTextFileResponse,
 };
 use nvim_oxi::conversion::FromObject;
+pub use responder::*;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -72,8 +71,7 @@ impl RequestHandler for Requests {
     fn cancel_session_requests(&self, session_id: String) -> Result<()> {
         let mut pending = self.pending.blocking_lock();
         let cancelled =
-            pending
-            .extract_if(|_, request| match request.responder {
+            pending.extract_if(|_, request| match request.responder {
                 Responder::PermissionResponse(..) => request.session_id == session_id,
                 _ => false,
             })
