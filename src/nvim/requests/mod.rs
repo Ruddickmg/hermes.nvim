@@ -1,27 +1,11 @@
+pub mod request;
 pub mod responder;
-use crate::acp::{Result, error::Error};
-use agent_client_protocol::{
-    RequestPermissionOutcome, SelectedPermissionOutcome, WriteTextFileResponse,
-};
-use nvim_oxi::conversion::FromObject;
-pub use responder::*;
+use crate::{acp::{Result, error::Error}, nvim::requests::request::Request};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-pub struct Request {
-    session_id: String,
-    responder: Responder,
-}
-
-impl Request {
-    pub fn new(session_id: String, responder: Responder) -> Self {
-        Self {
-            session_id,
-            responder,
-        }
-    }
-}
+pub use responder::*;
 
 pub struct Requests {
     pending: Arc<Mutex<HashMap<Uuid, Request>>>,
@@ -54,7 +38,7 @@ impl RequestHandler for Requests {
         let retrieved = pending.remove(request_id);
         drop(pending);
         if let Some(request) = retrieved {
-            request.responder.default()
+            request.default()
         } else {
             Err(Error::Internal(format!(
                 "No pending request found for ID: '{}'",
@@ -71,25 +55,12 @@ impl RequestHandler for Requests {
     fn cancel_session_requests(&self, session_id: String) -> Result<()> {
         let mut pending = self.pending.blocking_lock();
         let cancelled =
-            pending.extract_if(|_, request| match request.responder {
-                Responder::PermissionResponse(..) => request.session_id == session_id,
-                _ => false,
-            })
-            .map(|(id, request)| {
-                match request.responder {
-                    Responder::PermissionResponse(sender, _, _) => {
-                        if let Err(e) = sender.send(RequestPermissionOutcome::Cancelled) {
-                            return Err(Error::Internal(format!(
-                                "Failed to send cancellation for request '{}': {:?}",
-                                id, e
-                            )));
-                        };
-                    }
-                    _ => panic!("Unexpected responder type when cancelling session requests. This should never happen."),
-                };
+            pending.extract_if(|_, request| request.is_permission_request() && request.is_session(session_id.clone()))
+            .map(|(id, mut request)| {
+                request.cancel()?;
                 Ok((
                     id,
-                    Request::new(request.session_id.clone(), Responder::Cancelled),
+                    Request::new(session_id.clone(), Responder::Cancelled),
                 ))
             })
             .collect::<Result<Vec<(Uuid, Request)>>>()?;
@@ -103,42 +74,13 @@ impl RequestHandler for Requests {
         let mut pending = self.pending.blocking_lock();
         let retrieved = pending.remove(request_id);
         drop(pending);
-        if let Some(request) = retrieved {
-            match request.responder {
-                Responder::WriteFileResponse(sender, _) => {
-                    sender.send(WriteTextFileResponse::new()).map_err(|e| {
-                        Error::Internal(format!(
-                            "Failed to send response for request '{}': {:?}",
-                            request_id, e
-                        ))
-                    })?;
-                    Ok(())
-                }
-                Responder::PermissionResponse(sender, _, _) => {
-                    let option_id: String = String::from_object(response)
-                        .map_err(|e| Error::Internal(e.to_string()))?;
-                    let outcome = RequestPermissionOutcome::Selected(
-                        SelectedPermissionOutcome::new(option_id),
-                    );
-                    sender.send(outcome).map_err(|e| {
-                        Error::Internal(format!(
-                            "Failed to send response for request '{}': {:?}",
-                            request_id, e
-                        ))
-                    })?;
-                    Ok(())
-                }
-                Responder::Cancelled => Err(Error::Internal(format!(
-                    "Request was responded to after it was cancelled. request id: '{}', session id: '{}'",
-                    request_id, request.session_id
-                ))),
-            }
-        } else {
-            Err(Error::Internal(format!(
+        retrieved.map(|mut request| request.respond(response))
+            .transpose()
+            .map_err(|_|Error::Internal(format!(
                 "No pending request found for ID: '{}'",
                 request_id
-            )))
-        }
+            )))?;
+        Ok(())
     }
 }
 
@@ -172,7 +114,6 @@ mod tests {
         let responder = Responder::PermissionResponse(
             sender,
             create_test_permission_request("test-session"),
-            Uuid::new_v4(),
         );
 
         requests.add_request(session_id, request_id, responder);
@@ -192,7 +133,6 @@ mod tests {
         let responder = Responder::PermissionResponse(
             sender,
             create_test_permission_request("test-session"),
-            Uuid::new_v4(),
         );
 
         requests.add_request(session_id, request_id, responder);
@@ -244,7 +184,6 @@ mod tests {
             Responder::PermissionResponse(
                 sender,
                 create_test_permission_request("test-session"),
-                Uuid::new_v4(),
             ),
         );
 
@@ -265,15 +204,17 @@ mod tests {
             Responder::PermissionResponse(
                 sender,
                 create_test_permission_request("test-session"),
-                Uuid::new_v4(),
             ),
         );
 
         requests.cancel_session_requests(session_id).unwrap();
 
         let pending = requests.pending.blocking_lock();
-        match pending.get(&request_id).unwrap().responder {
+        match pending.get(&request_id).unwrap().responder.unwrap() {
             Responder::Cancelled => {}
+                Uuid::new_v4(),
+        let request_id = self.id.clone();
+        let session_id = self.session_id.clone();
             _ => panic!("Request should be Cancelled"),
         }
         drop(pending);
@@ -302,7 +243,6 @@ mod tests {
             Responder::PermissionResponse(
                 target_sender,
                 create_test_permission_request("target-session"),
-                Uuid::new_v4(),
             ),
         );
         requests.add_request(
@@ -311,7 +251,6 @@ mod tests {
             Responder::PermissionResponse(
                 other_sender,
                 create_test_permission_request("other-session"),
-                Uuid::new_v4(),
             ),
         );
 

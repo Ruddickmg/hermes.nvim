@@ -38,7 +38,7 @@ impl<R: RequestHandler + 'static> Client for AutoCommand<R> {
             args.session_id.to_string(),
             Commands::PermissionRequest,
             args.clone(),
-            Responder::PermissionResponse(sender, args, request_id),
+            Responder::PermissionResponse(sender, args),
         )
         .await?;
         receiver
