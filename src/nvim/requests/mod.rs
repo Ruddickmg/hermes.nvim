@@ -1,15 +1,14 @@
 pub mod request;
-pub mod responder;
 use crate::{
     acp::{Result, error::Error},
-    nvim::requests::request::Request,
+    nvim::requests::Request,
 };
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::error;
 use uuid::Uuid;
 
-pub use responder::*;
+pub use request::*;
 
 pub struct Requests {
     pending: Arc<Mutex<HashMap<Uuid, Request>>>,

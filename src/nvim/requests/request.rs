@@ -1,21 +1,30 @@
 use std::sync::Arc;
 
 use agent_client_protocol::{
-    RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
-    WriteTextFileResponse,
+    RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome, WriteTextFileRequest, WriteTextFileResponse
 };
 use nvim_oxi::conversion::FromObject;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, oneshot};
 use tracing::error;
 use uuid::Uuid;
 
 use crate::acp::error::Error;
 use crate::acp::Result;
-use crate::nvim::requests::{
+use crate::utilities::{
     acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
-    show_permission_ui, update_buffer_content, Responder,
+    show_permission_ui, update_buffer_content
 };
 use crate::utilities::prompt::get_permission_prompt;
+
+#[derive(Debug)]
+pub enum Responder {
+    Cancelled,
+    PermissionResponse(
+        oneshot::Sender<RequestPermissionOutcome>,
+        RequestPermissionRequest,
+    ),
+    WriteFileResponse(oneshot::Sender<WriteTextFileResponse>, WriteTextFileRequest),
+}
 
 #[derive(Debug, Clone)]
 pub struct Request {
