@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::acp::{ Result, error::Error };
+use crate::acp::{Result, error::Error};
 
 // TODO: move these helper functions into a "utilities" directory
 /// Find an existing buffer that is listed (visible to user)
@@ -75,5 +75,3 @@ pub fn save_buffer_to_disk(buf: &nvim_oxi::api::Buffer) -> Result<()> {
 pub fn refresh_view() -> Result<()> {
     nvim_oxi::api::command("redraw").map_err(|e| Error::Internal(e.to_string()))
 }
-
-

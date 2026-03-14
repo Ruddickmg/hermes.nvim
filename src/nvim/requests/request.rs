@@ -1,20 +1,21 @@
 use std::sync::Arc;
 
 use agent_client_protocol::{
-    RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome, WriteTextFileRequest, WriteTextFileResponse
+    RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
+    WriteTextFileRequest, WriteTextFileResponse,
 };
 use nvim_oxi::conversion::FromObject;
 use tokio::sync::{Mutex, oneshot};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::acp::error::Error;
 use crate::acp::Result;
+use crate::acp::error::Error;
+use crate::utilities::get_permission_prompt;
 use crate::utilities::{
     acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
-    show_permission_ui, update_buffer_content
+    show_permission_ui, update_buffer_content,
 };
-use crate::utilities::get_permission_prompt;
 
 #[derive(Debug)]
 pub enum Responder {
@@ -116,12 +117,14 @@ impl Request {
         let response_handler = self.clone();
         let prompt = get_permission_prompt();
         show_permission_ui(&data.options, &prompt, move |option_id| {
-            response_handler.respond(option_id.into()).unwrap_or_else(|e| {
-                error!(
-                    "Failed to send permission response for request '{}', session '{}': {:?}",
-                    request_id, session_id, e
-                )
-            });
+            response_handler
+                .respond(option_id.into())
+                .unwrap_or_else(|e| {
+                    error!(
+                        "Failed to send permission response for request '{}', session '{}': {:?}",
+                        request_id, session_id, e
+                    )
+                });
         })
     }
 

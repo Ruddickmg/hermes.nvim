@@ -26,7 +26,6 @@ where
     let pattern = autocommand.to_string();
     let (tx, reciever) = mpsc::channel::<T>();
     let sender = Rc::new(tx);
-
     let opts = CreateAutocmdOpts::builder()
         .group("hermes")
         .patterns(vec![pattern.as_str()])

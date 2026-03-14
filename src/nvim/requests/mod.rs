@@ -1,7 +1,5 @@
 pub mod request;
-use crate::{
-    acp::{Result, error::Error},
-};
+use crate::acp::{Result, error::Error};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::error;

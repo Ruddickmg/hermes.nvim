@@ -5,6 +5,10 @@ use hermes::nvim::{
 use nvim_oxi::api::opts::{CreateAugroupOpts, CreateAutocmdOpts};
 use std::sync::Arc;
 
+pub mod helpers;
+pub mod request;
+pub mod utilities;
+
 const GROUP: &str = "hermes";
 
 fn create_test_autogroup() -> nvim_oxi::Result<u32> {
@@ -84,11 +88,3 @@ fn test_execute_autocommand_sends_to_channel() -> nvim_oxi::Result<()> {
     Ok(())
 }
 
-// Note: execute_autocommand_request cannot be easily tested here because
-// Requests::add_request uses blocking_lock() which panics when called from
-// within a Tokio runtime (which tokio_test::block_on creates).
-// This is an architectural issue where synchronous lock acquisition
-// happens inside async contexts. The integration is tested indirectly
-// through the working execute_autocommand test above.
-
-pub mod responder;

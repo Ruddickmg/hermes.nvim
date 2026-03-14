@@ -2,7 +2,7 @@
 # test-threads = 1
 
 [package]
-name = "hermes-e2e"
+name = "hermes-integration"
 version = "0.1.0"
 edition = "2024"
 
