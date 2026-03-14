@@ -1,10 +1,12 @@
 use crate::acp::{error::Error, Result};
 use agent_client_protocol::{
-    RequestPermissionOutcome, RequestPermissionRequest, WriteTextFileRequest, WriteTextFileResponse,
+    PermissionOption, RequestPermissionOutcome, RequestPermissionRequest, WriteTextFileRequest,
+    WriteTextFileResponse,
 };
 use nvim_oxi::mlua;
 use std::path::Path;
 use tokio::sync::oneshot;
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub enum Responder {
@@ -12,6 +14,7 @@ pub enum Responder {
     PermissionResponse(
         oneshot::Sender<RequestPermissionOutcome>,
         RequestPermissionRequest,
+        Uuid, // request_id for callback
     ),
     WriteFileResponse(oneshot::Sender<WriteTextFileResponse>, WriteTextFileRequest),
 }
@@ -89,16 +92,60 @@ pub fn refresh_view() -> Result<()> {
     nvim_oxi::api::command("redraw").map_err(|e| Error::Internal(e.to_string()))
 }
 
+/// Show permission request UI with vim.ui.select (non-blocking)
+/// The Lua callback will call hermes.respond(request_id, option_id)
+pub fn show_permission_ui(
+    options: &[PermissionOption],
+    prompt: &str,
+    request_id: &str,
+) -> Result<()> {
+    let lua = mlua::Lua::new();
+
+    // Create array of {label, id} tables for Lua
+    let items: Vec<mlua::Table> = options
+        .iter()
+        .map(|opt| {
+            let table = lua.create_table().unwrap();
+            table.set("label", opt.name.to_string()).unwrap();
+            table.set("id", opt.option_id.to_string()).unwrap();
+            table
+        })
+        .collect();
+
+    let items_array = lua
+        .create_sequence_from(items)
+        .map_err(|e| Error::Internal(format!("Failed to create Lua array: {}", e)))?;
+
+    // Execute vim.ui.select with callback
+    lua.load(format!(
+        r#"
+        local items = ...
+        vim.ui.select(items, {{
+            prompt = "{}",
+            format_item = function(item) 
+                return item.label 
+            end,
+        }}, function(choice, idx)
+            if choice then
+                hermes.respond("{}", choice.id)
+            end
+        end)
+    "#,
+        prompt, request_id
+    ))
+    .call::<()>(items_array)
+    .map_err(|e| Error::Internal(format!("Failed to show permission UI: {}", e)))?;
+
+    Ok(())
+}
+
 impl Responder {
     pub fn default(self) -> Result<()> {
         match self {
-            Self::PermissionResponse(_, data) => {
-                let _options = data
-                    .options
-                    .iter()
-                    .map(|option| option.name.to_string())
-                    .collect::<Vec<String>>();
-                mlua::Lua::new().globals();
+            Self::PermissionResponse(_, data, request_id) => {
+                let prompt = format!("Permission required (session: {})", data.session_id);
+                show_permission_ui(&data.options, &prompt, &request_id.to_string())?;
+                // Callback handles sending the response via hermes.respond
             }
             Self::WriteFileResponse(responder, data) => {
                 let path = data.path.clone();

@@ -79,7 +79,7 @@ impl RequestHandler for Requests {
             })
             .map(|(id, request)| {
                 match request.responder {
-                    Responder::PermissionResponse(sender, _) => {
+                    Responder::PermissionResponse(sender, _, _) => {
                         if let Err(e) = sender.send(RequestPermissionOutcome::Cancelled) {
                             return Err(Error::Internal(format!(
                                 "Failed to send cancellation for request '{}': {:?}",
@@ -116,7 +116,7 @@ impl RequestHandler for Requests {
                     })?;
                     Ok(())
                 }
-                Responder::PermissionResponse(sender, _) => {
+                Responder::PermissionResponse(sender, _, _) => {
                     let option_id: String = String::from_object(response)
                         .map_err(|e| Error::Internal(e.to_string()))?;
                     let outcome = RequestPermissionOutcome::Selected(
@@ -171,8 +171,11 @@ mod tests {
         let session_id = String::from("test-session");
         let request_id = Uuid::new_v4();
         let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
-        let responder =
-            Responder::PermissionResponse(sender, create_test_permission_request("test-session"));
+        let responder = Responder::PermissionResponse(
+            sender,
+            create_test_permission_request("test-session"),
+            Uuid::new_v4(),
+        );
 
         requests.add_request(session_id, request_id, responder);
 
@@ -188,8 +191,11 @@ mod tests {
         let session_id = String::from("test-session");
         let request_id = Uuid::new_v4();
         let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
-        let responder =
-            Responder::PermissionResponse(sender, create_test_permission_request("test-session"));
+        let responder = Responder::PermissionResponse(
+            sender,
+            create_test_permission_request("test-session"),
+            Uuid::new_v4(),
+        );
 
         requests.add_request(session_id, request_id, responder);
 
@@ -237,7 +243,11 @@ mod tests {
         requests.add_request(
             session_id.clone(),
             Uuid::new_v4(),
-            Responder::PermissionResponse(sender, create_test_permission_request("test-session")),
+            Responder::PermissionResponse(
+                sender,
+                create_test_permission_request("test-session"),
+                Uuid::new_v4(),
+            ),
         );
 
         let result = requests.cancel_session_requests(session_id);
@@ -254,7 +264,11 @@ mod tests {
         requests.add_request(
             session_id.clone(),
             request_id,
-            Responder::PermissionResponse(sender, create_test_permission_request("test-session")),
+            Responder::PermissionResponse(
+                sender,
+                create_test_permission_request("test-session"),
+                Uuid::new_v4(),
+            ),
         );
 
         requests.cancel_session_requests(session_id).unwrap();
@@ -290,6 +304,7 @@ mod tests {
             Responder::PermissionResponse(
                 target_sender,
                 create_test_permission_request("target-session"),
+                Uuid::new_v4(),
             ),
         );
         requests.add_request(
@@ -298,6 +313,7 @@ mod tests {
             Responder::PermissionResponse(
                 other_sender,
                 create_test_permission_request("other-session"),
+                Uuid::new_v4(),
             ),
         );
 
