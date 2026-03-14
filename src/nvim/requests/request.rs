@@ -18,7 +18,6 @@ use crate::utilities::get_permission_prompt;
 
 #[derive(Debug)]
 pub enum Responder {
-    Cancelled,
     PermissionResponse(
         oneshot::Sender<RequestPermissionOutcome>,
         RequestPermissionRequest,
@@ -84,9 +83,7 @@ impl Request {
     }
 
     pub fn respond(&self, response: nvim_oxi::Object) -> Result<()> {
-        let session_id = self.session_id.clone();
-        let responder = self.get_responder()?;
-        match responder {
+        match self.get_responder()? {
             Responder::WriteFileResponse(sender, _) => {
                 sender.send(WriteTextFileResponse::new()).map_err(|e| {
                     Error::Internal(format!(
@@ -109,10 +106,6 @@ impl Request {
                 })?;
                 Ok(())
             }
-            Responder::Cancelled => Err(Error::Internal(format!(
-                "Request was responded to after it was cancelled. request id: '{}', session id: '{}'",
-                self.id, session_id
-            ))),
         }
     }
 
@@ -120,10 +113,10 @@ impl Request {
         let data: RequestPermissionRequest = serde_json::from_value(data)?;
         let request_id = self.id.to_string();
         let session_id = self.session_id.clone();
-        let other = self.clone();
+        let response_handler = self.clone();
         let prompt = get_permission_prompt();
         show_permission_ui(&data.options, &prompt, move |option_id| {
-            other.respond(option_id.into()).unwrap_or_else(|e| {
+            response_handler.respond(option_id.into()).unwrap_or_else(|e| {
                 error!(
                     "Failed to send permission response for request '{}', session '{}': {:?}",
                     request_id, session_id, e
@@ -162,7 +155,6 @@ impl Request {
                         )
                     })?;
                 }
-                Responder::Cancelled => {}
             }
         }
         Ok(())

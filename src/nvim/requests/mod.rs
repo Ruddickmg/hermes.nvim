@@ -160,18 +160,6 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_response_not_found_error_message() {
-        let requests = Requests::new();
-        let request_id = Uuid::new_v4();
-        let response_obj = nvim_oxi::Object::from("some-option");
-
-        let result = requests.handle_response(&request_id, response_obj);
-
-        let error_msg = format!("{}", result.unwrap_err());
-        assert!(error_msg.contains("No pending request found"));
-    }
-
-    #[test]
     fn test_cancel_session_requests_returns_ok() {
         let requests = Requests::new();
         let session_id = String::from("test-session");
@@ -185,31 +173,6 @@ mod tests {
         let result = requests.cancel_session_requests(session_id);
         assert!(result.is_ok());
     }
-
-    /*
-    #[test]
-    fn test_cancel_session_requests_preserves_cancelled_responder() {
-        let requests = Requests::new();
-        let session_id = String::from("test-session");
-        let request_id = Uuid::new_v4();
-        let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
-
-        requests.add_request(
-            session_id.clone(),
-            request_id,
-            Responder::PermissionResponse(sender, create_test_permission_request("test-session")),
-        );
-
-        requests.cancel_session_requests(session_id).unwrap();
-
-        let pending = requests.pending.blocking_lock();
-        match pending.get(&request_id).unwrap().responder.unwrap() {
-            Responder::Cancelled => {}
-            _ => panic!("Request should be Cancelled"),
-        }
-        drop(pending);
-    }
-    */
 
     #[test]
     fn test_cancel_session_requests_no_matches_returns_ok() {

@@ -18,7 +18,6 @@ impl From<Responder> for Commands {
         match responder {
             Responder::PermissionResponse(..) => Commands::PermissionRequest,
             Responder::WriteFileResponse(..) => Commands::WriteTextFile,
-            _ => panic!("Unsupported responder type for command conversion"),
         }
     }
 }
