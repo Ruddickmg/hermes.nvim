@@ -28,6 +28,7 @@ pretty_assertions = "1.4"
 futures = "0.3"
 tracing-test = { version = "0.2", features = ["no-env-filter"] }
 assert_fs = "1.1"
+uuid = "1"
 
 [build-dependencies]
 nvim-oxi = { version = "0.6.0", features = ["neovim-0-10", "test"] }

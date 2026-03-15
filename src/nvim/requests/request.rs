@@ -42,7 +42,7 @@ impl Request {
     }
     pub fn new(
         session_id: String,
-        remove:Arc<tokio::sync::mpsc::Sender<Uuid>>,
+        remove: Arc<tokio::sync::mpsc::Sender<Uuid>>,
         finisher: Arc<AsyncHandle>,
         responder: Responder,
     ) -> Self {
@@ -56,14 +56,12 @@ impl Request {
     }
 
     fn finish(&self) -> Result<()> {
-        self.remove
-            .blocking_send(self.id)
-            .map_err(|e| {
-                Error::Internal(format!(
-                    "Failed to send finish signal for request '{}', in session '{}': {:?}",
-                    self.id, self.session_id, e
-                ))
-             })?;
+        self.remove.blocking_send(self.id).map_err(|e| {
+            Error::Internal(format!(
+                "Failed to send finish signal for request '{}', in session '{}': {:?}",
+                self.id, self.session_id, e
+            ))
+        })?;
         self.finisher.send().map_err(|e| {
             Error::Internal(format!(
                 "Failed to send finisher signal for request '{}', in session '{}': {:?}",
@@ -110,8 +108,6 @@ impl Request {
         }
         Ok(())
     }
-
-
 
     pub fn respond(&self, response: nvim_oxi::Object) -> Result<()> {
         match self.get_responder()? {

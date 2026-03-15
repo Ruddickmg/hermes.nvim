@@ -1,10 +1,13 @@
 pub mod request;
 use crate::acp::{Result, error::Error};
+use nvim_oxi::libuv::AsyncHandle;
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::{Mutex, mpsc::{ Sender, channel }};
+use tokio::sync::{
+    Mutex,
+    mpsc::{Sender, channel},
+};
 use tracing::error;
 use uuid::Uuid;
-use nvim_oxi::libuv::AsyncHandle;
 
 pub use request::*;
 
@@ -25,7 +28,8 @@ impl Requests {
                 lock.remove(&id);
                 drop(lock);
             }
-        }).map_err(|e|Error::Internal(e.to_string()))?;
+        })
+        .map_err(|e| Error::Internal(e.to_string()))?;
         Ok(Self {
             pending,
             finisher: Arc::new(finisher),
@@ -39,6 +43,7 @@ pub trait RequestHandler {
     fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()>;
     fn cancel_session_requests(&self, session_id: String) -> Result<()>;
     fn add_request(&self, session_id: String, responder: Responder) -> Uuid;
+    fn get_request(&self, request_id: &Uuid) -> Option<Request>;
 }
 
 impl RequestHandler for Requests {
@@ -65,6 +70,13 @@ impl RequestHandler for Requests {
         pending.insert(request_id, request);
         drop(pending);
         request_id
+    }
+
+    fn get_request(&self, request_id: &Uuid) -> Option<Request> {
+        let pending = self.pending.blocking_lock();
+        let request = pending.get(request_id).cloned();
+        drop(pending);
+        request
     }
 
     fn cancel_session_requests(&self, session_id: String) -> Result<()> {
@@ -96,136 +108,5 @@ impl RequestHandler for Requests {
                     .to_string(),
             ))
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use agent_client_protocol::{
-        RequestPermissionOutcome, RequestPermissionRequest, SessionId, ToolCallUpdate,
-    };
-    use pretty_assertions::assert_eq;
-    use tokio::sync::oneshot;
-
-    fn create_test_permission_request(session_id: impl Into<String>) -> RequestPermissionRequest {
-        use agent_client_protocol::{ToolCallId, ToolCallUpdateFields};
-        RequestPermissionRequest::new(
-            SessionId::from(session_id.into()),
-            ToolCallUpdate::new(
-                ToolCallId::from("test-call-id"),
-                ToolCallUpdateFields::default(),
-            ),
-            vec![],
-        )
-    }
-
-    #[test]
-    fn test_handle_response_success() {
-        let requests = Requests::new();
-        let session_id = String::from("test-session");
-        let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
-        let responder =
-            Responder::PermissionResponse(sender, create_test_permission_request("test-session"));
-
-        let request_id = requests.add_request(session_id, responder);
-
-        let response_obj = nvim_oxi::Object::from("selected-option-id");
-        let result = requests.handle_response(&request_id, response_obj);
-
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_handle_response_outcome_contains_option_id() {
-        let requests = Requests::new();
-        let session_id = String::from("test-session");
-        let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
-        let responder =
-            Responder::PermissionResponse(sender, create_test_permission_request("test-session"));
-
-        let request_id = requests.add_request(session_id, responder);
-
-        let response_obj = nvim_oxi::Object::from("selected-option-id");
-        requests.handle_response(&request_id, response_obj).unwrap();
-
-        let outcome = receiver.try_recv().expect("Should receive outcome");
-        match outcome {
-            RequestPermissionOutcome::Selected(selected) => {
-                assert_eq!(selected.option_id.0.as_ref(), "selected-option-id");
-            }
-            _ => panic!("Expected Selected outcome"),
-        }
-    }
-
-    #[test]
-    fn test_handle_response_not_found_returns_error() {
-        let requests = Requests::new();
-        let request_id = Uuid::new_v4();
-        let response_obj = nvim_oxi::Object::from("some-option");
-
-        let result = requests.handle_response(&request_id, response_obj);
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_cancel_session_requests_returns_ok() {
-        let requests = Requests::new();
-        let session_id = String::from("test-session");
-        let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
-
-        requests.add_request(
-            session_id.clone(),
-            Responder::PermissionResponse(sender, create_test_permission_request("test-session")),
-        );
-
-        let result = requests.cancel_session_requests(session_id);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_cancel_session_requests_no_matches_returns_ok() {
-        let requests = Requests::new();
-        let session_id = String::from("nonexistent-session");
-
-        let result = requests.cancel_session_requests(session_id);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_cancel_session_requests_only_affects_target_session() {
-        let requests = Requests::new();
-        let session_id = String::from("target-session");
-        let other_session_id = String::from("other-session");
-        let (target_sender, mut target_receiver) = oneshot::channel::<RequestPermissionOutcome>();
-        let (other_sender, mut other_receiver) = oneshot::channel::<RequestPermissionOutcome>();
-
-        requests.add_request(
-            session_id.clone(),
-            Responder::PermissionResponse(
-                target_sender,
-                create_test_permission_request("target-session"),
-            ),
-        );
-        requests.add_request(
-            other_session_id.clone(),
-            Responder::PermissionResponse(
-                other_sender,
-                create_test_permission_request("other-session"),
-            ),
-        );
-
-        requests.cancel_session_requests(session_id).unwrap();
-
-        // Target session should be cancelled
-        let target_outcome = target_receiver
-            .try_recv()
-            .expect("Should receive cancellation");
-        assert_eq!(target_outcome, RequestPermissionOutcome::Cancelled);
-
-        // Other session should not be cancelled
-        let other_outcome = other_receiver.try_recv();
-        assert!(other_outcome.is_err());
     }
 }

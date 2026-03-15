@@ -10,7 +10,7 @@ use agent_client_protocol::{
     PermissionOption, PermissionOptionId, PermissionOptionKind, RequestPermissionRequest,
     SessionId, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
 };
-use hermes::nvim::requests::{Request, Responder};
+use hermes::nvim::requests::Responder;
 use hermes::utilities::ui::show_permission_ui;
 use std::cell::RefCell;
 #[allow(unused_imports)]
@@ -108,8 +108,15 @@ fn show_permission_ui_options_can_be_selected() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_non_permission_request_not_permission() -> nvim_oxi::Result<()> {
     use agent_client_protocol::{SessionId, WriteTextFileRequest};
+    use hermes::nvim::requests::{RequestHandler, Requests};
     use std::path::PathBuf;
+    use std::sync::Arc;
 
+    // Create Requests handler and add a write file request
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
     let (sender, _receiver) =
         tokio::sync::oneshot::channel::<agent_client_protocol::WriteTextFileResponse>();
     let write_request = WriteTextFileRequest::new(
@@ -118,7 +125,12 @@ fn test_non_permission_request_not_permission() -> nvim_oxi::Result<()> {
         "test content",
     );
     let responder = Responder::WriteFileResponse(sender, write_request);
-    let request = Request::new("test-session".to_string(), responder);
+    let request_id = requests.add_request("test-session".to_string(), responder);
+
+    // Get the request and check if it's a permission request
+    let request = requests
+        .get_request(&request_id)
+        .expect("Request should exist");
 
     // Verify this is NOT a permission request
     assert!(

@@ -7,7 +7,8 @@ use agent_client_protocol::{
     PermissionOption, PermissionOptionId, PermissionOptionKind, RequestPermissionOutcome,
     RequestPermissionRequest, SessionId, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
 };
-use hermes::nvim::requests::{Request, Responder};
+use hermes::nvim::requests::{RequestHandler, Requests, Responder};
+use std::sync::Arc;
 
 fn create_permission_option(id: &str, name: &str) -> PermissionOption {
     PermissionOption::new(
@@ -38,11 +39,16 @@ fn create_permission_request(
 // The following test works and is NOT commented out:
 #[nvim_oxi::test]
 fn invalid_json_data_returns_error() -> nvim_oxi::Result<()> {
+    // Create Requests handler and add a permission request
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
     let (sender, _receiver) = tokio::sync::oneshot::channel::<RequestPermissionOutcome>();
     let options = vec![create_permission_option("opt-1", "Option 1")];
     let responder =
         Responder::PermissionResponse(sender, create_permission_request("test-session", options));
-    let request = Request::new("test-session".to_string(), responder);
+    let request_id = requests.add_request("test-session".to_string(), responder);
 
     // Invalid JSON that doesn't match RequestPermissionRequest structure
     let invalid_data = serde_json::json!({
@@ -50,7 +56,7 @@ fn invalid_json_data_returns_error() -> nvim_oxi::Result<()> {
         "another_field": 123
     });
 
-    let result = request.default(invalid_data);
+    let result = requests.default_response(&request_id, invalid_data);
     assert!(result.is_err(), "Should return error for invalid JSON data");
 
     Ok(())

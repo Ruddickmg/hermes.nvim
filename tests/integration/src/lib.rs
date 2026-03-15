@@ -58,7 +58,7 @@ fn test_listener_attached_with_listener() -> nvim_oxi::Result<()> {
 fn test_autocommand_new_creates_valid_instance() -> nvim_oxi::Result<()> {
     // Integration: Verify AutoCommand can be instantiated with Requests handler
     // This tests the constructor which sets up mpsc channel and AsyncHandle
-    let requests = Arc::new(Requests::new());
+    let requests = Arc::new(Requests::new()?);
     let autocommand = AutoCommand::new(requests)?;
     
     // If we get here without error, the integration worked
@@ -72,7 +72,7 @@ fn test_autocommand_new_creates_valid_instance() -> nvim_oxi::Result<()> {
 fn test_execute_autocommand_sends_to_channel() -> nvim_oxi::Result<()> {
     // Integration: Verify message is queued via mpsc channel
     // Uses: channel.send(), AsyncHandle.send()
-    let requests = Arc::new(Requests::new());
+    let requests = Arc::new(Requests::new()?);
     let autocommand = AutoCommand::new(requests)?;
     
     // Execute an autocommand with test data
