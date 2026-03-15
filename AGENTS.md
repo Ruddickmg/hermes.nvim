@@ -251,6 +251,18 @@ Aim for the **minimum number of tests that cover all code paths**. Avoid testing
 **Examples of redundancy to avoid:**
 
 - **Language features:** Do not test Rust's built-in functionality (e.g., auto-derived traits like `PartialEq`, `Clone`, `Debug`, field access, Arc/Mutex usage). Assume the Rust compiler and standard library work correctly. Only test your own logic and custom trait implementations. Reading a field from a struct through an Arc/Mutex is standard Rust - don't test it.
+  
+  **Specifically DO NOT write tests like:**
+  ```rust
+  #[nvim_oxi::test]
+  fn handler_is_cloneable() {  // ❌ BAD - testing #[derive(Clone)]
+      let handler = create_handler();
+      let _cloned = handler.clone();
+      assert!(true);
+  }
+  ```
+  
+  The `#[derive(Clone)]` macro is provided by Rust and guaranteed to work. Testing it wastes time and creates maintenance burden.
 - **Shared validation logic:** If multiple types share the same initial validation (e.g., checking for a required "type" field), test it once for one type, not for every type.
 - **Trivial accessors:** Enum variant extraction methods (e.g., `into_vec()` on a simple wrapper) may not need dedicated tests if the logic is obvious and covered indirectly.
 - **Collection iteration:** If individual elements are thoroughly tested, you typically need only one test for the collection wrapper to verify iteration works.
@@ -286,6 +298,40 @@ We follow the [Testing Pyramid](https://martinfowler.com/articles/practical-test
   - Focus on verifying that Neovim-interacting code works correctly in isolation
   - Use `assert_fs` for filesystem assertions in file-related tests
   - Example: Testing `Responder::WriteFileResponse` which uses `nvim_oxi::api::command` and buffer operations
+
+**What makes a proper integration test:**
+Integration tests should verify that components actually **integrate** with Neovim, not just that API calls succeed. Examples:
+
+- **Good**: Spawn a background thread that sends data via `NvimHandler`, then use `wait_for()` to verify the callback executed on Neovim's main thread
+- **Bad**: Just verifying that `handler.blocking_send()` returns `Ok(())` - this doesn't test the integration
+
+**Pattern for testing async/callback code:**
+```rust
+#[nvim_oxi::test]
+fn cross_thread_communication_works() -> nvim_oxi::Result<()> {
+    let received = Arc::new(Mutex::new(Vec::new()));
+    let received_clone = received.clone();
+    
+    let handler = NvimHandler::initialize(move |data| {
+        received_clone.lock().unwrap().push(data);
+        Ok(())
+    })?;
+    
+    // Spawn thread that sends data
+    std::thread::spawn(move || {
+        handler.blocking_send("test".to_string()).unwrap();
+    });
+    
+    // Wait for callback to execute on Neovim main thread
+    let received_data = wait_for(
+        || received.lock().unwrap().len() == 1,
+        Duration::from_millis(500),
+    );
+    
+    assert!(received_data, "Data should reach callback from spawned thread");
+    Ok(())
+}
+```
 
 **Guideline**: E2E tests verify that "the system works together", unit tests verify that "each component works correctly", integration tests verify that "Neovim-interacting components work correctly". Keep E2E tests minimal and focused on integration points.
 

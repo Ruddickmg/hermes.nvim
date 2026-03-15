@@ -1,11 +1,9 @@
 use std::sync::Arc;
-
 use agent_client_protocol::{
     ReadTextFileRequest, ReadTextFileResponse, RequestPermissionOutcome, RequestPermissionRequest,
     SelectedPermissionOutcome, WriteTextFileRequest, WriteTextFileResponse,
 };
 use nvim_oxi::conversion::FromObject;
-use nvim_oxi::libuv::AsyncHandle;
 use tokio::sync::{Mutex, oneshot};
 use tracing::error;
 use uuid::Uuid;
@@ -13,8 +11,8 @@ use uuid::Uuid;
 use crate::acp::Result;
 use crate::acp::error::Error;
 use crate::utilities::{
-    acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
-    show_permission_ui, update_buffer_content,
+    NvimHandler, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
+    save_buffer_to_disk, show_permission_ui, update_buffer_content,
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
@@ -33,27 +31,18 @@ pub struct Request {
     id: Uuid,
     session_id: String,
     responder: Arc<Mutex<Option<Responder>>>,
-    finisher: Arc<AsyncHandle>,
-    remove: Arc<tokio::sync::mpsc::Sender<Uuid>>,
+    remove: NvimHandler<Uuid>,
 }
-
-
 
 impl Request {
     pub fn id(&self) -> Uuid {
         self.id
     }
-    pub fn new(
-        session_id: String,
-        remove: Arc<tokio::sync::mpsc::Sender<Uuid>>,
-        finisher: Arc<AsyncHandle>,
-        responder: Responder,
-    ) -> Self {
+    pub fn new(session_id: String, remove: NvimHandler<Uuid>, responder: Responder) -> Self {
         Self {
             id: Uuid::new_v4(),
             session_id,
             responder: Arc::new(Mutex::new(Some(responder))),
-            finisher,
             remove,
         }
     }
@@ -64,14 +53,7 @@ impl Request {
                 "Failed to send finish signal for request '{}', in session '{}': {:?}",
                 self.id, self.session_id, e
             ))
-        })?;
-        self.finisher.send().map_err(|e| {
-            Error::Internal(format!(
-                "Failed to send finisher signal for request '{}', in session '{}': {:?}",
-                self.id, self.session_id, e
-            ))
-        })?;
-        Ok(())
+        })
     }
 
     pub fn is_permission_request(&self) -> bool {
