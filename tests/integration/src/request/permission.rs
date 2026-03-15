@@ -45,9 +45,7 @@ fn invalid_json_data_returns_error() -> nvim_oxi::Result<()> {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let (sender, _receiver) = tokio::sync::oneshot::channel::<RequestPermissionOutcome>();
-    let options = vec![create_permission_option("opt-1", "Option 1")];
-    let responder =
-        Responder::PermissionResponse(sender, create_permission_request("test-session", options));
+    let responder = Responder::PermissionResponse(sender);
     let request_id = requests.add_request("test-session".to_string(), responder);
 
     // Invalid JSON that doesn't match RequestPermissionRequest structure

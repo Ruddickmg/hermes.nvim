@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use agent_client_protocol::{
-    RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
-    WriteTextFileRequest, WriteTextFileResponse,
+    ReadTextFileRequest, ReadTextFileResponse, RequestPermissionOutcome, RequestPermissionRequest,
+    SelectedPermissionOutcome, WriteTextFileRequest, WriteTextFileResponse,
 };
 use nvim_oxi::conversion::FromObject;
 use nvim_oxi::libuv::AsyncHandle;
@@ -12,17 +12,18 @@ use uuid::Uuid;
 
 use crate::acp::Result;
 use crate::acp::error::Error;
-use crate::utilities::get_permission_prompt;
 use crate::utilities::{
     acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
     show_permission_ui, update_buffer_content,
 };
+use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
 #[derive(Debug)]
 pub enum Responder {
-    PermissionResponse(
-        oneshot::Sender<RequestPermissionOutcome>,
-        RequestPermissionRequest,
+    PermissionResponse(oneshot::Sender<RequestPermissionOutcome>),
+    ReadFileResponse(
+        oneshot::Sender<agent_client_protocol::Result<ReadTextFileResponse>>,
+        ReadTextFileRequest,
     ),
     WriteFileResponse(oneshot::Sender<WriteTextFileResponse>, WriteTextFileRequest),
 }
@@ -111,6 +112,18 @@ impl Request {
 
     pub fn respond(&self, response: nvim_oxi::Object) -> Result<()> {
         match self.get_responder()? {
+            Responder::ReadFileResponse(sender, ..) => {
+                let outcome =
+                    String::from_object(response).map_err(|e| Error::Internal(e.to_string()))?;
+                sender
+                    .send(Ok(ReadTextFileResponse::new(outcome)))
+                    .map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send response for request '{}': {:?}",
+                            self.id, e
+                        ))
+                    })?;
+            }
             Responder::WriteFileResponse(sender, _) => {
                 sender.send(WriteTextFileResponse::new()).map_err(|e| {
                     Error::Internal(format!(
@@ -163,6 +176,46 @@ impl Request {
             match self.get_responder()? {
                 Responder::PermissionResponse(..) => {
                     panic!("Permission requests should have been handled in the if branch above")
+                }
+                Responder::ReadFileResponse(responder, data) => {
+                    let start = data.line.unwrap_or(0);
+                    let path = data.path.clone();
+                    let content = if let Some(buffer_content) = find_existing_buffer(&path) {
+                        let end = data.limit.unwrap_or(
+                            buffer_content
+                                .line_count()
+                                .map_err(|e| Error::Internal(e.to_string()))?
+                                as u32,
+                        );
+                        buffer_content
+                            .get_lines((start as usize)..(end as usize), true)
+                            .map_err(|e| {
+                                error!("Error: {}", e);
+                                agent_client_protocol::Error::invalid_params()
+                            })
+                            .map(|result| {
+                                ReadTextFileResponse::new(
+                                    result
+                                        .map(|s| s.to_string().to_string())
+                                        .collect::<String>(),
+                                )
+                            })
+                    } else if let Ok(file_content) = read_file_content(&path, data.line, data.limit)
+                    {
+                        Ok(ReadTextFileResponse::new(file_content))
+                    } else {
+                        let display_path = path.display();
+                        error!("Failed to read content for file '{}'", display_path);
+                        Err(agent_client_protocol::Error::resource_not_found(Some(
+                            display_path.to_string(),
+                        )))
+                    };
+                    responder.send(content).map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send file content response for request '{}': {:?}",
+                            self.id, e
+                        ))
+                    })?;
                 }
                 Responder::WriteFileResponse(responder, data) => {
                     let path = data.path.clone();

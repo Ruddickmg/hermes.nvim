@@ -30,8 +30,7 @@ fn test_handle_response_success() -> nvim_oxi::Result<()> {
         })?);
     let session_id = String::from("test-session");
     let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
-    let responder =
-        Responder::PermissionResponse(sender, create_test_permission_request("test-session"));
+    let responder = Responder::PermissionResponse(sender);
 
     let request_id = requests.add_request(session_id, responder);
 
@@ -50,8 +49,7 @@ fn test_handle_response_outcome_contains_option_id() -> nvim_oxi::Result<()> {
         })?);
     let session_id = String::from("test-session");
     let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
-    let responder =
-        Responder::PermissionResponse(sender, create_test_permission_request("test-session"));
+    let responder = Responder::PermissionResponse(sender);
 
     let request_id = requests.add_request(session_id, responder);
 
@@ -94,10 +92,7 @@ fn test_cancel_session_requests_returns_ok() -> nvim_oxi::Result<()> {
     let session_id = String::from("test-session");
     let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
 
-    requests.add_request(
-        session_id.clone(),
-        Responder::PermissionResponse(sender, create_test_permission_request("test-session")),
-    );
+    requests.add_request(session_id.clone(), Responder::PermissionResponse(sender));
 
     let result = requests.cancel_session_requests(session_id);
     assert!(result.is_ok());
@@ -130,17 +125,11 @@ fn test_cancel_session_requests_only_affects_target_session() -> nvim_oxi::Resul
 
     requests.add_request(
         session_id.clone(),
-        Responder::PermissionResponse(
-            target_sender,
-            create_test_permission_request("target-session"),
-        ),
+        Responder::PermissionResponse(target_sender),
     );
     requests.add_request(
         other_session_id.clone(),
-        Responder::PermissionResponse(
-            other_sender,
-            create_test_permission_request("other-session"),
-        ),
+        Responder::PermissionResponse(other_sender),
     );
 
     requests
@@ -167,8 +156,7 @@ fn test_get_request_returns_some_for_existing() -> nvim_oxi::Result<()> {
         })?);
     let session_id = String::from("test-session");
     let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
-    let responder =
-        Responder::PermissionResponse(sender, create_test_permission_request("test-session"));
+    let responder = Responder::PermissionResponse(sender);
 
     let request_id = requests.add_request(session_id, responder);
     let retrieved = requests.get_request(&request_id);
@@ -199,8 +187,7 @@ fn test_handle_response_removes_request_from_pending() -> nvim_oxi::Result<()> {
         })?);
     let session_id = String::from("test-session");
     let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
-    let responder =
-        Responder::PermissionResponse(sender, create_test_permission_request("test-session"));
+    let responder = Responder::PermissionResponse(sender);
 
     let request_id = requests.add_request(session_id, responder);
 
@@ -291,8 +278,7 @@ fn test_multiple_requests_cleanup() -> nvim_oxi::Result<()> {
     for i in 0..3 {
         let session_id = format!("test-session-{}", i);
         let (sender, receiver) = oneshot::channel::<RequestPermissionOutcome>();
-        let responder =
-            Responder::PermissionResponse(sender, create_test_permission_request(&session_id));
+        let responder = Responder::PermissionResponse(sender);
         let request_id = requests.add_request(session_id, responder);
         request_ids.push(request_id);
         receivers.push(receiver); // Keep receiver alive
@@ -347,8 +333,7 @@ fn test_responded_request_cannot_be_found() -> nvim_oxi::Result<()> {
         })?);
     let session_id = String::from("test-session");
     let (sender, receiver) = oneshot::channel::<RequestPermissionOutcome>();
-    let responder =
-        Responder::PermissionResponse(sender, create_test_permission_request("test-session"));
+    let responder = Responder::PermissionResponse(sender);
 
     let request_id = requests.add_request(session_id, responder);
 

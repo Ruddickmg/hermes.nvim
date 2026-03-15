@@ -77,9 +77,20 @@ Handle agent authentication.
 
 ```lua
 local hermes = require("hermes")
-local auth_method_id = "example-auth-method-id"
 
+-- function signature
 hermes.authenticate(auth_method_id)
+
+-- example
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "ConnectionInitialized",
+    callback = function(args)
+        local auth_method_id = table.remove(args.data.authMethods).id -- select auth method id somehow
+
+        hermes.authenticate(auth_method_id)
+    end,
+})
 ```
 
 > **Triggers:** [Authenticated](#authenticated) autocommand upon completion.
@@ -134,30 +145,30 @@ local hermes = require("hermes")
 hermes.loadSession(sessionId)
 
 -- call signature (with further configuration)
-hermes.loadSession({sessionId, {
+hermes.loadSession(sessionId, {
     cwd = ".", -- path to load the session from (optional, defaults to either project root or current directory)
     mcpServers = {
         { -- Http or Sse MCP server definition
-          type = "http", -- or "sse"
-          name = "Human readable name for MCP server",
-          url = "http://url-to-mcp-server.com",
-          headers = {
-            { ["Content-Type"] = "application/json" },
-            { headerName = "header value" },
-          },
+            type = "http", -- or "sse"
+            name = "Human readable name for MCP server",
+            url = "http://url-to-mcp-server.com",
+            headers = {
+                { ["Content-Type"] = "application/json" },
+                { headerName = "header value" },
+            },
         },
         {  -- Stdio MCP server definition
-          type = "stdio",
-          name = "Human readable name for MCP server",
-          command = "/path/to/the/MCP/server/executable",
-          args = { "run", "--flag", "something" },
-          -- Environment variables to set when launching the MCP server.
-          env = {
-            { name = "ENVIRONMENT_VAR_NAME", value = "value" },
-          },
+            type = "stdio",
+            name = "Human readable name for MCP server",
+            command = "/path/to/the/MCP/server/executable",
+            args = { "run", "--flag", "something" },
+            -- Environment variables to set when launching the MCP server.
+            env = {
+                { name = "ENVIRONMENT_VAR_NAME", value = "value" },
+            },
         },
     },
-}})
+})
 
 -- example
 vim.api.nvim_create_autocmd("User", {
@@ -305,9 +316,10 @@ vim.api.nvim_create_autocmd("User", {
 
 ### Respond
 
-When an agent makes a request that requires user input (such as a permission request), it triggers an autocommand and pauses until the user responds. Use the `respond` method with the request ID to resume the agent's operation.
+When an agent makes a request that requires user input (such as a permission request), it triggers an autocommand and pauses until the user responds. Use the `respond` method with the request ID to resume the agent's operation. If no autocommand handler is defined, a default workflow will be triggered. Requests can be disabled via the setup configuration. 
 
-#### Permission response
+#### Permission request
+
 
 ```lua
 local hermes = require("hermes")
@@ -328,7 +340,74 @@ vim.api.nvim_create_autocmd("User", {
     end,
 })
 ```
+
+> **Default behavior:** If no autocommand handler is defined for `PermissionRequest`, Hermes will use the native Neovim select menu to gather a response from the user.
+>
 > **Responds to:** [PermissionRequest](#permissionrequest) autocommand.
+
+
+#### Write to file
+
+```lua
+local hermes = require("hermes")
+
+-- call signature
+hermes.respond("requestId")
+
+-- example: 
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "WriteTextFile",
+    callback = function(args)
+        local requestId = args.data.requestId
+
+        -- writing to a file doesn't take any data, but a notification is required when it is finished
+        hermes.respond(requestId)
+    end,
+})
+```
+
+> **Default behavior:** If no autocommand handler is defined for `WriteTextFile`, Hermes will:
+> - Update buffers if they are open and mark them as modified (will not automatically save)
+> - Refresh the view of any modified buffers
+> - Write to the file on disk if it is not open in a buffer
+>
+> **Responds to:** [WriteTextFile](#writetextfile) autocommand.
+
+
+#### Read from file
+
+```lua
+local hermes = require("hermes")
+
+-- call signature
+hermes.respond("requestId", "Hello World!")
+
+-- example: 
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "ReadTextFile",
+    callback = function(args)
+        local requestId = args.data.requestId
+        local filename = args.data.path
+        local _start = args.data.line -- optional, may not be provided by the agent
+        local _end = args.data.limit -- optional, may not be provided by the agent 
+        local file = io.open(filename, "r")
+        local content = file:read("*all")
+        file:close()
+
+        hermes.respond(requestId, content)
+    end,
+})
+```
+
+> **Default behavior:** If no autocommand handler is defined for `ReadTextFile`, Hermes will:
+> - Read the file from disk if one is not open in a buffer
+> - Read the current state of the open buffer if the target file is open
+> - Start at the `line` number if defined
+> - End at the `limit` number if defined
+>
+> **Responds to:** [ReadTextFile](#readtextfile) autocommand.
 
 ## Autocommands
 
@@ -1040,7 +1119,7 @@ Your options for log formats are:
 - [x] Allow permission request
 - [x] Allow agent to write to files
   - [x] Automatically refresh open buffers that have been modified
-- [ ] Allow agent to read files
+- [x] Allow agent to read files
 - [ ] Allow agent to use terminal
   - [ ] Create autocommands for Agent progress in the terminal
 

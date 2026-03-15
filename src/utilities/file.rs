@@ -1,4 +1,8 @@
-use std::path::Path;
+use std::{
+    fs::File,
+    io::BufReader,
+    path::{Path, PathBuf},
+};
 
 use crate::acp::{Result, error::Error};
 
@@ -104,4 +108,51 @@ pub fn save_buffer_to_disk(buf: &nvim_oxi::api::Buffer) -> Result<()> {
 /// Refresh the display to show updated buffer content
 pub fn refresh_view() -> Result<()> {
     nvim_oxi::api::command("redraw").map_err(|e| Error::Internal(e.to_string()))
+}
+
+pub fn read_file_content(path: &PathBuf, start: Option<u32>, end: Option<u32>) -> Result<String> {
+    use std::io::BufRead;
+
+    let file = File::open(&path).map_err(|e| Error::Internal(e.to_string()))?;
+    let reader = BufReader::new(file);
+
+    // Convert options to u64 for safe arithmetic
+    let start_line = start.map(|s| s as u64).unwrap_or(0);
+    let end_line = end.map(|e| e as u64);
+
+    // Validate bounds: if end is specified, start must be <= end
+    if let Some(e) = end_line {
+        if start_line > e {
+            return Err(Error::Internal(format!(
+                "Invalid line range: start ({}) > end ({})",
+                start_line, e
+            )));
+        }
+    }
+
+    let mut content = String::new();
+    let mut current_line: u64 = 0;
+
+    for line_result in reader.lines() {
+        let line = line_result.map_err(|e| Error::Internal(e.to_string()))?;
+
+        // Check if we should stop reading
+        if let Some(end) = end_line {
+            if current_line >= end {
+                break;
+            }
+        }
+
+        // Check if we should include this line
+        let should_include = current_line >= start_line;
+
+        if should_include {
+            content.push_str(&line);
+            content.push('\n');
+        }
+
+        current_line += 1;
+    }
+
+    Ok(content)
 }
