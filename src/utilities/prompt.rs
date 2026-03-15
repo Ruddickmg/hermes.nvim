@@ -1,5 +1,10 @@
-pub fn get_random_element<T: Clone>(elements: Vec<T>) -> T {
+pub fn get_random_element<T: Clone>(elements: &[T]) -> Option<T> {
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    // Return None if there are no elements to choose from
+    if elements.is_empty() {
+        return None;
+    }
 
     // Get current time in milliseconds since the epoch
     let duration = SystemTime::now()
@@ -15,7 +20,7 @@ pub fn get_random_element<T: Clone>(elements: Vec<T>) -> T {
     // Use the 'random' number to calculate an index within the array bounds
     let index = (state % elements.len() as u64) as usize;
 
-    elements[index].clone()
+    Some(elements[index].clone())
 }
 
 pub fn get_permission_prompt() -> String {
@@ -73,7 +78,9 @@ pub fn get_permission_prompt() -> String {
         "What is permission but a social construct we both agree to? 🎓",
         "Consider this: every 'yes' makes an AI happy somewhere 🌈",
     ];
-    get_random_element(prompts).to_string()
+    get_random_element(&prompts)
+        .unwrap_or("Please sir 🙏")
+        .to_string()
 }
 
 #[cfg(test)]

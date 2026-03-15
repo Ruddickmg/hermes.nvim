@@ -122,8 +122,11 @@ impl Request {
             Responder::PermissionResponse(sender, ..) => {
                 let option_id: String =
                     String::from_object(response).map_err(|e| Error::Internal(e.to_string()))?;
-                let outcome =
-                    RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(option_id));
+                let outcome = if option_id.is_empty() {
+                    RequestPermissionOutcome::Cancelled
+                } else {
+                    RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(option_id))
+                };
                 sender.send(outcome).map_err(|e| {
                     Error::Internal(format!(
                         "Failed to send response for request '{}': {:?}",

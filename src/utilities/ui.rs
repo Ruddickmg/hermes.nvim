@@ -41,31 +41,25 @@ where
         })
         .map_err(|e| Error::Internal(format!("Failed to create callback: {}", e)))?;
 
-    let callback_name = "__hermes_permission_callback";
-
-    // Store callback in a global variable so Lua can access it
-    lua.globals()
-        .set(callback_name, lua_callback)
-        .map_err(|e| Error::Internal(format!("Failed to set callback: {}", e)))?;
-
-    // Execute vim.ui.select - callback is accessed via global
-    lua.load(format!(
+    // Execute vim.ui.select, passing items, prompt, and callback as arguments
+    lua.load(
         r#"
-        local items = ...
-        vim.ui.select(items, {{
-            prompt = "{}",
-            format_item = function(item) 
-                return item.label 
+        local items, prompt, cb = ...
+        vim.ui.select(items, {
+            prompt = prompt,
+            format_item = function(item)
+                return item.label
             end,
-        }}, function(choice, idx)
+        }, function(choice, idx)
             if choice then
-                {}(choice.id)
+                cb(choice.id)
+            else
+                cb("")
             end
         end)
     "#,
-        prompt, callback_name
-    ))
-    .call::<()>(items_array)
+    )
+    .call::<()>((items_array, prompt.to_string(), lua_callback))
     .map_err(|e| Error::Internal(format!("Failed to show permission UI: {}", e)))?;
 
     Ok(())

@@ -3,6 +3,26 @@ use std::path::Path;
 use crate::acp::{Result, error::Error};
 
 // TODO: move these helper functions into a "utilities" directory
+
+/// Escape a filename so it is safe to use as an argument in an Ex command.
+///
+/// This function backslash-escapes characters that are significant to Ex
+/// command parsing (such as spaces and `|`) so that they are treated as
+/// literal filename characters.
+fn escape_for_ex(filename: &str) -> String {
+    let mut escaped = String::with_capacity(filename.len());
+    for ch in filename.chars() {
+        match ch {
+            ' ' | '\t' | '\\' | '|' | '"' | '\'' => {
+                escaped.push('\\');
+                escaped.push(ch);
+            }
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
 /// Find an existing buffer that is listed (visible to user)
 pub fn find_existing_buffer(path: &Path) -> Option<nvim_oxi::api::Buffer> {
     nvim_oxi::api::list_bufs().into_iter().find(|b| {
@@ -23,7 +43,8 @@ pub fn acquire_or_create_buffer(path: &Path) -> Result<(nvim_oxi::api::Buffer, b
         return Ok((buf, true));
     }
 
-    nvim_oxi::api::command(&format!("badd {}", path.to_string_lossy()))
+    let escaped_path = escape_for_ex(&path.to_string_lossy());
+    nvim_oxi::api::command(&format!("badd {}", escaped_path))
         .map_err(|e| Error::Internal(e.to_string()))?;
 
     let buf = nvim_oxi::api::list_bufs()
@@ -64,10 +85,19 @@ pub fn mark_buffer_modified(buf: &nvim_oxi::api::Buffer) -> Result<()> {
 
 /// Save buffer to disk
 pub fn save_buffer_to_disk(buf: &nvim_oxi::api::Buffer) -> Result<()> {
-    buf.call(|()| {
-        nvim_oxi::api::command("write").ok();
+    // Run :write in the context of the given buffer and propagate any errors.
+    buf.call(|_| {
+        nvim_oxi::api::command("write")
+            .inspect_err(|e| {
+                tracing::error!(
+                    "An error occurred while triggering write in Neovim: {:?}",
+                    e
+                )
+            })
+            .ok();
     })
     .map_err(|e| Error::Internal(e.to_string()))?;
+
     Ok(())
 }
 
