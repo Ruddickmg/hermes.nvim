@@ -1,9 +1,9 @@
-use std::sync::Arc;
 use agent_client_protocol::{
     ReadTextFileRequest, ReadTextFileResponse, RequestPermissionOutcome, RequestPermissionRequest,
     SelectedPermissionOutcome, WriteTextFileRequest, WriteTextFileResponse,
 };
 use nvim_oxi::conversion::FromObject;
+use std::sync::Arc;
 use tokio::sync::{Mutex, oneshot};
 use tracing::error;
 use uuid::Uuid;

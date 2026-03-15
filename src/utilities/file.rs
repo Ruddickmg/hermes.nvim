@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::acp::{error::Error, Result};
+use crate::acp::{Result, error::Error};
 
 // TODO: move these helper functions into a "utilities" directory
 

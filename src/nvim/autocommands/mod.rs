@@ -4,7 +4,7 @@ use crate::{
         GROUP,
         requests::{RequestHandler, Responder},
     },
-    utilities::{ TransmitToNvim, NvimHandler },
+    utilities::{NvimHandler, TransmitToNvim},
 };
 use core::fmt;
 use nvim_oxi::{Array, Dictionary, Object, api::opts::ExecAutocmdsOpts};
@@ -32,8 +32,8 @@ impl<R: RequestHandler + 'static> AutoCommand<R> {
     #[instrument(level = "trace", skip_all)]
     pub fn new(requests: Arc<R>) -> Result<Self> {
         let nvim_requests = requests.clone();
-        let channel = NvimHandler::<NvimHandleArgs>::initialize(
-            move |(command, data, request_id)| {
+        let channel =
+            NvimHandler::<NvimHandleArgs>::initialize(move |(command, data, request_id)| {
                 debug!("Received autocommand: {}, with data: {:#?}", command, data);
                 if Self::listener_attached(command.to_string()) {
                     match serde_json::from_value::<Object>(data) {
@@ -73,8 +73,7 @@ impl<R: RequestHandler + 'static> AutoCommand<R> {
                 } else {
                     warn!("No listener attached for command '{}'", command);
                 }
-            }
-        )?;
+            })?;
         Ok(Self { channel, requests })
     }
 

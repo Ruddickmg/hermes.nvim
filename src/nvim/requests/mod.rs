@@ -4,9 +4,7 @@ use crate::{
     utilities::NvimHandler,
 };
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::{
-    Mutex,
-};
+use tokio::sync::Mutex;
 use tracing::error;
 use uuid::Uuid;
 
@@ -26,7 +24,10 @@ impl Requests {
             lock.remove(&id);
             drop(lock);
         })?;
-        Ok(Self { pending, nvim_handler })
+        Ok(Self {
+            pending,
+            nvim_handler,
+        })
     }
 }
 
