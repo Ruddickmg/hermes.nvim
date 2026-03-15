@@ -37,6 +37,8 @@ pub struct Request {
     remove: Arc<tokio::sync::mpsc::Sender<Uuid>>,
 }
 
+
+
 impl Request {
     pub fn id(&self) -> Uuid {
         self.id
@@ -199,7 +201,8 @@ impl Request {
                                         .collect::<String>(),
                                 )
                             })
-                    } else if let Ok(file_content) = read_file_content(&data.path, data.line, data.limit)
+                    } else if let Ok(file_content) =
+                        read_file_content(&data.path, data.line, data.limit)
                     {
                         Ok(ReadTextFileResponse::new(file_content))
                     } else {
