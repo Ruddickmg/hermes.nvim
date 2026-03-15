@@ -1,7 +1,7 @@
 //! UI waiting utilities for integration tests
 //! Pattern based on e2e/src/utilities/autocommand.rs
-use std::time::{Duration, Instant};
 use hermes::acp::error::Error;
+use std::time::{Duration, Instant};
 use tracing::debug;
 
 /// Poll with sleep until condition is met or timeout
@@ -9,27 +9,24 @@ pub fn wait_for<F>(condition: F, timeout: Duration) -> bool
 where
     F: Fn() -> bool,
 {
-    wait_for_some(timeout, || {
-        if condition() {
-            Some(())
-        } else {
-            None
-        }
-    }).is_ok()
+    wait_for_some(timeout, || if condition() { Some(()) } else { None }).is_ok()
 }
 
-pub fn wait_for_some<F, R>(timeout: Duration, callback: F) -> Result<R, Error> 
+pub fn wait_for_some<F, R>(timeout: Duration, callback: F) -> Result<R, Error>
 where
     F: Fn() -> Option<R>,
 {
     let start = Instant::now();
     loop {
         let result = callback();
-        if result.is_some() {
-            return Ok(result.unwrap());
+        if let Some(value) = result {
+            return Ok(value);
         }
         if start.elapsed() > timeout {
-            return Err(Error::Internal(format!("Timeout after {:?} waiting for condition", timeout)));
+            return Err(Error::Internal(format!(
+                "Timeout after {:?} waiting for condition",
+                timeout
+            )));
         }
         nvim_oxi::api::command("sleep 50m").ok();
     }

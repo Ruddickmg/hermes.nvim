@@ -7,8 +7,8 @@
 
 use crate::helpers::ui::{wait_for_floating_window, wait_for_some};
 use agent_client_protocol::{
-    PermissionOption, PermissionOptionId, PermissionOptionKind, RequestPermissionOutcome,
-    RequestPermissionRequest, SessionId, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
+    PermissionOption, PermissionOptionId, PermissionOptionKind, RequestPermissionRequest,
+    SessionId, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
 };
 use hermes::nvim::requests::{Request, Responder};
 use hermes::utilities::ui::show_permission_ui;
@@ -17,7 +17,6 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tracing::debug;
-use tracing::field::debug;
 
 fn create_permission_option(id: &str, name: &str) -> PermissionOption {
     PermissionOption::new(
@@ -27,6 +26,7 @@ fn create_permission_option(id: &str, name: &str) -> PermissionOption {
     )
 }
 
+#[allow(dead_code)]
 fn create_permission_request(
     session_id: impl Into<String>,
     options: Vec<PermissionOption>,
@@ -46,7 +46,7 @@ fn create_permission_request(
 #[tracing_test::traced_test]
 #[nvim_oxi::test]
 fn show_permission_ui_options_can_be_selected() -> nvim_oxi::Result<()> {
-    let (sender, mut reciever) = tokio::sync::oneshot::channel::<String>();
+    let (sender, reciever) = tokio::sync::oneshot::channel::<String>();
     let options = vec![
         create_permission_option("opt-1", "Option 1"),
         create_permission_option("opt-2", "Option 2"),
@@ -55,7 +55,7 @@ fn show_permission_ui_options_can_be_selected() -> nvim_oxi::Result<()> {
     let thing2 = RefCell::new(reciever);
 
     debug!("Showing permission UI with options: {:?}", options);
-    show_permission_ui(&options, "Hello!", move |selection| {
+    let _ = show_permission_ui(&options, "Hello!", move |selection| {
         debug!("Calling back! selected: {}", selection);
         if let Some(other) = thing1.take() {
             other.send(selection.clone()).ok();

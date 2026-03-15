@@ -102,7 +102,7 @@ mod tests {
         let handler = Handler::new(state.clone(), MockClient::new());
 
         let result = handler.can_receive_notifications().await;
-        assert_eq!(result, true);
+        assert!(result, "Should return true by default");
     }
 
     #[tokio::test]
@@ -113,7 +113,7 @@ mod tests {
         let handler = Handler::new(state.clone(), MockClient::new());
 
         let result = handler.can_receive_notifications().await;
-        assert_eq!(result, false);
+        assert!(!result, "Should return false when disabled");
     }
 
     #[tokio::test]

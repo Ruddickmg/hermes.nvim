@@ -87,7 +87,7 @@ mod tests {
 
         // Should return one of the elements from the list
         assert!(
-            elements.iter().any(|&e| e == selected),
+            elements.contains(&selected),
             "Selected element should be from the original list"
         );
     }
@@ -106,7 +106,7 @@ mod tests {
         let selected = get_random_element(elements.clone());
 
         assert!(
-            elements.iter().any(|&e| e == selected),
+            elements.contains(&selected),
             "Should return one of the two elements"
         );
     }
@@ -143,7 +143,7 @@ mod tests {
             || prompt.contains("ask")
             || prompt.contains("following")
             || prompt.contains("yes")
-            || prompt.chars().any(|c| !c.is_ascii()); // Contains non-ASCII (likely emoji)
+            || !prompt.is_ascii(); // Contains non-ASCII (likely emoji)
 
         assert!(is_valid, "Prompt should be from known set: {}", prompt);
     }
@@ -164,7 +164,7 @@ mod tests {
         // Verify we have variety (at least 1 unique prompt in 10 calls is very likely)
         let unique_count: std::collections::HashSet<_> = prompts.iter().collect();
         assert!(
-            unique_count.len() >= 1,
+            !unique_count.is_empty(),
             "Should get at least some variety (got {} unique)",
             unique_count.len()
         );

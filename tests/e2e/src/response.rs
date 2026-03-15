@@ -1,6 +1,6 @@
-use crate::{TIMEOUT_IN_SECONDS, utilities::autocommand};
+use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
 use agent_client_protocol::{
-    InitializeResponse, NewSessionResponse, PermissionOption, PromptResponse, SessionId, ToolCall
+    InitializeResponse, NewSessionResponse, PermissionOption, PromptResponse, SessionId, ToolCall,
 };
 use hermes::{
     api::{
@@ -8,14 +8,14 @@ use hermes::{
     },
     nvim::{autocommands::Commands, hermes},
 };
-use nvim_oxi::{Dictionary, Function, conversion::FromObject};
+use nvim_oxi::{conversion::FromObject, Dictionary, Function};
 use serde::{Deserialize, Serialize};
-use tracing::info;
 use std::time::Duration;
+use tracing::info;
 
 fn create_func<A>(plugin: Dictionary, name: &str) -> Function<A, ()> {
     FromObject::from_object(plugin.get(name).unwrap().clone())
-        .expect(&format!("Failed to create function for {}", name))
+        .unwrap_or_else(|_| panic!("Failed to create function for {}", name))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,10 +77,9 @@ fn can_chose_a_response_to_a_permission_request() -> Result<(), nvim_oxi::Error>
     ));
     info!("Responded to permission request: {:?}", response);
     let finished_prompt = wait_for_prompt_finish(Duration::from_secs(TIMEOUT_IN_SECONDS));
-    
 
     info!("Finished prompt response: {:?}", finished_prompt);
-    
+
     disconnect.call(DisconnectArgs::All)?;
 
     assert!(
