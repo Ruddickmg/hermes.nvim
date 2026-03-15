@@ -162,9 +162,22 @@ impl Request {
                     panic!("Permission requests should have been handled in the if branch above")
                 }
                 Responder::ReadFileResponse(responder, data) => {
+                    // compensate for 1-based indexing in the ACP spec
+                    let compensate_for_one_based_index = |n: u32| {
+                        if n < 1 {
+                            Err(Error::Internal(format!(
+                                "File indexing is one based, index out of range: {}",
+                                n
+                            )))
+                        } else {
+                            Ok(n - 1)
+                        }
+                    };
+                    let line = data.line.map(compensate_for_one_based_index).transpose()?;
+                    let limit = data.limit.map(compensate_for_one_based_index).transpose()?;
                     let content = if let Some(buffer_content) = find_existing_buffer(&data.path) {
-                        let start = data.line.unwrap_or(0);
-                        let end = data.limit.unwrap_or(
+                        let start = line.unwrap_or(0);
+                        let end = limit.unwrap_or(
                             buffer_content
                                 .line_count()
                                 .map_err(|e| Error::Internal(e.to_string()))?
@@ -185,9 +198,7 @@ impl Request {
                                 content.push('\n');
                                 ReadTextFileResponse::new(content)
                             })
-                    } else if let Ok(file_content) =
-                        read_file_content(&data.path, data.line, data.limit)
-                    {
+                    } else if let Ok(file_content) = read_file_content(&data.path, line, limit) {
                         Ok(ReadTextFileResponse::new(file_content))
                     } else {
                         let display_path = data.path.display();
