@@ -595,7 +595,7 @@ fn read_file_start_beyond_length_cleanup_works() -> nvim_oxi::Result<()> {
 
     requests
         .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+        .expect("Failed to send default response for out-of-range read request");
 
     let cleaned_up = wait_for(
         || requests.get_request(&request_id).is_none(),
@@ -618,7 +618,9 @@ fn read_file_respond_path_sends_custom_content() -> nvim_oxi::Result<()> {
 
     let custom_content = "Custom content from user";
     let response_obj = nvim_oxi::Object::from(custom_content);
-    requests.handle_response(&request_id, response_obj).ok();
+    requests
+        .handle_response(&request_id, response_obj)
+        .expect("Failed to handle custom content response");
 
     let response = receiver
         .try_recv()
@@ -638,7 +640,9 @@ fn read_file_respond_path_cleanup_works() -> nvim_oxi::Result<()> {
     let request_id = requests.add_request("test-session".to_string(), responder);
 
     let response_obj = nvim_oxi::Object::from("test content");
-    requests.handle_response(&request_id, response_obj).ok();
+    requests
+        .handle_response(&request_id, response_obj)
+        .expect("Failed to handle response for cleanup verification");
 
     let cleaned_up = wait_for(
         || requests.get_request(&request_id).is_none(),
