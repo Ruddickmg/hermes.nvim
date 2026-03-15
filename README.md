@@ -16,9 +16,9 @@ Hermes focuses on:
 - [x] Full implementation of ACP Client
 - [x] Configurable capabilities (filesystem, terminal, etc)
 - [x] Trigger Autocommands for messages/notifications
-- [ ] Speech to text for audio prompting (If no audio capability is present for the agent)
 - [ ] Lsp integration
 - [ ] [Recursive language model](https://arxiv.org/abs/2512.24601) integration
+- [ ] Speech to text for audio prompting (If no audio capability is present for the agent)
 
 ## API
 
@@ -408,6 +408,50 @@ vim.api.nvim_create_autocmd("User", {
 > - Read the current state of the open buffer if the target file is open
 > - Start at the `line` number if defined
 > - End at the `limit` number if defined
+
+
+#### Create Terminal for agent communication
+
+```lua
+local hermes = require("hermes")
+local terminals = {}
+
+-- call signature
+hermes.respond("requestId", "terminalId")
+
+-- example:     
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "CreateTerminal",
+    callback = function(args)
+        local terminalId = "your-generated-terminal-id" -- generate a unique id for terminal
+        local requestId = args.data.requestId
+        local comand = args.data.command
+        local args = args.data.args
+        local byte_limit = args.data.output_byte_limit
+
+        -- lua combines args and command (add command to the beginning of args)
+        table.insert(args, 1, command)
+
+        terminals[terminalId] = vim.fn.startJob(args, {
+            env = args.data.env,
+            cwd = args.data.cwd,
+        })
+
+        hermes.respond(requestId, terminalId);
+    end,
+})
+```
+
+> **Responds to:** [CreateTerminal](#createterminal) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for `CreateTerminal`, Hermes will:
+> - Create a terminal job and watch it's execution
+> - Handle byte limit constraints if defined
+> - Define default functionality for handling StdErr, StdOut, and exit events
+>
+> [!WARNING]
+> In order to customize the terminal flow it must be started here. Otherwise defaults will be used for all terminal interaction.
 
 ## Autocommands
 
@@ -1143,8 +1187,8 @@ Your options for log formats are:
 - [x] Allow agent to write to files
   - [x] Automatically refresh open buffers that have been modified
 - [x] Allow agent to read files
-- [ ] Allow agent to use terminal
-  - [ ] Create autocommands for Agent progress in the terminal
+- [x] Allow agent to use terminal
+  - [x] Create autocommands for Agent progress in the terminal
 
 - [x] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
 
