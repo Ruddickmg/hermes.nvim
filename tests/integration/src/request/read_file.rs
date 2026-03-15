@@ -75,7 +75,7 @@ fn read_file_returns_all_content() -> nvim_oxi::Result<()> {
 
     requests
         .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+        .expect("default_response should succeed");
 
     let response = receiver
         .try_recv()
