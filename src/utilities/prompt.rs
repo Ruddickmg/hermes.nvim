@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn test_get_random_element_selects_from_list() {
         let elements = vec!["a", "b", "c", "d", "e"];
-        let selected = get_random_element(elements.clone());
+        let selected = get_random_element(&elements).unwrap();
 
         // Should return one of the elements from the list
         assert!(
@@ -102,7 +102,7 @@ mod tests {
     #[test]
     fn test_get_random_element_with_single_element() {
         let elements = vec!["only"];
-        let selected = get_random_element(elements);
+        let selected = get_random_element(&elements).unwrap();
 
         assert_eq!(selected, "only", "Should return the only element");
     }
@@ -110,12 +110,20 @@ mod tests {
     #[test]
     fn test_get_random_element_with_two_elements() {
         let elements = vec!["first", "second"];
-        let selected = get_random_element(elements.clone());
+        let selected = get_random_element(&elements).unwrap();
 
         assert!(
             elements.contains(&selected),
             "Should return one of the two elements"
         );
+    }
+
+    #[test]
+    fn test_get_random_element_empty_returns_none() {
+        let elements: Vec<&str> = vec![];
+        let selected = get_random_element(&elements);
+
+        assert!(selected.is_none(), "Should return None for empty list");
     }
 
     #[test]
