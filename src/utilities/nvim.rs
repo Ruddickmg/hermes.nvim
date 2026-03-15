@@ -19,7 +19,9 @@ impl<T> NvimHandler<T> {
         let (sender, mut receiver) = tokio::sync::mpsc::channel::<T>(100);
         let handle = AsyncHandle::new(move || {
             while let Ok(data) = receiver.try_recv() {
-                callback(data);
+                if let Err(err) = callback(data).into_result() {
+                    eprintln!("Error in NvimHandler callback: {}", err);
+                }
             }
         })
         .map_err(|e| Error::Internal(e.to_string()))?;

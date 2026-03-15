@@ -89,7 +89,7 @@ impl<R: RequestHandler + 'static> Client for AutoCommand<R> {
         let (sender, receiver) = oneshot::channel::<Result<ReadTextFileResponse>>();
         self.execute_autocommand_request(
             args.session_id.to_string(),
-            Commands::WriteTextFile,
+            Commands::ReadTextFile,
             args.clone(),
             Responder::ReadFileResponse(sender, args),
         )

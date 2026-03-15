@@ -181,7 +181,6 @@ mod tests {
         let content = read_file_content(&temp_file.path().to_path_buf(), None, None).unwrap();
 
         let actual_lines: Vec<&str> = content.trim_end().split('\n').collect();
-        assert_eq!(actual_lines.len(), 5);
         assert_eq!(
             actual_lines,
             expected_lines
@@ -197,20 +196,24 @@ mod tests {
         let content = read_file_content(&temp_file.path().to_path_buf(), Some(2), None).unwrap();
 
         let actual_lines: Vec<&str> = content.trim_end().split('\n').collect();
-        assert_eq!(actual_lines.len(), 3); // lines 2, 3, 4
-        assert_eq!(actual_lines[0], "line2");
-        assert_eq!(actual_lines[2], "line4");
+        let expected_slice: Vec<&str> = expected_lines[2..]
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
+        assert_eq!(actual_lines, expected_slice);
     }
 
     #[test]
     fn read_file_content_with_end_line() {
-        let (temp_file, _expected_lines) = create_test_file_with_lines(5);
+        let (temp_file, expected_lines) = create_test_file_with_lines(5);
         let content = read_file_content(&temp_file.path().to_path_buf(), None, Some(3)).unwrap();
 
         let actual_lines: Vec<&str> = content.trim_end().split('\n').collect();
-        assert_eq!(actual_lines.len(), 3); // lines 0, 1, 2
-        assert_eq!(actual_lines[0], "line0");
-        assert_eq!(actual_lines[2], "line2");
+        let expected_slice: Vec<&str> = expected_lines[0..3]
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
+        assert_eq!(actual_lines, expected_slice);
     }
 
     #[test]
@@ -244,10 +247,9 @@ mod tests {
     #[test]
     fn read_file_content_invalid_range_errors() {
         let (temp_file, _expected_lines) = create_test_file_with_lines(5);
-        let result = read_file_content(&temp_file.path().to_path_buf(), Some(5), Some(2));
-
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
+        let err_msg = read_file_content(&temp_file.path().to_path_buf(), Some(5), Some(2))
+            .unwrap_err()
+            .to_string();
         assert!(err_msg.contains("Invalid line range"));
     }
 

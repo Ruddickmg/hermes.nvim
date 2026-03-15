@@ -177,11 +177,13 @@ impl Request {
                                 agent_client_protocol::Error::invalid_params()
                             })
                             .map(|result| {
-                                ReadTextFileResponse::new(
-                                    result
-                                        .map(|s| s.to_string().to_string())
-                                        .collect::<String>(),
-                                )
+                                // Preserve line breaks by joining with '\n' and add a trailing newline
+                                let mut content = result
+                                    .map(|s| s.to_string())
+                                    .collect::<Vec<String>>()
+                                    .join("\n");
+                                content.push('\n');
+                                ReadTextFileResponse::new(content)
                             })
                     } else if let Ok(file_content) =
                         read_file_content(&data.path, data.line, data.limit)
