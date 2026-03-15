@@ -1,27 +1,36 @@
 pub mod request;
 use crate::acp::{Result, error::Error};
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, mpsc::{ Sender, channel }};
 use tracing::error;
 use uuid::Uuid;
+use nvim_oxi::libuv::AsyncHandle;
 
 pub use request::*;
 
 pub struct Requests {
     pending: Arc<Mutex<HashMap<Uuid, Request>>>,
+    finisher: Arc<AsyncHandle>,
+    remove: Arc<Sender<Uuid>>,
 }
 
 impl Requests {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl Default for Requests {
-    fn default() -> Self {
-        Self {
-            pending: Arc::new(Mutex::new(HashMap::new())),
-        }
+    pub fn new() -> Result<Self> {
+        let list = Arc::new(Mutex::new(HashMap::new()));
+        let pending = list.clone();
+        let (sender, mut receiver) = channel::<Uuid>(100);
+        let finisher = AsyncHandle::new(move || {
+            while let Ok(id) = receiver.try_recv() {
+                let mut lock = list.blocking_lock();
+                lock.remove(&id);
+                drop(lock);
+            }
+        }).map_err(|e|Error::Internal(e.to_string()))?;
+        Ok(Self {
+            pending,
+            finisher: Arc::new(finisher),
+            remove: Arc::new(sender),
+        })
     }
 }
 
@@ -46,9 +55,12 @@ impl RequestHandler for Requests {
             )))
         }
     }
+
     fn add_request(&self, session_id: String, responder: Responder) -> Uuid {
         let mut pending = self.pending.blocking_lock();
-        let request = Request::new(session_id, responder);
+        let finisher = self.finisher.clone();
+        let remove = self.remove.clone();
+        let request = Request::new(session_id, remove, finisher, responder);
         let request_id = request.id();
         pending.insert(request_id, request);
         drop(pending);
@@ -68,8 +80,8 @@ impl RequestHandler for Requests {
     }
 
     fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()> {
-        let mut pending = self.pending.blocking_lock();
-        let retrieved = pending.remove(request_id);
+        let pending = self.pending.blocking_lock();
+        let retrieved = pending.get(request_id).cloned();
         drop(pending);
 
         if let Some(request) = retrieved {

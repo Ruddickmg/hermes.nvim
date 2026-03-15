@@ -5,6 +5,7 @@ use agent_client_protocol::{
     WriteTextFileRequest, WriteTextFileResponse,
 };
 use nvim_oxi::conversion::FromObject;
+use nvim_oxi::libuv::AsyncHandle;
 use tokio::sync::{Mutex, oneshot};
 use tracing::error;
 use uuid::Uuid;
@@ -26,23 +27,50 @@ pub enum Responder {
     WriteFileResponse(oneshot::Sender<WriteTextFileResponse>, WriteTextFileRequest),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Request {
     id: Uuid,
     session_id: String,
     responder: Arc<Mutex<Option<Responder>>>,
+    finisher: Arc<AsyncHandle>,
+    remove: Arc<tokio::sync::mpsc::Sender<Uuid>>,
 }
 
 impl Request {
     pub fn id(&self) -> Uuid {
         self.id
     }
-    pub fn new(session_id: String, responder: Responder) -> Self {
+    pub fn new(
+        session_id: String,
+        remove:Arc<tokio::sync::mpsc::Sender<Uuid>>,
+        finisher: Arc<AsyncHandle>,
+        responder: Responder,
+    ) -> Self {
         Self {
             id: Uuid::new_v4(),
             session_id,
             responder: Arc::new(Mutex::new(Some(responder))),
+            finisher,
+            remove,
         }
+    }
+
+    fn finish(&self) -> Result<()> {
+        self.remove
+            .blocking_send(self.id)
+            .map_err(|e| {
+                Error::Internal(format!(
+                    "Failed to send finish signal for request '{}', in session '{}': {:?}",
+                    self.id, self.session_id, e
+                ))
+             })?;
+        self.finisher.send().map_err(|e| {
+            Error::Internal(format!(
+                "Failed to send finisher signal for request '{}', in session '{}': {:?}",
+                self.id, self.session_id, e
+            ))
+        })?;
+        Ok(())
     }
 
     pub fn is_permission_request(&self) -> bool {
@@ -83,6 +111,8 @@ impl Request {
         Ok(())
     }
 
+
+
     pub fn respond(&self, response: nvim_oxi::Object) -> Result<()> {
         match self.get_responder()? {
             Responder::WriteFileResponse(sender, _) => {
@@ -92,7 +122,6 @@ impl Request {
                         self.id, e
                     ))
                 })?;
-                Ok(())
             }
             Responder::PermissionResponse(sender, ..) => {
                 let option_id: String =
@@ -105,9 +134,9 @@ impl Request {
                         self.id, e
                     ))
                 })?;
-                Ok(())
             }
-        }
+        };
+        self.finish()
     }
 
     fn ask_user_for_permission(&self, data: serde_json::Value) -> Result<()> {
