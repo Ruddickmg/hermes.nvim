@@ -19,10 +19,21 @@ fn test_find_existing_buffer_finds_open_file() -> nvim_oxi::Result<()> {
         buffer.is_some(),
         "Should find existing buffer for open file"
     );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_find_existing_buffer_correct_path() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("test_find.txt").unwrap();
+
+    // Open the file in Neovim
+    nvim_oxi::api::command(&format!("edit {}", temp_file.path().display()))?;
+
+    // Should find the buffer
+    let buffer = find_existing_buffer(temp_file.path()).expect("Buffer should exist");
 
     // Verify it's the right buffer
-    let buf = buffer.unwrap();
-    let name = buf
+    let name = buffer
         .get_name()
         .map_err(|e| nvim_oxi::api::Error::Other(format!("Failed to get buffer name: {}", e)))?;
     assert_eq!(
@@ -30,7 +41,6 @@ fn test_find_existing_buffer_finds_open_file() -> nvim_oxi::Result<()> {
         temp_file.path(),
         "Buffer should point to correct file"
     );
-
     Ok(())
 }
 
@@ -50,13 +60,23 @@ fn test_acquire_or_create_buffer_creates_new() -> nvim_oxi::Result<()> {
     let temp_file = NamedTempFile::new("test_new.txt").unwrap();
 
     // Acquire buffer (file doesn't exist yet in Neovim)
-    let (buffer, was_already_open) = acquire_or_create_buffer(temp_file.path())
+    let (_buffer, was_already_open) = acquire_or_create_buffer(temp_file.path())
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     assert!(
         !was_already_open,
         "Buffer should not have been already open"
     );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_acquire_or_create_buffer_new_has_correct_path() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("test_new.txt").unwrap();
+
+    // Acquire buffer (file doesn't exist yet in Neovim)
+    let (buffer, _) = acquire_or_create_buffer(temp_file.path())
+        .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     // Verify buffer exists
     let name = buffer
@@ -67,7 +87,6 @@ fn test_acquire_or_create_buffer_creates_new() -> nvim_oxi::Result<()> {
         temp_file.path(),
         "Buffer should point to correct file"
     );
-
     Ok(())
 }
 
@@ -79,13 +98,26 @@ fn test_acquire_or_create_buffer_finds_existing() -> nvim_oxi::Result<()> {
     nvim_oxi::api::command(&format!("edit {}", temp_file.path().display()))?;
 
     // Acquire buffer again
-    let (buffer, was_already_open) = acquire_or_create_buffer(temp_file.path())
+    let (_buffer, was_already_open) = acquire_or_create_buffer(temp_file.path())
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     assert!(
         was_already_open,
         "Should detect that buffer was already open"
     );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_acquire_or_create_buffer_existing_has_correct_path() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("test_existing.txt").unwrap();
+
+    // Open the file first
+    nvim_oxi::api::command(&format!("edit {}", temp_file.path().display()))?;
+
+    // Acquire buffer again
+    let (buffer, _) = acquire_or_create_buffer(temp_file.path())
+        .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     // Verify buffer exists
     let name = buffer
@@ -96,7 +128,6 @@ fn test_acquire_or_create_buffer_finds_existing() -> nvim_oxi::Result<()> {
         temp_file.path(),
         "Buffer should point to correct file"
     );
-
     Ok(())
 }
 

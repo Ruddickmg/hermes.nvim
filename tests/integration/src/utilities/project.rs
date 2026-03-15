@@ -14,13 +14,21 @@ fn test_get_project_root_finds_git_repo() -> nvim_oxi::Result<()> {
         project_root.join(".git").exists() || project_root.join("Cargo.toml").exists(),
         "Project root should contain .git or Cargo.toml"
     );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_get_project_root_is_ancestor_of_current() -> nvim_oxi::Result<()> {
+    let current_dir = std::env::current_dir().unwrap();
+    let root_markers = vec![".git".to_string()];
+
+    let project_root = get_project_root(current_dir.clone(), root_markers);
 
     // Should be an ancestor of current directory
     assert!(
         current_dir.starts_with(&project_root),
         "Project root should be ancestor of current directory"
     );
-
     Ok(())
 }
 

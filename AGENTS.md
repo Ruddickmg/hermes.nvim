@@ -147,7 +147,124 @@ mod tests {
   - Use `assert_eq!` to verify exact values.
   - Avoid `assert!` with boolean checks (e.g., `is_some()`) when the value itself can be verified.
 - **Scope:** Each test should verify a single behavior or unit. Use only **one assertion** per test unless absolutely necessary.
+  - `.expect()` calls and setup code don't count as assertions
+  - If a test needs multiple assertions, split it into multiple tests with descriptive names
+  - Each test name should clearly indicate what specific behavior it's testing
 - **Debugging:** Run tests locally to verify fixes.
+
+### One Assertion Per Test Rule
+
+**CRITICAL:** Every test must contain exactly ONE assertion (e.g., `assert!()`, `assert_eq!()`). This ensures:
+- Clear test failures that immediately identify which behavior failed
+- Easy debugging without guessing which assertion failed
+- Tests serve as living documentation of specific behaviors
+
+**WRONG (multiple assertions in one test):**
+```rust
+#[nvim_oxi::test]
+fn test_buffer_updated() -> nvim_oxi::Result<()> {
+    let buffer = setup_buffer();
+    update_content(&buffer, "new content");
+    
+    // ❌ BAD: Two assertions in one test
+    assert!(buffer.is_modified(), "Should be modified");  // First assertion
+    assert_eq!(buffer.content(), "new content");        // Second assertion
+    Ok(())
+}
+```
+
+**CORRECT (split into separate tests):**
+```rust
+#[nvim_oxi::test]
+fn buffer_marked_modified_after_update() -> nvim_oxi::Result<()> {
+    let buffer = setup_buffer();
+    update_content(&buffer, "new content");
+    
+    // ✅ GOOD: Exactly one assertion
+    assert!(buffer.is_modified(), "Buffer should be marked as modified");
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn buffer_content_matches_update() -> nvim_oxi::Result<()> {
+    let buffer = setup_buffer();
+    update_content(&buffer, "new content");
+    
+    // ✅ GOOD: Exactly one assertion
+    assert_eq!(buffer.content(), "new content");
+    Ok(())
+}
+```
+
+**When multiple related behaviors need testing:**
+- Create a separate test for each behavior
+- Use descriptive test names that clearly state what is being verified
+- Helper functions can reduce code duplication in setup
+
+**Comparing multiple values in one assertion:**
+When you need to verify multiple related values (e.g., checking all elements of a collection), prefer comparing slices/arrays rather than individual element assertions. This maintains the single-assertion rule while still verifying all data.
+
+```rust
+// ❌ BAD: Multiple assertions for individual elements
+assert_eq!(actual_lines.len(), 3);
+assert_eq!(actual_lines[0], "line2");
+assert_eq!(actual_lines[1], "line3");
+assert_eq!(actual_lines[2], "line4");
+
+// ✅ GOOD: Single assertion comparing slices
+assert_eq!(actual_lines.as_slice(), &["line2", "line3", "line4"]);
+```
+
+**When to use this pattern:**
+- Verifying all elements in a collection match expected values
+- Checking multiple fields of a struct that form a logical unit
+- Comparing ordered sequences of data
+
+**When NOT to use this pattern:**
+- Each element represents a different behavior (should be separate tests)
+- Different error conditions need separate verification
+- The assertion would be too complex to understand at a glance
+```rust
+fn setup_write_request(path: &Path, content: &str) -> WriteTextFileRequest {
+    WriteTextFileRequest::new(SessionId::from("test-session"), path, content)
+}
+
+#[nvim_oxi::test]
+fn write_request_buffer_marked_modified() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("test.txt").unwrap();
+    let requests = create_requests();
+    let (sender, mut receiver) = oneshot::channel();
+    let responder = Responder::WriteFileResponse(
+        sender,
+        setup_write_request(temp_file.path(), "content"),
+    );
+    let request_id = requests.add_request("test-session".to_string(), responder);
+
+    requests.default_response(&request_id, serde_json::Value::Null)?;
+    
+    // Single assertion: verifies buffer modification
+    assert!(is_buffer_modified(&temp_file), "Buffer should be marked as modified");
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn write_request_response_sent() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("test.txt").unwrap();
+    let requests = create_requests();
+    let (sender, mut receiver) = oneshot::channel();
+    let responder = Responder::WriteFileResponse(
+        sender,
+        setup_write_request(temp_file.path(), "content"),
+    );
+    let request_id = requests.add_request("test-session".to_string(), responder);
+
+    requests.default_response(&request_id, serde_json::Value::Null)?;
+    
+    // Single assertion: verifies response was sent
+    assert!(receiver.try_recv().is_ok(), "Should receive success response");
+    Ok(())
+}
+```
 
 ### Test Redundancy
 
@@ -156,6 +273,18 @@ Aim for the **minimum number of tests that cover all code paths**. Avoid testing
 **Examples of redundancy to avoid:**
 
 - **Language features:** Do not test Rust's built-in functionality (e.g., auto-derived traits like `PartialEq`, `Clone`, `Debug`, field access, Arc/Mutex usage). Assume the Rust compiler and standard library work correctly. Only test your own logic and custom trait implementations. Reading a field from a struct through an Arc/Mutex is standard Rust - don't test it.
+  
+  **Specifically DO NOT write tests like:**
+  ```rust
+  #[nvim_oxi::test]
+  fn handler_is_cloneable() {  // ❌ BAD - testing #[derive(Clone)]
+      let handler = create_handler();
+      let _cloned = handler.clone();
+      assert!(true);
+  }
+  ```
+  
+  The `#[derive(Clone)]` macro is provided by Rust and guaranteed to work. Testing it wastes time and creates maintenance burden.
 - **Shared validation logic:** If multiple types share the same initial validation (e.g., checking for a required "type" field), test it once for one type, not for every type.
 - **Trivial accessors:** Enum variant extraction methods (e.g., `into_vec()` on a simple wrapper) may not need dedicated tests if the logic is obvious and covered indirectly.
 - **Collection iteration:** If individual elements are thoroughly tested, you typically need only one test for the collection wrapper to verify iteration works.
@@ -191,6 +320,40 @@ We follow the [Testing Pyramid](https://martinfowler.com/articles/practical-test
   - Focus on verifying that Neovim-interacting code works correctly in isolation
   - Use `assert_fs` for filesystem assertions in file-related tests
   - Example: Testing `Responder::WriteFileResponse` which uses `nvim_oxi::api::command` and buffer operations
+
+**What makes a proper integration test:**
+Integration tests should verify that components actually **integrate** with Neovim, not just that API calls succeed. Examples:
+
+- **Good**: Spawn a background thread that sends data via `NvimHandler`, then use `wait_for()` to verify the callback executed on Neovim's main thread
+- **Bad**: Just verifying that `handler.blocking_send()` returns `Ok(())` - this doesn't test the integration
+
+**Pattern for testing async/callback code:**
+```rust
+#[nvim_oxi::test]
+fn cross_thread_communication_works() -> nvim_oxi::Result<()> {
+    let received = Arc::new(Mutex::new(Vec::new()));
+    let received_clone = received.clone();
+    
+    let handler = NvimHandler::initialize(move |data| {
+        received_clone.lock().unwrap().push(data);
+        Ok(())
+    })?;
+    
+    // Spawn thread that sends data
+    std::thread::spawn(move || {
+        handler.blocking_send("test".to_string()).unwrap();
+    });
+    
+    // Wait for callback to execute on Neovim main thread
+    let received_data = wait_for(
+        || received.lock().unwrap().len() == 1,
+        Duration::from_millis(500),
+    );
+    
+    assert!(received_data, "Data should reach callback from spawned thread");
+    Ok(())
+}
+```
 
 **Guideline**: E2E tests verify that "the system works together", unit tests verify that "each component works correctly", integration tests verify that "Neovim-interacting components work correctly". Keep E2E tests minimal and focused on integration points.
 
