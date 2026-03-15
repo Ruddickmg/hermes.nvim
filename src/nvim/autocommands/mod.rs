@@ -4,16 +4,16 @@ use crate::{
         GROUP,
         requests::{RequestHandler, Responder},
     },
+    utilities::{NvimHandler, TransmitToNvim},
 };
 use core::fmt;
-use nvim_oxi::{Array, Dictionary, Object, api::opts::ExecAutocmdsOpts, libuv::AsyncHandle};
+use nvim_oxi::{Array, Dictionary, Object, api::opts::ExecAutocmdsOpts};
 use serde::Serialize;
 use std::{
     fmt::{Debug, Display},
     sync::Arc,
 };
-use tokio::sync::mpsc::{Sender, channel};
-use tracing::{debug, error, instrument, trace, warn};
+use tracing::{debug, error, instrument, warn};
 use uuid::Uuid;
 
 mod event;
@@ -21,19 +21,19 @@ mod response;
 
 pub use response::*;
 
+type NvimHandleArgs = (String, serde_json::Value, Option<Uuid>);
+
 pub struct AutoCommand<R: RequestHandler> {
-    handle: AsyncHandle,
     requests: Arc<R>,
-    channel: Sender<(String, serde_json::Value, Option<Uuid>)>,
+    channel: NvimHandler<NvimHandleArgs>,
 }
 
 impl<R: RequestHandler + 'static> AutoCommand<R> {
     #[instrument(level = "trace", skip_all)]
     pub fn new(requests: Arc<R>) -> Result<Self> {
         let nvim_requests = requests.clone();
-        let (sender, mut receiver) = channel::<(String, serde_json::Value, Option<Uuid>)>(100);
-        let handle = nvim_oxi::libuv::AsyncHandle::new(move || {
-            while let Ok((command, data, request_id)) = receiver.try_recv() {
+        let channel =
+            NvimHandler::<NvimHandleArgs>::initialize(move |(command, data, request_id)| {
                 debug!("Received autocommand: {}, with data: {:#?}", command, data);
                 if Self::listener_attached(command.to_string()) {
                     match serde_json::from_value::<Object>(data) {
@@ -73,14 +73,8 @@ impl<R: RequestHandler + 'static> AutoCommand<R> {
                 } else {
                     warn!("No listener attached for command '{}'", command);
                 }
-            }
-        })
-        .map_err(|e| Error::Internal(e.to_string()))?;
-        Ok(Self {
-            channel: sender,
-            handle,
-            requests,
-        })
+            })?;
+        Ok(Self { channel, requests })
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -95,10 +89,6 @@ impl<R: RequestHandler + 'static> AutoCommand<R> {
         self.channel
             .send((command.to_string(), serialized, request_id))
             .await
-            .map_err(|e| Error::Internal(e.to_string()))?;
-        trace!("Triggering callback in Neovim thread");
-        self.handle
-            .send()
             .map_err(|e| Error::Internal(e.to_string()))
     }
 
@@ -153,6 +143,7 @@ impl<R: RequestHandler + 'static> AutoCommand<R> {
 pub enum Commands {
     // Permission and tool commands
     WriteTextFile,
+    ReadTextFile,
     PermissionRequest,
     ToolCall,
     ToolCallUpdate,
@@ -197,6 +188,8 @@ impl From<&str> for Commands {
     fn from(value: &str) -> Self {
         match value {
             // Permission and tool commands
+            "WriteTextFile" => Commands::WriteTextFile,
+            "ReadTextFile" => Commands::ReadTextFile,
             "PermissionRequest" => Commands::PermissionRequest,
             "ToolCall" => Commands::ToolCall,
             "ToolCallUpdate" => Commands::ToolCallUpdate,

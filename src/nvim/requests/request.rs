@@ -1,28 +1,27 @@
-use std::sync::Arc;
-
 use agent_client_protocol::{
-    RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
-    WriteTextFileRequest, WriteTextFileResponse,
+    ReadTextFileRequest, ReadTextFileResponse, RequestPermissionOutcome, RequestPermissionRequest,
+    SelectedPermissionOutcome, WriteTextFileRequest, WriteTextFileResponse,
 };
 use nvim_oxi::conversion::FromObject;
-use nvim_oxi::libuv::AsyncHandle;
+use std::sync::Arc;
 use tokio::sync::{Mutex, oneshot};
 use tracing::error;
 use uuid::Uuid;
 
 use crate::acp::Result;
 use crate::acp::error::Error;
-use crate::utilities::get_permission_prompt;
 use crate::utilities::{
-    acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
-    show_permission_ui, update_buffer_content,
+    NvimHandler, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
+    save_buffer_to_disk, show_permission_ui, update_buffer_content,
 };
+use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
 #[derive(Debug)]
 pub enum Responder {
-    PermissionResponse(
-        oneshot::Sender<RequestPermissionOutcome>,
-        RequestPermissionRequest,
+    PermissionResponse(oneshot::Sender<RequestPermissionOutcome>),
+    ReadFileResponse(
+        oneshot::Sender<agent_client_protocol::Result<ReadTextFileResponse>>,
+        ReadTextFileRequest,
     ),
     WriteFileResponse(oneshot::Sender<WriteTextFileResponse>, WriteTextFileRequest),
 }
@@ -32,25 +31,18 @@ pub struct Request {
     id: Uuid,
     session_id: String,
     responder: Arc<Mutex<Option<Responder>>>,
-    finisher: Arc<AsyncHandle>,
-    remove: Arc<tokio::sync::mpsc::Sender<Uuid>>,
+    remove: NvimHandler<Uuid>,
 }
 
 impl Request {
     pub fn id(&self) -> Uuid {
         self.id
     }
-    pub fn new(
-        session_id: String,
-        remove: Arc<tokio::sync::mpsc::Sender<Uuid>>,
-        finisher: Arc<AsyncHandle>,
-        responder: Responder,
-    ) -> Self {
+    pub fn new(session_id: String, remove: NvimHandler<Uuid>, responder: Responder) -> Self {
         Self {
             id: Uuid::new_v4(),
             session_id,
             responder: Arc::new(Mutex::new(Some(responder))),
-            finisher,
             remove,
         }
     }
@@ -61,14 +53,7 @@ impl Request {
                 "Failed to send finish signal for request '{}', in session '{}': {:?}",
                 self.id, self.session_id, e
             ))
-        })?;
-        self.finisher.send().map_err(|e| {
-            Error::Internal(format!(
-                "Failed to send finisher signal for request '{}', in session '{}': {:?}",
-                self.id, self.session_id, e
-            ))
-        })?;
-        Ok(())
+        })
     }
 
     pub fn is_permission_request(&self) -> bool {
@@ -111,6 +96,18 @@ impl Request {
 
     pub fn respond(&self, response: nvim_oxi::Object) -> Result<()> {
         match self.get_responder()? {
+            Responder::ReadFileResponse(sender, ..) => {
+                let outcome =
+                    String::from_object(response).map_err(|e| Error::Internal(e.to_string()))?;
+                sender
+                    .send(Ok(ReadTextFileResponse::new(outcome)))
+                    .map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send response for request '{}': {:?}",
+                            self.id, e
+                        ))
+                    })?;
+            }
             Responder::WriteFileResponse(sender, _) => {
                 sender.send(WriteTextFileResponse::new()).map_err(|e| {
                     Error::Internal(format!(
@@ -156,6 +153,52 @@ impl Request {
         })
     }
 
+    fn read_file(
+        data: ReadTextFileRequest,
+    ) -> std::result::Result<ReadTextFileResponse, agent_client_protocol::Error> {
+        // compensate for 1-based indexing in the ACP spec
+        let compensate_for_one_based_index = |n: u32| {
+            if n < 1 {
+                Err(agent_client_protocol::Error::invalid_params())
+            } else {
+                Ok(n - 1)
+            }
+        };
+        let line = data.line.map(compensate_for_one_based_index).transpose()?;
+        let limit = data.limit.map(compensate_for_one_based_index).transpose()?;
+
+        if let Some(buffer_content) = find_existing_buffer(&data.path) {
+            let count = buffer_content
+                .line_count()
+                .map_err(|_| agent_client_protocol::Error::internal_error())?;
+            let start = line.unwrap_or(0);
+            let end = limit.unwrap_or(count as u32);
+            buffer_content
+                .get_lines((start as usize)..(end as usize), true)
+                .map_err(|e| {
+                    error!("Error: {}", e);
+                    agent_client_protocol::Error::invalid_params()
+                })
+                .map(|result| {
+                    // Preserve line breaks by joining with '\n' and add a trailing newline
+                    let mut content = result
+                        .map(|s| s.to_string())
+                        .collect::<Vec<String>>()
+                        .join("\n");
+                    content.push('\n');
+                    ReadTextFileResponse::new(content)
+                })
+        } else if let Ok(file_content) = read_file_content(&data.path, line, limit) {
+            Ok(ReadTextFileResponse::new(file_content))
+        } else {
+            let display_path = data.path.display();
+            error!("Failed to read content for file '{}'", display_path);
+            Err(agent_client_protocol::Error::resource_not_found(Some(
+                display_path.to_string(),
+            )))
+        }
+    }
+
     pub fn default(&self, data: serde_json::Value) -> Result<()> {
         if self.is_permission_request() {
             self.ask_user_for_permission(data)?;
@@ -163,6 +206,14 @@ impl Request {
             match self.get_responder()? {
                 Responder::PermissionResponse(..) => {
                     panic!("Permission requests should have been handled in the if branch above")
+                }
+                Responder::ReadFileResponse(responder, data) => {
+                    responder.send(Self::read_file(data)).map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send file content response for request '{}': {:?}",
+                            self.id, e
+                        ))
+                    })?;
                 }
                 Responder::WriteFileResponse(responder, data) => {
                     let path = data.path.clone();

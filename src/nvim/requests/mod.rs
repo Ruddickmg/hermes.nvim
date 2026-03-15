@@ -1,11 +1,10 @@
 pub mod request;
-use crate::acp::{Result, error::Error};
-use nvim_oxi::libuv::AsyncHandle;
-use std::{collections::HashMap, sync::Arc};
-use tokio::sync::{
-    Mutex,
-    mpsc::{Sender, channel},
+use crate::{
+    acp::{Result, error::Error},
+    utilities::NvimHandler,
 };
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::Mutex;
 use tracing::error;
 use uuid::Uuid;
 
@@ -13,27 +12,21 @@ pub use request::*;
 
 pub struct Requests {
     pending: Arc<Mutex<HashMap<Uuid, Request>>>,
-    finisher: Arc<AsyncHandle>,
-    remove: Arc<Sender<Uuid>>,
+    nvim_handler: NvimHandler<Uuid>,
 }
 
 impl Requests {
     pub fn new() -> Result<Self> {
         let list = Arc::new(Mutex::new(HashMap::new()));
         let pending = list.clone();
-        let (sender, mut receiver) = channel::<Uuid>(100);
-        let finisher = AsyncHandle::new(move || {
-            while let Ok(id) = receiver.try_recv() {
-                let mut lock = list.blocking_lock();
-                lock.remove(&id);
-                drop(lock);
-            }
-        })
-        .map_err(|e| Error::Internal(e.to_string()))?;
+        let nvim_handler = NvimHandler::initialize(move |id| {
+            let mut lock = list.blocking_lock();
+            lock.remove(&id);
+            drop(lock);
+        })?;
         Ok(Self {
             pending,
-            finisher: Arc::new(finisher),
-            remove: Arc::new(sender),
+            nvim_handler,
         })
     }
 }
@@ -63,9 +56,8 @@ impl RequestHandler for Requests {
 
     fn add_request(&self, session_id: String, responder: Responder) -> Uuid {
         let mut pending = self.pending.blocking_lock();
-        let finisher = self.finisher.clone();
-        let remove = self.remove.clone();
-        let request = Request::new(session_id, remove, finisher, responder);
+        let finisher = self.nvim_handler.clone();
+        let request = Request::new(session_id, finisher, responder);
         let request_id = request.id();
         pending.insert(request_id, request);
         drop(pending);

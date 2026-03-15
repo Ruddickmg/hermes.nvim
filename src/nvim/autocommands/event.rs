@@ -16,6 +16,7 @@ use tracing::error;
 impl From<Responder> for Commands {
     fn from(responder: Responder) -> Self {
         match responder {
+            Responder::ReadFileResponse(..) => Commands::ReadTextFile,
             Responder::PermissionResponse(..) => Commands::PermissionRequest,
             Responder::WriteFileResponse(..) => Commands::WriteTextFile,
         }
@@ -35,7 +36,7 @@ impl<R: RequestHandler + 'static> Client for AutoCommand<R> {
             args.session_id.to_string(),
             Commands::PermissionRequest,
             args.clone(),
-            Responder::PermissionResponse(sender, args),
+            Responder::PermissionResponse(sender),
         )
         .await?;
         receiver
@@ -84,8 +85,19 @@ impl<R: RequestHandler + 'static> Client for AutoCommand<R> {
         })
     }
 
-    async fn read_text_file(&self, _args: ReadTextFileRequest) -> Result<ReadTextFileResponse> {
-        Err(AcpError::method_not_found())
+    async fn read_text_file(&self, args: ReadTextFileRequest) -> Result<ReadTextFileResponse> {
+        let (sender, receiver) = oneshot::channel::<Result<ReadTextFileResponse>>();
+        self.execute_autocommand_request(
+            args.session_id.to_string(),
+            Commands::ReadTextFile,
+            args.clone(),
+            Responder::ReadFileResponse(sender, args),
+        )
+        .await?;
+        receiver.await.map_err(|e| {
+            error!("{:?}", e);
+            AcpError::internal_error()
+        })?
     }
 
     async fn create_terminal(
