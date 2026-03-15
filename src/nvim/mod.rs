@@ -9,7 +9,7 @@ use nvim_oxi::{Dictionary, api::opts::CreateAugroupOpts};
 use std::{rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
 
-use crate::{Handler, acp::connection::ConnectionManager, utilities::logging::Logger};
+use crate::{Handler, acp::connection::ConnectionManager, utilities::Logger};
 
 pub const GROUP: &str = "hermes";
 
@@ -17,7 +17,7 @@ pub const GROUP: &str = "hermes";
 pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     let _logger = Logger::inititalize();
     let plugin_state = Arc::new(Mutex::new(state::PluginState::new()));
-    let request_handler = Arc::new(requests::Requests::new());
+    let request_handler = Arc::new(requests::Requests::new()?);
     let auto_command = autocommands::AutoCommand::new(request_handler.clone())?;
     let event_handler = Arc::new(Handler::new(plugin_state.clone(), auto_command));
     let connection_manager = Rc::new(Mutex::new(ConnectionManager::new(event_handler.clone())));

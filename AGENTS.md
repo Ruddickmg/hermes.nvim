@@ -9,6 +9,8 @@ The architecture separates Neovim logic from Rust ACP interactions:
 - **Directory Structure:**
   - `src/acp`: Contains all direct interactions with the ACP SDK.
   - `src/nvim`: Contains Neovim-specific bindings and logic.
+  - tests/integration: Contains integration tests.
+  - tests/e2e: Contains end to end tests.
 
 - **Concurrency Model:** The ACP SDK is single-threaded and async. We spawn a dedicated thread for each connection, each running a single-threaded Tokio runtime. This ensures every Agent has its own [independent](https://docs.rs/tokio/latest/tokio/task/struct.JoinHandle.html) environment. Thread handles are stored to be joined and dropped upon disconnection.
 
@@ -37,6 +39,29 @@ Essential references for development:
 - **Mocking:** [mockall documentation](https://docs.rs/mockall/latest/mockall/)
 
 ## Practices
+
+### ⚠️ CRITICAL: Git Safety - DO NOT MAKE DESTRUCTIVE CHANGES WITHOUT EXPLICIT PERMISSION ⚠️
+
+**NEVER execute any git commands that modify repository state without explicit user permission. This includes:**
+- `git checkout -- .` or `git checkout` (destructive reset of working directory)
+- `git reset` (destructive reset of commits or staging area)
+- `git clean` (removes untracked files permanently)
+- `git stash` or `git stash pop` (can cause work to be lost)
+- `git rebase` (rewrites commit history)
+- `git push --force` or `git push -f` (destructive remote history rewrite)
+- `git cherry-pick` (modifies commit history)
+- `git branch -d` or `git branch -D` (deletes branches)
+- `git merge` (without explicit permission)
+- Any branch switching (`git checkout <branch>` or `git switch`)
+
+**ALLOWED git operations (read-only):**
+- `git status` - checking repository status
+- `git log` - viewing commit history
+- `git diff` - viewing changes
+- `git show` - viewing specific commits
+- `git branch` - listing branches (without `-d` or `-D`)
+
+**The user MUST explicitly state they want destructive git operations before executing them. Loss of uncommitted work due to unauthorized git operations is UNACCEPTABLE and CRITICAL.**
 
 ### Tool Usage
 
@@ -68,6 +93,52 @@ Adhere to "Clean Code" patterns.
 ## Testing
 
 Tests ensure code reliability and prevent regression.
+
+### **CRITICAL: Test Placement Rules**
+
+**DO NOT** create tests in the wrong location. Follow these strict rules:
+
+1. **Unit Tests** - For pure Rust functions with no Neovim dependencies:
+   - **Location:** Inside `#[cfg(test)]` module in the same source file as the code being tested
+   - **Macro:** Use `#[test]`, NEVER use `#[nvim_oxi::test]`
+   - **Example:** Testing `get_random_element()` or `get_permission_prompt()` goes in `src/utilities/prompt.rs`
+
+2. **Integration Tests** - For code that interacts with Neovim APIs (buffers, files, windows):
+   - **Location:** `tests/integration/src/` directory
+   - **Macro:** Must use `#[nvim_oxi::test]` (runs inside Neovim)
+   - **Example:** Testing buffer manipulation, file operations, autocommands
+
+3. **E2E Tests** - For full system flow testing:
+   - **Location:** `tests/e2e/` directory
+   - **Macro:** Must use `#[nvim_oxi::test]`
+   - **Example:** Testing complete request-response cycles
+
+**WRONG (what NOT to do):**
+```rust
+// tests/integration/src/utilities/prompt.rs
+#[nvim_oxi::test]
+fn test_get_random_element() {  // Pure function, doesn't need Neovim!
+    let result = get_random_element(vec!["a", "b"]);  // This is a unit test!
+    assert!(...);
+}
+```
+
+**CORRECT:**
+```rust
+// src/utilities/prompt.rs
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]  // Regular test, not nvim_oxi::test
+    fn test_get_random_element() {
+        let result = get_random_element(vec!["a", "b"]);
+        assert!(...);
+    }
+}
+```
+
+**Guideline:** If a test doesn't call `nvim_oxi::api::*`, it's a **unit test** and belongs in the source file.
 
 ### Guidelines
 
@@ -107,13 +178,21 @@ We follow the [Testing Pyramid](https://martinfowler.com/articles/practical-test
   - Should cover all parsing logic, validation, and conversion functions
   - **Important:** Any test that involves actual message flow between Neovim and ACP (e.g., sending requests, receiving responses, autocommand firing) should be considered an **integration test**, not a unit test
 
-- **E2E Tests** (`e2e/`): Integration tests that verify the full flow from Lua API through to autocommand responses.
+- **E2E Tests** (`tests/e2e/`): Integration tests that verify the full flow from Lua API through to autocommand responses.
   - Run inside a Neovim instance using `#[nvim_oxi::test]`
   - Focus on verifying that components integrate correctly
   - Test representative scenarios rather than exhaustive coverage
   - Should not duplicate unit test coverage - if a parsing edge case is covered in unit tests, don't repeat it in E2E
 
-**Guideline**: E2E tests verify that "the system works together", unit tests verify that "each component works correctly". Keep E2E tests minimal and focused on integration points.
+- **Integration Tests** (`tests/integration/`): Tests for isolated component integration that requires Neovim but not full system flow.
+  - Run inside a Neovim instance using `#[nvim_oxi::test]`
+  - Test individual components that interact with Neovim APIs (e.g., file operations, buffer manipulation)
+  - Use when you need to test code that makes direct Neovim API calls but doesn't require full ACP message flow
+  - Focus on verifying that Neovim-interacting code works correctly in isolation
+  - Use `assert_fs` for filesystem assertions in file-related tests
+  - Example: Testing `Responder::WriteFileResponse` which uses `nvim_oxi::api::command` and buffer operations
+
+**Guideline**: E2E tests verify that "the system works together", unit tests verify that "each component works correctly", integration tests verify that "Neovim-interacting components work correctly". Keep E2E tests minimal and focused on integration points.
 
 ### Running Tests
 

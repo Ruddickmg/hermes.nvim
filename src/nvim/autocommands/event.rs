@@ -1,47 +1,50 @@
-use agent_client_protocol::{
-    Client, CreateTerminalRequest, CreateTerminalResponse, Error, ReadTextFileRequest,
-    ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
-    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Result,
-    SessionNotification, SessionUpdate, TerminalOutputRequest, TerminalOutputResponse,
-    WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
-    WriteTextFileResponse,
-};
-use tokio::sync::oneshot;
-use tracing::error;
-
 use crate::nvim::{
     autocommands::{AutoCommand, Commands},
     parse,
     requests::{RequestHandler, Responder},
 };
+use agent_client_protocol::{
+    Client, CreateTerminalRequest, CreateTerminalResponse, Error as AcpError, ReadTextFileRequest,
+    ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
+    RequestPermissionRequest, RequestPermissionResponse, Result, SessionNotification,
+    SessionUpdate, TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
+    WaitForTerminalExitResponse, WriteTextFileRequest, WriteTextFileResponse,
+};
+use tokio::sync::oneshot;
+use tracing::error;
+
+impl From<Responder> for Commands {
+    fn from(responder: Responder) -> Self {
+        match responder {
+            Responder::PermissionResponse(..) => Commands::PermissionRequest,
+            Responder::WriteFileResponse(..) => Commands::WriteTextFile,
+        }
+    }
+}
 
 #[async_trait::async_trait(?Send)]
-impl<R: RequestHandler> Client for AutoCommand<R> {
+impl<R: RequestHandler + 'static> Client for AutoCommand<R> {
     async fn request_permission(
         &self,
         args: RequestPermissionRequest,
     ) -> Result<RequestPermissionResponse> {
-        if !self.listener_attached(Commands::PermissionRequest).await? {
-            // TODO: add default implementation
-            return Err(Error::method_not_found());
-        }
-
         let (sender, receiver) =
             oneshot::channel::<agent_client_protocol::RequestPermissionOutcome>();
+
         self.execute_autocommand_request(
             args.session_id.to_string(),
             Commands::PermissionRequest,
-            args,
-            Responder::PermissionResponse(sender),
+            args.clone(),
+            Responder::PermissionResponse(sender, args),
         )
         .await?;
-
-        let outcome: RequestPermissionOutcome = receiver.await.map_err(|e| {
-            error!("{:?}", e);
-            Error::internal_error()
-        })?;
-
-        Ok(RequestPermissionResponse::new(outcome))
+        receiver
+            .await
+            .map_err(|e| {
+                error!("{:?}", e);
+                AcpError::internal_error()
+            })
+            .map(RequestPermissionResponse::new)
     }
 
     async fn session_notification(&self, session_notification: SessionNotification) -> Result<()> {
@@ -58,7 +61,7 @@ impl<R: RequestHandler> Client for AutoCommand<R> {
             SessionUpdate::AvailableCommandsUpdate(_) => Ok(Commands::AvailableCommands),
             SessionUpdate::CurrentModeUpdate(_) => Ok(Commands::ModeCurrent),
             SessionUpdate::ConfigOptionUpdate(_) => Ok(Commands::ConfigurationOption),
-            _ => return Err(Error::method_not_found()),
+            _ => return Err(AcpError::method_not_found()),
         }?;
 
         Ok(self
@@ -66,19 +69,30 @@ impl<R: RequestHandler> Client for AutoCommand<R> {
             .await?)
     }
 
-    async fn write_text_file(&self, _args: WriteTextFileRequest) -> Result<WriteTextFileResponse> {
-        Err(Error::method_not_found())
+    async fn write_text_file(&self, args: WriteTextFileRequest) -> Result<WriteTextFileResponse> {
+        let (sender, receiver) = oneshot::channel::<WriteTextFileResponse>();
+        self.execute_autocommand_request(
+            args.session_id.to_string(),
+            Commands::WriteTextFile,
+            args.clone(),
+            Responder::WriteFileResponse(sender, args),
+        )
+        .await?;
+        receiver.await.map_err(|e| {
+            error!("{:?}", e);
+            AcpError::internal_error()
+        })
     }
 
     async fn read_text_file(&self, _args: ReadTextFileRequest) -> Result<ReadTextFileResponse> {
-        Err(Error::method_not_found())
+        Err(AcpError::method_not_found())
     }
 
     async fn create_terminal(
         &self,
         _args: CreateTerminalRequest,
     ) -> Result<CreateTerminalResponse> {
-        Err(Error::method_not_found())
+        Err(AcpError::method_not_found())
     }
 
     /// Gets the terminal output and exit status
@@ -86,7 +100,7 @@ impl<R: RequestHandler> Client for AutoCommand<R> {
         &self,
         _args: TerminalOutputRequest,
     ) -> Result<TerminalOutputResponse> {
-        Err(Error::method_not_found())
+        Err(AcpError::method_not_found())
     }
 
     /// Waits for a terminal command to exit
@@ -94,7 +108,7 @@ impl<R: RequestHandler> Client for AutoCommand<R> {
         &self,
         _args: WaitForTerminalExitRequest,
     ) -> Result<WaitForTerminalExitResponse> {
-        Err(Error::method_not_found())
+        Err(AcpError::method_not_found())
     }
 
     /// Releases a terminal resource
@@ -102,6 +116,6 @@ impl<R: RequestHandler> Client for AutoCommand<R> {
         &self,
         _args: ReleaseTerminalRequest,
     ) -> Result<ReleaseTerminalResponse> {
-        Err(Error::method_not_found())
+        Err(AcpError::method_not_found())
     }
 }
