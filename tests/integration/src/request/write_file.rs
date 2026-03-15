@@ -15,7 +15,7 @@ fn create_write_request(path: &Path, content: &str) -> WriteTextFileRequest {
 }
 
 #[nvim_oxi::test]
-fn open_buffer_updated() -> nvim_oxi::Result<()> {
+fn open_buffer_marked_modified() -> nvim_oxi::Result<()> {
     let temp_file = NamedTempFile::new("test.txt").unwrap();
     temp_file.write_str("initial content").unwrap();
 
@@ -52,10 +52,43 @@ fn open_buffer_updated() -> nvim_oxi::Result<()> {
             .build(),
     )
     .expect("Should get modified option");
+
     assert!(
         is_modified,
         "Buffer should be marked as modified after agent update"
     );
+
+    receiver
+        .try_recv()
+        .expect("Should receive success response");
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn open_buffer_disk_content_unchanged() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("test.txt").unwrap();
+    temp_file.write_str("initial content").unwrap();
+
+    // Open file in Neovim buffer
+    nvim_oxi::api::command(&format!("edit {}", temp_file.path().display()))?;
+
+    // Create Requests handler and add a write file request
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let responder = Responder::WriteFileResponse(
+        sender,
+        create_write_request(temp_file.path(), "updated content"),
+    );
+    let request_id = requests.add_request("test-session".to_string(), responder);
+
+    // Execute the request
+    requests
+        .default_response(&request_id, serde_json::Value::Null)
+        .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     // Verify file on disk is NOT updated (buffer only, not saved)
     let disk_content = std::fs::read_to_string(temp_file.path()).unwrap();
@@ -63,10 +96,6 @@ fn open_buffer_updated() -> nvim_oxi::Result<()> {
         disk_content, "initial content",
         "File on disk should NOT be updated when buffer is already open"
     );
-
-    receiver
-        .try_recv()
-        .expect("Should receive success response");
 
     Ok(())
 }
@@ -133,7 +162,7 @@ fn file_exists_but_closed() -> nvim_oxi::Result<()> {
 }
 
 #[nvim_oxi::test]
-fn responder_send_failure_handled() -> nvim_oxi::Result<()> {
+fn responder_send_failure_returns_error() -> nvim_oxi::Result<()> {
     let temp_file = NamedTempFile::new("send_fail.txt").unwrap();
 
     // Create Requests handler and add a write file request
@@ -150,16 +179,33 @@ fn responder_send_failure_handled() -> nvim_oxi::Result<()> {
 
     let result = requests.default_response(&request_id, serde_json::Value::Null);
     assert!(result.is_err(), "Should return error when send fails");
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Failed to respond to ACP"));
-
     Ok(())
 }
 
 #[nvim_oxi::test]
-fn buffer_already_open_not_written_to_disk() -> nvim_oxi::Result<()> {
+fn responder_send_failure_contains_acp_message() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("send_fail.txt").unwrap();
+
+    // Create Requests handler and add a write file request
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let (sender, receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let responder =
+        Responder::WriteFileResponse(sender, create_write_request(temp_file.path(), "content"));
+    let request_id = requests.add_request("test-session".to_string(), responder);
+
+    drop(receiver);
+
+    let result = requests.default_response(&request_id, serde_json::Value::Null);
+    let error_message = result.unwrap_err().to_string();
+    assert!(error_message.contains("Failed to respond to ACP"));
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn buffer_already_open_marked_modified() -> nvim_oxi::Result<()> {
     let temp_file = NamedTempFile::new("open_file.txt").unwrap();
     temp_file.write_str("original disk content").unwrap();
 
@@ -198,12 +244,72 @@ fn buffer_already_open_not_written_to_disk() -> nvim_oxi::Result<()> {
     .expect("Should get modified option");
     assert!(is_modified, "Buffer should be marked as modified");
 
+    receiver
+        .try_recv()
+        .expect("Should receive success response");
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn buffer_already_open_disk_unchanged() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("open_file.txt").unwrap();
+    temp_file.write_str("original disk content").unwrap();
+
+    // Open the file in Neovim
+    nvim_oxi::api::command(&format!("edit {}", temp_file.path().display()))?;
+
+    // Create Requests handler and add a write file request
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let responder = Responder::WriteFileResponse(
+        sender,
+        create_write_request(temp_file.path(), "agent updated content"),
+    );
+    let request_id = requests.add_request("test-session".to_string(), responder);
+
+    // Execute the request
+    requests
+        .default_response(&request_id, serde_json::Value::Null)
+        .expect("Request should succeed");
+
     // Verify: File on disk should NOT be changed
     let disk_content = std::fs::read_to_string(temp_file.path()).unwrap();
     assert_eq!(
         disk_content, "original disk content",
         "Disk file should remain unchanged when buffer is open"
     );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn buffer_already_open_response_sent() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("open_file.txt").unwrap();
+    temp_file.write_str("original disk content").unwrap();
+
+    // Open the file in Neovim
+    nvim_oxi::api::command(&format!("edit {}", temp_file.path().display()))?;
+
+    // Create Requests handler and add a write file request
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let responder = Responder::WriteFileResponse(
+        sender,
+        create_write_request(temp_file.path(), "agent updated content"),
+    );
+    let request_id = requests.add_request("test-session".to_string(), responder);
+
+    // Execute the request
+    requests
+        .default_response(&request_id, serde_json::Value::Null)
+        .expect("Request should succeed");
 
     // Verify: Response was sent
     assert!(
@@ -215,7 +321,7 @@ fn buffer_already_open_not_written_to_disk() -> nvim_oxi::Result<()> {
 }
 
 #[nvim_oxi::test]
-fn write_file_cleanup_via_default_response() -> nvim_oxi::Result<()> {
+fn write_file_cleanup_request_exists_before_response() -> nvim_oxi::Result<()> {
     let temp_file = NamedTempFile::new("default_cleanup.txt").unwrap();
 
     // Use Requests handler to verify cleanup
@@ -224,7 +330,7 @@ fn write_file_cleanup_via_default_response() -> nvim_oxi::Result<()> {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
 
-    let (sender, receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
         sender,
         create_write_request(temp_file.path(), "test content"),
@@ -234,10 +340,55 @@ fn write_file_cleanup_via_default_response() -> nvim_oxi::Result<()> {
 
     // Verify request exists before response
     assert!(requests.get_request(&request_id).is_some());
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn write_file_cleanup_default_response_succeeds() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("default_cleanup.txt").unwrap();
+
+    // Use Requests handler to verify cleanup
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+
+    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let responder = Responder::WriteFileResponse(
+        sender,
+        create_write_request(temp_file.path(), "test content"),
+    );
+
+    let request_id = requests.add_request("test-session".to_string(), responder);
 
     // Use default_response (goes through Request::default() -> now calls finish())
     let result = requests.default_response(&request_id, serde_json::Value::Null);
     assert!(result.is_ok());
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn write_file_cleanup_request_removed_after_response() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("default_cleanup.txt").unwrap();
+
+    // Use Requests handler to verify cleanup
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+
+    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let responder = Responder::WriteFileResponse(
+        sender,
+        create_write_request(temp_file.path(), "test content"),
+    );
+
+    let request_id = requests.add_request("test-session".to_string(), responder);
+
+    // Use default_response (goes through Request::default() -> now calls finish())
+    requests
+        .default_response(&request_id, serde_json::Value::Null)
+        .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     // Wait for cleanup via AsyncHandle + mpsc channel
     let cleaned_up = wait_for(
@@ -249,8 +400,5 @@ fn write_file_cleanup_via_default_response() -> nvim_oxi::Result<()> {
         cleaned_up,
         "WriteFile request should be cleaned up via default_response after finish() fix"
     );
-
-    // Keep receiver alive until after cleanup verification
-    drop(receiver);
     Ok(())
 }

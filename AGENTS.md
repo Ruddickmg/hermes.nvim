@@ -147,7 +147,102 @@ mod tests {
   - Use `assert_eq!` to verify exact values.
   - Avoid `assert!` with boolean checks (e.g., `is_some()`) when the value itself can be verified.
 - **Scope:** Each test should verify a single behavior or unit. Use only **one assertion** per test unless absolutely necessary.
+  - `.expect()` calls and setup code don't count as assertions
+  - If a test needs multiple assertions, split it into multiple tests with descriptive names
+  - Each test name should clearly indicate what specific behavior it's testing
 - **Debugging:** Run tests locally to verify fixes.
+
+### One Assertion Per Test Rule
+
+**CRITICAL:** Every test must contain exactly ONE assertion (e.g., `assert!()`, `assert_eq!()`). This ensures:
+- Clear test failures that immediately identify which behavior failed
+- Easy debugging without guessing which assertion failed
+- Tests serve as living documentation of specific behaviors
+
+**WRONG (multiple assertions in one test):**
+```rust
+#[nvim_oxi::test]
+fn test_buffer_updated() -> nvim_oxi::Result<()> {
+    let buffer = setup_buffer();
+    update_content(&buffer, "new content");
+    
+    // ❌ BAD: Two assertions in one test
+    assert!(buffer.is_modified(), "Should be modified");  // First assertion
+    assert_eq!(buffer.content(), "new content");        // Second assertion
+    Ok(())
+}
+```
+
+**CORRECT (split into separate tests):**
+```rust
+#[nvim_oxi::test]
+fn buffer_marked_modified_after_update() -> nvim_oxi::Result<()> {
+    let buffer = setup_buffer();
+    update_content(&buffer, "new content");
+    
+    // ✅ GOOD: Exactly one assertion
+    assert!(buffer.is_modified(), "Buffer should be marked as modified");
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn buffer_content_matches_update() -> nvim_oxi::Result<()> {
+    let buffer = setup_buffer();
+    update_content(&buffer, "new content");
+    
+    // ✅ GOOD: Exactly one assertion
+    assert_eq!(buffer.content(), "new content");
+    Ok(())
+}
+```
+
+**When multiple related behaviors need testing:**
+- Create a separate test for each behavior
+- Use descriptive test names that clearly state what is being verified
+- Helper functions can reduce code duplication in setup
+
+**Example with helper function:**
+```rust
+fn setup_write_request(path: &Path, content: &str) -> WriteTextFileRequest {
+    WriteTextFileRequest::new(SessionId::from("test-session"), path, content)
+}
+
+#[nvim_oxi::test]
+fn write_request_buffer_marked_modified() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("test.txt").unwrap();
+    let requests = create_requests();
+    let (sender, mut receiver) = oneshot::channel();
+    let responder = Responder::WriteFileResponse(
+        sender,
+        setup_write_request(temp_file.path(), "content"),
+    );
+    let request_id = requests.add_request("test-session".to_string(), responder);
+
+    requests.default_response(&request_id, serde_json::Value::Null)?;
+    
+    // Single assertion: verifies buffer modification
+    assert!(is_buffer_modified(&temp_file), "Buffer should be marked as modified");
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn write_request_response_sent() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("test.txt").unwrap();
+    let requests = create_requests();
+    let (sender, mut receiver) = oneshot::channel();
+    let responder = Responder::WriteFileResponse(
+        sender,
+        setup_write_request(temp_file.path(), "content"),
+    );
+    let request_id = requests.add_request("test-session".to_string(), responder);
+
+    requests.default_response(&request_id, serde_json::Value::Null)?;
+    
+    // Single assertion: verifies response was sent
+    assert!(receiver.try_recv().is_ok(), "Should receive success response");
+    Ok(())
+}
+```
 
 ### Test Redundancy
 

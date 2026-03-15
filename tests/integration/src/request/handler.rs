@@ -140,10 +140,41 @@ fn test_cancel_session_requests_only_affects_target_session() -> nvim_oxi::Resul
     let target_outcome = target_receiver
         .try_recv()
         .expect("Should receive cancellation");
+
     assert_eq!(target_outcome, RequestPermissionOutcome::Cancelled);
+
+    // Verify other session is NOT affected (separate test)
+    let _ = other_receiver;
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_other_session_not_cancelled() -> nvim_oxi::Result<()> {
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let session_id = String::from("target-session");
+    let other_session_id = String::from("other-session");
+    let (target_sender, _target_receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (other_sender, mut other_receiver) = oneshot::channel::<RequestPermissionOutcome>();
+
+    requests.add_request(
+        session_id.clone(),
+        Responder::PermissionResponse(target_sender),
+    );
+    requests.add_request(
+        other_session_id.clone(),
+        Responder::PermissionResponse(other_sender),
+    );
+
+    requests
+        .cancel_session_requests(session_id)
+        .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     // Other session should not be cancelled
     let other_outcome = other_receiver.try_recv();
+
     assert!(other_outcome.is_err());
     Ok(())
 }
@@ -191,12 +222,6 @@ fn test_handle_response_removes_request_from_pending() -> nvim_oxi::Result<()> {
 
     let request_id = requests.add_request(session_id, responder);
 
-    // Verify request exists before response
-    assert!(
-        requests.get_request(&request_id).is_some(),
-        "Request should exist before response"
-    );
-
     // Handle the response
     let response_obj = nvim_oxi::Object::from("selected-option-id");
     requests
@@ -217,7 +242,27 @@ fn test_handle_response_removes_request_from_pending() -> nvim_oxi::Result<()> {
 }
 
 #[nvim_oxi::test]
-fn test_write_file_request_cleanup() -> nvim_oxi::Result<()> {
+fn test_request_exists_before_response_handled() -> nvim_oxi::Result<()> {
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let session_id = String::from("test-session");
+    let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let responder = Responder::PermissionResponse(sender);
+
+    let request_id = requests.add_request(session_id, responder);
+
+    // Verify request exists before response (separate test from cleanup test)
+    assert!(
+        requests.get_request(&request_id).is_some(),
+        "Request should exist before response"
+    );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_write_file_request_cleanup_via_handle_response() -> nvim_oxi::Result<()> {
     use assert_fs::NamedTempFile;
 
     let temp_file = NamedTempFile::new("cleanup_test.txt").unwrap();
@@ -239,15 +284,69 @@ fn test_write_file_request_cleanup() -> nvim_oxi::Result<()> {
     // Verify request exists
     assert!(requests.get_request(&request_id).is_some());
 
+    // Cleanup receiver at end of test
+    drop(receiver);
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_write_file_handle_response_succeeds() -> nvim_oxi::Result<()> {
+    use assert_fs::NamedTempFile;
+
+    let temp_file = NamedTempFile::new("cleanup_test.txt").unwrap();
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+
+    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let write_request = WriteTextFileRequest::new(
+        SessionId::from("test-session"),
+        temp_file.path().to_path_buf(),
+        "test content",
+    );
+    let responder = Responder::WriteFileResponse(sender, write_request);
+
+    let request_id = requests.add_request("test-session".to_string(), responder);
+
     // Use handle_response to trigger cleanup (goes through respond() -> finish())
     // NOTE: default_response() doesn't call finish(), so we use handle_response for this test
     let response_obj = nvim_oxi::Object::from(0i64); // WriteFileResponse doesn't use the response data
     let result = requests.handle_response(&request_id, response_obj);
+
     assert!(
         result.is_ok(),
         "handle_response should succeed: {:?}",
         result
     );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_write_file_request_cleaned_up_after_response() -> nvim_oxi::Result<()> {
+    use assert_fs::NamedTempFile;
+
+    let temp_file = NamedTempFile::new("cleanup_test.txt").unwrap();
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+
+    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let write_request = WriteTextFileRequest::new(
+        SessionId::from("test-session"),
+        temp_file.path().to_path_buf(),
+        "test content",
+    );
+    let responder = Responder::WriteFileResponse(sender, write_request);
+
+    let request_id = requests.add_request("test-session".to_string(), responder);
+
+    // Use handle_response to trigger cleanup
+    let response_obj = nvim_oxi::Object::from(0i64);
+    requests
+        .handle_response(&request_id, response_obj)
+        .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     // Wait for cleanup
     let cleaned_up = wait_for(
@@ -259,20 +358,17 @@ fn test_write_file_request_cleanup() -> nvim_oxi::Result<()> {
         cleaned_up,
         "Write file request should be cleaned up after response"
     );
-
-    // Now we can drop the receiver
-    drop(receiver);
     Ok(())
 }
 
 #[nvim_oxi::test]
-fn test_multiple_requests_cleanup() -> nvim_oxi::Result<()> {
+fn test_multiple_requests_exist_after_adding() -> nvim_oxi::Result<()> {
     let requests =
         Arc::new(Requests::new().map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
 
-    // Add 3 requests and keep their receivers alive
+    // Add 3 requests
     let mut request_ids = vec![];
     let mut receivers = vec![];
     for i in 0..3 {
@@ -281,28 +377,80 @@ fn test_multiple_requests_cleanup() -> nvim_oxi::Result<()> {
         let responder = Responder::PermissionResponse(sender);
         let request_id = requests.add_request(session_id, responder);
         request_ids.push(request_id);
-        receivers.push(receiver); // Keep receiver alive
+        receivers.push(receiver);
     }
 
     // Verify all 3 exist
-    for id in &request_ids {
-        assert!(
-            requests.get_request(id).is_some(),
-            "Request {} should exist",
-            id
-        );
-    }
+    let all_exist = request_ids
+        .iter()
+        .all(|id| requests.get_request(id).is_some());
+
+    assert!(all_exist, "All 3 requests should exist after adding");
+
+    // Keep receivers alive until after test
+    drop(receivers);
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_multiple_requests_all_handled_successfully() -> nvim_oxi::Result<()> {
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+
+    // Add 3 requests and keep their receivers alive
+    let mut request_ids = vec![];
+    let receivers: Vec<_> = (0..3)
+        .map(|i| {
+            let session_id = format!("test-session-{}", i);
+            let (sender, receiver) = oneshot::channel::<RequestPermissionOutcome>();
+            let responder = Responder::PermissionResponse(sender);
+            let request_id = requests.add_request(session_id, responder);
+            request_ids.push(request_id);
+            receiver
+        })
+        .collect();
+
+    // Respond to all 3
+    let all_succeeded = request_ids.iter().all(|id| {
+        let response_obj = nvim_oxi::Object::from("selected-option");
+        requests.handle_response(id, response_obj).is_ok()
+    });
+
+    assert!(all_succeeded, "All handle_response calls should succeed");
+
+    // Keep receivers alive until after test
+    drop(receivers);
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_multiple_requests_all_cleaned_up() -> nvim_oxi::Result<()> {
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+
+    // Add 3 requests and keep their receivers alive
+    let mut request_ids = vec![];
+    let receivers: Vec<_> = (0..3)
+        .map(|i| {
+            let session_id = format!("test-session-{}", i);
+            let (sender, receiver) = oneshot::channel::<RequestPermissionOutcome>();
+            let responder = Responder::PermissionResponse(sender);
+            let request_id = requests.add_request(session_id, responder);
+            request_ids.push(request_id);
+            receiver
+        })
+        .collect();
 
     // Respond to all 3
     for id in &request_ids {
         let response_obj = nvim_oxi::Object::from("selected-option");
-        let result = requests.handle_response(id, response_obj);
-        assert!(
-            result.is_ok(),
-            "handle_response should succeed for {}: {:?}",
-            id,
-            result
-        );
+        requests
+            .handle_response(id, response_obj)
+            .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
     }
 
     // Wait for all to be cleaned up
@@ -320,13 +468,33 @@ fn test_multiple_requests_cleanup() -> nvim_oxi::Result<()> {
         "All 3 requests should be cleaned up after responses"
     );
 
-    // Now we can drop all receivers
+    // Keep receivers alive until after cleanup verification
     drop(receivers);
     Ok(())
 }
 
 #[nvim_oxi::test]
-fn test_responded_request_cannot_be_found() -> nvim_oxi::Result<()> {
+fn test_first_response_to_request_succeeds() -> nvim_oxi::Result<()> {
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let session_id = String::from("test-session");
+    let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let responder = Responder::PermissionResponse(sender);
+
+    let request_id = requests.add_request(session_id, responder);
+
+    // First response succeeds
+    let response_obj = nvim_oxi::Object::from("selected-option-id");
+    let result1 = requests.handle_response(&request_id, response_obj.clone());
+
+    assert!(result1.is_ok(), "First response should succeed");
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_second_response_to_cleaned_up_request_fails() -> nvim_oxi::Result<()> {
     let requests =
         Arc::new(Requests::new().map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
@@ -339,8 +507,9 @@ fn test_responded_request_cannot_be_found() -> nvim_oxi::Result<()> {
 
     // First response succeeds
     let response_obj = nvim_oxi::Object::from("selected-option-id");
-    let result1 = requests.handle_response(&request_id, response_obj.clone());
-    assert!(result1.is_ok(), "First response should succeed");
+    requests
+        .handle_response(&request_id, response_obj.clone())
+        .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     // Wait for cleanup
     wait_for(
@@ -350,6 +519,7 @@ fn test_responded_request_cannot_be_found() -> nvim_oxi::Result<()> {
 
     // Second response should fail (request no longer exists)
     let result2 = requests.handle_response(&request_id, response_obj);
+
     assert!(
         result2.is_err(),
         "Second response should fail - request cleaned up"

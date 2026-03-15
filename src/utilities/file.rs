@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::acp::{Result, error::Error};
+use crate::acp::{error::Error, Result};
 
 // TODO: move these helper functions into a "utilities" directory
 
@@ -155,4 +155,106 @@ pub fn read_file_content(path: &PathBuf, start: Option<u32>, end: Option<u32>) -
     }
 
     Ok(content)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    fn create_test_file_with_lines(line_count: usize) -> (tempfile::NamedTempFile, Vec<String>) {
+        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
+        let mut lines = Vec::new();
+
+        for i in 0..line_count {
+            let line = format!("line{}", i);
+            writeln!(temp_file, "{}", line).unwrap();
+            lines.push(line);
+        }
+
+        (temp_file, lines)
+    }
+
+    #[test]
+    fn read_file_content_full_file() {
+        let (temp_file, expected_lines) = create_test_file_with_lines(5);
+        let content = read_file_content(&temp_file.path().to_path_buf(), None, None).unwrap();
+
+        let actual_lines: Vec<&str> = content.trim_end().split('\n').collect();
+        assert_eq!(actual_lines.len(), 5);
+        assert_eq!(
+            actual_lines,
+            expected_lines
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn read_file_content_with_start_line() {
+        let (temp_file, expected_lines) = create_test_file_with_lines(5);
+        let content = read_file_content(&temp_file.path().to_path_buf(), Some(2), None).unwrap();
+
+        let actual_lines: Vec<&str> = content.trim_end().split('\n').collect();
+        assert_eq!(actual_lines.len(), 3); // lines 2, 3, 4
+        assert_eq!(actual_lines[0], "line2");
+        assert_eq!(actual_lines[2], "line4");
+    }
+
+    #[test]
+    fn read_file_content_with_end_line() {
+        let (temp_file, _expected_lines) = create_test_file_with_lines(5);
+        let content = read_file_content(&temp_file.path().to_path_buf(), None, Some(3)).unwrap();
+
+        let actual_lines: Vec<&str> = content.trim_end().split('\n').collect();
+        assert_eq!(actual_lines.len(), 3); // lines 0, 1, 2
+        assert_eq!(actual_lines[0], "line0");
+        assert_eq!(actual_lines[2], "line2");
+    }
+
+    #[test]
+    fn read_file_content_with_start_and_end() {
+        let (temp_file, _expected_lines) = create_test_file_with_lines(5);
+        let content = read_file_content(&temp_file.path().to_path_buf(), Some(1), Some(4)).unwrap();
+
+        let actual_lines: Vec<&str> = content.trim_end().split('\n').collect();
+        assert_eq!(actual_lines.len(), 3); // lines 1, 2, 3
+        assert_eq!(actual_lines[0], "line1");
+        assert_eq!(actual_lines[1], "line2");
+        assert_eq!(actual_lines[2], "line3");
+    }
+
+    #[test]
+    fn read_file_content_end_zero_returns_empty() {
+        let (temp_file, _expected_lines) = create_test_file_with_lines(5);
+        let content = read_file_content(&temp_file.path().to_path_buf(), None, Some(0)).unwrap();
+
+        assert!(content.is_empty());
+    }
+
+    #[test]
+    fn read_file_content_empty_file() {
+        let temp_file = tempfile::NamedTempFile::new().unwrap();
+        let content = read_file_content(&temp_file.path().to_path_buf(), None, None).unwrap();
+
+        assert!(content.is_empty());
+    }
+
+    #[test]
+    fn read_file_content_invalid_range_errors() {
+        let (temp_file, _expected_lines) = create_test_file_with_lines(5);
+        let result = read_file_content(&temp_file.path().to_path_buf(), Some(5), Some(2));
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Invalid line range"));
+    }
+
+    #[test]
+    fn read_file_content_nonexistent_file_errors() {
+        let result = read_file_content(&PathBuf::from("/nonexistent/file.txt"), None, None);
+
+        assert!(result.is_err());
+    }
 }
