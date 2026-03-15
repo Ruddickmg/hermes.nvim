@@ -1,6 +1,5 @@
 use agent_client_protocol::{
-    ReadTextFileRequest, ReadTextFileResponse, RequestPermissionOutcome, RequestPermissionRequest,
-    SelectedPermissionOutcome, WriteTextFileRequest, WriteTextFileResponse,
+    CreateTerminalRequest, CreateTerminalResponse, ReadTextFileRequest, ReadTextFileResponse, RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome, WriteTextFileRequest, WriteTextFileResponse
 };
 use nvim_oxi::conversion::FromObject;
 use std::sync::Arc;
@@ -24,6 +23,7 @@ pub enum Responder {
         ReadTextFileRequest,
     ),
     WriteFileResponse(oneshot::Sender<WriteTextFileResponse>, WriteTextFileRequest),
+    CreateTerminal(oneshot::Sender<agent_client_protocol::Result<CreateTerminalResponse>>, CreateTerminalRequest),
 }
 
 #[derive(Clone)]

@@ -142,6 +142,7 @@ impl<R: RequestHandler + 'static> AutoCommand<R> {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Commands {
     // Permission and tool commands
+    CreateTerminal,
     WriteTextFile,
     ReadTextFile,
     PermissionRequest,
@@ -188,6 +189,7 @@ impl From<&str> for Commands {
     fn from(value: &str) -> Self {
         match value {
             // Permission and tool commands
+            "CreateTerminal" => Commands::CreateTerminal,
             "WriteTextFile" => Commands::WriteTextFile,
             "ReadTextFile" => Commands::ReadTextFile,
             "PermissionRequest" => Commands::PermissionRequest,

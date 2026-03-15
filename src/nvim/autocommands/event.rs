@@ -102,9 +102,20 @@ impl<R: RequestHandler + 'static> Client for AutoCommand<R> {
 
     async fn create_terminal(
         &self,
-        _args: CreateTerminalRequest,
+        args: CreateTerminalRequest,
     ) -> Result<CreateTerminalResponse> {
-        Err(AcpError::method_not_found())
+        let (sender, receiver) = oneshot::channel::<Result<CreateTerminalResponse>>();
+        self.execute_autocommand_request(
+            args.session_id.to_string(),
+            Commands::CreateTerminal,
+            args.clone(),
+            Responder::CreateTerminal(sender, args),
+        )
+        .await?;
+        receiver.await.map_err(|e| {
+            error!("{:?}", e);
+            AcpError::internal_error()
+        })?
     }
 
     /// Gets the terminal output and exit status
