@@ -1,10 +1,12 @@
 //! Integration tests for Responder::WriteFileResponse via Request
+use crate::helpers::ui::wait_for;
 use agent_client_protocol::{SessionId, WriteTextFileRequest, WriteTextFileResponse};
 use assert_fs::prelude::*;
 use assert_fs::{NamedTempFile, TempDir};
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::oneshot;
 
 /// Helper function to create a WriteTextFileRequest
@@ -209,5 +211,46 @@ fn buffer_already_open_not_written_to_disk() -> nvim_oxi::Result<()> {
         "Should receive success response"
     );
 
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn write_file_cleanup_via_default_response() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("default_cleanup.txt").unwrap();
+
+    // Use Requests handler to verify cleanup
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+
+    let (sender, receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let responder = Responder::WriteFileResponse(
+        sender,
+        create_write_request(temp_file.path(), "test content"),
+    );
+
+    let request_id = requests.add_request("test-session".to_string(), responder);
+
+    // Verify request exists before response
+    assert!(requests.get_request(&request_id).is_some());
+
+    // Use default_response (goes through Request::default() -> now calls finish())
+    let result = requests.default_response(&request_id, serde_json::Value::Null);
+    assert!(result.is_ok());
+
+    // Wait for cleanup via AsyncHandle + mpsc channel
+    let cleaned_up = wait_for(
+        || requests.get_request(&request_id).is_none(),
+        Duration::from_millis(500),
+    );
+
+    assert!(
+        cleaned_up,
+        "WriteFile request should be cleaned up via default_response after finish() fix"
+    );
+
+    // Keep receiver alive until after cleanup verification
+    drop(receiver);
     Ok(())
 }

@@ -184,6 +184,7 @@ impl Request {
                     })?;
                 }
             }
+            self.finish()?;
         }
         Ok(())
     }
