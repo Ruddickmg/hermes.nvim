@@ -1009,8 +1009,7 @@ Your options for log formats are:
 - json
 - pretty
 - compact
-- full 
-
+- full
 
 ## TODO:
 
@@ -1039,14 +1038,17 @@ Your options for log formats are:
 
 -- agent requests
 - [x] Allow permission request
-- [ ] Allow agent to write to files
-  - [ ] Automatically refresh open buffers that have been modified
+- [x] Allow agent to write to files
+  - [x] Automatically refresh open buffers that have been modified
 - [ ] Allow agent to read files
 - [ ] Allow agent to use terminal
   - [ ] Create autocommands for Agent progress in the terminal
 
 - [x] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
 
+- [ ] figure out cleanup after permission selection
+
+- [ ] use smol instead of tokio to reduce build size
 - [ ] look into ways of improving ai integration
   - [ ] research RLM ([example](https://github.com/JaredStewart/coderlm))
   - [ ] connect agent to lsp (try to set it up as a tool call/connect to neovim lsp)

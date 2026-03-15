@@ -10,7 +10,7 @@ use tracing::{debug, instrument};
 
 use crate::{
     acp::connection::ConnectionManager, api::mcp_servers::parse_mcp_servers,
-    nvim::autocommands::ResponseHandler, utilities::project,
+    nvim::autocommands::ResponseHandler, utilities,
 };
 
 /// Configuration for loading a session (second argument of the tuple)
@@ -23,7 +23,7 @@ pub struct LoadSessionConfig {
 impl LoadSessionConfig {
     fn default_with_root() -> Self {
         let current_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let root = project::get_project_root(current_directory, vec![".git".to_string()]);
+        let root = utilities::get_project_root(current_directory, vec![".git".to_string()]);
         Self {
             cwd: Some(root),
             mcp_servers: Vec::new(),
@@ -48,7 +48,7 @@ impl FromObject for LoadSessionConfig {
             .unwrap_or_default();
 
         let current_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let root = project::get_project_root(current_directory, vec![".git".to_string()]);
+        let root = utilities::get_project_root(current_directory, vec![".git".to_string()]);
 
         Ok(Self {
             cwd: Some(cwd.unwrap_or(root)),

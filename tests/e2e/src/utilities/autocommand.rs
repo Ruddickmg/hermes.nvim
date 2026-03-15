@@ -24,9 +24,8 @@ where
     T: Debug + DeserializeOwned + Send + Clone + 'static,
 {
     let pattern = autocommand.to_string();
-    let (tx, reciever) = mpsc::channel::<T>();
+    let (tx, receiver) = mpsc::channel::<T>();
     let sender = Rc::new(tx);
-
     let opts = CreateAutocmdOpts::builder()
         .group("hermes")
         .patterns(vec![pattern.as_str()])
@@ -44,7 +43,7 @@ where
     Box::new(move |duration| {
         let start = Instant::now();
         loop {
-            if let Ok(response) = reciever.try_recv() {
+            if let Ok(response) = receiver.try_recv() {
                 break Ok(response);
             }
             if start.elapsed() > duration {

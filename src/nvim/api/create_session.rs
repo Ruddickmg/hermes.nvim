@@ -10,7 +10,7 @@ use tracing::{debug, instrument};
 
 use crate::{
     acp::connection::ConnectionManager, api::mcp_servers::parse_mcp_servers,
-    nvim::autocommands::ResponseHandler, utilities::project,
+    nvim::autocommands::ResponseHandler, utilities,
 };
 
 #[derive(Debug, Clone)]
@@ -151,7 +151,7 @@ pub fn create_session<H: Client + ResponseHandler + Send + Sync + 'static>(
         Function::from_fn(move |session: CreateSessionArgs| {
             debug!("createSession function called with: {:#?}", session);
             let current_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let root = project::get_project_root(current_directory, vec![".git".to_string()]);
+            let root = utilities::get_project_root(current_directory, vec![".git".to_string()]);
             let request = match session {
                 CreateSessionArgs::Default => NewSessionRequest::new(root),
                 CreateSessionArgs::Configuration { cwd, mcp_servers } => {

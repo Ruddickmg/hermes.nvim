@@ -22,7 +22,11 @@ impl<H: Client + ResponseHandler> Client for Handler<H> {
     }
 
     async fn session_notification(&self, args: SessionNotification) -> Result<()> {
-        self.handler.session_notification(args).await
+        if self.can_receive_notifications().await {
+            self.handler.session_notification(args).await
+        } else {
+            Err(Error::method_not_found())
+        }
     }
 
     async fn write_text_file(&self, args: WriteTextFileRequest) -> Result<WriteTextFileResponse> {
@@ -82,7 +86,7 @@ impl<H: Client + ResponseHandler> Client for Handler<H> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::nvim::state::PluginState;
     use agent_client_protocol::{
@@ -97,18 +101,20 @@ mod tests {
     use tokio::sync::Mutex;
 
     #[derive(Clone)]
-    struct MockClient {
+    pub struct MockClient {
         write_called: Arc<Mutex<bool>>,
         read_called: Arc<Mutex<bool>>,
         terminal_create_called: Arc<Mutex<bool>>,
+        pub notification_called: Arc<Mutex<bool>>,
     }
 
     impl MockClient {
-        fn new() -> Self {
+        pub fn new() -> Self {
             Self {
                 write_called: Arc::new(Mutex::new(false)),
                 read_called: Arc::new(Mutex::new(false)),
                 terminal_create_called: Arc::new(Mutex::new(false)),
+                notification_called: Arc::new(Mutex::new(false)),
             }
         }
     }
@@ -159,6 +165,7 @@ mod tests {
             ))
         }
         async fn session_notification(&self, _args: SessionNotification) -> Result<()> {
+            *self.notification_called.lock().await = true;
             Ok(())
         }
         async fn terminal_output(

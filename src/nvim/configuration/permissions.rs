@@ -10,6 +10,7 @@ pub struct Permissions {
     pub fs_read_access: bool,
     pub terminal_access: bool,
     pub can_request_permissions: bool,
+    pub allow_notifications: bool,
 }
 
 impl Default for Permissions {
@@ -19,6 +20,7 @@ impl Default for Permissions {
             fs_read_access: true,
             terminal_access: true,
             can_request_permissions: true,
+            allow_notifications: true,
         }
     }
 }
@@ -32,6 +34,7 @@ impl Pushable for Permissions {
             table.insert("fs_read_access", self.fs_read_access);
             table.insert("terminal_access", self.terminal_access);
             table.insert("can_request_permissions", self.can_request_permissions);
+            table.insert("allow_notifications", self.allow_notifications);
 
             table.push(state)
         }
@@ -77,11 +80,18 @@ impl FromObject for Permissions {
             .transpose()?
             .unwrap_or(true);
 
+        let allow_notifications = dict
+            .get("allow_notifications")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?
+            .unwrap_or(true);
+
         Ok(Self {
             fs_write_access,
             fs_read_access,
             terminal_access,
             can_request_permissions,
+            allow_notifications,
         })
     }
 }
@@ -93,14 +103,22 @@ mod tests {
 
     // Strategy for generating Permissions with random boolean values
     fn arb_permissions() -> impl Strategy<Value = Permissions> {
-        (any::<bool>(), any::<bool>(), any::<bool>(), any::<bool>()).prop_map(
-            |(fs_write, fs_read, terminal, can_request)| Permissions {
-                fs_write_access: fs_write,
-                fs_read_access: fs_read,
-                terminal_access: terminal,
-                can_request_permissions: can_request,
-            },
+        (
+            any::<bool>(),
+            any::<bool>(),
+            any::<bool>(),
+            any::<bool>(),
+            any::<bool>(),
         )
+            .prop_map(|(fs_write, fs_read, terminal, can_request, allow_notif)| {
+                Permissions {
+                    fs_write_access: fs_write,
+                    fs_read_access: fs_read,
+                    terminal_access: terminal,
+                    can_request_permissions: can_request,
+                    allow_notifications: allow_notif,
+                }
+            })
     }
 
     proptest! {
@@ -113,6 +131,7 @@ mod tests {
             dict.insert("fs_read_access", permissions.fs_read_access);
             dict.insert("terminal_access", permissions.terminal_access);
             dict.insert("can_request_permissions", permissions.can_request_permissions);
+            dict.insert("allow_notifications", permissions.allow_notifications);
 
             let obj = Object::from(dict);
             let parsed = Permissions::from_object(obj).expect("Permissions::from_object failed");
@@ -121,6 +140,7 @@ mod tests {
             prop_assert_eq!(parsed.fs_read_access, permissions.fs_read_access);
             prop_assert_eq!(parsed.terminal_access, permissions.terminal_access);
             prop_assert_eq!(parsed.can_request_permissions, permissions.can_request_permissions);
+            prop_assert_eq!(parsed.allow_notifications, permissions.allow_notifications);
         }
     }
 
@@ -131,6 +151,7 @@ mod tests {
         assert!(perms.fs_read_access);
         assert!(perms.terminal_access);
         assert!(perms.can_request_permissions);
+        assert!(perms.allow_notifications);
     }
 
     #[test]
@@ -140,10 +161,12 @@ mod tests {
             fs_read_access: true,
             terminal_access: false,
             can_request_permissions: true,
+            allow_notifications: false,
         };
         assert!(!perms.fs_write_access);
         assert!(perms.fs_read_access);
         assert!(!perms.terminal_access);
         assert!(perms.can_request_permissions);
+        assert!(!perms.allow_notifications);
     }
 }
