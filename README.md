@@ -1148,7 +1148,7 @@ Your options for log formats are:
 
 - [x] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
 
-- [ ] figure out cleanup after permission selection
+- [x] figure out cleanup after permission selection
 
 - [ ] use smol instead of tokio to reduce build size
 - [ ] look into ways of improving ai integration
