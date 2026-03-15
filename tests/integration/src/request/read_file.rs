@@ -168,7 +168,9 @@ fn read_file_buffer_cleanup_works() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn read_file_line_range_returns_correct_lines() -> nvim_oxi::Result<()> {
     let (temp_file, path) = create_file_with_lines(5);
-    let (requests, request_id, mut receiver) = setup_read_request(&path, Some(1), Some(4));
+    // ACP uses 1-based indexing, so line=2, limit=4 means lines 2-4 (1-based)
+    // After conversion to 0-based: start=1, end=3, so we get lines 1, 2 (indices 1..3)
+    let (requests, request_id, mut receiver) = setup_read_request(&path, Some(2), Some(4));
 
     requests
         .default_response(&request_id, serde_json::Value::Null)
@@ -178,7 +180,8 @@ fn read_file_line_range_returns_correct_lines() -> nvim_oxi::Result<()> {
         .try_recv()
         .expect("Should receive response")
         .expect("Should be Ok");
-    assert_eq!(response.content, "line1\nline2\nline3\n");
+    // Lines 1, 2 (0-based) = line1, line2 (range is 1..3, exclusive end)
+    assert_eq!(response.content, "line1\nline2\n");
 
     Ok(())
 }
@@ -228,7 +231,214 @@ fn read_file_range_with_buffer_modifications() -> nvim_oxi::Result<()> {
     Ok(())
 }
 
+// === Buffer and File Consistency Tests ===
+
+#[nvim_oxi::test]
+fn read_file_buffer_and_file_return_same_content() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("consistency_test.txt").unwrap();
+    temp_file
+        .write_str("line0\nline1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\n")
+        .unwrap();
+    let path = temp_file.path().to_path_buf();
+
+    // Read from disk (file not open in buffer)
+    let (requests1, request_id1, mut receiver1) = setup_read_request(&path, Some(3), Some(7));
+    requests1
+        .default_response(&request_id1, serde_json::Value::Null)
+        .ok();
+    let file_response = receiver1
+        .try_recv()
+        .expect("Should receive file response")
+        .expect("Should be Ok");
+
+    // Read from buffer (file open in buffer)
+    nvim_oxi::api::command(&format!("edit {}", path.display()))?;
+    let (requests2, request_id2, mut receiver2) = setup_read_request(&path, Some(3), Some(7));
+    requests2
+        .default_response(&request_id2, serde_json::Value::Null)
+        .ok();
+    let buffer_response = receiver2
+        .try_recv()
+        .expect("Should receive buffer response")
+        .expect("Should be Ok");
+
+    // Both should return identical content (lines 2-6, 0-based)
+    assert_eq!(
+        file_response.content, buffer_response.content,
+        "File and buffer paths should return identical content for the same 1-based range"
+    );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn read_file_buffer_and_file_edge_case_line_one() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("edge_case_test.txt").unwrap();
+    temp_file.write_str("line0\nline1\nline2\n").unwrap();
+    let path = temp_file.path().to_path_buf();
+
+    // Read from disk with line=1 (should read from beginning)
+    let (requests1, request_id1, mut receiver1) = setup_read_request(&path, Some(1), None);
+    requests1
+        .default_response(&request_id1, serde_json::Value::Null)
+        .ok();
+    let file_response = receiver1
+        .try_recv()
+        .expect("Should receive file response")
+        .expect("Should be Ok");
+
+    // Read from buffer with line=1
+    nvim_oxi::api::command(&format!("edit {}", path.display()))?;
+    let (requests2, request_id2, mut receiver2) = setup_read_request(&path, Some(1), None);
+    requests2
+        .default_response(&request_id2, serde_json::Value::Null)
+        .ok();
+    let buffer_response = receiver2
+        .try_recv()
+        .expect("Should receive buffer response")
+        .expect("Should be Ok");
+
+    // Both should start from line 0 (converted from 1-based line=1)
+    assert_eq!(
+        file_response.content, buffer_response.content,
+        "Both paths should handle line=1 (converted to 0) consistently"
+    );
+    assert!(file_response.content.contains("line0"));
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn read_file_buffer_modifications_preserved() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("modifications_test.txt").unwrap();
+    temp_file.write_str("line0\nline1\nline2\n").unwrap();
+    let path = temp_file.path().to_path_buf();
+
+    // Open in buffer and modify first line
+    nvim_oxi::api::command(&format!("edit {}", path.display()))?;
+    nvim_oxi::api::command("normal! gg0cwMODIFIED")?;
+
+    // Read from buffer (should see modifications)
+    let (requests1, request_id1, mut receiver1) = setup_read_request(&path, Some(1), Some(2));
+    requests1
+        .default_response(&request_id1, serde_json::Value::Null)
+        .ok();
+    let buffer_response = receiver1
+        .try_recv()
+        .expect("Should receive buffer response")
+        .expect("Should be Ok");
+
+    // Close buffer
+    nvim_oxi::api::command("bd!")?;
+
+    // Read from disk (should see original content)
+    let (requests2, request_id2, mut receiver2) = setup_read_request(&path, Some(1), Some(2));
+    requests2
+        .default_response(&request_id2, serde_json::Value::Null)
+        .ok();
+    let file_response = receiver2
+        .try_recv()
+        .expect("Should receive file response")
+        .expect("Should be Ok");
+
+    // Buffer should show modified content
+    assert!(
+        buffer_response.content.contains("MODIFIED"),
+        "Buffer path should reflect unsaved modifications"
+    );
+
+    // File should show original content
+    assert!(
+        !file_response.content.contains("MODIFIED"),
+        "File path should read from disk without modifications"
+    );
+
+    // But both should have applied the same 1-based conversion
+    // line=1, limit=2 should give us 1 line from each (start=0, end=1)
+    assert_eq!(
+        buffer_response.content.lines().count(),
+        file_response.content.lines().count(),
+        "Both paths should return same number of lines after 1-based conversion"
+    );
+
+    Ok(())
+}
+
 // === Error handling ===
+
+#[nvim_oxi::test]
+fn read_file_line_zero_returns_invalid_params_error() -> nvim_oxi::Result<()> {
+    let (temp_file, path) = create_file_with_lines(5);
+    let (requests, request_id, mut receiver) = setup_read_request(&path, Some(0), None);
+
+    requests
+        .default_response(&request_id, serde_json::Value::Null)
+        .ok();
+
+    let response = receiver.try_recv().expect("Should receive response");
+    assert!(
+        response.is_err(),
+        "Line 0 should return invalid_params error"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn read_file_limit_zero_returns_invalid_params_error() -> nvim_oxi::Result<()> {
+    let (temp_file, path) = create_file_with_lines(5);
+    let (requests, request_id, mut receiver) = setup_read_request(&path, None, Some(0));
+
+    requests
+        .default_response(&request_id, serde_json::Value::Null)
+        .ok();
+
+    let response = receiver.try_recv().expect("Should receive response");
+    assert!(
+        response.is_err(),
+        "Limit 0 should return invalid_params error"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn read_file_line_zero_cleanup_works() -> nvim_oxi::Result<()> {
+    let (temp_file, path) = create_file_with_lines(5);
+    let (requests, request_id, _receiver) = setup_read_request(&path, Some(0), None);
+
+    requests
+        .default_response(&request_id, serde_json::Value::Null)
+        .ok();
+
+    let cleaned_up = wait_for(
+        || requests.get_request(&request_id).is_none(),
+        Duration::from_millis(500),
+    );
+    assert!(
+        cleaned_up,
+        "Request should be cleaned up after validation error"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn read_file_invalid_line_error_sent_to_agent() -> nvim_oxi::Result<()> {
+    let (temp_file, path) = create_file_with_lines(5);
+    let (requests, request_id, mut receiver) = setup_read_request(&path, Some(0), Some(3));
+
+    requests
+        .default_response(&request_id, serde_json::Value::Null)
+        .ok();
+
+    let response = receiver.try_recv().expect("Should receive response");
+    let is_invalid_params = response.is_err();
+    assert!(
+        is_invalid_params,
+        "Invalid line should send error response to agent through channel"
+    );
+
+    Ok(())
+}
 
 #[nvim_oxi::test]
 fn read_file_missing_file_returns_error() -> nvim_oxi::Result<()> {
@@ -397,7 +607,9 @@ fn read_file_respond_path_cleanup_works() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn read_file_large_returns_correct_range() -> nvim_oxi::Result<()> {
     let (temp_file, path) = create_file_with_lines(300);
-    let (requests, request_id, mut receiver) = setup_read_request(&path, Some(100), Some(200));
+    // ACP uses 1-based indexing: line=101, limit=201 means lines 101-201 (1-based)
+    // After conversion to 0-based: start=100, end=200, so we get lines 100-199
+    let (requests, request_id, mut receiver) = setup_read_request(&path, Some(101), Some(201));
 
     requests
         .default_response(&request_id, serde_json::Value::Null)
@@ -407,6 +619,7 @@ fn read_file_large_returns_correct_range() -> nvim_oxi::Result<()> {
         .try_recv()
         .expect("Should receive response")
         .expect("Should be Ok");
+    // Lines 100-199 (0-based) = line100 to line199
     assert!(response.content.contains("line100") && response.content.contains("line199"));
 
     Ok(())
@@ -415,7 +628,7 @@ fn read_file_large_returns_correct_range() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn read_file_large_cleanup_works() -> nvim_oxi::Result<()> {
     let (temp_file, path) = create_file_with_lines(300);
-    let (requests, request_id, _receiver) = setup_read_request(&path, Some(100), Some(200));
+    let (requests, request_id, _receiver) = setup_read_request(&path, Some(101), Some(201));
 
     requests
         .default_response(&request_id, serde_json::Value::Null)

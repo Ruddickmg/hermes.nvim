@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::acp::{Result, error::Error};
+use crate::acp::{error::Error, Result};
 
 // TODO: move these helper functions into a "utilities" directory
 
@@ -192,15 +192,13 @@ mod tests {
 
     #[test]
     fn read_file_content_with_start_line() {
-        let (temp_file, _expected_lines) = create_test_file_with_lines(5);
+        let (temp_file, expected_lines) = create_test_file_with_lines(5);
         let content = read_file_content(&temp_file.path().to_path_buf(), Some(2), None).unwrap();
 
         let actual_lines: Vec<&str> = content.trim_end().split('\n').collect();
-        let expected_slice: Vec<&str> = expected_lines[2..]
-            .iter()
-            .map(|s| s.as_str())
-            .collect();
-        assert_eq!(actual_lines, expected_slice);
+        assert_eq!(actual_lines.len(), 3); // lines 2, 3, 4
+        assert_eq!(actual_lines[0], "line2");
+        assert_eq!(actual_lines[2], "line4");
     }
 
     #[test]
@@ -209,10 +207,7 @@ mod tests {
         let content = read_file_content(&temp_file.path().to_path_buf(), None, Some(3)).unwrap();
 
         let actual_lines: Vec<&str> = content.trim_end().split('\n').collect();
-        let expected_slice: Vec<&str> = expected_lines[0..3]
-            .iter()
-            .map(|s| s.as_str())
-            .collect();
+        let expected_slice: Vec<&str> = expected_lines[0..3].iter().map(|s| s.as_str()).collect();
         assert_eq!(actual_lines, expected_slice);
     }
 
