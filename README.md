@@ -732,6 +732,18 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "stopReason": "string (e.g., 'Stop', 'Cancelled', 'Error')"
 }</code></pre></td>
     </tr>
+    <tr id="readtextfile">
+      <td><code>ReadTextFile</code></td>
+      <td>Agent requests to read a text file</td>
+      <td>🤖 Agent (requires -> <a href="#respond">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "path": "string",
+  "line": "number (optional, 1-based)",
+  "limit": "number (optional, max lines to read)"
+}</code></pre></td>
+    </tr>
     <tr id="sessioncreated">
       <td><code>SessionCreated</code></td>
       <td>New session created</td>
@@ -1051,6 +1063,17 @@ Below is a list of all autocommands and their associated data (passed to the cal
     "lastModified": "ISO8601 string",
     "priority": "number"
   }
+}</code></pre></td>
+    </tr>
+    <tr id="writetextfile">
+      <td><code>WriteTextFile</code></td>
+      <td>Agent requests to write to a text file</td>
+      <td>🤖 Agent (requires -> <a href="#respond">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "path": "string",
+  "content": "string"
 }</code></pre></td>
     </tr>
   </tbody>
