@@ -1,19 +1,35 @@
 //! UI waiting utilities for integration tests
 //! Pattern based on e2e/src/utilities/autocommand.rs
 use std::time::{Duration, Instant};
+use hermes::acp::error::Error;
+use tracing::debug;
 
 /// Poll with sleep until condition is met or timeout
 pub fn wait_for<F>(condition: F, timeout: Duration) -> bool
 where
     F: Fn() -> bool,
 {
+    wait_for_some(timeout, || {
+        if condition() {
+            Some(())
+        } else {
+            None
+        }
+    }).is_ok()
+}
+
+pub fn wait_for_some<F, R>(timeout: Duration, callback: F) -> Result<R, Error> 
+where
+    F: Fn() -> Option<R>,
+{
     let start = Instant::now();
     loop {
-        if condition() {
-            return true;
+        let result = callback();
+        if result.is_some() {
+            return Ok(result.unwrap());
         }
         if start.elapsed() > timeout {
-            return false;
+            return Err(Error::Internal(format!("Timeout after {:?} waiting for condition", timeout)));
         }
         nvim_oxi::api::command("sleep 50m").ok();
     }
@@ -23,7 +39,7 @@ where
 /// Floating windows have a non-empty 'relative' field in their config
 pub fn find_floating_window() -> Option<nvim_oxi::api::Window> {
     let wins = nvim_oxi::api::list_wins();
-    eprintln!("[DEBUG] Total windows: {}", wins.len());
+    debug!("Total windows: {}", wins.len());
 
     wins.into_iter().find(|win| {
         // Floating windows have a 'relative' option set (to 'editor', 'win', or 'cursor')
@@ -37,10 +53,12 @@ pub fn find_floating_window() -> Option<nvim_oxi::api::Window> {
         let is_floating = result
             .map(|rel| {
                 let floating = !rel.is_empty();
-                eprintln!("[DEBUG] Window relative='{}', floating={}", rel, floating);
+                debug!("Window relative='{}', floating={}", rel, floating);
                 floating
             })
             .unwrap_or(false);
+
+        debug!("Window: {:#?}, is_floating: {}", win, is_floating);
 
         is_floating
     })
@@ -48,9 +66,7 @@ pub fn find_floating_window() -> Option<nvim_oxi::api::Window> {
 
 /// Wait for floating window to appear
 pub fn wait_for_floating_window(timeout: Duration) -> Option<nvim_oxi::api::Window> {
-    wait_for(|| find_floating_window().is_some(), timeout)
-        .then(find_floating_window)
-        .flatten()
+    wait_for_some(timeout, find_floating_window).ok()
 }
 
 /// Wait for channel to receive outcome

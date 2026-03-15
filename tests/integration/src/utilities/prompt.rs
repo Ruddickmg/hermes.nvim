@@ -85,7 +85,6 @@ fn test_get_permission_prompt_from_expected_set() -> nvim_oxi::Result<()> {
 }
 
 #[nvim_oxi::test]
-fn test_get_permission_prompt_variety() -> nvim_oxi::Result<()> {
     // Call multiple times to verify we get different prompts (probabilistic)
     let mut prompts = Vec::new();
     for _ in 0..10 {

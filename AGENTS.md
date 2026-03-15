@@ -94,6 +94,52 @@ Adhere to "Clean Code" patterns.
 
 Tests ensure code reliability and prevent regression.
 
+### **CRITICAL: Test Placement Rules**
+
+**DO NOT** create tests in the wrong location. Follow these strict rules:
+
+1. **Unit Tests** - For pure Rust functions with no Neovim dependencies:
+   - **Location:** Inside `#[cfg(test)]` module in the same source file as the code being tested
+   - **Macro:** Use `#[test]`, NEVER use `#[nvim_oxi::test]`
+   - **Example:** Testing `get_random_element()` or `get_permission_prompt()` goes in `src/utilities/prompt.rs`
+
+2. **Integration Tests** - For code that interacts with Neovim APIs (buffers, files, windows):
+   - **Location:** `tests/integration/src/` directory
+   - **Macro:** Must use `#[nvim_oxi::test]` (runs inside Neovim)
+   - **Example:** Testing buffer manipulation, file operations, autocommands
+
+3. **E2E Tests** - For full system flow testing:
+   - **Location:** `tests/e2e/` directory
+   - **Macro:** Must use `#[nvim_oxi::test]`
+   - **Example:** Testing complete request-response cycles
+
+**WRONG (what NOT to do):**
+```rust
+// tests/integration/src/utilities/prompt.rs
+#[nvim_oxi::test]
+fn test_get_random_element() {  // Pure function, doesn't need Neovim!
+    let result = get_random_element(vec!["a", "b"]);  // This is a unit test!
+    assert!(...);
+}
+```
+
+**CORRECT:**
+```rust
+// src/utilities/prompt.rs
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]  // Regular test, not nvim_oxi::test
+    fn test_get_random_element() {
+        let result = get_random_element(vec!["a", "b"]);
+        assert!(...);
+    }
+}
+```
+
+**Guideline:** If a test doesn't call `nvim_oxi::api::*`, it's a **unit test** and belongs in the source file.
+
 ### Guidelines
 
 - **Coverage:** Cover all code paths, including edge cases and error handling.

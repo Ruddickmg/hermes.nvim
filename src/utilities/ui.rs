@@ -2,6 +2,7 @@ use agent_client_protocol::PermissionOption;
 
 use crate::acp::{Result, error::Error};
 
+// TODO: I can't figure out how to test this functionality, hopeully someday this can be tested in an automated fashion
 /// Show permission request UI with vim.ui.select
 /// The callback will be invoked with the selected option_id when user makes a selection
 /// Callback is FnOnce since it should only be called once
