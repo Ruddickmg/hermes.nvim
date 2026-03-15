@@ -341,9 +341,9 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-> **Default behavior:** If no autocommand handler is defined for `PermissionRequest`, Hermes will use the native Neovim select menu to gather a response from the user.
->
 > **Responds to:** [PermissionRequest](#permissionrequest) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for `PermissionRequest`, Hermes will use the native Neovim select menu to gather a response from the user.
 
 
 #### Write to file
@@ -367,12 +367,12 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
+> **Responds to:** [WriteTextFile](#writetextfile) autocommand.
+>
 > **Default behavior:** If no autocommand handler is defined for `WriteTextFile`, Hermes will:
 > - Update buffers if they are open and mark them as modified (will not automatically save)
 > - Refresh the view of any modified buffers
 > - Write to the file on disk if it is not open in a buffer
->
-> **Responds to:** [WriteTextFile](#writetextfile) autocommand.
 
 
 #### Read from file
@@ -401,13 +401,13 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
+> **Responds to:** [ReadTextFile](#readtextfile) autocommand.
+>
 > **Default behavior:** If no autocommand handler is defined for `ReadTextFile`, Hermes will:
 > - Read the file from disk if one is not open in a buffer
 > - Read the current state of the open buffer if the target file is open
 > - Start at the `line` number if defined
 > - End at the `limit` number if defined
->
-> **Responds to:** [ReadTextFile](#readtextfile) autocommand.
 
 ## Autocommands
 
@@ -676,7 +676,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="permissionrequest">
       <td><code>PermissionRequest</code></td>
       <td>Agent requests permission to execute a tool</td>
-      <td>🤖 Agent (requires -> <a href="#permission-response">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#permission-request">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -735,7 +735,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="readtextfile">
       <td><code>ReadTextFile</code></td>
       <td>Agent requests to read a text file</td>
-      <td>🤖 Agent (requires -> <a href="#respond">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#read-from-file">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -1068,7 +1068,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="writetextfile">
       <td><code>WriteTextFile</code></td>
       <td>Agent requests to write to a text file</td>
-      <td>🤖 Agent (requires -> <a href="#respond">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#write-to-file">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -1150,6 +1150,7 @@ Your options for log formats are:
 
 - [x] figure out cleanup after permission selection
 
+- [ ] use async for all the things
 - [ ] use smol instead of tokio to reduce build size
 - [ ] look into ways of improving ai integration
   - [ ] research RLM ([example](https://github.com/JaredStewart/coderlm))
