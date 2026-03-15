@@ -201,7 +201,29 @@ fn buffer_content_matches_update() -> nvim_oxi::Result<()> {
 - Use descriptive test names that clearly state what is being verified
 - Helper functions can reduce code duplication in setup
 
-**Example with helper function:**
+**Comparing multiple values in one assertion:**
+When you need to verify multiple related values (e.g., checking all elements of a collection), prefer comparing slices/arrays rather than individual element assertions. This maintains the single-assertion rule while still verifying all data.
+
+```rust
+// ❌ BAD: Multiple assertions for individual elements
+assert_eq!(actual_lines.len(), 3);
+assert_eq!(actual_lines[0], "line2");
+assert_eq!(actual_lines[1], "line3");
+assert_eq!(actual_lines[2], "line4");
+
+// ✅ GOOD: Single assertion comparing slices
+assert_eq!(actual_lines.as_slice(), &["line2", "line3", "line4"]);
+```
+
+**When to use this pattern:**
+- Verifying all elements in a collection match expected values
+- Checking multiple fields of a struct that form a logical unit
+- Comparing ordered sequences of data
+
+**When NOT to use this pattern:**
+- Each element represents a different behavior (should be separate tests)
+- Different error conditions need separate verification
+- The assertion would be too complex to understand at a glance
 ```rust
 fn setup_write_request(path: &Path, content: &str) -> WriteTextFileRequest {
     WriteTextFileRequest::new(SessionId::from("test-session"), path, content)

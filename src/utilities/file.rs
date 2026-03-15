@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::acp::{error::Error, Result};
+use crate::acp::{Result, error::Error};
 
 // TODO: move these helper functions into a "utilities" directory
 
@@ -192,13 +192,12 @@ mod tests {
 
     #[test]
     fn read_file_content_with_start_line() {
-        let (temp_file, expected_lines) = create_test_file_with_lines(5);
+        let (temp_file, _expected_lines) = create_test_file_with_lines(5);
         let content = read_file_content(&temp_file.path().to_path_buf(), Some(2), None).unwrap();
 
         let actual_lines: Vec<&str> = content.trim_end().split('\n').collect();
-        assert_eq!(actual_lines.len(), 3); // lines 2, 3, 4
-        assert_eq!(actual_lines[0], "line2");
-        assert_eq!(actual_lines[2], "line4");
+        // Compare slice to verify multiple values in single assertion
+        assert_eq!(actual_lines.as_slice(), &["line2", "line3", "line4"]);
     }
 
     #[test]

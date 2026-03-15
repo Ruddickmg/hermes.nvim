@@ -307,7 +307,7 @@ fn read_file_buffer_and_file_edge_case_line_one() -> nvim_oxi::Result<()> {
 }
 
 #[nvim_oxi::test]
-fn read_file_buffer_modifications_preserved() -> nvim_oxi::Result<()> {
+fn read_file_buffer_shows_modifications() -> nvim_oxi::Result<()> {
     let temp_file = NamedTempFile::new("modifications_test.txt").unwrap();
     temp_file.write_str("line0\nline1\nline2\n").unwrap();
     let path = temp_file.path().to_path_buf();
@@ -317,7 +317,67 @@ fn read_file_buffer_modifications_preserved() -> nvim_oxi::Result<()> {
     nvim_oxi::api::command("normal! gg0cwMODIFIED")?;
 
     // Read from buffer (should see modifications)
-    let (requests1, request_id1, mut receiver1) = setup_read_request(&path, Some(1), Some(2));
+    let (requests, request_id, mut receiver) = setup_read_request(&path, Some(1), Some(2));
+    requests
+        .default_response(&request_id, serde_json::Value::Null)
+        .ok();
+    let buffer_response = receiver
+        .try_recv()
+        .expect("Should receive buffer response")
+        .expect("Should be Ok");
+
+    // Buffer should show modified content
+    assert!(
+        buffer_response.content.contains("MODIFIED"),
+        "Buffer path should reflect unsaved modifications"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn read_file_file_ignores_modifications() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("modifications_test.txt").unwrap();
+    temp_file.write_str("line0\nline1\nline2\n").unwrap();
+    let path = temp_file.path().to_path_buf();
+
+    // Open in buffer and modify first line (but don't save)
+    nvim_oxi::api::command(&format!("edit {}", path.display()))?;
+    nvim_oxi::api::command("normal! gg0cwMODIFIED")?;
+
+    // Close buffer without saving
+    nvim_oxi::api::command("bd!")?;
+
+    // Read from disk (should see original content)
+    let (requests, request_id, mut receiver) = setup_read_request(&path, Some(1), Some(2));
+    requests
+        .default_response(&request_id, serde_json::Value::Null)
+        .ok();
+    let file_response = receiver
+        .try_recv()
+        .expect("Should receive file response")
+        .expect("Should be Ok");
+
+    // File should show original content, not modifications
+    assert!(
+        !file_response.content.contains("MODIFIED"),
+        "File path should read from disk without modifications"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn read_file_buffer_and_file_apply_same_conversion() -> nvim_oxi::Result<()> {
+    let temp_file = NamedTempFile::new("consistent_test.txt").unwrap();
+    temp_file.write_str("line0\nline1\nline2\n").unwrap();
+    let path = temp_file.path().to_path_buf();
+
+    // Open in buffer but don't modify
+    nvim_oxi::api::command(&format!("edit {}", path.display()))?;
+
+    // Read from buffer with 1-based indexing
+    let (requests1, request_id1, mut receiver1) = setup_read_request(&path, Some(2), Some(3));
     requests1
         .default_response(&request_id1, serde_json::Value::Null)
         .ok();
@@ -329,8 +389,8 @@ fn read_file_buffer_modifications_preserved() -> nvim_oxi::Result<()> {
     // Close buffer
     nvim_oxi::api::command("bd!")?;
 
-    // Read from disk (should see original content)
-    let (requests2, request_id2, mut receiver2) = setup_read_request(&path, Some(1), Some(2));
+    // Read from disk with same 1-based parameters
+    let (requests2, request_id2, mut receiver2) = setup_read_request(&path, Some(2), Some(3));
     requests2
         .default_response(&request_id2, serde_json::Value::Null)
         .ok();
@@ -339,24 +399,11 @@ fn read_file_buffer_modifications_preserved() -> nvim_oxi::Result<()> {
         .expect("Should receive file response")
         .expect("Should be Ok");
 
-    // Buffer should show modified content
-    assert!(
-        buffer_response.content.contains("MODIFIED"),
-        "Buffer path should reflect unsaved modifications"
-    );
-
-    // File should show original content
-    assert!(
-        !file_response.content.contains("MODIFIED"),
-        "File path should read from disk without modifications"
-    );
-
-    // But both should have applied the same 1-based conversion
-    // line=1, limit=2 should give us 1 line from each (start=0, end=1)
+    // Both should return identical content since both apply same 1-based conversion
+    // line=2, limit=3 (1-based) → start=1, end=2 (0-based) → "line1"
     assert_eq!(
-        buffer_response.content.lines().count(),
-        file_response.content.lines().count(),
-        "Both paths should return same number of lines after 1-based conversion"
+        buffer_response.content, file_response.content,
+        "Buffer and file paths should return identical content with same 1-based parameters"
     );
 
     Ok(())
