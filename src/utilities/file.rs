@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::acp::{Result, error::Error};
+use crate::acp::{error::Error, Result};
 
 // TODO: move these helper functions into a "utilities" directory
 
@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn read_file_content_with_start_line() {
-        let (temp_file, expected_lines) = create_test_file_with_lines(5);
+        let (temp_file, _expected_lines) = create_test_file_with_lines(5);
         let content = read_file_content(&temp_file.path().to_path_buf(), Some(2), None).unwrap();
 
         let actual_lines: Vec<&str> = content.trim_end().split('\n').collect();
@@ -256,5 +256,87 @@ mod tests {
         let result = read_file_content(&PathBuf::from("/nonexistent/file.txt"), None, None);
 
         assert!(result.is_err());
+    }
+
+    // Line ending handling tests (cross-platform)
+
+    #[test]
+    fn read_file_content_normalizes_windows_crlf() {
+        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
+        // Write Windows-style line endings (CRLF)
+        temp_file.write_all(b"line1\r\nline2\r\nline3\r\n").unwrap();
+
+        let content = read_file_content(&temp_file.path().to_path_buf(), None, None).unwrap();
+        // Should normalize to Unix line endings (LF)
+        assert_eq!(content, "line1\nline2\nline3\n");
+    }
+
+    #[test]
+    fn read_file_content_preserves_unix_lf() {
+        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
+        // Write Unix-style line endings (LF)
+        temp_file.write_all(b"line1\nline2\nline3\n").unwrap();
+
+        let content = read_file_content(&temp_file.path().to_path_buf(), None, None).unwrap();
+        // Should preserve Unix line endings
+        assert_eq!(content, "line1\nline2\nline3\n");
+    }
+
+    #[test]
+    fn read_file_content_handles_mixed_line_endings() {
+        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
+        // Write mixed line endings
+        temp_file.write_all(b"line1\r\nline2\nline3\r\n").unwrap();
+
+        let content = read_file_content(&temp_file.path().to_path_buf(), None, None).unwrap();
+        // All should be normalized to LF
+        assert_eq!(content, "line1\nline2\nline3\n");
+    }
+
+    #[test]
+    fn read_file_content_crlf_line_counting_is_accurate() {
+        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
+        // Write Windows-style line endings
+        temp_file
+            .write_all(b"line0\r\nline1\r\nline2\r\nline3\r\nline4\r\n")
+            .unwrap();
+
+        // Read from line 2 to line 4 (0-indexed)
+        let content = read_file_content(&temp_file.path().to_path_buf(), Some(2), Some(4)).unwrap();
+        let lines: Vec<&str> = content.trim_end().split('\n').collect();
+
+        // Should get lines 2 and 3 (0-indexed)
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], "line2");
+        assert_eq!(lines[1], "line3");
+    }
+
+    #[test]
+    fn read_file_content_crlf_last_line_no_ending() {
+        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
+        // Write file with CRLF but last line has no ending
+        temp_file.write_all(b"line1\r\nline2\r\nlast_line").unwrap();
+
+        let content = read_file_content(&temp_file.path().to_path_buf(), None, None).unwrap();
+        // Should still normalize properly and add trailing newline
+        assert_eq!(content, "line1\nline2\nlast_line\n");
+    }
+
+    #[test]
+    fn read_file_content_empty_lines_with_crlf() {
+        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
+        // Write file with empty lines using CRLF
+        temp_file
+            .write_all(b"line1\r\n\r\nline3\r\n\r\n\r\n")
+            .unwrap();
+
+        let content = read_file_content(&temp_file.path().to_path_buf(), None, None).unwrap();
+        let lines: Vec<&str> = content.split('\n').collect();
+
+        // Should preserve empty lines (5 newlines = 5 lines)
+        assert_eq!(lines.len(), 6); // "line1", "", "line3", "", "", ""
+        assert_eq!(lines[0], "line1");
+        assert_eq!(lines[1], "");
+        assert_eq!(lines[2], "line3");
     }
 }

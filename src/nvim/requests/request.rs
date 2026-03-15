@@ -178,9 +178,8 @@ impl Request {
                     panic!("Permission requests should have been handled in the if branch above")
                 }
                 Responder::ReadFileResponse(responder, data) => {
-                    let start = data.line.unwrap_or(0);
-                    let path = data.path.clone();
-                    let content = if let Some(buffer_content) = find_existing_buffer(&path) {
+                    let content = if let Some(buffer_content) = find_existing_buffer(&data.path) {
+                        let start = data.line.unwrap_or(0);
                         let end = data.limit.unwrap_or(
                             buffer_content
                                 .line_count()
@@ -200,11 +199,11 @@ impl Request {
                                         .collect::<String>(),
                                 )
                             })
-                    } else if let Ok(file_content) = read_file_content(&path, data.line, data.limit)
+                    } else if let Ok(file_content) = read_file_content(&data.path, data.line, data.limit)
                     {
                         Ok(ReadTextFileResponse::new(file_content))
                     } else {
-                        let display_path = path.display();
+                        let display_path = data.path.display();
                         error!("Failed to read content for file '{}'", display_path);
                         Err(agent_client_protocol::Error::resource_not_found(Some(
                             display_path.to_string(),

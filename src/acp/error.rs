@@ -2,10 +2,7 @@
 use crate::nvim::autocommands::Commands;
 use agent_client_protocol::Error as AcpError;
 use nvim_oxi::{api, lua};
-use std::{
-    path::PathBuf,
-    sync::{PoisonError, mpsc::SendError},
-};
+use std::sync::{PoisonError, mpsc::SendError};
 
 #[derive(Debug, Clone)]
 pub enum Error {
@@ -13,8 +10,6 @@ pub enum Error {
     Connection(String),
     Permissions(String),
     NoListenerAttached(Commands),
-    FileNotFound(PathBuf),
-    InvalidLineRange { start: u32, end: u32 },
 }
 
 impl std::fmt::Display for Error {
@@ -23,10 +18,6 @@ impl std::fmt::Display for Error {
             Error::Connection(msg) => write!(f, "Connection error: {}", msg),
             Error::Permissions(msg) => write!(f, "Permissions error: {}", msg),
             Error::Internal(msg) => write!(f, "Internal error: {}", msg),
-            Error::FileNotFound(path) => write!(f, "File not found: {:?}", path),
-            Error::InvalidLineRange { start, end } => {
-                write!(f, "Invalid line range: start ({}), end ({})", start, end)
-            }
             Error::NoListenerAttached(command) => {
                 write!(f, "No listener attached for autocommand: {}", command)
             }
