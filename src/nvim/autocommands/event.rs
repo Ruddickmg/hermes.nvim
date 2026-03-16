@@ -19,6 +19,7 @@ impl From<Responder> for Commands {
             Responder::ReadFileResponse(..) => Commands::ReadTextFile,
             Responder::PermissionResponse(..) => Commands::PermissionRequest,
             Responder::WriteFileResponse(..) => Commands::WriteTextFile,
+            Responder::CreateTerminal(..) => Commands::CreateTerminal,
         }
     }
 }

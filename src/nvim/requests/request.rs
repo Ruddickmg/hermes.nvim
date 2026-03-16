@@ -1,17 +1,19 @@
 use agent_client_protocol::{
-    CreateTerminalRequest, CreateTerminalResponse, ReadTextFileRequest, ReadTextFileResponse, RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome, WriteTextFileRequest, WriteTextFileResponse
+    CreateTerminalRequest, CreateTerminalResponse, ReadTextFileRequest, ReadTextFileResponse,
+    RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
+    WriteTextFileRequest, WriteTextFileResponse,
 };
 use nvim_oxi::conversion::FromObject;
 use std::sync::Arc;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::acp::Result;
 use crate::acp::error::Error;
+use crate::acp::Result;
 use crate::utilities::{
-    NvimHandler, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
-    save_buffer_to_disk, show_permission_ui, update_buffer_content,
+    acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
+    show_permission_ui, update_buffer_content, NvimHandler, TransmitToNvim,
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
@@ -23,7 +25,10 @@ pub enum Responder {
         ReadTextFileRequest,
     ),
     WriteFileResponse(oneshot::Sender<WriteTextFileResponse>, WriteTextFileRequest),
-    CreateTerminal(oneshot::Sender<agent_client_protocol::Result<CreateTerminalResponse>>, CreateTerminalRequest),
+    CreateTerminal(
+        oneshot::Sender<agent_client_protocol::Result<CreateTerminalResponse>>,
+        CreateTerminalRequest,
+    ),
 }
 
 #[derive(Clone)]
@@ -127,6 +132,17 @@ impl Request {
                 sender.send(outcome).map_err(|e| {
                     Error::Internal(format!(
                         "Failed to send response for request '{}': {:?}",
+                        self.id, e
+                    ))
+                })?;
+            }
+            Responder::CreateTerminal(sender, _) => {
+                let result = String::from_object(response)
+                    .map(CreateTerminalResponse::new)
+                    .map_err(|_| agent_client_protocol::Error::invalid_params());
+                sender.send(result).map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send terminal response for request '{}': {:?}",
                         self.id, e
                     ))
                 })?;
@@ -236,6 +252,18 @@ impl Request {
                             "Failed to respond to ACP about successful file write".to_string(),
                         )
                     })?;
+                }
+                Responder::CreateTerminal(_sender, _data) => {
+                    // TODO: Implement default terminal creation flow
+                    // This will create a terminal job using Neovim's :terminal command
+                    // and manage output/exit events for the ACP agent
+                    // For now, this is a stub - user must define autocommand handler
+                    error!(
+                        "CreateTerminal default flow not yet implemented. Please define a CreateTerminal autocommand handler."
+                    );
+                    return Err(Error::Internal(
+                        "CreateTerminal default flow not implemented".to_string(),
+                    ));
                 }
             }
             self.finish()?;

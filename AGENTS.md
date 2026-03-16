@@ -270,6 +270,10 @@ fn write_request_response_sent() -> nvim_oxi::Result<()> {
 
 Aim for the **minimum number of tests that cover all code paths**. Avoid testing the same logic multiple times.
 
+**⚠️ CRITICAL: All tests must test application code**
+
+Every test should verify behavior from the codebase being tested. Do NOT write tests that only exercise Rust language features, standard library functions, or external crate functionality without involving your application logic.
+
 **Examples of redundancy to avoid:**
 
 - **Language features:** Do not test Rust's built-in functionality (e.g., auto-derived traits like `PartialEq`, `Clone`, `Debug`, field access, Arc/Mutex usage). Assume the Rust compiler and standard library work correctly. Only test your own logic and custom trait implementations. Reading a field from a struct through an Arc/Mutex is standard Rust - don't test it.

@@ -410,7 +410,7 @@ vim.api.nvim_create_autocmd("User", {
 > - End at the `limit` number if defined
 
 
-#### Create Terminal for agent communication
+#### Create Terminal for agent communication 
 
 ```lua
 local hermes = require("hermes")
@@ -699,6 +699,20 @@ Below is a list of all autocommands and their associated data (passed to the cal
     "version": "string",
     "title": "string (optional)"
   }
+}</code></pre></td>
+    </tr>
+    <tr id="createterminal">
+      <td><code>CreateTerminal</code></td>
+      <td>Agent requests to create a terminal for command execution</td>
+      <td>🤖 Agent (requires -> <a href="#create-terminal-for-agent-communication">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "command": "string",
+  "args": ["string"],
+  "env": [{"name": "string", "value": "string"}],
+  "cwd": "string (optional)",
+  "outputByteLimit": "number (optional)"
 }</code></pre></td>
     </tr>
     <tr id="modecurrent">
