@@ -5,6 +5,7 @@ use agent_client_protocol::{
 use hermes::acp::handler::Handler;
 use hermes::nvim::state::PluginState;
 use crate::helpers::{MockClient, MockRequestHandler};
+use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -16,7 +17,7 @@ fn create_test_notification() -> SessionNotification {
 #[nvim_oxi::test]
 fn test_can_receive_notifications_returns_true_by_default() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    let handler = Handler::new(state.clone(), Arc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
 
     let result = tokio_test::block_on(handler.can_receive_notifications());
     assert!(result, "Should return true by default");
@@ -29,7 +30,7 @@ fn test_can_receive_notifications_returns_false_when_disabled() -> nvim_oxi::Res
     let state = Arc::new(Mutex::new(PluginState::default()));
     state.blocking_lock().config.permissions.allow_notifications = false;
 
-    let handler = Handler::new(state.clone(), Arc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
 
     let result = tokio_test::block_on(handler.can_receive_notifications());
     assert!(!result, "Should return false when disabled");
@@ -42,7 +43,7 @@ fn test_session_notification_permissions_allowed() -> nvim_oxi::Result<()> {
     let _mock = MockClient::new();
     let state = Arc::new(Mutex::new(PluginState::default()));
 
-    let handler = Handler::new(state.clone(), Arc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
 
     let notification = create_test_notification();
     let res: agent_client_protocol::Result<()> = tokio_test::block_on(handler.session_notification(notification));
@@ -57,7 +58,7 @@ fn test_session_notification_permissions_denied() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     state.blocking_lock().config.permissions.allow_notifications = false;
 
-    let handler = Handler::new(state.clone(), Arc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
 
     let notification = create_test_notification();
     let res = tokio_test::block_on(handler.session_notification(notification));
@@ -72,7 +73,7 @@ fn test_session_notification_permissions_denied_does_not_call_handler() -> nvim_
     let state = Arc::new(Mutex::new(PluginState::default()));
     state.blocking_lock().config.permissions.allow_notifications = false;
 
-    let handler = Handler::new(state.clone(), Arc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
 
     let notification = create_test_notification();
     let _ = tokio_test::block_on(handler.session_notification(notification));

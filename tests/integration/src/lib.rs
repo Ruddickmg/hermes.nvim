@@ -11,6 +11,7 @@ use hermes::nvim::{
     state::PluginState,
 };
 use nvim_oxi::api::opts::{CreateAugroupOpts, CreateAutocmdOpts};
+use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -69,7 +70,7 @@ fn test_handler_new_creates_valid_instance() -> nvim_oxi::Result<()> {
     // Integration: Verify Handler can be instantiated with Requests handler
     // This tests the constructor which sets up mpsc channel and AsyncHandle
     let state = Arc::new(Mutex::new(PluginState::default()));
-    let requests = Arc::new(Requests::new()?);
+    let requests = Rc::new(Requests::new()?);
     let handler = Handler::new(state, requests).expect("Handler creation should succeed");
     
     // If we get here without error, the integration worked
@@ -84,7 +85,7 @@ fn test_execute_autocommand_sends_to_channel() -> nvim_oxi::Result<()> {
     // Integration: Verify message is queued via mpsc channel
     // Uses: channel.send(), AsyncHandle.send()
     let state = Arc::new(Mutex::new(PluginState::default()));
-    let requests = Arc::new(Requests::new()?);
+    let requests = Rc::new(Requests::new()?);
     let handler = Handler::new(state, requests).expect("Handler creation should succeed");
     
     // Execute an autocommand with test data

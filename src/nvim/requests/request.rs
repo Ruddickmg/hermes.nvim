@@ -5,20 +5,20 @@ use agent_client_protocol::{
     TerminalOutputResponse, WaitForTerminalExitRequest, WriteTextFileRequest,
     WriteTextFileResponse,
 };
-use nvim_oxi::Dictionary;
 use nvim_oxi::conversion::FromObject;
+use nvim_oxi::Dictionary;
 use std::sync::Arc;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::acp::Result;
 use crate::acp::error::Error;
+use crate::acp::Result;
 use crate::nvim::autocommands::Commands;
 use crate::nvim::terminal::{Terminal, TerminalManager};
 use crate::utilities::{
-    NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
-    save_buffer_to_disk, show_permission_ui, update_buffer_content,
+    acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
+    show_permission_ui, update_buffer_content, NvimMessenger, TransmitToNvim,
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
@@ -387,5 +387,82 @@ impl Request {
             self.finish()?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nvim_oxi::Object;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn parse_terminal_output_accepts_plain_string() {
+        let obj = Object::from("hello world");
+        let result = Request::parse_terminal_output(obj);
+        assert_eq!(result.unwrap(), ("hello world".to_string(), false));
+    }
+
+    #[test]
+    fn parse_terminal_output_accepts_empty_string() {
+        let obj = Object::from("");
+        let result = Request::parse_terminal_output(obj);
+        assert_eq!(result.unwrap(), ("".to_string(), false));
+    }
+
+    #[test]
+    fn parse_terminal_output_accepts_dictionary_with_output_field() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("output", Object::from("test output"));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_output(obj);
+        assert_eq!(result.unwrap(), ("test output".to_string(), false));
+    }
+
+    #[test]
+    fn parse_terminal_output_accepts_dictionary_with_truncated_true() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("output", Object::from("test output"));
+        dict.insert("truncated", Object::from(true));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_output(obj);
+        assert_eq!(result.unwrap(), ("test output".to_string(), true));
+    }
+
+    #[test]
+    fn parse_terminal_output_accepts_dictionary_with_truncated_false() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("output", Object::from("test output"));
+        dict.insert("truncated", Object::from(false));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_output(obj);
+        assert_eq!(result.unwrap(), ("test output".to_string(), false));
+    }
+
+    #[test]
+    fn parse_terminal_output_rejects_missing_output_field() {
+        let dict = nvim_oxi::Dictionary::default();
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_output(obj);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_terminal_output_rejects_invalid_output_type() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("output", Object::from(123i64));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_output(obj);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_terminal_output_rejects_invalid_truncated_type() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("output", Object::from("test"));
+        dict.insert("truncated", Object::from("yes"));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_output(obj);
+        assert!(result.is_err());
     }
 }

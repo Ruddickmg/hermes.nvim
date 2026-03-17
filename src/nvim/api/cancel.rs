@@ -1,5 +1,5 @@
 use agent_client_protocol::CancelNotification;
-use nvim_oxi::{Function, Object, lua::Error};
+use nvim_oxi::{lua::Error, Function, Object};
 use std::{cell::RefCell, rc::Rc};
 use tracing::{debug, instrument};
 

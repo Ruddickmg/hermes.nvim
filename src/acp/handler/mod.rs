@@ -13,8 +13,7 @@ use crate::{
 };
 use nvim_oxi::{Array, Dictionary, Object, api::opts::ExecAutocmdsOpts};
 use serde::Serialize;
-use std::{fmt::Debug, rc::Rc};
-use std::{fmt::Display, sync::Arc};
+use std::{fmt::Debug, fmt::Display, rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{debug, error, instrument, warn};
 
