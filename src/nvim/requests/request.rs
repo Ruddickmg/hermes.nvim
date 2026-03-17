@@ -98,10 +98,7 @@ impl Request {
 
     pub fn terminal(&self) -> bool {
         let responder = self.responder.blocking_lock();
-        let requries = match responder.as_ref() {
-            Some(Responder::TerminalCreate(..)) => true,
-            _ => false,
-        };
+        let requries = matches!(responder.as_ref(), Some(Responder::TerminalCreate(..)));
         drop(responder);
         requries
     }
@@ -228,13 +225,13 @@ impl Request {
                     ))
                 })?;
             }
-            Responder::TerminalExit(sender, _) => {
+            Responder::TerminalExit(_sender, _) => {
                 unimplemented!(
                     "Terminal exit response handling is not yet implemented. Request ID '{}'",
                     self.id
                 );
             }
-            Responder::TerminalRelease(sender, _) => {
+            Responder::TerminalRelease(_sender, _) => {
                 unimplemented!(
                     "Terminal release is not yet implemented. Request ID '{}'",
                     self.id
@@ -380,7 +377,7 @@ impl Request {
                 Responder::TerminalExit(sender, data) => {
                     terminal_manager.notify_when_finished(&data.terminal_id.to_string(), sender)?;
                 }
-                Responder::TerminalRelease(sender, data) => {
+                Responder::TerminalRelease(_sender, _data) => {
                     unimplemented!(
                         "Terminal release is not yet implemented. Request ID '{}'",
                         self.id

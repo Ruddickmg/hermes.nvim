@@ -113,7 +113,7 @@ pub fn refresh_view() -> Result<()> {
 pub fn read_file_content(path: &PathBuf, start: Option<u32>, end: Option<u32>) -> Result<String> {
     use std::io::BufRead;
 
-    let file = File::open(&path).map_err(|e| Error::Internal(e.to_string()))?;
+    let file = File::open(path).map_err(|e| Error::Internal(e.to_string()))?;
     let reader = BufReader::new(file);
 
     // Convert options to u64 for safe arithmetic
@@ -121,26 +121,25 @@ pub fn read_file_content(path: &PathBuf, start: Option<u32>, end: Option<u32>) -
     let end_line = end.map(|e| e as u64);
 
     // Validate bounds: if end is specified, start must be <= end
-    if let Some(e) = end_line {
-        if start_line > e {
-            return Err(Error::Internal(format!(
-                "Invalid line range: start ({}) > end ({})",
-                start_line, e
-            )));
-        }
+    if let Some(e) = end_line
+        && start_line > e
+    {
+        return Err(Error::Internal(format!(
+            "Invalid line range: start ({}) > end ({})",
+            start_line, e
+        )));
     }
 
     let mut content = String::new();
-    let mut current_line: u64 = 0;
 
-    for line_result in reader.lines() {
+    for (current_line, line_result) in (0_u64..).zip(reader.lines()) {
         let line = line_result.map_err(|e| Error::Internal(e.to_string()))?;
 
         // Check if we should stop reading
-        if let Some(end) = end_line {
-            if current_line >= end {
-                break;
-            }
+        if let Some(end) = end_line
+            && current_line >= end
+        {
+            break;
         }
 
         // Check if we should include this line
@@ -150,8 +149,6 @@ pub fn read_file_content(path: &PathBuf, start: Option<u32>, end: Option<u32>) -
             content.push_str(&line);
             content.push('\n');
         }
-
-        current_line += 1;
     }
 
     Ok(content)

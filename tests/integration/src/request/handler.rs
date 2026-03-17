@@ -11,7 +11,7 @@ use std::time::Duration;
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
-fn create_test_permission_request(session_id: impl Into<String>) -> RequestPermissionRequest {
+fn _create_test_permission_request(session_id: impl Into<String>) -> RequestPermissionRequest {
     RequestPermissionRequest::new(
         SessionId::from(session_id.into()),
         ToolCallUpdate::new(
@@ -121,7 +121,7 @@ fn test_cancel_session_requests_only_affects_target_session() -> nvim_oxi::Resul
     let session_id = String::from("target-session");
     let other_session_id = String::from("other-session");
     let (target_sender, mut target_receiver) = oneshot::channel::<RequestPermissionOutcome>();
-    let (other_sender, mut other_receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (other_sender, other_receiver) = oneshot::channel::<RequestPermissionOutcome>();
 
     requests.add_request(
         session_id.clone(),
@@ -144,7 +144,7 @@ fn test_cancel_session_requests_only_affects_target_session() -> nvim_oxi::Resul
     assert_eq!(target_outcome, RequestPermissionOutcome::Cancelled);
 
     // Verify other session is NOT affected (separate test)
-    let _ = other_receiver;
+    drop(other_receiver);
     Ok(())
 }
 

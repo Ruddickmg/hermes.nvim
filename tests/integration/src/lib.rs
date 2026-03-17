@@ -2,6 +2,8 @@
 //!
 //! Tests verify that the Handler struct properly manages autocommands
 //! and communicates with the Neovim main thread.
+#![allow(clippy::arc_with_non_send_sync)]
+
 use hermes::acp::handler::Handler;
 use hermes::nvim::{
     autocommands::Commands,

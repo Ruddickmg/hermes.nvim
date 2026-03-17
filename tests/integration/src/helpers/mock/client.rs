@@ -19,6 +19,12 @@ pub struct MockClient {
     pub notification_called: Arc<Mutex<bool>>,
 }
 
+impl Default for MockClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockClient {
     pub fn new() -> Self {
         Self {

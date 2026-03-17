@@ -1,10 +1,15 @@
 //! Mock implementation of RequestHandler trait for testing
 use hermes::nvim::requests::{Request, RequestHandler, Responder};
-use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct MockRequestHandler;
+
+impl Default for MockRequestHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl MockRequestHandler {
     pub fn new() -> Self {
