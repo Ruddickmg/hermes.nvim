@@ -1,4 +1,4 @@
-use crate::acp::{Result, error::Error};
+use crate::acp::{error::Error, Result};
 use agent_client_protocol::EnvVariable;
 use nvim_oxi::{Array, Dictionary, Function, Object};
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
@@ -12,8 +12,8 @@ pub struct TerminalInfo {
     job_id: Option<i64>,
     pub truncated: Rc<RefCell<Option<bool>>>,
     pub output: Rc<RefCell<String>>,
-    pub exit_status: Rc<RefCell<Option<(u32, String)>>>,
-    pub exit_response: Rc<RefCell<Option<oneshot::Sender<(u32, String)>>>>,
+    pub exit_status: Rc<RefCell<Option<(Option<u32>, Option<String>)>>>,
+    pub exit_response: Rc<RefCell<Option<oneshot::Sender<(Option<u32>, Option<String>)>>>>,
     buffer: Option<nvim_oxi::api::Buffer>,
     pub configuration: Dictionary,
 }
@@ -53,19 +53,31 @@ pub fn process_terminal_input(
 }
 
 /// Pure function to handle terminal exit
+/// Parses exit_code (i64 from Neovim) to Option<u32> (None if negative)
+/// Parses event String to Option<String> (None if empty)
 /// Returns Err if the oneshot channel is closed (recipient dropped)
 pub fn handle_terminal_exit(
-    exit_code: u32,
+    exit_code: i64,
     event: String,
-    exit_status: &mut Option<(u32, String)>,
-    exit_response: &mut Option<oneshot::Sender<(u32, String)>>,
+    exit_status: &mut Option<(Option<u32>, Option<String>)>,
+    exit_response: &mut Option<oneshot::Sender<(Option<u32>, Option<String>)>>,
 ) -> std::result::Result<(), String> {
+    // Parse exit_code: None if negative, else Some(exit_code as u32)
+    let parsed_exit = if exit_code < 0 {
+        None
+    } else {
+        Some(exit_code as u32)
+    };
+
+    // Parse event: None if empty, else Some(event)
+    let parsed_event = if event.is_empty() { None } else { Some(event) };
+
     if let Some(sender) = exit_response.take() {
-        sender.send((exit_code, event)).map_err(|_| {
+        sender.send((parsed_exit, parsed_event)).map_err(|_| {
             "Error occurred while sending terminal exit notification: channel closed".to_string()
         })
     } else {
-        *exit_status = Some((exit_code, event));
+        *exit_status = Some((parsed_exit, parsed_event));
         Ok(())
     }
 }
@@ -73,8 +85,9 @@ pub fn handle_terminal_exit(
 impl TerminalInfo {
     pub fn new(byte_limit: Option<u64>) -> Self {
         let output = Rc::new(RefCell::new(String::new()));
-        let exit_status: Rc<RefCell<Option<(u32, String)>>> = Rc::new(RefCell::new(None));
-        let exit_response: Rc<RefCell<Option<oneshot::Sender<(u32, String)>>>> =
+        let exit_status: Rc<RefCell<Option<(Option<u32>, Option<String>)>>> =
+            Rc::new(RefCell::new(None));
+        let exit_response: Rc<RefCell<Option<oneshot::Sender<(Option<u32>, Option<String>)>>>> =
             Rc::new(RefCell::new(None));
         let truncated = Rc::new(RefCell::new(None));
 
@@ -108,13 +121,13 @@ impl TerminalInfo {
     }
 
     fn create_exit_callback(
-        exit_status: Rc<RefCell<Option<(u32, String)>>>,
-        exit_response: Rc<RefCell<Option<oneshot::Sender<(u32, String)>>>>,
+        exit_status: Rc<RefCell<Option<(Option<u32>, Option<String>)>>>,
+        exit_response: Rc<RefCell<Option<oneshot::Sender<(Option<u32>, Option<String>)>>>>,
     ) -> ExitCallback {
         Function::from_fn(move |(_, exit_code, event): (i64, i64, String)| {
             let mut status = exit_status.borrow_mut();
             let mut response = exit_response.borrow_mut();
-            match handle_terminal_exit(exit_code as u32, event, &mut *status, &mut *response) {
+            match handle_terminal_exit(exit_code, event, &mut *status, &mut *response) {
                 Ok(()) => Ok(()),
                 Err(e) => Err(nvim_oxi::lua::Error::MemoryError(e)),
             }
@@ -164,7 +177,7 @@ pub trait Terminal {
     fn content(&self) -> String;
     fn truncated(&self) -> bool;
     fn close(&self) -> Result<()>;
-    fn report_exit_to(&self, sender: oneshot::Sender<(u32, String)>) -> Result<()>;
+    fn report_exit_to(&self, sender: oneshot::Sender<(Option<u32>, Option<String>)>) -> Result<()>;
     fn id(&self) -> Uuid;
     fn from_request(data: agent_client_protocol::CreateTerminalRequest) -> Self;
 }
@@ -182,7 +195,7 @@ impl Terminal for TerminalInfo {
         self.truncated.borrow().is_some()
     }
 
-    fn report_exit_to(&self, sender: oneshot::Sender<(u32, String)>) -> Result<()> {
+    fn report_exit_to(&self, sender: oneshot::Sender<(Option<u32>, Option<String>)>) -> Result<()> {
         if let Some(exit_code) = self.exit_status.borrow_mut().take() {
             sender.send(exit_code).map_err(|e| {
                 Error::Internal(format!(
@@ -321,30 +334,59 @@ mod tests {
 
     #[test]
     fn handle_exit_sends_immediately_when_sender_available() {
-        let mut exit_status: Option<(u32, String)> = None;
-        let mut exit_response: Option<oneshot::Sender<(u32, String)>> = None;
+        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
+        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
 
         let (sender, mut receiver) = oneshot::channel();
         exit_response = Some(sender);
 
-        let result =
+        let _result =
             handle_terminal_exit(42, "exit".to_string(), &mut exit_status, &mut exit_response);
 
-        assert!(result.is_ok());
-        assert_eq!(receiver.try_recv().unwrap(), (42, "exit".to_string()));
+        assert_eq!(
+            receiver.try_recv().unwrap(),
+            (Some(42), Some("exit".to_string()))
+        );
         assert!(exit_status.is_none());
     }
 
     #[test]
     fn handle_exit_stores_status_when_no_sender() {
-        let mut exit_status: Option<(u32, String)> = None;
-        let mut exit_response: Option<oneshot::Sender<(u32, String)>> = None;
+        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
+        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
 
         let result =
             handle_terminal_exit(1, "error".to_string(), &mut exit_status, &mut exit_response);
 
         assert!(result.is_ok());
-        assert_eq!(exit_status, Some((1, "error".to_string())));
+        assert_eq!(exit_status, Some((Some(1), Some("error".to_string()))));
         assert!(exit_response.is_none());
+    }
+
+    #[test]
+    fn handle_exit_parses_negative_code_as_none() {
+        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
+        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+
+        let result = handle_terminal_exit(
+            -1,
+            "SIGTERM".to_string(),
+            &mut exit_status,
+            &mut exit_response,
+        );
+
+        assert!(result.is_ok());
+        assert_eq!(exit_status, Some((None, Some("SIGTERM".to_string()))));
+    }
+
+    #[test]
+    fn handle_exit_parses_empty_event_as_none() {
+        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
+        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+
+        let result = handle_terminal_exit(0, "".to_string(), &mut exit_status, &mut exit_response);
+
+        assert!(result.is_ok());
+        assert_eq!(exit_status, Some((Some(0), None)));
     }
 }

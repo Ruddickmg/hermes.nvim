@@ -5,20 +5,20 @@ use agent_client_protocol::{
     SelectedPermissionOutcome, TerminalOutputRequest, TerminalOutputResponse,
     WaitForTerminalExitRequest, WriteTextFileRequest, WriteTextFileResponse,
 };
-use nvim_oxi::Dictionary;
 use nvim_oxi::conversion::FromObject;
+use nvim_oxi::Dictionary;
 use std::sync::Arc;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::acp::Result;
 use crate::acp::error::Error;
+use crate::acp::Result;
 use crate::nvim::autocommands::Commands;
 use crate::nvim::terminal::{Terminal, TerminalManager};
 use crate::utilities::{
-    NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
-    save_buffer_to_disk, show_permission_ui, update_buffer_content,
+    acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
+    show_permission_ui, update_buffer_content, NvimMessenger, TransmitToNvim,
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
@@ -38,7 +38,10 @@ pub enum Responder {
         oneshot::Sender<agent_client_protocol::Result<TerminalOutputResponse>>,
         TerminalOutputRequest,
     ),
-    TerminalExit(oneshot::Sender<(u32, String)>, WaitForTerminalExitRequest),
+    TerminalExit(
+        oneshot::Sender<(Option<u32>, Option<String>)>,
+        WaitForTerminalExitRequest,
+    ),
     TerminalRelease(
         oneshot::Sender<agent_client_protocol::Result<ReleaseTerminalResponse>>,
         ReleaseTerminalRequest,
@@ -231,7 +234,7 @@ impl Request {
                 })?;
             }
             Responder::TerminalExit(sender, _) => {
-                sender.send((0, String::new())).map_err(|e| {
+                sender.send((Some(0), Some(String::new()))).map_err(|e| {
                     Error::Internal(format!(
                         "Failed to send terminal exit response for request '{}': {:?}",
                         self.id, e

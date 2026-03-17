@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use tokio::sync::oneshot;
 
-use crate::acp::Result;
 use crate::acp::error::Error;
+use crate::acp::Result;
 use crate::nvim::terminal::Terminal;
 
 /// Manages all terminal (job) instances for a session
@@ -36,7 +36,7 @@ impl<T: Terminal + Clone> TerminalManager<T> {
     pub fn notify_when_finished(
         &self,
         id: &str,
-        sender: oneshot::Sender<(u32, String)>,
+        sender: oneshot::Sender<(Option<u32>, Option<String>)>,
     ) -> Result<()> {
         let terminals = self.terminals.borrow();
         let terminal = terminals.get(id);
@@ -83,7 +83,7 @@ mod tests {
     struct MockTerminal {
         id: Uuid,
         content: String,
-        exit_sender: Rc<RefCell<Option<oneshot::Sender<(u32, String)>>>>,
+        exit_sender: Rc<RefCell<Option<oneshot::Sender<(Option<u32>, Option<String>)>>>>,
         closed: Rc<RefCell<bool>>,
     }
 
@@ -111,7 +111,10 @@ mod tests {
             self.content.clone()
         }
 
-        fn report_exit_to(&self, sender: oneshot::Sender<(u32, String)>) -> Result<()> {
+        fn report_exit_to(
+            &self,
+            sender: oneshot::Sender<(Option<u32>, Option<String>)>,
+        ) -> Result<()> {
             *self.exit_sender.borrow_mut() = Some(sender);
             Ok(())
         }

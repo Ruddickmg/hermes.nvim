@@ -147,7 +147,7 @@ impl Client for Handler {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
         }
-        let (sender, receiver) = oneshot::channel::<(u32, String)>();
+        let (sender, receiver) = oneshot::channel::<(Option<u32>, Option<String>)>();
         self.execute_autocommand_request(
             args.session_id.to_string(),
             Commands::TerminalOutput,
@@ -158,10 +158,21 @@ impl Client for Handler {
         receiver
             .await
             .map_err(|_| Error::internal_error())
-            .map(|(exit_code, event)| {
-                WaitForTerminalExitResponse::new(
-                    TerminalExitStatus::new().signal(event).exit_code(exit_code),
-                )
+            .and_then(|(exit_code, signal)| {
+                // Validate that at least one field is present
+                if exit_code.is_none() && signal.is_none() {
+                    Err(Error::internal_error())
+                } else {
+                    let mut status = TerminalExitStatus::new();
+                    if let Some(code) = exit_code {
+                        status = status.exit_code(code);
+                    }
+                    if let Some(sig) = signal {
+                        status = status.signal(sig);
+                    }
+
+                    Ok(WaitForTerminalExitResponse::new(status))
+                }
             })
     }
 
