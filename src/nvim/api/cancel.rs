@@ -1,6 +1,6 @@
 use agent_client_protocol::CancelNotification;
 use nvim_oxi::{Function, Object, lua::Error};
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{cell::RefCell, rc::Rc};
 use tracing::{debug, instrument};
 
 use crate::{acp::connection::ConnectionManager, nvim::requests::RequestHandler};
@@ -8,7 +8,7 @@ use crate::{acp::connection::ConnectionManager, nvim::requests::RequestHandler};
 #[instrument(level = "trace", skip_all)]
 pub fn cancel<R: RequestHandler + 'static>(
     connection: Rc<RefCell<ConnectionManager>>,
-    request_handler: Arc<R>,
+    request_handler: Rc<R>,
 ) -> Object {
     let function: Function<String, Result<(), Error>> =
         Function::from_fn(move |session_id: String| -> Result<(), Error> {

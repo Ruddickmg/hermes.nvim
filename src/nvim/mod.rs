@@ -18,8 +18,7 @@ pub const GROUP: &str = "hermes";
 pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     let _logger = Logger::inititalize();
     let plugin_state = Arc::new(Mutex::new(state::PluginState::new()));
-    #[allow(clippy::arc_with_non_send_sync)]
-    let request_handler = Arc::new(requests::Requests::new()?);
+    let request_handler = Rc::new(requests::Requests::new()?);
     let event_handler = Arc::new(Handler::new(plugin_state.clone(), request_handler.clone())?);
     let connection_manager = Rc::new(RefCell::new(ConnectionManager::new(plugin_state.clone())));
 

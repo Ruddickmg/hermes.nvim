@@ -13,7 +13,7 @@ use crate::{
 };
 use nvim_oxi::{Array, Dictionary, Object, api::opts::ExecAutocmdsOpts};
 use serde::Serialize;
-use std::fmt::Debug;
+use std::{fmt::Debug, rc::Rc};
 use std::{fmt::Display, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{debug, error, instrument, warn};
@@ -29,7 +29,7 @@ impl Handler {
     #[instrument(level = "trace", skip_all)]
     pub fn new<R: RequestHandler + 'static>(
         state: Arc<Mutex<PluginState>>,
-        requests: Arc<R>,
+        requests: Rc<R>,
     ) -> Result<Self> {
         let nvim_requests = requests.clone();
         let channel = NvimMessenger::<NvimHandleArgs>::initialize(
