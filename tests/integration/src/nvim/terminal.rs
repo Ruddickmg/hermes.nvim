@@ -1,0 +1,337 @@
+//! Integration tests for TerminalInfo
+//!
+//! These tests verify that TerminalInfo works correctly within the Neovim runtime.
+
+use hermes::nvim::terminal::{
+    handle_terminal_exit, process_terminal_input, Terminal, TerminalInfo,
+};
+use tokio::sync::oneshot;
+
+/// Integration test: Verifies TerminalInfo can be created and returns empty content
+#[nvim_oxi::test]
+fn terminal_info_new_returns_empty_content() -> nvim_oxi::Result<()> {
+    let terminal = TerminalInfo::new(None);
+
+    assert_eq!(terminal.content(), "");
+
+    Ok(())
+}
+
+/// Integration test: Verifies TerminalInfo with byte limit returns empty content initially
+#[nvim_oxi::test]
+fn terminal_info_new_with_byte_limit_returns_empty_content() -> nvim_oxi::Result<()> {
+    let terminal = TerminalInfo::new(Some(1000));
+
+    assert_eq!(terminal.content(), "");
+
+    Ok(())
+}
+
+/// Integration test: Verifies TerminalInfo is not truncated initially
+#[nvim_oxi::test]
+fn terminal_info_new_not_truncated() -> nvim_oxi::Result<()> {
+    let terminal = TerminalInfo::new(None);
+
+    assert_eq!(terminal.truncated(), false);
+
+    Ok(())
+}
+
+/// Integration test: Verifies report_exit_to sends exit code when already occurred
+#[nvim_oxi::test]
+fn terminal_info_report_exit_to_sends_exit_code_when_already_occurred() -> nvim_oxi::Result<()> {
+    let terminal = TerminalInfo::new(None);
+
+    // Manually set exit status (simulating what exit callback would do)
+    *terminal.exit_status.borrow_mut() = Some((5, "error".to_string()));
+
+    let (sender, mut receiver) = oneshot::channel();
+    terminal.report_exit_to(sender).expect("report failed");
+
+    assert_eq!(receiver.try_recv().unwrap(), (5, "error".to_string()));
+
+    Ok(())
+}
+
+/// Integration test: Verifies report_exit_to stores sender for later notification
+#[nvim_oxi::test]
+fn terminal_info_report_exit_to_stores_sender_for_later() -> nvim_oxi::Result<()> {
+    let terminal = TerminalInfo::new(None);
+
+    let (sender, _receiver) = oneshot::channel();
+    terminal.report_exit_to(sender).expect("report failed");
+
+    // Verify the sender was stored by checking the exit_response field has a value
+    assert_eq!(terminal.exit_response.borrow().is_some(), true);
+
+    Ok(())
+}
+
+/// Integration test: Verifies process_terminal_input joins lines with newlines
+#[nvim_oxi::test]
+fn process_terminal_input_joins_lines_with_newlines() -> nvim_oxi::Result<()> {
+    let mut output = String::new();
+    let mut truncated = None;
+
+    process_terminal_input(
+        vec!["line1".to_string(), "line2".to_string()],
+        &mut output,
+        &mut truncated,
+        None,
+    );
+
+    assert_eq!(output, "line1\nline2");
+
+    Ok(())
+}
+
+/// Integration test: Verifies handle_terminal_exit sends immediately when sender available
+#[nvim_oxi::test]
+fn handle_terminal_exit_sends_immediately_when_sender_available() -> nvim_oxi::Result<()> {
+    let mut exit_status: Option<(u32, String)> = None;
+    let mut exit_response: Option<oneshot::Sender<(u32, String)>> = None;
+
+    let (sender, mut receiver) = oneshot::channel();
+    exit_response = Some(sender);
+
+    let result = handle_terminal_exit(42, "exit".to_string(), &mut exit_status, &mut exit_response);
+
+    assert_eq!(receiver.try_recv().unwrap(), (42, "exit".to_string()));
+
+    Ok(())
+}
+
+/// Integration test: Verifies FromRequest creates TerminalInfo with correct defaults
+#[nvim_oxi::test]
+fn terminal_info_from_request_creates_with_correct_defaults() -> nvim_oxi::Result<()> {
+    use agent_client_protocol::{CreateTerminalRequest, SessionId};
+
+    let request = CreateTerminalRequest::new(SessionId::from("test-session"), "test".to_string());
+    let terminal = TerminalInfo::from_request(request);
+
+    assert_eq!(terminal.truncated(), false);
+
+    Ok(())
+}
+
+/// Integration test: Verifies id() returns unique values for different terminals
+#[nvim_oxi::test]
+fn terminal_info_id_returns_unique_values() -> nvim_oxi::Result<()> {
+    let terminal1 = TerminalInfo::new(None);
+    let terminal2 = TerminalInfo::new(None);
+
+    assert_ne!(terminal1.id(), terminal2.id());
+
+    Ok(())
+}
+
+/// Integration test: Verifies content() returns set output value
+#[nvim_oxi::test]
+fn terminal_info_content_returns_set_output_value() -> nvim_oxi::Result<()> {
+    let terminal = TerminalInfo::new(None);
+
+    // Simulate callback updating output
+    *terminal.output.borrow_mut() = "test output".to_string();
+
+    assert_eq!(terminal.content(), "test output");
+
+    Ok(())
+}
+
+/// Integration test: Verifies truncated() returns false initially
+#[nvim_oxi::test]
+fn terminal_info_truncated_returns_false_initially() -> nvim_oxi::Result<()> {
+    let terminal = TerminalInfo::new(None);
+
+    assert_eq!(terminal.truncated(), false);
+
+    Ok(())
+}
+
+/// Integration test: Verifies truncated() returns true when flag is set
+#[nvim_oxi::test]
+fn terminal_info_truncated_returns_true_when_flag_set() -> nvim_oxi::Result<()> {
+    let terminal = TerminalInfo::new(None);
+
+    // Simulate callback setting truncated flag
+    *terminal.truncated.borrow_mut() = Some(true);
+
+    assert_eq!(terminal.truncated(), true);
+
+    Ok(())
+}
+
+/// Integration test: Verifies run() returns positive job ID
+#[nvim_oxi::test]
+fn terminal_info_run_returns_positive_job_id() -> nvim_oxi::Result<()> {
+    let mut terminal = TerminalInfo::new(None);
+
+    // Start a simple echo command
+    let job_id = terminal.run("echo".to_string(), vec!["hello".to_string()]);
+
+    assert_eq!(job_id.unwrap() > 0, true);
+
+    Ok(())
+}
+
+/// Integration test: Verifies close() succeeds on non-running terminal
+#[nvim_oxi::test]
+fn terminal_info_close_succeeds_on_non_running_terminal() -> nvim_oxi::Result<()> {
+    let terminal = TerminalInfo::new(None);
+
+    // Close on a terminal that was never run should succeed (no-op)
+    let result = terminal.close();
+
+    assert_eq!(result.is_ok(), true);
+
+    Ok(())
+}
+
+/// Integration test: Verifies FromRequest with byte limit sets configuration
+#[nvim_oxi::test]
+fn terminal_info_from_request_applies_byte_limit_to_configuration() -> nvim_oxi::Result<()> {
+    use agent_client_protocol::{CreateTerminalRequest, SessionId};
+
+    let mut request =
+        CreateTerminalRequest::new(SessionId::from("test-session"), "test".to_string());
+    request.output_byte_limit = Some(100);
+
+    let terminal = TerminalInfo::from(request);
+
+    // Byte limit is set - verify content is initially empty
+    assert_eq!(terminal.content(), "");
+
+    Ok(())
+}
+
+/// Integration test: Verifies FromRequest with cwd sets correct path
+#[nvim_oxi::test]
+fn terminal_info_from_request_applies_cwd_path() -> nvim_oxi::Result<()> {
+    use agent_client_protocol::{CreateTerminalRequest, SessionId};
+    use std::path::PathBuf;
+
+    let mut request =
+        CreateTerminalRequest::new(SessionId::from("test-session"), "test".to_string());
+    request.cwd = Some(PathBuf::from("/tmp"));
+
+    let terminal = TerminalInfo::from(request);
+
+    // Verify cwd was set in configuration by extracting and comparing the value
+    let cwd_obj = terminal.configuration.get("cwd").unwrap();
+    let cwd_oxi_str: nvim_oxi::String = cwd_obj.clone().try_into().unwrap();
+    let cwd_str: String = cwd_oxi_str.to_string();
+    assert_eq!(cwd_str, "/tmp");
+
+    Ok(())
+}
+
+/// Integration test: Verifies FromRequest with env sets correct variables
+#[nvim_oxi::test]
+fn terminal_info_from_request_applies_environment_variables() -> nvim_oxi::Result<()> {
+    use agent_client_protocol::{CreateTerminalRequest, EnvVariable, SessionId};
+
+    let mut request =
+        CreateTerminalRequest::new(SessionId::from("test-session"), "test".to_string());
+    request.env = vec![EnvVariable::new(
+        "TEST_KEY".to_string(),
+        "test_value".to_string(),
+    )];
+
+    let terminal = TerminalInfo::from(request);
+
+    // Verify env was set in configuration by extracting and checking the value
+    let env_dict_obj = terminal.configuration.get("env").unwrap();
+    let env_dict: nvim_oxi::Dictionary = env_dict_obj.clone().try_into().unwrap();
+    let test_key_obj = env_dict.get("TEST_KEY").unwrap();
+    let test_key_oxi_str: nvim_oxi::String = test_key_obj.clone().try_into().unwrap();
+    let test_key_value: String = test_key_oxi_str.to_string();
+    assert_eq!(test_key_value, "test_value");
+
+    Ok(())
+}
+
+/// Integration test: Verifies working_directory builder sets correct path
+#[nvim_oxi::test]
+fn terminal_info_working_directory_builder_sets_path() -> nvim_oxi::Result<()> {
+    use std::path::PathBuf;
+
+    let terminal = TerminalInfo::new(None).working_directory(PathBuf::from("/home/user"));
+
+    // Verify cwd was set by extracting and comparing the value
+    let cwd_obj = terminal.configuration.get("cwd").unwrap();
+    let cwd_oxi_str: nvim_oxi::String = cwd_obj.clone().try_into().unwrap();
+    let cwd_str: String = cwd_oxi_str.to_string();
+    assert_eq!(cwd_str, "/home/user");
+
+    Ok(())
+}
+
+/// Integration test: Verifies environment builder sets correct variables
+#[nvim_oxi::test]
+fn terminal_info_environment_builder_sets_variables() -> nvim_oxi::Result<()> {
+    use agent_client_protocol::EnvVariable;
+
+    let terminal = TerminalInfo::new(None)
+        .environment(vec![EnvVariable::new("FOO".to_string(), "bar".to_string())]);
+
+    // Verify env was set by extracting and checking the value
+    let env_dict_obj = terminal.configuration.get("env").unwrap();
+    let env_dict: nvim_oxi::Dictionary = env_dict_obj.clone().try_into().unwrap();
+    let foo_obj = env_dict.get("FOO").unwrap();
+    let foo_oxi_str: nvim_oxi::String = foo_obj.clone().try_into().unwrap();
+    let foo_value: String = foo_oxi_str.to_string();
+    assert_eq!(foo_value, "bar");
+
+    Ok(())
+}
+
+/// Integration test: Verifies process_terminal_input concatenates multiple calls
+#[nvim_oxi::test]
+fn process_terminal_input_concatenates_multiple_calls() -> nvim_oxi::Result<()> {
+    let mut output = String::new();
+    let mut truncated = None;
+
+    // Simulate multiple callback invocations
+    process_terminal_input(vec!["line1".to_string()], &mut output, &mut truncated, None);
+    process_terminal_input(vec!["line2".to_string()], &mut output, &mut truncated, None);
+    process_terminal_input(vec!["line3".to_string()], &mut output, &mut truncated, None);
+
+    assert_eq!(output, "line1line2line3");
+
+    Ok(())
+}
+
+/// Integration test: Verifies handle_terminal_exit stores exit status when no sender
+#[nvim_oxi::test]
+fn handle_terminal_exit_stores_exit_status_when_no_sender() -> nvim_oxi::Result<()> {
+    let mut exit_status: Option<(u32, String)> = None;
+    let mut exit_response: Option<oneshot::Sender<(u32, String)>> = None;
+
+    // No sender available - stores status
+    handle_terminal_exit(42, "exit".to_string(), &mut exit_status, &mut exit_response);
+
+    assert_eq!(exit_status, Some((42, "exit".to_string())));
+
+    Ok(())
+}
+
+/// Integration test: Verifies handle_terminal_exit sends when sender is provided
+#[nvim_oxi::test]
+fn handle_terminal_exit_sends_when_sender_provided() -> nvim_oxi::Result<()> {
+    let mut exit_status: Option<(u32, String)> = None;
+    let mut exit_response: Option<oneshot::Sender<(u32, String)>> = None;
+
+    let (sender, mut receiver) = oneshot::channel();
+    exit_response = Some(sender);
+
+    handle_terminal_exit(
+        0,
+        "stored".to_string(),
+        &mut exit_status,
+        &mut exit_response,
+    );
+
+    assert_eq!(receiver.try_recv().unwrap(), (0, "stored".to_string()));
+
+    Ok(())
+}

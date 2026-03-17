@@ -3,12 +3,12 @@ use crate::{
     nvim::{autocommands::Commands, parse, requests::Responder},
 };
 use agent_client_protocol::{
-    Client, CreateTerminalRequest, CreateTerminalResponse, Error, ReadTextFileRequest,
-    ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
-    RequestPermissionRequest, RequestPermissionResponse, Result, SessionNotification,
-    SessionUpdate, TerminalExitStatus, TerminalOutputRequest, TerminalOutputResponse,
-    WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
-    WriteTextFileResponse,
+    Client, CreateTerminalRequest, CreateTerminalResponse, Error, KillTerminalCommandRequest,
+    KillTerminalCommandResponse, ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest,
+    ReleaseTerminalResponse, RequestPermissionRequest, RequestPermissionResponse, Result,
+    SessionNotification, SessionUpdate, TerminalExitStatus, TerminalOutputRequest,
+    TerminalOutputResponse, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
+    WriteTextFileRequest, WriteTextFileResponse,
 };
 use tokio::sync::oneshot;
 use tracing::error;
@@ -165,14 +165,46 @@ impl Client for Handler {
             })
     }
 
+    async fn kill_terminal_command(
+        &self,
+        args: KillTerminalCommandRequest,
+    ) -> Result<KillTerminalCommandResponse> {
+        if !self.can_access_terminal().await {
+            return Err(Error::method_not_found());
+        }
+        let (sender, receiver) = oneshot::channel::<Result<KillTerminalCommandResponse>>();
+        self.execute_autocommand_request(
+            args.session_id.to_string(),
+            Commands::TerminalKill,
+            args.clone(),
+            Responder::TerminalKill(sender, args),
+        )
+        .await?;
+        receiver.await.map_err(|e| {
+            error!("{:?}", e);
+            Error::internal_error()
+        })?
+    }
+
     /// Releases a terminal resource
     async fn release_terminal(
         &self,
-        _args: ReleaseTerminalRequest,
+        args: ReleaseTerminalRequest,
     ) -> Result<ReleaseTerminalResponse> {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
         }
-        return Err(Error::method_not_found());
+        let (sender, receiver) = oneshot::channel::<Result<ReleaseTerminalResponse>>();
+        self.execute_autocommand_request(
+            args.session_id.to_string(),
+            Commands::TerminalRelease,
+            args.clone(),
+            Responder::TerminalRelease(sender, args),
+        )
+        .await?;
+        receiver.await.map_err(|e| {
+            error!("{:?}", e);
+            Error::internal_error()
+        })?
     }
 }

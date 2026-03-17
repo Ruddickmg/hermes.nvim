@@ -1,24 +1,24 @@
 use agent_client_protocol::{
-    CreateTerminalRequest, CreateTerminalResponse, ReadTextFileRequest, ReadTextFileResponse,
-    ReleaseTerminalRequest, ReleaseTerminalResponse, RequestPermissionOutcome,
-    RequestPermissionRequest, SelectedPermissionOutcome, TerminalOutputRequest,
-    TerminalOutputResponse, WaitForTerminalExitRequest, WriteTextFileRequest,
-    WriteTextFileResponse,
+    CreateTerminalRequest, CreateTerminalResponse, KillTerminalCommandRequest,
+    KillTerminalCommandResponse, ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest,
+    ReleaseTerminalResponse, RequestPermissionOutcome, RequestPermissionRequest,
+    SelectedPermissionOutcome, TerminalOutputRequest, TerminalOutputResponse,
+    WaitForTerminalExitRequest, WriteTextFileRequest, WriteTextFileResponse,
 };
-use nvim_oxi::conversion::FromObject;
 use nvim_oxi::Dictionary;
+use nvim_oxi::conversion::FromObject;
 use std::sync::Arc;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::acp::error::Error;
 use crate::acp::Result;
+use crate::acp::error::Error;
 use crate::nvim::autocommands::Commands;
 use crate::nvim::terminal::{Terminal, TerminalManager};
 use crate::utilities::{
-    acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
-    show_permission_ui, update_buffer_content, NvimMessenger, TransmitToNvim,
+    NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
+    save_buffer_to_disk, show_permission_ui, update_buffer_content,
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
@@ -43,12 +43,17 @@ pub enum Responder {
         oneshot::Sender<agent_client_protocol::Result<ReleaseTerminalResponse>>,
         ReleaseTerminalRequest,
     ),
+    TerminalKill(
+        oneshot::Sender<agent_client_protocol::Result<KillTerminalCommandResponse>>,
+        KillTerminalCommandRequest,
+    ),
 }
 
 impl From<Responder> for Commands {
     fn from(responder: Responder) -> Self {
         match responder {
             Responder::TerminalOutput(..) => Commands::TerminalOutput,
+            Responder::TerminalKill(..) => Commands::TerminalKill,
             Responder::ReadFileResponse(..) => Commands::ReadTextFile,
             Responder::PermissionResponse(..) => Commands::PermissionRequest,
             Responder::WriteFileResponse(..) => Commands::WriteTextFile,
@@ -134,7 +139,7 @@ impl Request {
         Ok(())
     }
 
-    fn parse_terminal_output(
+    fn parse_terminal_output_response(
         data: nvim_oxi::Object,
     ) -> agent_client_protocol::Result<(String, bool)> {
         // First, try to parse as a plain String
@@ -216,7 +221,7 @@ impl Request {
                 })?;
             }
             Responder::TerminalOutput(sender, _) => {
-                let result = Self::parse_terminal_output(response)
+                let result = Self::parse_terminal_output_response(response)
                     .map(|(output, truncated)| TerminalOutputResponse::new(output, truncated));
                 sender.send(result).map_err(|e| {
                     Error::Internal(format!(
@@ -225,15 +230,23 @@ impl Request {
                     ))
                 })?;
             }
-            Responder::TerminalExit(_sender, _) => {
-                unimplemented!(
-                    "Terminal exit response handling is not yet implemented. Request ID '{}'",
-                    self.id
-                );
+            Responder::TerminalExit(sender, _) => {
+                sender.send((0, String::new())).map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send terminal exit response for request '{}': {:?}",
+                        self.id, e
+                    ))
+                })?;
             }
             Responder::TerminalRelease(_sender, _) => {
                 unimplemented!(
                     "Terminal release is not yet implemented. Request ID '{}'",
+                    self.id
+                );
+            }
+            Responder::TerminalKill(_sender, _) => {
+                unimplemented!(
+                    "Terminal kill is not yet implemented. Request ID '{}'",
                     self.id
                 );
             }
@@ -383,6 +396,12 @@ impl Request {
                         self.id
                     );
                 }
+                Responder::TerminalKill(_sender, _data) => {
+                    unimplemented!(
+                        "Terminal kill is not yet implemented. Request ID '{}'",
+                        self.id
+                    );
+                }
             }
             self.finish()?;
         }
@@ -399,14 +418,14 @@ mod tests {
     #[test]
     fn parse_terminal_output_accepts_plain_string() {
         let obj = Object::from("hello world");
-        let result = Request::parse_terminal_output(obj);
+        let result = Request::parse_terminal_output_response(obj);
         assert_eq!(result.unwrap(), ("hello world".to_string(), false));
     }
 
     #[test]
     fn parse_terminal_output_accepts_empty_string() {
         let obj = Object::from("");
-        let result = Request::parse_terminal_output(obj);
+        let result = Request::parse_terminal_output_response(obj);
         assert_eq!(result.unwrap(), ("".to_string(), false));
     }
 
@@ -415,7 +434,7 @@ mod tests {
         let mut dict = nvim_oxi::Dictionary::default();
         dict.insert("output", Object::from("test output"));
         let obj = Object::from(dict);
-        let result = Request::parse_terminal_output(obj);
+        let result = Request::parse_terminal_output_response(obj);
         assert_eq!(result.unwrap(), ("test output".to_string(), false));
     }
 
@@ -425,7 +444,7 @@ mod tests {
         dict.insert("output", Object::from("test output"));
         dict.insert("truncated", Object::from(true));
         let obj = Object::from(dict);
-        let result = Request::parse_terminal_output(obj);
+        let result = Request::parse_terminal_output_response(obj);
         assert_eq!(result.unwrap(), ("test output".to_string(), true));
     }
 
@@ -435,7 +454,7 @@ mod tests {
         dict.insert("output", Object::from("test output"));
         dict.insert("truncated", Object::from(false));
         let obj = Object::from(dict);
-        let result = Request::parse_terminal_output(obj);
+        let result = Request::parse_terminal_output_response(obj);
         assert_eq!(result.unwrap(), ("test output".to_string(), false));
     }
 
@@ -443,7 +462,7 @@ mod tests {
     fn parse_terminal_output_rejects_missing_output_field() {
         let dict = nvim_oxi::Dictionary::default();
         let obj = Object::from(dict);
-        let result = Request::parse_terminal_output(obj);
+        let result = Request::parse_terminal_output_response(obj);
         assert!(result.is_err());
     }
 
@@ -452,7 +471,7 @@ mod tests {
         let mut dict = nvim_oxi::Dictionary::default();
         dict.insert("output", Object::from(123i64));
         let obj = Object::from(dict);
-        let result = Request::parse_terminal_output(obj);
+        let result = Request::parse_terminal_output_response(obj);
         assert!(result.is_err());
     }
 
@@ -462,7 +481,7 @@ mod tests {
         dict.insert("output", Object::from("test"));
         dict.insert("truncated", Object::from("yes"));
         let obj = Object::from(dict);
-        let result = Request::parse_terminal_output(obj);
+        let result = Request::parse_terminal_output_response(obj);
         assert!(result.is_err());
     }
 }

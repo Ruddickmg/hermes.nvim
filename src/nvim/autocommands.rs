@@ -5,6 +5,7 @@ use std::fmt::{Debug, Display};
 pub enum Commands {
     // Permission and tool commands
     TerminalRelease,
+    TerminalKill,
     TerminalExit,
     TerminalOutput,
     TerminalCreate,
@@ -55,6 +56,7 @@ impl From<&str> for Commands {
         match value {
             // Permission and tool commands
             "CreateTerminal" => Commands::TerminalCreate,
+            "TerminalKill" => Commands::TerminalKill,
             "WriteTextFile" => Commands::WriteTextFile,
             "ReadTextFile" => Commands::ReadTextFile,
             "PermissionRequest" => Commands::PermissionRequest,

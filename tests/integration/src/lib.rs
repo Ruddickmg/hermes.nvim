@@ -17,6 +17,7 @@ use tokio::sync::Mutex;
 
 pub mod acp;
 pub mod helpers;
+pub mod nvim;
 pub mod request;
 pub mod utilities;
 

@@ -10,12 +10,12 @@ use uuid::Uuid;
 pub struct TerminalInfo {
     id: Uuid,
     job_id: Option<i64>,
-    truncated: Rc<RefCell<Option<bool>>>,
-    output: Rc<RefCell<String>>,
-    exit_status: Rc<RefCell<Option<(u32, String)>>>,
-    exit_response: Rc<RefCell<Option<oneshot::Sender<(u32, String)>>>>,
+    pub truncated: Rc<RefCell<Option<bool>>>,
+    pub output: Rc<RefCell<String>>,
+    pub exit_status: Rc<RefCell<Option<(u32, String)>>>,
+    pub exit_response: Rc<RefCell<Option<oneshot::Sender<(u32, String)>>>>,
     buffer: Option<nvim_oxi::api::Buffer>,
-    configuration: Dictionary,
+    pub configuration: Dictionary,
 }
 
 impl From<agent_client_protocol::CreateTerminalRequest> for TerminalInfo {
@@ -31,51 +31,56 @@ impl From<agent_client_protocol::CreateTerminalRequest> for TerminalInfo {
 type InputCallback = Function<(i64, Vec<String>), std::result::Result<(), nvim_oxi::lua::Error>>;
 type ExitCallback = Function<(i64, i64, String), std::result::Result<(), nvim_oxi::lua::Error>>;
 
+/// Pure function to process terminal input data
+/// Joins lines, strips ANSI codes, and applies byte limit truncation
+pub fn process_terminal_input(
+    data: Vec<String>,
+    output: &mut String,
+    truncated: &mut Option<bool>,
+    byte_limit: Option<u64>,
+) {
+    let combined = data.join("\n");
+    let clean = strip_ansi_escapes::strip_str(&combined);
+    output.push_str(&clean);
+    if let Some(limit) = byte_limit {
+        let current_bytes = output.len() as u64;
+        if current_bytes > limit {
+            *truncated = Some(true);
+            let excess = current_bytes - limit;
+            output.drain(0..excess as usize);
+        }
+    }
+}
+
+/// Pure function to handle terminal exit
+/// Returns Err if the oneshot channel is closed (recipient dropped)
+pub fn handle_terminal_exit(
+    exit_code: u32,
+    event: String,
+    exit_status: &mut Option<(u32, String)>,
+    exit_response: &mut Option<oneshot::Sender<(u32, String)>>,
+) -> std::result::Result<(), String> {
+    if let Some(sender) = exit_response.take() {
+        sender.send((exit_code, event)).map_err(|_| {
+            "Error occurred while sending terminal exit notification: channel closed".to_string()
+        })
+    } else {
+        *exit_status = Some((exit_code, event));
+        Ok(())
+    }
+}
+
 impl TerminalInfo {
     pub fn new(byte_limit: Option<u64>) -> Self {
         let output = Rc::new(RefCell::new(String::new()));
         let exit_status: Rc<RefCell<Option<(u32, String)>>> = Rc::new(RefCell::new(None));
         let exit_response: Rc<RefCell<Option<oneshot::Sender<(u32, String)>>>> =
             Rc::new(RefCell::new(None));
-        let response = exit_response.clone();
-        let cloned_output = output.clone();
-        let status = exit_status.clone();
         let truncated = Rc::new(RefCell::new(None));
-        let is_truncated = truncated.clone();
-        let update_content: InputCallback =
-            Function::from_fn(move |(_, data): (i64, Vec<String>)| {
-                let combined = data.join("\n");
-                // Strip ANSI escape codes from terminal output
-                let clean = strip_ansi_escapes::strip_str(&combined);
-                let mut input = output.borrow_mut();
-                input.push_str(&clean);
-                if let Some(limit) = byte_limit {
-                    let current_bytes = input.len() as u64;
-                    if current_bytes > limit {
-                        *is_truncated.borrow_mut() = Some(true);
-                        let excess = current_bytes - limit;
-                        input.drain(0..excess as usize);
-                    }
-                }
-                drop(input);
-                Ok(())
-            });
-        let on_exit: ExitCallback =
-            Function::from_fn(move |(_, exit_code, event): (i64, i64, String)| {
-                if let Some(sender) = response.take() {
-                    sender
-                        .send((exit_code as u32, event.to_string()))
-                        .map_err(|e| {
-                            nvim_oxi::lua::Error::MemoryError(format!(
-                                "Error occurred while sending terminal exit notification: {:?}",
-                                e
-                            ))
-                        })
-                } else {
-                    *exit_status.borrow_mut() = Some((exit_code as u32, event));
-                    Ok(())
-                }
-            });
+
+        let update_content =
+            Self::create_input_callback(output.clone(), truncated.clone(), byte_limit);
+        let on_exit = Self::create_exit_callback(exit_status.clone(), exit_response.clone());
         let configuration = Self::configuration(update_content, on_exit);
         Self {
             buffer: None,
@@ -83,10 +88,37 @@ impl TerminalInfo {
             configuration,
             id: Uuid::new_v4(),
             job_id: None,
-            output: cloned_output,
-            exit_status: status,
+            output,
+            exit_status,
             exit_response,
         }
+    }
+
+    fn create_input_callback(
+        output: Rc<RefCell<String>>,
+        truncated: Rc<RefCell<Option<bool>>>,
+        byte_limit: Option<u64>,
+    ) -> InputCallback {
+        Function::from_fn(move |(_, data): (i64, Vec<String>)| {
+            let mut input = output.borrow_mut();
+            let mut trunc = truncated.borrow_mut();
+            process_terminal_input(data, &mut *input, &mut *trunc, byte_limit);
+            Ok(())
+        })
+    }
+
+    fn create_exit_callback(
+        exit_status: Rc<RefCell<Option<(u32, String)>>>,
+        exit_response: Rc<RefCell<Option<oneshot::Sender<(u32, String)>>>>,
+    ) -> ExitCallback {
+        Function::from_fn(move |(_, exit_code, event): (i64, i64, String)| {
+            let mut status = exit_status.borrow_mut();
+            let mut response = exit_response.borrow_mut();
+            match handle_terminal_exit(exit_code as u32, event, &mut *status, &mut *response) {
+                Ok(()) => Ok(()),
+                Err(e) => Err(nvim_oxi::lua::Error::MemoryError(e)),
+            }
+        })
     }
 
     pub fn configuration(handle_input: InputCallback, handle_exit: ExitCallback) -> Dictionary {
@@ -165,7 +197,6 @@ impl Terminal for TerminalInfo {
     }
 
     fn run(&mut self, command: String, args: Vec<String>) -> Result<i64> {
-        // start the terminal in a hidden buffer (the user can toggle visibility but default to hidden)
         let buffer =
             nvim_oxi::api::create_buf(false, true).map_err(|e| Error::Internal(e.to_string()))?;
         let configuration = self.configuration.clone();
@@ -187,5 +218,133 @@ impl Terminal for TerminalInfo {
             .transpose()
             .map_err(|e| Error::Internal(e.to_string()))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    // === Tests for process_terminal_input ===
+
+    #[test]
+    fn process_input_joins_lines_with_newlines() {
+        let mut output = String::new();
+        let mut truncated = None;
+
+        process_terminal_input(
+            vec!["line1".to_string(), "line2".to_string()],
+            &mut output,
+            &mut truncated,
+            None,
+        );
+
+        assert_eq!(output, "line1\nline2");
+    }
+
+    #[test]
+    fn process_input_strips_ansi_codes() {
+        let mut output = String::new();
+        let mut truncated = None;
+        let ansi_string = "\x1b[31mred\x1b[0m \x1b[1mbold\x1b[0m text";
+
+        process_terminal_input(
+            vec![ansi_string.to_string()],
+            &mut output,
+            &mut truncated,
+            None,
+        );
+
+        assert_eq!(output, "red bold text");
+    }
+
+    #[test]
+    fn process_input_truncates_when_over_byte_limit() {
+        let mut output = String::new();
+        let mut truncated = None;
+
+        process_terminal_input(
+            vec!["this is a long string".to_string()],
+            &mut output,
+            &mut truncated,
+            Some(10),
+        );
+
+        assert_eq!(output.len(), 10);
+    }
+
+    #[test]
+    fn process_input_sets_truncated_flag_when_over_limit() {
+        let mut output = String::new();
+        let mut truncated = None;
+
+        process_terminal_input(
+            vec!["too long".to_string()],
+            &mut output,
+            &mut truncated,
+            Some(5),
+        );
+
+        assert_eq!(truncated, Some(true));
+    }
+
+    #[test]
+    fn process_input_does_not_truncate_when_under_limit() {
+        let mut output = String::new();
+        let mut truncated = None;
+
+        process_terminal_input(
+            vec!["short".to_string()],
+            &mut output,
+            &mut truncated,
+            Some(100),
+        );
+
+        assert_eq!(output, "short");
+        assert_eq!(truncated, None);
+    }
+
+    #[test]
+    fn process_input_does_not_truncate_when_no_limit() {
+        let mut output = String::new();
+        let mut truncated = None;
+        let long_string = "a".repeat(10000);
+
+        process_terminal_input(vec![long_string.clone()], &mut output, &mut truncated, None);
+
+        assert_eq!(output.len(), 10000);
+        assert_eq!(truncated, None);
+    }
+
+    // === Tests for handle_terminal_exit ===
+
+    #[test]
+    fn handle_exit_sends_immediately_when_sender_available() {
+        let mut exit_status: Option<(u32, String)> = None;
+        let mut exit_response: Option<oneshot::Sender<(u32, String)>> = None;
+
+        let (sender, mut receiver) = oneshot::channel();
+        exit_response = Some(sender);
+
+        let result =
+            handle_terminal_exit(42, "exit".to_string(), &mut exit_status, &mut exit_response);
+
+        assert!(result.is_ok());
+        assert_eq!(receiver.try_recv().unwrap(), (42, "exit".to_string()));
+        assert!(exit_status.is_none());
+    }
+
+    #[test]
+    fn handle_exit_stores_status_when_no_sender() {
+        let mut exit_status: Option<(u32, String)> = None;
+        let mut exit_response: Option<oneshot::Sender<(u32, String)>> = None;
+
+        let result =
+            handle_terminal_exit(1, "error".to_string(), &mut exit_status, &mut exit_response);
+
+        assert!(result.is_ok());
+        assert_eq!(exit_status, Some((1, "error".to_string())));
+        assert!(exit_response.is_none());
     }
 }
