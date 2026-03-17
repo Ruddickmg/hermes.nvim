@@ -1,8 +1,9 @@
+use crate::PluginState;
 use crate::acp::connection::{Connection, stdio};
-use crate::nvim::autocommands::ResponseHandler;
 use crate::{Handler, acp::error::Error};
 use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolVersion};
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -10,7 +11,7 @@ use std::thread::JoinHandle;
 use tokio::sync::Mutex;
 use tracing::{debug, info, instrument, trace, warn};
 
-type ConnectionHandles = Arc<Mutex<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>;
+type ConnectionHandles = Rc<RefCell<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>;
 
 #[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
 pub enum Protocol {
@@ -96,32 +97,32 @@ pub struct ConnectionDetails {
 }
 
 #[derive(Clone)]
-pub struct ConnectionManager<H: Client + ResponseHandler> {
+pub struct ConnectionManager {
     handles: ConnectionHandles,
     connection: HashMap<Assistant, Rc<Connection>>,
-    handler: Arc<Handler<H>>,
+    state: Arc<Mutex<PluginState>>,
 }
 
-impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
-    #[instrument(level = "trace", skip(client))]
-    pub fn new(client: Arc<Handler<H>>) -> Self {
+impl ConnectionManager {
+    #[instrument(level = "trace")]
+    pub fn new(state: Arc<Mutex<PluginState>>) -> Self {
         Self {
-            handler: client,
-            handles: Arc::new(Mutex::new(HashMap::new())),
+            handles: Rc::new(RefCell::new(HashMap::new())),
             connection: HashMap::new(),
+            state,
         }
     }
 
     #[instrument(level = "trace", skip(self))]
     fn set_agent(&self, agent: Assistant) {
-        let mut config = self.handler.state.blocking_lock();
+        let mut config = self.state.blocking_lock();
         config.set_agent(agent);
         drop(config);
     }
 
     #[instrument(level = "trace", skip(self))]
     fn get_agent(&self) -> Assistant {
-        let config = self.handler.state.blocking_lock();
+        let config = self.state.blocking_lock();
         let agent = config.agent.clone();
         drop(config);
         agent
@@ -142,9 +143,10 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
         self.get_connection(&self.get_agent())
     }
 
-    #[instrument(level = "trace", skip(self))]
-    pub fn connect(
+    #[instrument(level = "trace", skip(self, handler))]
+    pub fn connect<H: Client + Send + Sync + 'static>(
         &mut self,
+        handler: Arc<Handler>,
         ConnectionDetails { agent, protocol }: ConnectionDetails,
     ) -> Result<Rc<Connection>, Error> {
         Ok(match self.get_connection(&agent) {
@@ -158,14 +160,13 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
             None => {
                 let (sender, receiver) = tokio::sync::mpsc::channel(100);
                 let connection = Rc::new(Connection::new(sender));
-                let handler = self.handler.clone();
                 let thread_agent = agent.clone();
                 let init_config = InitializeRequest::new(ProtocolVersion::LATEST).client_info(
                     Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"),
                 );
 
                 trace!("Starting agent communication in new thread");
-                self.handles.blocking_lock().insert(
+                self.handles.borrow_mut().insert(
                     agent.clone(),
                     std::thread::spawn(move || {
                         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -222,13 +223,9 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
         let sender = self.connection.remove(assistant).ok_or_else(|| {
             Error::Connection(format!("No connection found for assistant {}", assistant))
         })?;
-        let handle = self
-            .handles
-            .blocking_lock()
-            .remove(assistant)
-            .ok_or_else(|| {
-                Error::Connection(format!("No handle found for assistant {}", assistant))
-            })?;
+        let handle = self.handles.borrow_mut().remove(assistant).ok_or_else(|| {
+            Error::Connection(format!("No handle found for assistant {}", assistant))
+        })?;
         debug!("Disconnecting from agent {}", assistant);
         drop(sender);
         handle

@@ -1,18 +1,13 @@
-use agent_client_protocol::Client;
 use nvim_oxi::{
     Function, Object, ObjectKind,
     conversion::{self, FromObject},
     lua::{self, Error, Poppable, Pushable},
     serde::SerializeError,
 };
-use std::rc::Rc;
-use tokio::sync::Mutex;
+use std::{cell::RefCell, rc::Rc};
 use tracing::{debug, instrument};
 
-use crate::{
-    acp::connection::{Assistant, ConnectionManager},
-    nvim::autocommands::ResponseHandler,
-};
+use crate::acp::connection::{Assistant, ConnectionManager};
 
 #[derive(Clone, Debug, Default)]
 pub enum DisconnectArgs {
@@ -112,13 +107,11 @@ impl Pushable for DisconnectArgs {
 }
 
 #[instrument(level = "trace", skip_all)]
-pub fn disconnect<H: Client + ResponseHandler + Send + Sync + 'static>(
-    connection: Rc<Mutex<ConnectionManager<H>>>,
-) -> Object {
+pub fn disconnect(connection: Rc<RefCell<ConnectionManager>>) -> Object {
     let function: Function<DisconnectArgs, Result<(), Error>> =
         Function::from_fn(move |args: DisconnectArgs| -> Result<(), Error> {
             debug!("Disconnect function called with {:#?}", args);
-            let mut manager = connection.blocking_lock();
+            let mut manager = connection.borrow_mut();
             match args {
                 DisconnectArgs::Multiple(agents) => manager.disconnect(agents),
                 DisconnectArgs::Single(agent) => manager.disconnect(vec![agent.clone()]),

@@ -1,19 +1,15 @@
 use crate::{
+    Handler,
     acp::connection::{Assistant, ConnectionDetails, ConnectionManager, Protocol},
-    nvim::autocommands::ResponseHandler,
 };
-use agent_client_protocol::Client;
 use nvim_oxi::{Dictionary, Function, Object, ObjectKind, lua::Error};
-use std::rc::Rc;
-use tokio::sync::Mutex;
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 use tracing::{debug, instrument};
 
 pub type ConnectionArgs = (nvim_oxi::String, Option<Dictionary>);
 
 #[instrument(level = "trace", skip_all)]
-pub fn connect<H: Client + ResponseHandler + Send + Sync + 'static>(
-    connection: Rc<Mutex<ConnectionManager<H>>>,
-) -> Object {
+pub fn connect(connection: Rc<RefCell<ConnectionManager>>, handler: Arc<Handler>) -> Object {
     let function: Function<ConnectionArgs, Result<(), Error>> = Function::from_fn(
         move |(agent_name, options): ConnectionArgs| -> Result<(), Error> {
             debug!(
@@ -81,7 +77,9 @@ pub fn connect<H: Client + ResponseHandler + Send + Sync + 'static>(
                 agent,
                 protocol: protocol.unwrap_or_default(),
             };
-            connection.blocking_lock().connect(details)?;
+            connection
+                .borrow_mut()
+                .connect::<Handler>(handler.clone(), details)?;
             Ok(())
         },
     );

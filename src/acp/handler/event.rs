@@ -13,17 +13,6 @@ use agent_client_protocol::{
 use tokio::sync::oneshot;
 use tracing::error;
 
-impl From<Responder> for Commands {
-    fn from(responder: Responder) -> Self {
-        match responder {
-            Responder::ReadFileResponse(..) => Commands::ReadTextFile,
-            Responder::PermissionResponse(..) => Commands::PermissionRequest,
-            Responder::WriteFileResponse(..) => Commands::WriteTextFile,
-            Responder::CreateTerminal(..) => Commands::CreateTerminal,
-        }
-    }
-}
-
 #[async_trait::async_trait(?Send)]
 impl<R: RequestHandler + 'static> Client for AutoCommand<R> {
     async fn request_permission(

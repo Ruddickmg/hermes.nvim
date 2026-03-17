@@ -1,17 +1,13 @@
-use agent_client_protocol::{CancelNotification, Client};
+use agent_client_protocol::CancelNotification;
 use nvim_oxi::{Function, Object, lua::Error};
-use std::{rc::Rc, sync::Arc};
-use tokio::sync::Mutex;
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 use tracing::{debug, instrument};
 
-use crate::{
-    acp::connection::ConnectionManager,
-    nvim::{autocommands::ResponseHandler, requests::RequestHandler},
-};
+use crate::{acp::connection::ConnectionManager, nvim::requests::RequestHandler};
 
 #[instrument(level = "trace", skip_all)]
-pub fn cancel<H: Client + ResponseHandler + Send + Sync + 'static, R: RequestHandler + 'static>(
-    connection: Rc<Mutex<ConnectionManager<H>>>,
+pub fn cancel<R: RequestHandler + 'static>(
+    connection: Rc<RefCell<ConnectionManager>>,
     request_handler: Arc<R>,
 ) -> Object {
     let function: Function<String, Result<(), Error>> =
@@ -19,7 +15,7 @@ pub fn cancel<H: Client + ResponseHandler + Send + Sync + 'static, R: RequestHan
             debug!("Cancel function called with session_id: {}", session_id);
             let notification: CancelNotification = CancelNotification::new(session_id.clone());
             connection
-                .blocking_lock()
+                .borrow()
                 .get_current_connection()
                 .ok_or_else(|| {
                     Error::RuntimeError(

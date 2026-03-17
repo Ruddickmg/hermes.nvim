@@ -422,7 +422,7 @@ hermes.respond("requestId", "terminalId")
 -- example:     
 vim.api.nvim_create_autocmd("User", {
     group = "hermes",
-    pattern = "CreateTerminal",
+    pattern = "TerminalCreate",
     callback = function(args)
         local terminalId = "your-generated-terminal-id" -- generate a unique id for terminal
         local requestId = args.data.requestId
@@ -443,15 +443,51 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-> **Responds to:** [CreateTerminal](#createterminal) autocommand.
+> **Responds to:** [TerminalCreate](#createterminal) autocommand.
 >
-> **Default behavior:** If no autocommand handler is defined for `CreateTerminal`, Hermes will:
-> - Create a terminal job and watch it's execution
+> **Default behavior:** If no autocommand handler is defined for `TerminalCreate`, Hermes will:
+> - Create a terminal attached to a buffer (hidden by default)
 > - Handle byte limit constraints if defined
 > - Define default functionality for handling StdErr, StdOut, and exit events
 >
 > [!WARNING]
 > In order to customize the terminal flow it must be started here. Otherwise defaults will be used for all terminal interaction.
+
+#### Send terminal output to the assistant 
+
+```lua
+local hermes = require("hermes")
+local terminals = {}
+local is_truncated = true;
+
+-- call signature (truncated defaults to false)
+hermes.respond("requestId", "terminal output text")
+
+-- call signature with truncation defined
+hermes.respond("requestId", {
+    output = "erminal output text",
+    truncated = is_truncated,
+})
+
+-- example:
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "TerminalOutput",
+    callback = function(args)
+        local requestId = args.data.requestId
+        local terminalId = args.data.terminalId
+        local terminalOutput = terminals[terminalId].output -- get output somehow
+
+        hermes.respond(requestId, terminalOutput);
+    end,
+})
+```
+
+> **Responds to:** [TerminalOutput](#terminaloutput) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for `TerminalCreate`, Hermes will:
+> - Do nothing if the user did not handle the [TerminalCreate](#terminalcreate)
+> - Collect and send the terminal output if Hermes is handling the terminal
 
 ## Autocommands
 
@@ -701,8 +737,8 @@ Below is a list of all autocommands and their associated data (passed to the cal
   }
 }</code></pre></td>
     </tr>
-    <tr id="createterminal">
-      <td><code>CreateTerminal</code></td>
+    <tr id="terminalcreate">
+      <td><code>TerminalCreate</code></td>
       <td>Agent requests to create a terminal for command execution</td>
       <td>🤖 Agent (requires -> <a href="#create-terminal-for-agent-communication">respond()</a>)</td>
       <td><pre><code class="language-json">{
@@ -1203,13 +1239,14 @@ Your options for log formats are:
 - [x] Allow agent to read files
 - [x] Allow agent to use terminal
   - [x] Create autocommands for Agent progress in the terminal
-
 - [x] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
 
-- [x] figure out cleanup after permission selection
-
-- [ ] use async for all the things
+-- infra
+- [ ] separate main thread logic from background threads
 - [ ] use smol instead of tokio to reduce build size
+- [ ] use async for all the things
+
+-- nice to haves
 - [ ] look into ways of improving ai integration
   - [ ] research RLM ([example](https://github.com/JaredStewart/coderlm))
   - [ ] connect agent to lsp (try to set it up as a tool call/connect to neovim lsp)

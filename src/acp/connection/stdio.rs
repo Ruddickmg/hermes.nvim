@@ -5,9 +5,7 @@ use crate::{
         error::Error,
         handler::message::handle_request,
     },
-    nvim::autocommands::ResponseHandler,
 };
-use agent_client_protocol::Client;
 use std::fmt::Debug;
 use std::{ffi::OsStr, process::Stdio, sync::Arc};
 use tokio::sync::mpsc::Receiver;
@@ -15,15 +13,14 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::{info, instrument, trace};
 
 #[instrument(level = "trace", skip(client, receiver))]
-pub async fn stdio_connection<H, I, S>(
+pub async fn stdio_connection<I, S>(
     receiver: Receiver<UserRequest>,
-    client: Arc<Handler<H>>,
+    client: Arc<Handler>,
     agent: &Assistant,
     command: &str,
     args: I,
 ) -> Result<(), Error>
 where
-    H: Client + ResponseHandler + 'static,
     I: IntoIterator<Item = S> + Debug,
     S: AsRef<OsStr>,
 {
@@ -73,8 +70,8 @@ where
 }
 
 #[instrument(level = "trace", skip(client, receiver))]
-pub async fn connect<H: Client + ResponseHandler + 'static>(
-    client: Arc<Handler<H>>,
+pub async fn connect(
+    client: Arc<Handler>,
     agent: Assistant,
     receiver: Receiver<UserRequest>,
 ) -> Result<(), Error> {

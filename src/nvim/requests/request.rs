@@ -1,19 +1,24 @@
 use agent_client_protocol::{
     CreateTerminalRequest, CreateTerminalResponse, ReadTextFileRequest, ReadTextFileResponse,
-    RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
+    ReleaseTerminalRequest, ReleaseTerminalResponse, RequestPermissionOutcome,
+    RequestPermissionRequest, SelectedPermissionOutcome, TerminalOutputRequest,
+    TerminalOutputResponse, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
     WriteTextFileRequest, WriteTextFileResponse,
 };
+use nvim_oxi::Dictionary;
 use nvim_oxi::conversion::FromObject;
 use std::sync::Arc;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::acp::error::Error;
 use crate::acp::Result;
+use crate::acp::error::Error;
+use crate::nvim::autocommands::Commands;
+use crate::nvim::terminal::{Terminal, TerminalManager};
 use crate::utilities::{
-    acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
-    show_permission_ui, update_buffer_content, NvimHandler, TransmitToNvim,
+    NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
+    save_buffer_to_disk, show_permission_ui, update_buffer_content,
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
@@ -25,10 +30,33 @@ pub enum Responder {
         ReadTextFileRequest,
     ),
     WriteFileResponse(oneshot::Sender<WriteTextFileResponse>, WriteTextFileRequest),
-    CreateTerminal(
+    TerminalCreate(
         oneshot::Sender<agent_client_protocol::Result<CreateTerminalResponse>>,
         CreateTerminalRequest,
     ),
+    TerminalOutput(
+        oneshot::Sender<agent_client_protocol::Result<TerminalOutputResponse>>,
+        TerminalOutputRequest,
+    ),
+    TerminalExit(oneshot::Sender<(u32, String)>, WaitForTerminalExitRequest),
+    TerminalRelease(
+        oneshot::Sender<agent_client_protocol::Result<ReleaseTerminalResponse>>,
+        ReleaseTerminalRequest,
+    ),
+}
+
+impl From<Responder> for Commands {
+    fn from(responder: Responder) -> Self {
+        match responder {
+            Responder::TerminalOutput(..) => Commands::TerminalOutput,
+            Responder::ReadFileResponse(..) => Commands::ReadTextFile,
+            Responder::PermissionResponse(..) => Commands::PermissionRequest,
+            Responder::WriteFileResponse(..) => Commands::WriteTextFile,
+            Responder::TerminalCreate(..) => Commands::TerminalCreate,
+            Responder::TerminalExit(..) => Commands::TerminalExit,
+            Responder::TerminalRelease(..) => Commands::TerminalRelease,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -36,14 +64,14 @@ pub struct Request {
     id: Uuid,
     session_id: String,
     responder: Arc<Mutex<Option<Responder>>>,
-    remove: NvimHandler<Uuid>,
+    remove: NvimMessenger<Uuid>,
 }
 
 impl Request {
     pub fn id(&self) -> Uuid {
         self.id
     }
-    pub fn new(session_id: String, remove: NvimHandler<Uuid>, responder: Responder) -> Self {
+    pub fn new(session_id: String, remove: NvimMessenger<Uuid>, responder: Responder) -> Self {
         Self {
             id: Uuid::new_v4(),
             session_id,
@@ -66,6 +94,16 @@ impl Request {
         let is_permission = matches!(*responder, Some(Responder::PermissionResponse(..)));
         drop(responder);
         is_permission
+    }
+
+    pub fn terminal(&self) -> bool {
+        let responder = self.responder.blocking_lock();
+        let requries = match responder.as_ref() {
+            Some(Responder::TerminalCreate(..)) => true,
+            _ => false,
+        };
+        drop(responder);
+        requries
     }
 
     pub fn is_session(&self, session_id: String) -> bool {
@@ -97,6 +135,39 @@ impl Request {
                 })?;
         }
         Ok(())
+    }
+
+    fn parse_terminal_output(
+        data: nvim_oxi::Object,
+    ) -> agent_client_protocol::Result<(String, bool)> {
+        // First, try to parse as a plain String
+        match String::from_object(data.clone()) {
+            Ok(output) => Ok((output, false)),
+            Err(_) => {
+                // Not a string, try Dictionary
+                let dict = Dictionary::from_object(data)
+                    .map_err(|_| agent_client_protocol::Error::invalid_params())?;
+
+                // "output" field is required and must be a String
+                let output = dict
+                    .get("output")
+                    .cloned()
+                    .ok_or(agent_client_protocol::Error::invalid_params())
+                    .and_then(|o| {
+                        String::from_object(o)
+                            .map_err(|_| agent_client_protocol::Error::invalid_params())
+                    })?;
+
+                // "truncated" field is optional, defaults to false
+                let truncated = match dict.get("truncated").cloned() {
+                    Some(t) => bool::from_object(t)
+                        .map_err(|_| agent_client_protocol::Error::invalid_params())?,
+                    None => false,
+                };
+
+                Ok((output, truncated))
+            }
+        }
     }
 
     pub fn respond(&self, response: nvim_oxi::Object) -> Result<()> {
@@ -136,7 +207,7 @@ impl Request {
                     ))
                 })?;
             }
-            Responder::CreateTerminal(sender, _) => {
+            Responder::TerminalCreate(sender, _) => {
                 let result = String::from_object(response)
                     .map(CreateTerminalResponse::new)
                     .map_err(|_| agent_client_protocol::Error::invalid_params());
@@ -146,6 +217,22 @@ impl Request {
                         self.id, e
                     ))
                 })?;
+            }
+            Responder::TerminalOutput(sender, _) => {
+                let result = Self::parse_terminal_output(response)
+                    .map(|(output, truncated)| TerminalOutputResponse::new(output, truncated));
+                sender.send(result).map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send terminal output response for request '{}': {:?}",
+                        self.id, e
+                    ))
+                })?;
+            }
+            Responder::TerminalExit(sender, _) => {
+                unimplemented!("Terminal exit response handling is not yet implemented. Request ID '{}'", self.id);
+            }
+            Responder::TerminalRelease(sender, _) => {
+                unimplemented!("Terminal release is not yet implemented. Request ID '{}'", self.id);
             }
         };
         self.finish()
@@ -215,7 +302,11 @@ impl Request {
         }
     }
 
-    pub fn default(&self, data: serde_json::Value) -> Result<()> {
+    pub fn default<T: Terminal + Clone>(
+        &mut self,
+        data: serde_json::Value,
+        mut terminal_manager: TerminalManager<T>,
+    ) -> Result<()> {
         if self.is_permission_request() {
             self.ask_user_for_permission(data)?;
         } else {
@@ -253,17 +344,38 @@ impl Request {
                         )
                     })?;
                 }
-                Responder::CreateTerminal(_sender, _data) => {
-                    // TODO: Implement default terminal creation flow
-                    // This will create a terminal job using Neovim's :terminal command
-                    // and manage output/exit events for the ACP agent
-                    // For now, this is a stub - user must define autocommand handler
-                    error!(
-                        "CreateTerminal default flow not yet implemented. Please define a CreateTerminal autocommand handler."
-                    );
-                    return Err(Error::Internal(
-                        "CreateTerminal default flow not implemented".to_string(),
-                    ));
+                Responder::TerminalCreate(sender, data) => {
+                    // Create terminal using the TerminalManager
+                    let terminal = T::from_request(data);
+                    let terminal_id = terminal.id().to_string();
+                    terminal_manager.intitialize_terminal(terminal_id.clone(), terminal);
+                    sender
+                        .send(Ok(CreateTerminalResponse::new(terminal_id)))
+                        .map_err(|e| {
+                            Error::Internal(format!(
+                                "Failed to send terminal creation response for request '{}': {:?}",
+                                self.id, e
+                            ))
+                        })?;
+                }
+                Responder::TerminalOutput(sender, data) => {
+                    let result = terminal_manager
+                        .get_terminal(&data.terminal_id.to_string())
+                        .map(|terminal| {
+                            TerminalOutputResponse::new(terminal.content(), terminal.truncated())
+                        })
+                        .ok_or_else(|| agent_client_protocol::Error::resource_not_found(None));
+                    sender.send(result).map_err(|e| {
+                        Error::Internal(
+                            format!("Failed to send terminal output response: {:?}", e,),
+                        )
+                    })?;
+                }
+                Responder::TerminalExit(sender, data) => {
+                    terminal_manager.notify_when_finished(&data.terminal_id.to_string(), sender)?;
+                }
+                Responder::TerminalRelease(sender, data) => {
+                    unimplemented!("Terminal release is not yet implemented. Request ID '{}'", self.id);
                 }
             }
             self.finish()?;

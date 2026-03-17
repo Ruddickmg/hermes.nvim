@@ -1,16 +1,15 @@
-use agent_client_protocol::{Client, McpServer, NewSessionRequest};
+use agent_client_protocol::{McpServer, NewSessionRequest};
 use nvim_oxi::{
     Dictionary, Function, Object,
     conversion::{Error, FromObject},
     lua::{Poppable, Pushable},
 };
-use std::{path::PathBuf, rc::Rc};
-use tokio::sync::Mutex;
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
 use tracing::{debug, instrument};
 
 use crate::{
     acp::connection::ConnectionManager, api::mcp_servers::parse_mcp_servers,
-    nvim::autocommands::ResponseHandler, utilities,
+    utilities,
 };
 
 #[derive(Debug, Clone)]
@@ -144,8 +143,8 @@ impl Pushable for CreateSessionArgs {
 }
 
 #[instrument(level = "trace", skip_all)]
-pub fn create_session<H: Client + ResponseHandler + Send + Sync + 'static>(
-    connection: Rc<Mutex<ConnectionManager<H>>>,
+pub fn create_session(
+    connection: Rc<RefCell<ConnectionManager>>,
 ) -> Object {
     let function: Function<CreateSessionArgs, Result<(), nvim_oxi::lua::Error>> =
         Function::from_fn(move |session: CreateSessionArgs| {
@@ -160,7 +159,7 @@ pub fn create_session<H: Client + ResponseHandler + Send + Sync + 'static>(
                 }
             };
             connection
-                .blocking_lock()
+                .borrow()
                 .get_current_connection()
                 .ok_or_else(|| {
                     nvim_oxi::lua::Error::RuntimeError(
