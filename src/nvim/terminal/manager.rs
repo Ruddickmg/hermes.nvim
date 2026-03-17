@@ -33,7 +33,11 @@ impl<T: Terminal + Clone> TerminalManager<T> {
         self.terminals.borrow().get(id).map(|info| info.content())
     }
 
-    pub fn notify_when_finished(&self, id: &str, sender: oneshot::Sender<(u32, String)>) -> Result<()> {
+    pub fn notify_when_finished(
+        &self,
+        id: &str,
+        sender: oneshot::Sender<(u32, String)>,
+    ) -> Result<()> {
         self.terminals
             .borrow_mut()
             .get(id)
@@ -49,7 +53,10 @@ impl<T: Terminal + Clone> TerminalManager<T> {
         if let Some(t) = terminal {
             t.close()
         } else {
-            Err(Error::Internal(format!("Terminal with id '{}' was not present when release was called", id)))
+            Err(Error::Internal(format!(
+                "Terminal with id '{}' was not present when release was called",
+                id
+            )))
         }
     }
 }

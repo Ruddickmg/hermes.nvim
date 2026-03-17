@@ -24,7 +24,7 @@ fn setup_terminal_request(
     let requests = Arc::new(Requests::new().unwrap());
     let (sender, receiver) =
         oneshot::channel::<agent_client_protocol::Result<CreateTerminalResponse>>();
-    let responder = Responder::CreateTerminal(sender, create_terminal_request(command, args));
+    let responder = Responder::TerminalCreate(sender, create_terminal_request(command, args));
     let request_id = requests.add_request("test-session".to_string(), responder);
     (requests, request_id, receiver)
 }

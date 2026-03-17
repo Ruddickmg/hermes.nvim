@@ -2,8 +2,8 @@ use agent_client_protocol::{
     CreateTerminalRequest, CreateTerminalResponse, ReadTextFileRequest, ReadTextFileResponse,
     ReleaseTerminalRequest, ReleaseTerminalResponse, RequestPermissionOutcome,
     RequestPermissionRequest, SelectedPermissionOutcome, TerminalOutputRequest,
-    TerminalOutputResponse, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
-    WriteTextFileRequest, WriteTextFileResponse,
+    TerminalOutputResponse, WaitForTerminalExitRequest, WriteTextFileRequest,
+    WriteTextFileResponse,
 };
 use nvim_oxi::Dictionary;
 use nvim_oxi::conversion::FromObject;
@@ -229,10 +229,16 @@ impl Request {
                 })?;
             }
             Responder::TerminalExit(sender, _) => {
-                unimplemented!("Terminal exit response handling is not yet implemented. Request ID '{}'", self.id);
+                unimplemented!(
+                    "Terminal exit response handling is not yet implemented. Request ID '{}'",
+                    self.id
+                );
             }
             Responder::TerminalRelease(sender, _) => {
-                unimplemented!("Terminal release is not yet implemented. Request ID '{}'", self.id);
+                unimplemented!(
+                    "Terminal release is not yet implemented. Request ID '{}'",
+                    self.id
+                );
             }
         };
         self.finish()
@@ -375,7 +381,10 @@ impl Request {
                     terminal_manager.notify_when_finished(&data.terminal_id.to_string(), sender)?;
                 }
                 Responder::TerminalRelease(sender, data) => {
-                    unimplemented!("Terminal release is not yet implemented. Request ID '{}'", self.id);
+                    unimplemented!(
+                        "Terminal release is not yet implemented. Request ID '{}'",
+                        self.id
+                    );
                 }
             }
             self.finish()?;

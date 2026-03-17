@@ -7,10 +7,7 @@ use nvim_oxi::{
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 use tracing::{debug, instrument};
 
-use crate::{
-    acp::connection::ConnectionManager, api::mcp_servers::parse_mcp_servers,
-    utilities,
-};
+use crate::{acp::connection::ConnectionManager, api::mcp_servers::parse_mcp_servers, utilities};
 
 #[derive(Debug, Clone)]
 pub enum CreateSessionArgs {
@@ -143,9 +140,7 @@ impl Pushable for CreateSessionArgs {
 }
 
 #[instrument(level = "trace", skip_all)]
-pub fn create_session(
-    connection: Rc<RefCell<ConnectionManager>>,
-) -> Object {
+pub fn create_session(connection: Rc<RefCell<ConnectionManager>>) -> Object {
     let function: Function<CreateSessionArgs, Result<(), nvim_oxi::lua::Error>> =
         Function::from_fn(move |session: CreateSessionArgs| {
             debug!("createSession function called with: {:#?}", session);

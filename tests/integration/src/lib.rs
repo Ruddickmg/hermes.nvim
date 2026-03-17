@@ -1,10 +1,18 @@
+//! Integration tests for autocommand functionality via Handler
+//!
+//! Tests verify that the Handler struct properly manages autocommands
+//! and communicates with the Neovim main thread.
+use hermes::acp::handler::Handler;
 use hermes::nvim::{
-    autocommands::{AutoCommand, Commands},
+    autocommands::Commands,
     requests::Requests,
+    state::PluginState,
 };
 use nvim_oxi::api::opts::{CreateAugroupOpts, CreateAutocmdOpts};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
+pub mod acp;
 pub mod helpers;
 pub mod request;
 pub mod utilities;
@@ -35,7 +43,7 @@ fn create_test_autocmd(command: Commands) -> nvim_oxi::Result<u32> {
 fn test_listener_attached_no_listener() -> nvim_oxi::Result<()> {
     create_test_autogroup()?;
     assert!(
-        !AutoCommand::<Requests>::listener_attached(Commands::ToolCall),
+        !Handler::listener_attached(Commands::ToolCall),
         "Should return false when no listener is attached"
     );
     Ok(())
@@ -47,7 +55,7 @@ fn test_listener_attached_with_listener() -> nvim_oxi::Result<()> {
     create_test_autogroup()?;
     create_test_autocmd(Commands::PermissionRequest)?;
     assert!(
-        AutoCommand::<Requests>::listener_attached(Commands::PermissionRequest),
+        Handler::listener_attached(Commands::PermissionRequest),
         "Should return true when a listener is attached"
     );
     Ok(())
@@ -55,15 +63,16 @@ fn test_listener_attached_with_listener() -> nvim_oxi::Result<()> {
 
 #[tracing_test::traced_test]
 #[nvim_oxi::test]
-fn test_autocommand_new_creates_valid_instance() -> nvim_oxi::Result<()> {
-    // Integration: Verify AutoCommand can be instantiated with Requests handler
+fn test_handler_new_creates_valid_instance() -> nvim_oxi::Result<()> {
+    // Integration: Verify Handler can be instantiated with Requests handler
     // This tests the constructor which sets up mpsc channel and AsyncHandle
+    let state = Arc::new(Mutex::new(PluginState::default()));
     let requests = Arc::new(Requests::new()?);
-    let autocommand = AutoCommand::new(requests)?;
+    let handler = Handler::new(state, requests).expect("Handler creation should succeed");
     
     // If we get here without error, the integration worked
     // The instance is valid and ready to use
-    drop(autocommand);
+    drop(handler);
     Ok(())
 }
 
@@ -72,13 +81,14 @@ fn test_autocommand_new_creates_valid_instance() -> nvim_oxi::Result<()> {
 fn test_execute_autocommand_sends_to_channel() -> nvim_oxi::Result<()> {
     // Integration: Verify message is queued via mpsc channel
     // Uses: channel.send(), AsyncHandle.send()
+    let state = Arc::new(Mutex::new(PluginState::default()));
     let requests = Arc::new(Requests::new()?);
-    let autocommand = AutoCommand::new(requests)?;
+    let handler = Handler::new(state, requests).expect("Handler creation should succeed");
     
     // Execute an autocommand with test data
     let test_data = serde_json::json!({"test": "data"});
     tokio_test::block_on(async {
-        autocommand
+        handler
             .execute_autocommand(Commands::ToolCall, test_data)
             .await
     })?;
@@ -87,4 +97,3 @@ fn test_execute_autocommand_sends_to_channel() -> nvim_oxi::Result<()> {
     // and AsyncHandle was triggered
     Ok(())
 }
-
