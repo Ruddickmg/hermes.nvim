@@ -161,7 +161,7 @@ impl Client for Handler {
             .and_then(|(exit_code, signal)| {
                 // Validate that at least one field is present
                 if exit_code.is_none() && signal.is_none() {
-                    Err(Error::internal_error())
+                    Err(Error::invalid_params())
                 } else {
                     let mut status = TerminalExitStatus::new();
                     if let Some(code) = exit_code {

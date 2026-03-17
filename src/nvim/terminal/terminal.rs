@@ -52,32 +52,113 @@ pub fn process_terminal_input(
     }
 }
 
+/// Maps exit codes to Unix signal names
+/// Handles both direct signal numbers (negative) and exit codes (128 + signal)
+/// Returns (exit_code, signal) tuple where both can be present
+fn map_exit_code_to_signal(exit_code: i64) -> (Option<u32>, Option<String>) {
+    // Handle negative values first (direct signal numbers from Neovim)
+    if exit_code < 0 {
+        let signal_num = -exit_code;
+        let signal_name = match signal_num {
+            1 => "SIGHUP",
+            2 => "SIGINT", // Ctrl+C
+            3 => "SIGQUIT",
+            4 => "SIGILL",
+            5 => "SIGTRAP",
+            6 => "SIGABRT",
+            7 => "SIGBUS",
+            8 => "SIGFPE",
+            9 => "SIGKILL", // kill -9
+            10 => "SIGUSR1",
+            11 => "SIGSEGV", // Segfault
+            12 => "SIGUSR2",
+            13 => "SIGPIPE",
+            14 => "SIGALRM",
+            15 => "SIGTERM", // kill (default)
+            16 => "SIGSTKFLT",
+            17 => "SIGCHLD",
+            18 => "SIGCONT",
+            19 => "SIGSTOP",
+            20 => "SIGTSTP", // Ctrl+Z
+            21 => "SIGTTIN",
+            22 => "SIGTTOU",
+            23 => "SIGURG",
+            24 => "SIGXCPU",
+            25 => "SIGXFSZ",
+            26 => "SIGVTALRM",
+            27 => "SIGPROF",
+            28 => "SIGWINCH",
+            29 => "SIGIO",
+            30 => "SIGPWR",
+            31 => "SIGSYS",
+            _ => return (None, Some(format!("SIG{}", signal_num))), // Unknown signal
+        };
+        return (None, Some(signal_name.to_string()));
+    }
+
+    // Handle exit codes in range 128-255 (128 + signal number convention)
+    // Return BOTH the exit code AND the signal name
+    if exit_code >= 128 && exit_code <= 255 {
+        let signal_num = exit_code - 128;
+        let signal_name = match signal_num {
+            1 => "SIGHUP",
+            2 => "SIGINT",
+            3 => "SIGQUIT",
+            4 => "SIGILL",
+            5 => "SIGTRAP",
+            6 => "SIGABRT",
+            7 => "SIGBUS",
+            8 => "SIGFPE",
+            9 => "SIGKILL",
+            10 => "SIGUSR1",
+            11 => "SIGSEGV",
+            12 => "SIGUSR2",
+            13 => "SIGPIPE",
+            14 => "SIGALRM",
+            15 => "SIGTERM",
+            16 => "SIGSTKFLT",
+            17 => "SIGCHLD",
+            18 => "SIGCONT",
+            19 => "SIGSTOP",
+            20 => "SIGTSTP",
+            21 => "SIGTTIN",
+            22 => "SIGTTOU",
+            23 => "SIGURG",
+            24 => "SIGXCPU",
+            25 => "SIGXFSZ",
+            26 => "SIGVTALRM",
+            27 => "SIGPROF",
+            28 => "SIGWINCH",
+            29 => "SIGIO",
+            30 => "SIGPWR",
+            31 => "SIGSYS",
+            _ => return (Some(exit_code as u32), Some(format!("SIG{}", signal_num))),
+        };
+        return (Some(exit_code as u32), Some(signal_name.to_string()));
+    }
+
+    // Normal exit codes (0-127) - return exit code only, no signal
+    (Some(exit_code as u32), None)
+}
+
 /// Pure function to handle terminal exit
-/// Parses exit_code (i64 from Neovim) to Option<u32> (None if negative)
-/// Parses event String to Option<String> (None if empty)
+/// Maps exit_code (i64 from Neovim) to (Option<u32>, Option<String>) using Unix signal conventions
 /// Returns Err if the oneshot channel is closed (recipient dropped)
 pub fn handle_terminal_exit(
     exit_code: i64,
-    event: String,
+    _event: String,
     exit_status: &mut Option<(Option<u32>, Option<String>)>,
     exit_response: &mut Option<oneshot::Sender<(Option<u32>, Option<String>)>>,
 ) -> std::result::Result<(), String> {
-    // Parse exit_code: None if negative, else Some(exit_code as u32)
-    let parsed_exit = if exit_code < 0 {
-        None
-    } else {
-        Some(exit_code as u32)
-    };
-
-    // Parse event: None if empty, else Some(event)
-    let parsed_event = if event.is_empty() { None } else { Some(event) };
+    // Use signal mapping function to convert exit code
+    let (parsed_exit, parsed_signal) = map_exit_code_to_signal(exit_code);
 
     if let Some(sender) = exit_response.take() {
-        sender.send((parsed_exit, parsed_event)).map_err(|_| {
+        sender.send((parsed_exit, parsed_signal)).map_err(|_| {
             "Error occurred while sending terminal exit notification: channel closed".to_string()
         })
     } else {
-        *exit_status = Some((parsed_exit, parsed_event));
+        *exit_status = Some((parsed_exit, parsed_signal));
         Ok(())
     }
 }
@@ -340,13 +421,15 @@ mod tests {
         let (sender, mut receiver) = oneshot::channel();
         exit_response = Some(sender);
 
-        let _result =
-            handle_terminal_exit(42, "exit".to_string(), &mut exit_status, &mut exit_response);
-
-        assert_eq!(
-            receiver.try_recv().unwrap(),
-            (Some(42), Some("exit".to_string()))
+        let _result = handle_terminal_exit(
+            42,
+            "ignored".to_string(),
+            &mut exit_status,
+            &mut exit_response,
         );
+
+        // Exit code 42 is normal (0-127 range), no signal
+        assert_eq!(receiver.try_recv().unwrap(), (Some(42), None));
         assert!(exit_status.is_none());
     }
 
@@ -355,36 +438,114 @@ mod tests {
         let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
         let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
 
-        let result =
-            handle_terminal_exit(1, "error".to_string(), &mut exit_status, &mut exit_response);
-
-        assert!(result.is_ok());
-        assert_eq!(exit_status, Some((Some(1), Some("error".to_string()))));
-        assert!(exit_response.is_none());
-    }
-
-    #[test]
-    fn handle_exit_parses_negative_code_as_none() {
-        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
-        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
-
         let result = handle_terminal_exit(
-            -1,
-            "SIGTERM".to_string(),
+            1,
+            "ignored".to_string(),
             &mut exit_status,
             &mut exit_response,
         );
 
         assert!(result.is_ok());
+        // Exit code 1 is normal (0-127 range), no signal
+        assert_eq!(exit_status, Some((Some(1), None)));
+        assert!(exit_response.is_none());
+    }
+
+    #[test]
+    fn handle_exit_maps_negative_signal_code_to_signal_name() {
+        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
+        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+
+        let result = handle_terminal_exit(
+            -15,
+            "ignored".to_string(),
+            &mut exit_status,
+            &mut exit_response,
+        );
+
+        assert!(result.is_ok());
+        // -15 maps to SIGTERM
         assert_eq!(exit_status, Some((None, Some("SIGTERM".to_string()))));
     }
 
     #[test]
-    fn handle_exit_parses_empty_event_as_none() {
+    fn handle_exit_maps_exit_code_128_plus_range_to_signal() {
         let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
         let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
 
-        let result = handle_terminal_exit(0, "".to_string(), &mut exit_status, &mut exit_response);
+        // 137 = 128 + 9 = SIGKILL
+        // Returns BOTH exit code AND signal
+        let result = handle_terminal_exit(
+            137,
+            "ignored".to_string(),
+            &mut exit_status,
+            &mut exit_response,
+        );
+
+        assert!(result.is_ok());
+        // Exit code 137 AND signal SIGKILL
+        assert_eq!(exit_status, Some((Some(137), Some("SIGKILL".to_string()))));
+    }
+
+    #[test]
+    fn handle_exit_maps_sigkill_negative_code() {
+        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
+        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+
+        let result = handle_terminal_exit(
+            -9,
+            "ignored".to_string(),
+            &mut exit_status,
+            &mut exit_response,
+        );
+
+        assert!(result.is_ok());
+        assert_eq!(exit_status, Some((None, Some("SIGKILL".to_string()))));
+    }
+
+    #[test]
+    fn handle_exit_maps_sigint_negative_code() {
+        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
+        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+
+        let result = handle_terminal_exit(
+            -2,
+            "ignored".to_string(),
+            &mut exit_status,
+            &mut exit_response,
+        );
+
+        assert!(result.is_ok());
+        assert_eq!(exit_status, Some((None, Some("SIGINT".to_string()))));
+    }
+
+    #[test]
+    fn handle_exit_maps_unknown_signal_to_generic_name() {
+        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
+        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+
+        let result = handle_terminal_exit(
+            -999,
+            "ignored".to_string(),
+            &mut exit_status,
+            &mut exit_response,
+        );
+
+        assert!(result.is_ok());
+        assert_eq!(exit_status, Some((None, Some("SIG999".to_string()))));
+    }
+
+    #[test]
+    fn handle_exit_maps_exit_code_zero_to_normal_exit() {
+        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
+        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+
+        let result = handle_terminal_exit(
+            0,
+            "ignored".to_string(),
+            &mut exit_status,
+            &mut exit_response,
+        );
 
         assert!(result.is_ok());
         assert_eq!(exit_status, Some((Some(0), None)));

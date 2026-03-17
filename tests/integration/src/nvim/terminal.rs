@@ -97,12 +97,15 @@ fn handle_terminal_exit_sends_immediately_when_sender_available() -> nvim_oxi::R
     let (sender, mut receiver) = oneshot::channel();
     exit_response = Some(sender);
 
-    handle_terminal_exit(42, "exit".to_string(), &mut exit_status, &mut exit_response);
-
-    assert_eq!(
-        receiver.try_recv().unwrap(),
-        (Some(42), Some("exit".to_string()))
+    // Exit code 42 is normal, maps to (Some(42), None)
+    handle_terminal_exit(
+        42,
+        "ignored".to_string(),
+        &mut exit_status,
+        &mut exit_response,
     );
+
+    assert_eq!(receiver.try_recv().unwrap(), (Some(42), None));
 
     Ok(())
 }
@@ -314,9 +317,15 @@ fn handle_terminal_exit_stores_exit_status_when_no_sender() -> nvim_oxi::Result<
     let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
 
     // No sender available - stores status
-    handle_terminal_exit(42, "exit".to_string(), &mut exit_status, &mut exit_response);
+    // Exit code 42 is normal, maps to (Some(42), None)
+    handle_terminal_exit(
+        42,
+        "ignored".to_string(),
+        &mut exit_status,
+        &mut exit_response,
+    );
 
-    assert_eq!(exit_status, Some((Some(42), Some("exit".to_string()))));
+    assert_eq!(exit_status, Some((Some(42), None)));
 
     Ok(())
 }
@@ -330,17 +339,15 @@ fn handle_terminal_exit_sends_when_sender_provided() -> nvim_oxi::Result<()> {
     let (sender, mut receiver) = oneshot::channel();
     exit_response = Some(sender);
 
+    // Exit code 0 is normal success, maps to (Some(0), None)
     handle_terminal_exit(
         0,
-        "stored".to_string(),
+        "ignored".to_string(),
         &mut exit_status,
         &mut exit_response,
     );
 
-    assert_eq!(
-        receiver.try_recv().unwrap(),
-        (Some(0), Some("stored".to_string()))
-    );
+    assert_eq!(receiver.try_recv().unwrap(), (Some(0), None));
 
     Ok(())
 }

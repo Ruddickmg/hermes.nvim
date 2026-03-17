@@ -453,7 +453,7 @@ vim.api.nvim_create_autocmd("User", {
 > [!WARNING]
 > In order to customize the terminal flow it must be started here. Otherwise defaults will be used for all terminal interaction.
 
-#### Send terminal output to the assistant 
+#### Provide terminal output to the assistant 
 
 ```lua
 local hermes = require("hermes")
@@ -488,6 +488,48 @@ vim.api.nvim_create_autocmd("User", {
 > **Default behavior:** If no autocommand handler is defined for `TerminalCreate`, Hermes will:
 > - Do nothing if the user did not handle the [TerminalCreate](#terminalcreate)
 > - Collect and send the terminal output if Hermes is handling the terminal
+
+#### Reporting terminal exit
+
+```lua
+local hermes = require("hermes")
+local terminals = {}
+
+-- call signature for termination signal
+hermes.respond("requestId", "SIGTERM")
+
+
+-- call signature for exit code
+hermes.respond("requestId", 0)
+
+-- call signature with exit code and termination signal
+hermes.respond("requestId", {
+    exitCode = 9,
+    signal = "SIGKILL"
+})
+
+-- example:
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "TerminalExit",
+    callback = function(args)
+        local requestId = args.data.requestId
+        local terminalId = args.data.terminalId
+
+        hermes.respond(requestId, {
+            exitCode = terminals[terminalId].exitCode, -- get output somehow
+            signal = terminals[terminalId].signal, -- get output somehow
+        });
+    end,
+})
+```
+
+> **Responds to:** [TerminalExit](#terminalexit) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for `TerminalCreate`, Hermes will:
+> - Do nothing if the user did not handle the [TerminalCreate](#terminalcreate)
+> - Wait for and report terminal exit details if Hermes is handling the terminal
+
 
 ## Autocommands
 
