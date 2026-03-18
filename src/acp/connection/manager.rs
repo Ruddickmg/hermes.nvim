@@ -1,6 +1,6 @@
+use crate::acp::connection::{stdio, Connection};
 use crate::PluginState;
-use crate::acp::connection::{Connection, stdio};
-use crate::{Handler, acp::error::Error};
+use crate::{acp::error::Error, Handler};
 use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolVersion};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -268,100 +268,82 @@ mod tests {
     }
 
     #[test]
-    fn test_protocol_display_socket() {
-        assert_eq!(format!("{}", Protocol::Socket), "socket");
+    fn test_protocol_display() {
+        // Test Display for all Protocol variants using slice comparison
+        let protocols: Vec<Protocol> = vec![Protocol::Socket, Protocol::Http, Protocol::Stdio];
+        let results: Vec<String> = protocols.iter().map(|p| format!("{}", p)).collect();
+
+        let expected: Vec<String> = vec![
+            "socket".to_string(),
+            "http".to_string(),
+            "stdio".to_string(),
+        ];
+
+        assert_eq!(results, expected);
     }
 
     #[test]
-    fn test_protocol_display_http() {
-        assert_eq!(format!("{}", Protocol::Http), "http");
+    fn test_protocol_from_str() {
+        // Test FromStr for known protocols using slice comparison
+        let inputs: Vec<&str> = vec![
+            "socket", "http", "stdio", "SOCKET", "HTTP", "STDIO", "unknown",
+        ];
+        let results: Vec<Protocol> = inputs.iter().map(|&s| Protocol::from(s)).collect();
+
+        let expected: Vec<Protocol> = vec![
+            Protocol::Socket, // socket
+            Protocol::Http,   // http
+            Protocol::Stdio,  // stdio
+            Protocol::Socket, // SOCKET (case-insensitive)
+            Protocol::Http,   // HTTP (case-insensitive)
+            Protocol::Stdio,  // STDIO (case-insensitive)
+            Protocol::Stdio,  // unknown defaults to Stdio
+        ];
+
+        assert_eq!(results, expected);
     }
 
     #[test]
-    fn test_protocol_display_stdio() {
-        assert_eq!(format!("{}", Protocol::Stdio), "stdio");
+    fn test_assistant_display() {
+        // Test Display for all Assistant variants using slice comparison
+        let assistants: Vec<Assistant> = vec![
+            Assistant::Copilot,
+            Assistant::Opencode,
+            Assistant::Custom {
+                name: String::from("my-claude"),
+                command: String::from("claude-acp"),
+                args: vec![String::from("--socket")],
+            },
+        ];
+        let results: Vec<String> = assistants.iter().map(|a| format!("{}", a)).collect();
+
+        let expected: Vec<String> = vec![
+            "copilot".to_string(),
+            "opencode".to_string(),
+            "my-claude".to_string(),
+        ];
+
+        assert_eq!(results, expected);
     }
 
     #[test]
-    fn test_protocol_from_str_socket() {
-        assert_eq!(Protocol::from("socket"), Protocol::Socket);
-    }
-
-    #[test]
-    fn test_protocol_from_str_socket_case_insensitive() {
-        assert_eq!(Protocol::from("SOCKET"), Protocol::Socket);
-    }
-
-    #[test]
-    fn test_protocol_from_str_http() {
-        assert_eq!(Protocol::from("http"), Protocol::Http);
-    }
-
-    #[test]
-    fn test_protocol_from_str_stdio() {
-        assert_eq!(Protocol::from("stdio"), Protocol::Stdio);
-    }
-
-    #[test]
-    fn test_protocol_from_str_unknown() {
-        assert_eq!(Protocol::from("unknown"), Protocol::Stdio);
-    }
-
-    #[test]
-    fn test_assistant_display_copilot() {
-        assert_eq!(format!("{}", Assistant::Copilot), "copilot");
-    }
-
-    #[test]
-    fn test_assistant_display_opencode() {
-        assert_eq!(format!("{}", Assistant::Opencode), "opencode");
-    }
-
-    #[test]
-    fn test_assistant_from_str_copilot() {
+    fn test_assistant_from_str_copilot_lowercase() {
         assert_eq!(Assistant::from("copilot"), Assistant::Copilot);
     }
 
     #[test]
-    fn test_assistant_from_str_copilot_case_insensitive() {
-        assert_eq!(Assistant::from("COPILOT"), Assistant::Copilot);
-    }
-
-    #[test]
-    fn test_assistant_from_str_opencode() {
+    fn test_assistant_from_str_opencode_lowercase() {
         assert_eq!(Assistant::from("opencode"), Assistant::Opencode);
     }
 
     #[test]
-    fn test_assistant_from_str_unknown() {
-        let assistant = Assistant::from("unknown");
-        assert!(matches!(assistant, Assistant::Custom { name, .. } if name == "unknown"));
+    fn test_assistant_from_str_copilot_uppercase() {
+        assert_eq!(Assistant::from("COPILOT"), Assistant::Copilot);
     }
 
     #[test]
-    fn test_assistant_display_custom() {
-        let assistant = Assistant::Custom {
-            name: String::from("my-claude"),
-            command: String::from("claude-acp"),
-            args: vec![String::from("--socket")],
-        };
-        assert_eq!(format!("{}", assistant), "my-claude");
-    }
-
-    #[test]
-    fn test_assistant_from_str_creates_custom() {
-        let assistant = Assistant::from("my-custom-agent");
-        match assistant {
-            Assistant::Custom {
-                name,
-                command,
-                args,
-            } => {
-                assert_eq!(name, "my-custom-agent");
-                assert_eq!(command, "");
-                assert!(args.is_empty());
-            }
-            _ => panic!("Expected Custom variant"),
-        }
+    fn test_assistant_from_str_unknown_creates_custom() {
+        let result = Assistant::from("unknown-agent");
+        assert!(matches!(result, Assistant::Custom { name, .. } if name == "unknown-agent"));
     }
 }

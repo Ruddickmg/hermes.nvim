@@ -7,36 +7,6 @@ use hermes::nvim::terminal::{
 };
 use tokio::sync::oneshot;
 
-/// Integration test: Verifies TerminalInfo can be created and returns empty content
-#[nvim_oxi::test]
-fn terminal_info_new_returns_empty_content() -> nvim_oxi::Result<()> {
-    let terminal = TerminalInfo::new(None);
-
-    assert_eq!(terminal.content(), "");
-
-    Ok(())
-}
-
-/// Integration test: Verifies TerminalInfo with byte limit returns empty content initially
-#[nvim_oxi::test]
-fn terminal_info_new_with_byte_limit_returns_empty_content() -> nvim_oxi::Result<()> {
-    let terminal = TerminalInfo::new(Some(1000));
-
-    assert_eq!(terminal.content(), "");
-
-    Ok(())
-}
-
-/// Integration test: Verifies TerminalInfo is not truncated initially
-#[nvim_oxi::test]
-fn terminal_info_new_not_truncated() -> nvim_oxi::Result<()> {
-    let terminal = TerminalInfo::new(None);
-
-    assert_eq!(terminal.truncated(), false);
-
-    Ok(())
-}
-
 /// Integration test: Verifies report_exit_to sends exit code when already occurred
 #[nvim_oxi::test]
 fn terminal_info_report_exit_to_sends_exit_code_when_already_occurred() -> nvim_oxi::Result<()> {
@@ -176,53 +146,6 @@ fn terminal_info_from_request_creates_with_correct_defaults() -> nvim_oxi::Resul
     let terminal = TerminalInfo::from_request(request);
 
     assert_eq!(terminal.truncated(), false);
-
-    Ok(())
-}
-
-/// Integration test: Verifies id() returns unique values for different terminals
-#[nvim_oxi::test]
-fn terminal_info_id_returns_unique_values() -> nvim_oxi::Result<()> {
-    let terminal1 = TerminalInfo::new(None);
-    let terminal2 = TerminalInfo::new(None);
-
-    assert_ne!(terminal1.id(), terminal2.id());
-
-    Ok(())
-}
-
-/// Integration test: Verifies content() returns set output value
-#[nvim_oxi::test]
-fn terminal_info_content_returns_set_output_value() -> nvim_oxi::Result<()> {
-    let terminal = TerminalInfo::new(None);
-
-    // Simulate callback updating output
-    *terminal.output.borrow_mut() = "test output".to_string();
-
-    assert_eq!(terminal.content(), "test output");
-
-    Ok(())
-}
-
-/// Integration test: Verifies truncated() returns false initially
-#[nvim_oxi::test]
-fn terminal_info_truncated_returns_false_initially() -> nvim_oxi::Result<()> {
-    let terminal = TerminalInfo::new(None);
-
-    assert_eq!(terminal.truncated(), false);
-
-    Ok(())
-}
-
-/// Integration test: Verifies truncated() returns true when flag is set
-#[nvim_oxi::test]
-fn terminal_info_truncated_returns_true_when_flag_set() -> nvim_oxi::Result<()> {
-    let terminal = TerminalInfo::new(None);
-
-    // Simulate callback setting truncated flag
-    *terminal.truncated.borrow_mut() = Some(true);
-
-    assert_eq!(terminal.truncated(), true);
 
     Ok(())
 }

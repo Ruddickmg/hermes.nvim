@@ -450,7 +450,7 @@ vim.api.nvim_create_autocmd("User", {
 > - Handle byte limit constraints if defined
 
 > [!WARNING]
-> In order to manage the terminal, the `TerminalCreate` autocmmmand must be implemented. If no `TerminalCreate` autocommand is registered, hermes will use default functionality to manage terminal interaction.
+> If no `TerminalCreate` autocommand is registered, Hermes will use default functionality to manage **all** subsequent terminal interaction.
 
 #### Provide terminal output to the assistant 
 

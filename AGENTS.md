@@ -384,6 +384,21 @@ data.replace(String::from("world"));  // OK!
 
 **Priority:** LSP > grep > read > other tools when working with code.
 
+### Following Instructions
+
+**CRITICAL:** When you encounter a situation where your opinion or interpretation conflicts with an instruction in this document, you MUST:
+
+1. **ASK for permission** to deviate from the instruction, OR
+2. **FOLLOW THE INSTRUCTION** instead of your opinion
+
+**Never act on contradictory opinions without explicit permission.** If an instruction seems wrong, unclear, or suboptimal, ask the user before proceeding rather than making assumptions.
+
+**Example:** If AGENTS.md says "write comprehensive tests" and you believe tests should be consolidated, you must either:
+- Ask: "The instructions say to write comprehensive tests, but I think they should be consolidated. Is that okay?"
+- Follow: Write comprehensive tests as instructed
+
+**Never consolidate, skip, or modify instructions based on your own judgment without asking first.**
+
 ### Code Style
 Adhere to "Clean Code" patterns.
 - **Design:** Apply SOLID principles where applicable.
