@@ -1,12 +1,5 @@
-pub fn map_exit_code_to_signal(exit_code: i64) -> Option<String> {
-    let code = if exit_code < 0 {
-        -exit_code
-    } else if exit_code >= 128 && exit_code <= 255 {
-        exit_code - 128
-    } else {
-        exit_code
-    };
-    let signal_name = match code {
+pub fn map_codes(exit_code: u32) -> Option<String> {
+    Some(match exit_code {
         1 => "SIGHUP",
         2 => "SIGINT",
         3 => "SIGQUIT",
@@ -38,11 +31,17 @@ pub fn map_exit_code_to_signal(exit_code: i64) -> Option<String> {
         29 => "SIGIO",
         30 => "SIGPWR",
         31 => "SIGSYS",
-        _ => "",
-    };
-    if signal_name.is_empty() {
-        None
+        _ => return None
+    }.to_string())
+}
+
+pub fn map_exit_code_to_signal(exit_code: i64) -> String {
+    let formatted = format!("UNKNOWN({})", exit_code);
+    if exit_code < 0 {
+        map_codes((-exit_code) as u32).unwrap_or(formatted)
+    } else if (120 ..255).contains(&exit_code) {
+        map_codes(exit_code as u32 - 128).unwrap_or(formatted)
     } else {
-        Some(signal_name.to_string())
+        formatted
     }
 }

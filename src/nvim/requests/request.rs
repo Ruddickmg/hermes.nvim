@@ -15,7 +15,7 @@ use uuid::Uuid;
 use crate::acp::Result;
 use crate::acp::error::Error;
 use crate::nvim::autocommands::Commands;
-use crate::nvim::terminal::{Terminal, TerminalManager};
+use crate::nvim::terminal::{Terminal, TerminalManager, map_exit_code_to_signal};
 use crate::utilities::{
     NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
     save_buffer_to_disk, show_permission_ui, update_buffer_content,
@@ -180,18 +180,23 @@ impl Request {
         // First, try to parse as a plain String (signal name only)
         match String::from_object(data.clone()) {
             Ok(signal) => Ok(if signal.is_empty() {
-                (None, None)
+                return Err(Error::InvalidInput(
+                    "Signal string cannot be empty".to_string(),
+                ));
             } else {
                 (None, Some(signal))
             }),
             Err(_) => {
                 // Not a string, try Integer (exit code)
                 match i64::from_object(data.clone()) {
-                    Ok(exit_code) => Ok(if exit_code < 0 {
-                        (None, None)
-                    } else {
-                        (Some(exit_code as u32), None)
-                    }),
+                    Ok(exit_code) => {
+                        let signal = Some(map_exit_code_to_signal(exit_code));
+                        Ok(if exit_code < 0 {
+                            (None, signal)
+                        } else {
+                            (Some(exit_code as u32), signal)
+                        })
+                    }
                     Err(_) => {
                         let dict = Dictionary::from_object(data)
                             .map_err(|e| Error::Internal(e.to_string()))?;
@@ -216,7 +221,13 @@ impl Request {
                             None => None,
                         };
 
+                        if signal.is_none() && exit_code.is_none() {
+                            Err(Error::InvalidInput(
+                                "Terminal exit response must contain at least 'exitCode' or 'signal'".to_string(),
+                            ))
+                        } else {
                         Ok((exit_code, signal))
+                        }
                     }
                 }
             }

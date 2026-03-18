@@ -1,5 +1,5 @@
 use crate::{
-    acp::{Result, error::Error},
+    acp::{error::Error, Result},
     nvim::terminal::map_exit_code_to_signal,
 };
 use agent_client_protocol::EnvVariable;
@@ -70,11 +70,11 @@ pub fn handle_terminal_exit(
     let signal = map_exit_code_to_signal(exit_code);
     let data: ExitStatus = (
         if exit_code < 0 {
-            Some(exit_code as u32)
-        } else {
             None
+        } else {
+            Some(exit_code as u32)
         },
-        signal,
+        Some(signal),
     );
 
     if let Some(sender) = exit_response.take() {
@@ -90,7 +90,7 @@ pub fn handle_terminal_exit(
 impl TerminalInfo {
     pub fn new(byte_limit: Option<u64>) -> Self {
         let output = Rc::new(RefCell::new(String::new()));
-        let exit_status: Rc<RefCell<Option<(Option<u32>, Option<String>)>>> =
+        let exit_status: Rc<RefCell<Option<ExitStatus>>> =
             Rc::new(RefCell::new(None));
         let exit_response: Rc<RefCell<Option<oneshot::Sender<Result<ExitStatus>>>>> =
             Rc::new(RefCell::new(None));
@@ -339,8 +339,8 @@ mod tests {
 
     #[test]
     fn handle_exit_sends_immediately_when_sender_available() {
-        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
-        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+        let mut exit_status: Option<ExitStatus> = None;
+        let mut exit_response: Option<oneshot::Sender<Result<ExitStatus>>> = None;
 
         let (sender, mut receiver) = oneshot::channel();
         exit_response = Some(sender);
@@ -353,14 +353,16 @@ mod tests {
         );
 
         // Exit code 42 is normal (0-127 range), no signal
-        assert_eq!(receiver.try_recv().unwrap(), (Some(42), None));
+        let received = receiver.try_recv().unwrap();
+        assert!(received.is_ok());
+        assert_eq!(received.unwrap(), (Some(42), None));
         assert!(exit_status.is_none());
     }
 
     #[test]
     fn handle_exit_stores_status_when_no_sender() {
-        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
-        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+        let mut exit_status: Option<ExitStatus> = None;
+        let mut exit_response: Option<oneshot::Sender<Result<ExitStatus>>> = None;
 
         let result = handle_terminal_exit(
             1,
@@ -377,8 +379,8 @@ mod tests {
 
     #[test]
     fn handle_exit_maps_negative_signal_code_to_signal_name() {
-        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
-        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+        let mut exit_status: Option<ExitStatus> = None;
+        let mut exit_response: Option<oneshot::Sender<Result<ExitStatus>>> = None;
 
         let result = handle_terminal_exit(
             -15,
@@ -394,8 +396,8 @@ mod tests {
 
     #[test]
     fn handle_exit_maps_exit_code_128_plus_range_to_signal() {
-        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
-        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+        let mut exit_status: Option<ExitStatus> = None;
+        let mut exit_response: Option<oneshot::Sender<Result<ExitStatus>>> = None;
 
         // 137 = 128 + 9 = SIGKILL
         // Returns BOTH exit code AND signal
@@ -413,8 +415,8 @@ mod tests {
 
     #[test]
     fn handle_exit_maps_sigkill_negative_code() {
-        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
-        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+        let mut exit_status: Option<ExitStatus> = None;
+        let mut exit_response: Option<oneshot::Sender<Result<ExitStatus>>> = None;
 
         let result = handle_terminal_exit(
             -9,
@@ -429,8 +431,8 @@ mod tests {
 
     #[test]
     fn handle_exit_maps_sigint_negative_code() {
-        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
-        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+        let mut exit_status: Option<ExitStatus> = None;
+        let mut exit_response: Option<oneshot::Sender<Result<ExitStatus>>> = None;
 
         let result = handle_terminal_exit(
             -2,
@@ -445,8 +447,8 @@ mod tests {
 
     #[test]
     fn handle_exit_maps_unknown_signal_to_generic_name() {
-        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
-        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+        let mut exit_status: Option<ExitStatus> = None;
+        let mut exit_response: Option<oneshot::Sender<Result<ExitStatus>>> = None;
 
         let result = handle_terminal_exit(
             -999,
@@ -461,8 +463,8 @@ mod tests {
 
     #[test]
     fn handle_exit_maps_exit_code_zero_to_normal_exit() {
-        let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
-        let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+        let mut exit_status: Option<ExitStatus> = None;
+        let mut exit_response: Option<oneshot::Sender<Result<ExitStatus>>> = None;
 
         let result = handle_terminal_exit(
             0,
