@@ -1,4 +1,4 @@
-pub fn map_codes(exit_code: u32) -> Option<String> {
+fn map_codes(exit_code: u32) -> Option<String> {
     Some(
         match exit_code {
             1 => "SIGHUP",
@@ -58,5 +58,183 @@ pub fn parse_exit_code(exit_code: i64) -> (Option<u32>, Option<String>) {
             // if it's not a valid u32, mark it as unknown with the number in string format
             (None, formatted)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests for map_codes function
+
+    #[test]
+    fn map_codes_returns_sigterm_for_code_15() {
+        assert_eq!(map_codes(15), Some("SIGTERM".to_string()));
+    }
+
+    #[test]
+    fn map_codes_returns_sigkill_for_code_9() {
+        assert_eq!(map_codes(9), Some("SIGKILL".to_string()));
+    }
+
+    #[test]
+    fn map_codes_returns_sigint_for_code_2() {
+        assert_eq!(map_codes(2), Some("SIGINT".to_string()));
+    }
+
+    #[test]
+    fn map_codes_returns_none_for_unknown_code() {
+        assert_eq!(map_codes(999), None);
+    }
+
+    #[test]
+    fn map_codes_returns_none_for_code_0() {
+        assert_eq!(map_codes(0), None);
+    }
+
+    #[test]
+    fn map_codes_returns_none_for_code_32() {
+        assert_eq!(map_codes(32), None);
+    }
+
+    #[test]
+    fn map_codes_handles_all_standard_signals() {
+        // Test all standard Unix signals 1-31
+        let expected = vec![
+            (1, "SIGHUP"),
+            (2, "SIGINT"),
+            (3, "SIGQUIT"),
+            (4, "SIGILL"),
+            (5, "SIGTRAP"),
+            (6, "SIGABRT"),
+            (7, "SIGBUS"),
+            (8, "SIGFPE"),
+            (9, "SIGKILL"),
+            (10, "SIGUSR1"),
+            (11, "SIGSEGV"),
+            (12, "SIGUSR2"),
+            (13, "SIGPIPE"),
+            (14, "SIGALRM"),
+            (15, "SIGTERM"),
+            (16, "SIGSTKFLT"),
+            (17, "SIGCHLD"),
+            (18, "SIGCONT"),
+            (19, "SIGSTOP"),
+            (20, "SIGTSTP"),
+            (21, "SIGTTIN"),
+            (22, "SIGTTOU"),
+            (23, "SIGURG"),
+            (24, "SIGXCPU"),
+            (25, "SIGXFSZ"),
+            (26, "SIGVTALRM"),
+            (27, "SIGPROF"),
+            (28, "SIGWINCH"),
+            (29, "SIGIO"),
+            (30, "SIGPWR"),
+            (31, "SIGSYS"),
+        ];
+
+        for (code, name) in expected {
+            assert_eq!(map_codes(code), Some(name.to_string()));
+        }
+    }
+
+    // Tests for parse_exit_code function
+
+    #[test]
+    fn parse_exit_code_returns_exit_code_and_none_for_normal_exit() {
+        // Exit code 42 (normal range 0-127)
+        assert_eq!(parse_exit_code(42), (Some(42), None));
+    }
+
+    #[test]
+    fn parse_exit_code_returns_exit_code_and_none_for_exit_code_0() {
+        assert_eq!(parse_exit_code(0), (Some(0), None));
+    }
+
+    #[test]
+    fn parse_exit_code_returns_exit_code_and_none_for_exit_code_1() {
+        assert_eq!(parse_exit_code(1), (Some(1), None));
+    }
+
+    #[test]
+    fn parse_exit_code_returns_exit_code_and_none_for_exit_code_127() {
+        // Max normal exit code
+        assert_eq!(parse_exit_code(127), (Some(127), None));
+    }
+
+    #[test]
+    fn parse_exit_code_returns_exit_code_and_signal_for_128_plus_range() {
+        // 137 = 128 + 9 = SIGKILL
+        assert_eq!(
+            parse_exit_code(137),
+            (Some(137), Some("SIGKILL".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_exit_code_returns_exit_code_and_signal_for_130() {
+        // 130 = 128 + 2 = SIGINT
+        assert_eq!(
+            parse_exit_code(130),
+            (Some(130), Some("SIGINT".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_exit_code_returns_exit_code_and_none_for_unknown_signal_in_128_range() {
+        // 255 = 128 + 127, 127 is not a standard signal
+        assert_eq!(parse_exit_code(255), (Some(255), None));
+    }
+
+    #[test]
+    fn parse_exit_code_returns_none_and_signal_for_negative_sigterm() {
+        // -15 = SIGTERM
+        assert_eq!(parse_exit_code(-15), (None, Some("SIGTERM".to_string())));
+    }
+
+    #[test]
+    fn parse_exit_code_returns_none_and_signal_for_negative_sigkill() {
+        // -9 = SIGKILL
+        assert_eq!(parse_exit_code(-9), (None, Some("SIGKILL".to_string())));
+    }
+
+    #[test]
+    fn parse_exit_code_returns_none_and_unknown_for_negative_unknown_signal() {
+        // -999 is not a standard signal
+        assert_eq!(
+            parse_exit_code(-999),
+            (None, Some("UNKNOWN(-999)".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_exit_code_returns_none_and_unknown_for_too_large_number() {
+        // u32::MAX + 1 would overflow
+        assert_eq!(
+            parse_exit_code(4294967296),
+            (None, Some("UNKNOWN(4294967296)".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_exit_code_handles_negative_1() {
+        // -1 = SIGHUP
+        assert_eq!(parse_exit_code(-1), (None, Some("SIGHUP".to_string())));
+    }
+
+    #[test]
+    fn parse_exit_code_handles_exit_code_128() {
+        // 128 = 128 + 0, signal 0 doesn't exist
+        assert_eq!(parse_exit_code(128), (Some(128), None));
+    }
+
+    #[test]
+    fn parse_exit_code_handles_large_negative_number() {
+        // Very large negative number that's still valid i64
+        assert_eq!(
+            parse_exit_code(-2147483648),
+            (None, Some("UNKNOWN(-2147483648)".to_string()))
+        );
     }
 }
