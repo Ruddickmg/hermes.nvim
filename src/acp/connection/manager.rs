@@ -1,7 +1,11 @@
 use crate::PluginState;
 use crate::acp::connection::{Connection, stdio};
+use crate::nvim::configuration::Permissions;
 use crate::{Handler, acp::error::Error};
-use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolVersion};
+use agent_client_protocol::{
+    Client, ClientCapabilities, FileSystemCapability, Implementation, InitializeRequest,
+    ProtocolVersion,
+};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -143,12 +147,21 @@ impl ConnectionManager {
         self.get_connection(&self.get_agent())
     }
 
+    #[instrument(level = "trace", skip(self))]
+    pub fn get_permissions(&self) -> Permissions {
+        let config = self.state.blocking_lock();
+        let permissions = config.config.permissions.clone();
+        drop(config);
+        permissions
+    }
+
     #[instrument(level = "trace", skip(self, handler))]
     pub fn connect(
         &mut self,
         handler: Arc<Handler>,
         ConnectionDetails { agent, protocol }: ConnectionDetails,
     ) -> Result<Rc<Connection>, Error> {
+        let permissions = self.get_permissions();
         Ok(match self.get_connection(&agent) {
             Some(connection) => {
                 warn!(
@@ -161,9 +174,17 @@ impl ConnectionManager {
                 let (sender, receiver) = tokio::sync::mpsc::channel(100);
                 let connection = Rc::new(Connection::new(sender));
                 let thread_agent = agent.clone();
-                let init_config = InitializeRequest::new(ProtocolVersion::LATEST).client_info(
-                    Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"),
-                );
+                let init_config = InitializeRequest::new(ProtocolVersion::LATEST)
+                    .client_info(
+                        Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"),
+                    )
+                    .client_capabilities(
+                        ClientCapabilities::new()
+                            .terminal(permissions.terminal_access)
+                            .fs(FileSystemCapability::new()
+                                .read_text_file(permissions.fs_read_access)
+                                .write_text_file(permissions.fs_write_access)),
+                    );
 
                 trace!("Starting agent communication in new thread");
                 self.handles.borrow_mut().insert(

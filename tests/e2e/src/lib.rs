@@ -5,4 +5,5 @@ pub mod connection;
 pub mod mode;
 pub mod prompt;
 pub mod session;
+pub mod terminal;
 pub mod utilities;

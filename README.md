@@ -485,8 +485,7 @@ vim.api.nvim_create_autocmd("User", {
 > **Responds to:** [TerminalOutput](#terminaloutput) autocommand.
 >
 > **Default behavior:** If no autocommand handler is defined for [TerminalCreate](#terminalcreate), Hermes will:
-> - Do nothing if the user is managing the terminal (implemented the  autocommand)
-> - Collect and send the terminal output if Hermes is handling the terminal
+> - Collect and send the terminal output to the agent
 
 #### Reporting terminal exit
 
@@ -526,7 +525,7 @@ vim.api.nvim_create_autocmd("User", {
 > **Responds to:** [TerminalExit](#terminalexit) autocommand.
 >
 > **Default behavior:** If no autocommand handler is defined for [TerminalCreate](#terminalcreate), Hermes will:
-> - Wait for and report terminal exit details if Hermes is handling the terminal
+> - Wait for and report terminal exit details
 
 #### Kill terminal process
 
@@ -552,7 +551,7 @@ vim.api.nvim_create_autocmd("User", {
 > **Responds to:** [TerminalKill](#terminalkill) autocommand.
 >
 > **Default behavior:** If no autocommand handler is defined for [TerminalCreate](#terminalcreate), Hermes will:
-> - Stop the process running in the terminal if Hermes is managing it
+> - Stop the process running in the terminal
 
 #### Release terminal process
 
@@ -579,8 +578,8 @@ vim.api.nvim_create_autocmd("User", {
 >
 > **Default behavior:** If no autocommand handler is defined for [TerminalCreate](#terminalcreate), Hermes will:
 > - Stop any process running in the terminal
-> - Remove the tracked terminal
-> - Delete the attched buffer
+> - Remove the terminal
+> - Delete the attached buffer (can be configured to omit this step)
 
 
 ## Autocommands
