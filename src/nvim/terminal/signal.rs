@@ -1,4 +1,4 @@
-pub fn map_exit_code_to_signal(exit_code: i32) -> Option<String> {
+pub fn map_exit_code_to_signal(exit_code: i64) -> Option<String> {
     let code = if exit_code < 0 {
         -exit_code
     } else if exit_code >= 128 && exit_code <= 255 {

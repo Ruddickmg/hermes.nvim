@@ -1,5 +1,7 @@
-use crate::acp::{error::Error, Result};
-use crate::nvim::terminal::signal::map_exit_code_to_signal;
+use crate::{
+    acp::{Result, error::Error},
+    nvim::terminal::map_exit_code_to_signal,
+};
 use agent_client_protocol::EnvVariable;
 use nvim_oxi::{Array, Dictionary, Function, Object};
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
@@ -65,8 +67,15 @@ pub fn handle_terminal_exit(
     exit_response: &mut Option<oneshot::Sender<Result<ExitStatus>>>,
 ) -> std::result::Result<(), String> {
     // Use signal mapping function to convert exit code
-    let parsed_exit = map_exit_code_to_signal(exit_code);
-    let data: ExitStatus = (parsed_exit.0, parsed_exit.1);
+    let signal = map_exit_code_to_signal(exit_code);
+    let data: ExitStatus = (
+        if exit_code < 0 {
+            Some(exit_code as u32)
+        } else {
+            None
+        },
+        signal,
+    );
 
     if let Some(sender) = exit_response.take() {
         sender.send(Ok(data)).map_err(|_| {
@@ -193,7 +202,7 @@ impl Terminal for TerminalInfo {
 
     fn report_exit_to(&self, sender: oneshot::Sender<Result<ExitStatus>>) -> Result<()> {
         if let Some(exit_code) = self.exit_status.borrow_mut().take() {
-            sender.send(exit_code).map_err(|e| {
+            sender.send(Ok(exit_code)).map_err(|e| {
                 Error::Internal(format!(
                     "Error occurred while sending terminal exit notification: {:?}",
                     e
