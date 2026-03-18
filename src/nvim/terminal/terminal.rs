@@ -1,6 +1,6 @@
 use crate::{
-    acp::{error::Error, Result},
-    nvim::terminal::map_exit_code_to_signal,
+    acp::{Result, error::Error},
+    nvim::terminal::parse_exit_code,
 };
 use agent_client_protocol::EnvVariable;
 use nvim_oxi::{Array, Dictionary, Function, Object};
@@ -67,16 +67,7 @@ pub fn handle_terminal_exit(
     exit_response: &mut Option<oneshot::Sender<Result<ExitStatus>>>,
 ) -> std::result::Result<(), String> {
     // Use signal mapping function to convert exit code
-    let signal = map_exit_code_to_signal(exit_code);
-    let data: ExitStatus = (
-        if exit_code < 0 {
-            None
-        } else {
-            Some(exit_code as u32)
-        },
-        Some(signal),
-    );
-
+    let data: ExitStatus = parse_exit_code(exit_code);
     if let Some(sender) = exit_response.take() {
         sender.send(Ok(data)).map_err(|_| {
             "Error occurred while sending terminal exit notification: channel closed".to_string()
@@ -90,8 +81,7 @@ pub fn handle_terminal_exit(
 impl TerminalInfo {
     pub fn new(byte_limit: Option<u64>) -> Self {
         let output = Rc::new(RefCell::new(String::new()));
-        let exit_status: Rc<RefCell<Option<ExitStatus>>> =
-            Rc::new(RefCell::new(None));
+        let exit_status: Rc<RefCell<Option<ExitStatus>>> = Rc::new(RefCell::new(None));
         let exit_response: Rc<RefCell<Option<oneshot::Sender<Result<ExitStatus>>>>> =
             Rc::new(RefCell::new(None));
         let truncated = Rc::new(RefCell::new(None));
@@ -352,10 +342,13 @@ mod tests {
             &mut exit_response,
         );
 
-        // Exit code 42 is normal (0-127 range), no signal
+        // Exit code 42 is normal (0-127 range), signal should be "UNKNOWN(42)"
         let received = receiver.try_recv().unwrap();
         assert!(received.is_ok());
-        assert_eq!(received.unwrap(), (Some(42), None));
+        assert_eq!(
+            received.unwrap(),
+            (Some(42), Some("UNKNOWN(42)".to_string()))
+        );
         assert!(exit_status.is_none());
     }
 
@@ -372,8 +365,8 @@ mod tests {
         );
 
         assert!(result.is_ok());
-        // Exit code 1 is normal (0-127 range), no signal
-        assert_eq!(exit_status, Some((Some(1), None)));
+        // Exit code 1 is normal (0-127 range), signal should be "UNKNOWN(1)"
+        assert_eq!(exit_status, Some((Some(1), Some("UNKNOWN(1)".to_string()))));
         assert!(exit_response.is_none());
     }
 
@@ -458,7 +451,7 @@ mod tests {
         );
 
         assert!(result.is_ok());
-        assert_eq!(exit_status, Some((None, Some("SIG999".to_string()))));
+        assert_eq!(exit_status, Some((None, Some("UNKNOWN(-999)".to_string()))));
     }
 
     #[test]
@@ -474,6 +467,6 @@ mod tests {
         );
 
         assert!(result.is_ok());
-        assert_eq!(exit_status, Some((Some(0), None)));
+        assert_eq!(exit_status, Some((Some(0), Some("UNKNOWN(0)".to_string()))));
     }
 }

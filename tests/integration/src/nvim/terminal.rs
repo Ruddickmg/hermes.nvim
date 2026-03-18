@@ -48,10 +48,9 @@ fn terminal_info_report_exit_to_sends_exit_code_when_already_occurred() -> nvim_
     let (sender, mut receiver) = oneshot::channel();
     terminal.report_exit_to(sender).expect("report failed");
 
-    assert_eq!(
-        receiver.try_recv().unwrap(),
-        (Some(5), Some("error".to_string()))
-    );
+    let received = receiver.try_recv().unwrap();
+    assert!(received.is_ok());
+    assert_eq!(received.unwrap(), (Some(5), Some("error".to_string())));
 
     Ok(())
 }
@@ -92,12 +91,12 @@ fn process_terminal_input_joins_lines_with_newlines() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn handle_terminal_exit_sends_immediately_when_sender_available() -> nvim_oxi::Result<()> {
     let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
-    let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+    let mut exit_response: Option<oneshot::Sender<Result<(Option<u32>, Option<String>)>>> = None;
 
     let (sender, mut receiver) = oneshot::channel();
     exit_response = Some(sender);
 
-    // Exit code 42 is normal, maps to (Some(42), None)
+    // Exit code 42 is normal, maps to (Some(42), "UNKNOWN(42)")
     handle_terminal_exit(
         42,
         "ignored".to_string(),
@@ -105,7 +104,59 @@ fn handle_terminal_exit_sends_immediately_when_sender_available() -> nvim_oxi::R
         &mut exit_response,
     );
 
-    assert_eq!(receiver.try_recv().unwrap(), (Some(42), None));
+    let received = receiver.try_recv().unwrap();
+    assert!(received.is_ok());
+    assert_eq!(
+        received.unwrap(),
+        (Some(42), Some("UNKNOWN(42)".to_string()))
+    );
+
+    Ok(())
+}
+
+/// Integration test: Verifies handle_terminal_exit stores exit status when no sender
+#[nvim_oxi::test]
+fn handle_terminal_exit_stores_exit_status_when_no_sender() -> nvim_oxi::Result<()> {
+    let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
+    let mut exit_response: Option<oneshot::Sender<Result<(Option<u32>, Option<String>)>>> = None;
+
+    // No sender available - stores status
+    // Exit code 42 is normal, maps to (Some(42), "UNKNOWN(42)")
+    handle_terminal_exit(
+        42,
+        "ignored".to_string(),
+        &mut exit_status,
+        &mut exit_response,
+    );
+
+    assert_eq!(
+        exit_status,
+        Some((Some(42), Some("UNKNOWN(42)".to_string())))
+    );
+
+    Ok(())
+}
+
+/// Integration test: Verifies handle_terminal_exit sends when sender is provided
+#[nvim_oxi::test]
+fn handle_terminal_exit_sends_when_sender_provided() -> nvim_oxi::Result<()> {
+    let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
+    let mut exit_response: Option<oneshot::Sender<Result<(Option<u32>, Option<String>)>>> = None;
+
+    let (sender, mut receiver) = oneshot::channel();
+    exit_response = Some(sender);
+
+    // Exit code 0 is normal success, maps to (Some(0), "UNKNOWN(0)")
+    handle_terminal_exit(
+        0,
+        "ignored".to_string(),
+        &mut exit_status,
+        &mut exit_response,
+    );
+
+    let received = receiver.try_recv().unwrap();
+    assert!(received.is_ok());
+    assert_eq!(received.unwrap(), (Some(0), Some("UNKNOWN(0)".to_string())));
 
     Ok(())
 }
@@ -314,7 +365,7 @@ fn process_terminal_input_concatenates_multiple_calls() -> nvim_oxi::Result<()> 
 #[nvim_oxi::test]
 fn handle_terminal_exit_stores_exit_status_when_no_sender() -> nvim_oxi::Result<()> {
     let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
-    let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+    let mut exit_response: Option<oneshot::Sender<Result<(Option<u32>, Option<String>)>>> = None;
 
     // No sender available - stores status
     // Exit code 42 is normal, maps to (Some(42), None)
@@ -334,7 +385,7 @@ fn handle_terminal_exit_stores_exit_status_when_no_sender() -> nvim_oxi::Result<
 #[nvim_oxi::test]
 fn handle_terminal_exit_sends_when_sender_provided() -> nvim_oxi::Result<()> {
     let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
-    let mut exit_response: Option<oneshot::Sender<(Option<u32>, Option<String>)>> = None;
+    let mut exit_response: Option<oneshot::Sender<Result<(Option<u32>, Option<String>)>>> = None;
 
     let (sender, mut receiver) = oneshot::channel();
     exit_response = Some(sender);

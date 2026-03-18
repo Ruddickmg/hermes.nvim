@@ -15,7 +15,7 @@ use uuid::Uuid;
 use crate::acp::Result;
 use crate::acp::error::Error;
 use crate::nvim::autocommands::Commands;
-use crate::nvim::terminal::{Terminal, TerminalManager, map_exit_code_to_signal};
+use crate::nvim::terminal::{Terminal, TerminalManager, parse_exit_code};
 use crate::utilities::{
     NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
     save_buffer_to_disk, show_permission_ui, update_buffer_content,
@@ -189,24 +189,17 @@ impl Request {
             Err(_) => {
                 // Not a string, try Integer (exit code)
                 match i64::from_object(data.clone()) {
-                    Ok(exit_code) => {
-                        let signal = Some(map_exit_code_to_signal(exit_code));
-                        Ok(if exit_code < 0 {
-                            (None, signal)
-                        } else {
-                            (Some(exit_code as u32), signal)
-                        })
-                    }
+                    Ok(exit_code) => Ok(parse_exit_code(exit_code)),
                     Err(_) => {
                         let dict = Dictionary::from_object(data)
-                            .map_err(|e| Error::Internal(e.to_string()))?;
+                            .map_err(|e| Error::InvalidInput(e.to_string()))?;
 
                         // "exitCode" field is optional
                         let exit_code = match dict.get("exitCode").cloned() {
                             Some(ec) => {
                                 let code: i64 = i64::from_object(ec)
-                                    .map_err(|e| Error::Internal(e.to_string()))?;
-                                if code < 0 { None } else { Some(code as u32) }
+                                    .map_err(|e| Error::InvalidInput(e.to_string()))?;
+                                Some(code)
                             }
                             None => None,
                         };
@@ -225,8 +218,10 @@ impl Request {
                             Err(Error::InvalidInput(
                                 "Terminal exit response must contain at least 'exitCode' or 'signal'".to_string(),
                             ))
+                        } else if let Some(code) = exit_code {
+                            Ok(parse_exit_code(code))
                         } else {
-                        Ok((exit_code, signal))
+                            Ok((None, signal))
                         }
                     }
                 }
@@ -563,7 +558,7 @@ mod tests {
         let obj = Object::from(42i64);
         let result = Request::parse_terminal_exit_response(obj);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), (Some(42), None));
+        assert_eq!(result.unwrap(), (Some(42), Some("UNKNOWN(42)".to_string())));
     }
 
     #[test]
@@ -571,7 +566,7 @@ mod tests {
         let obj = Object::from(0i64);
         let result = Request::parse_terminal_exit_response(obj);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), (Some(0), None));
+        assert_eq!(result.unwrap(), (Some(0), Some("UNKNOWN(0)".to_string())));
     }
 
     #[test]
@@ -626,8 +621,7 @@ mod tests {
     fn parse_terminal_exit_response_handles_empty_signal_string() {
         let obj = Object::from("");
         let result = Request::parse_terminal_exit_response(obj);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), (None, None));
+        assert!(result.is_err());
     }
 
     #[test]
@@ -638,6 +632,7 @@ mod tests {
         let obj = Object::from(dict);
         let result = Request::parse_terminal_exit_response(obj);
         assert!(result.is_ok());
+        // When signal is empty but exitCode is present, signal becomes None
         assert_eq!(result.unwrap(), (Some(1), None));
     }
 
@@ -646,15 +641,18 @@ mod tests {
         let obj = Object::from(-999i64);
         let result = Request::parse_terminal_exit_response(obj);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), (None, Some("SIG999".to_string())));
+        assert_eq!(result.unwrap(), (None, Some("UNKNOWN(-999)".to_string())));
     }
 
     #[test]
     fn parse_terminal_exit_response_handles_unknown_128_plus_range() {
-        // 255 = 128 + 127, should return exit code with generic signal name
+        // 255 is outside the 120..255 range, so it returns UNKNOWN(255)
         let obj = Object::from(255i64);
         let result = Request::parse_terminal_exit_response(obj);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), (Some(255), Some("SIG127".to_string())));
+        assert_eq!(
+            result.unwrap(),
+            (Some(255), Some("UNKNOWN(255)".to_string()))
+        );
     }
 }
