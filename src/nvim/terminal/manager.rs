@@ -75,6 +75,7 @@ impl<T: Terminal + Clone> Default for TerminalManager<T> {
 mod tests {
     use super::*;
     use std::cell::RefCell;
+    use std::process::ExitStatus;
     use std::rc::Rc;
     use uuid::Uuid;
 
@@ -83,7 +84,7 @@ mod tests {
     struct MockTerminal {
         id: Uuid,
         content: String,
-        exit_sender: Rc<RefCell<Option<oneshot::Sender<Result<(Option<u32>, Option<String>)>>>>>,
+        exit_sender: Rc<RefCell<Option<oneshot::Sender<Result<ExitStatus>>>>>,
         closed: Rc<RefCell<bool>>,
     }
 

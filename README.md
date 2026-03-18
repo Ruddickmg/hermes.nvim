@@ -527,7 +527,7 @@ vim.api.nvim_create_autocmd("User", {
 > **Responds to:** [TerminalExit](#terminalexit) autocommand.
 >
 > **Default behavior:** If no autocommand handler is defined for `TerminalExit`, Hermes will:
-> - Do nothing if the user did not handle the [TerminalExit](#terminalexit)
+> - Do nothing if the user did not handle the [TerminalCreate](#terminalcreate)
 > - Wait for and report terminal exit details if Hermes is handling the terminal
 
 

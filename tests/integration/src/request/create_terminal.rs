@@ -2,6 +2,7 @@
 //!
 //! Each test verifies exactly ONE behavior with exactly ONE assertion.
 use agent_client_protocol::{CreateTerminalRequest, CreateTerminalResponse, SessionId};
+use hermes::acp::Result;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use std::sync::Arc;
 use tokio::sync::oneshot;
@@ -19,11 +20,10 @@ fn setup_terminal_request(
 ) -> (
     Arc<Requests>,
     Uuid,
-    oneshot::Receiver<agent_client_protocol::Result<CreateTerminalResponse>>,
+    oneshot::Receiver<Result<CreateTerminalResponse>>,
 ) {
     let requests = Arc::new(Requests::new().unwrap());
-    let (sender, receiver) =
-        oneshot::channel::<agent_client_protocol::Result<CreateTerminalResponse>>();
+    let (sender, receiver) = oneshot::channel::<Result<CreateTerminalResponse>>();
     let responder = Responder::TerminalCreate(sender, create_terminal_request(command, args));
     let request_id = requests.add_request("test-session".to_string(), responder);
     (requests, request_id, receiver)
