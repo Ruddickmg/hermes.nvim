@@ -448,10 +448,9 @@ vim.api.nvim_create_autocmd("User", {
 > **Default behavior:** If no autocommand handler is defined for `TerminalCreate`, Hermes will:
 > - Create a terminal attached to a buffer (hidden by default)
 > - Handle byte limit constraints if defined
-> - Define default functionality for handling StdErr, StdOut, and exit events
->
+
 > [!WARNING]
-> In order to customize the terminal flow it must be started here. Otherwise defaults will be used for all terminal interaction.
+> In order to manage the terminal, the `TerminalCreate` autocmmmand must be implemented. If no `TerminalCreate` autocommand is registered, hermes will use default functionality to manage terminal interaction.
 
 #### Provide terminal output to the assistant 
 
@@ -485,8 +484,8 @@ vim.api.nvim_create_autocmd("User", {
 
 > **Responds to:** [TerminalOutput](#terminaloutput) autocommand.
 >
-> **Default behavior:** If no autocommand handler is defined for `TerminalCreate`, Hermes will:
-> - Do nothing if the user did not handle the [TerminalCreate](#terminalcreate)
+> **Default behavior:** If no autocommand handler is defined for [TerminalCreate](#terminalcreate), Hermes will:
+> - Do nothing if the user is managing the terminal (implemented the  autocommand)
 > - Collect and send the terminal output if Hermes is handling the terminal
 
 #### Reporting terminal exit
@@ -526,9 +525,62 @@ vim.api.nvim_create_autocmd("User", {
 
 > **Responds to:** [TerminalExit](#terminalexit) autocommand.
 >
-> **Default behavior:** If no autocommand handler is defined for `TerminalExit`, Hermes will:
-> - Do nothing if the user did not handle the [TerminalCreate](#terminalcreate)
+> **Default behavior:** If no autocommand handler is defined for [TerminalCreate](#terminalcreate), Hermes will:
 > - Wait for and report terminal exit details if Hermes is handling the terminal
+
+#### Kill terminal process
+
+```lua
+local hermes = require("hermes")
+local terminals = {}
+
+-- call signature with exit code and termination signal
+hermes.respond("requestId")
+
+-- example:
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "TerminalKill",
+    callback = function(args)
+        local requestId = args.data.requestId
+
+        hermes.respond(requestId);
+    end,
+})
+```
+
+> **Responds to:** [TerminalKill](#terminalkill) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for [TerminalCreate](#terminalcreate), Hermes will:
+> - Stop the process running in the terminal if Hermes is managing it
+
+#### Release terminal process
+
+```lua
+local hermes = require("hermes")
+local terminals = {}
+
+-- call signature with exit code and termination signal
+hermes.respond("requestId")
+
+-- example:
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "TerminalRelease",
+    callback = function(args)
+        local requestId = args.data.requestId
+
+        hermes.respond(requestId);
+    end,
+})
+```
+
+> **Responds to:** [TerminalRelease](#terminalrelease) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for [TerminalCreate](#terminalcreate), Hermes will:
+> - Stop any process running in the terminal
+> - Remove the tracked terminal
+> - Delete the attched buffer
 
 
 ## Autocommands

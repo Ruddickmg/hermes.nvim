@@ -1,5 +1,6 @@
 //! Integration tests for nvim API entry points
-//! 
-//! These tests verify the Lua-facing API functions that users interact with.
-
-pub mod respond;
+//!
+//! Note: API function tests should verify actual logic (error handling,
+//! connection management, etc.) not just struct construction.
+//!
+//! See request/handler.rs for examples of actual integration tests.
