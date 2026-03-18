@@ -172,6 +172,7 @@ pub trait Terminal {
     fn content(&self) -> String;
     fn truncated(&self) -> bool;
     fn close(&self) -> Result<()>;
+    fn kill(&self) -> Result<()>;
     fn report_exit_to(&self, sender: oneshot::Sender<Result<ExitStatus>>) -> Result<()>;
     fn id(&self) -> Uuid;
     fn from_request(data: agent_client_protocol::CreateTerminalRequest) -> Self;
@@ -188,6 +189,14 @@ impl Terminal for TerminalInfo {
 
     fn truncated(&self) -> bool {
         self.truncated.borrow().is_some()
+    }
+
+    fn kill(&self) -> Result<()> {
+        self.job_id
+            .map(|id| nvim_oxi::api::chan_send(id as u32, "\003"))
+            .transpose()
+            .map_err(|e| Error::Internal(e.to_string()))?;
+        Ok(())
     }
 
     fn report_exit_to(&self, sender: oneshot::Sender<Result<ExitStatus>>) -> Result<()> {

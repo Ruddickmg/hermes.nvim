@@ -50,14 +50,28 @@ impl<T: Terminal + Clone> TerminalManager<T> {
         }
     }
 
-    pub fn release(&mut self, id: &str) -> Result<()> {
+    pub fn kill(&self, id: &str) -> Result<()> {
+        let mut terminals = self.terminals.borrow_mut();
+        let terminal = terminals.get(id);
+        drop(terminals);
+        if let Some(t) = terminal {
+            t.close()
+        } else {
+            Err(Error::InvalidInput(format!(
+                "Terminal with id '{}' was not present when release was called",
+                id
+            )))
+        }
+    }
+
+    pub fn release(&self, id: &str) -> Result<()> {
         let mut terminals = self.terminals.borrow_mut();
         let terminal = terminals.remove(id);
         drop(terminals);
         if let Some(t) = terminal {
             t.close()
         } else {
-            Err(Error::Internal(format!(
+            Err(Error::InvalidInput(format!(
                 "Terminal with id '{}' was not present when release was called",
                 id
             )))

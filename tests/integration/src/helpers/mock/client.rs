@@ -16,6 +16,9 @@ pub struct MockClient {
     write_called: Arc<Mutex<bool>>,
     read_called: Arc<Mutex<bool>>,
     terminal_create_called: Arc<Mutex<bool>>,
+    terminal_output_called: Arc<Mutex<bool>>,
+    wait_for_terminal_exit_called: Arc<Mutex<bool>>,
+    release_terminal_called: Arc<Mutex<bool>>,
     pub notification_called: Arc<Mutex<bool>>,
 }
 
@@ -31,6 +34,9 @@ impl MockClient {
             write_called: Arc::new(Mutex::new(false)),
             read_called: Arc::new(Mutex::new(false)),
             terminal_create_called: Arc::new(Mutex::new(false)),
+            terminal_output_called: Arc::new(Mutex::new(false)),
+            wait_for_terminal_exit_called: Arc::new(Mutex::new(false)),
+            release_terminal_called: Arc::new(Mutex::new(false)),
             notification_called: Arc::new(Mutex::new(false)),
         }
     }
@@ -77,6 +83,7 @@ impl Client for MockClient {
         &self,
         _args: TerminalOutputRequest,
     ) -> Result<TerminalOutputResponse> {
+        *self.terminal_output_called.lock().await = true;
         Ok(TerminalOutputResponse::new("output", false))
     }
 
@@ -84,6 +91,7 @@ impl Client for MockClient {
         &self,
         _args: WaitForTerminalExitRequest,
     ) -> Result<WaitForTerminalExitResponse> {
+        *self.wait_for_terminal_exit_called.lock().await = true;
         Ok(WaitForTerminalExitResponse::new(TerminalExitStatus::new()))
     }
 
@@ -91,6 +99,7 @@ impl Client for MockClient {
         &self,
         _args: ReleaseTerminalRequest,
     ) -> Result<ReleaseTerminalResponse> {
+        *self.release_terminal_called.lock().await = true;
         Ok(ReleaseTerminalResponse::new())
     }
 }

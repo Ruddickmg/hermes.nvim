@@ -5,20 +5,20 @@ use agent_client_protocol::{
     SelectedPermissionOutcome, TerminalOutputRequest, TerminalOutputResponse,
     WaitForTerminalExitRequest, WriteTextFileRequest, WriteTextFileResponse,
 };
-use nvim_oxi::conversion::FromObject;
 use nvim_oxi::Dictionary;
+use nvim_oxi::conversion::FromObject;
 use std::sync::Arc;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::acp::error::Error;
 use crate::acp::Result;
+use crate::acp::error::Error;
 use crate::nvim::autocommands::Commands;
-use crate::nvim::terminal::{parse_exit_code, Terminal, TerminalManager};
+use crate::nvim::terminal::{Terminal, TerminalManager, parse_exit_code};
 use crate::utilities::{
-    acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
-    show_permission_ui, update_buffer_content, NvimMessenger, TransmitToNvim,
+    NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
+    save_buffer_to_disk, show_permission_ui, update_buffer_content,
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
@@ -209,11 +209,7 @@ impl Request {
                             Some(s) => {
                                 let sig: String = String::from_object(s)
                                     .map_err(|e| Error::Internal(e.to_string()))?;
-                                if sig.is_empty() {
-                                    None
-                                } else {
-                                    Some(sig)
-                                }
+                                if sig.is_empty() { None } else { Some(sig) }
                             }
                             None => None,
                         };
@@ -300,17 +296,25 @@ impl Request {
                     ))
                 })?;
             }
-            Responder::TerminalRelease(_sender, _) => {
-                unimplemented!(
-                    "Terminal release is not yet implemented. Request ID '{}'",
-                    self.id
-                );
+            Responder::TerminalRelease(sender, _) => {
+                sender
+                    .send(Ok(ReleaseTerminalResponse::new()))
+                    .map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send terminal release response for request '{}': {:?}",
+                            self.id, e
+                        ))
+                    })?;
             }
-            Responder::TerminalKill(_sender, _) => {
-                unimplemented!(
-                    "Terminal kill is not yet implemented. Request ID '{}'",
-                    self.id
-                );
+            Responder::TerminalKill(sender, _) => {
+                sender
+                    .send(Ok(KillTerminalCommandResponse::new()))
+                    .map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send terminal kill response for request '{}': {:?}",
+                            self.id, e
+                        ))
+                    })?;
             }
         };
         self.finish()
@@ -452,17 +456,27 @@ impl Request {
                 Responder::TerminalExit(sender, data) => {
                     terminal_manager.notify_when_finished(&data.terminal_id.to_string(), sender)?;
                 }
-                Responder::TerminalRelease(_sender, _data) => {
-                    unimplemented!(
-                        "Terminal release is not yet implemented. Request ID '{}'",
-                        self.id
-                    );
+                Responder::TerminalRelease(sender, data) => {
+                    let response = terminal_manager
+                        .release(&data.terminal_id.to_string())
+                        .map(|_| ReleaseTerminalResponse::new());
+                    sender.send(response).map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send terminal release response for request '{}': {:?}",
+                            self.id, e
+                        ))
+                    })?;
                 }
-                Responder::TerminalKill(_sender, _data) => {
-                    unimplemented!(
-                        "Terminal kill is not yet implemented. Request ID '{}'",
-                        self.id
-                    );
+                Responder::TerminalKill(sender, data) => {
+                    let response = terminal_manager
+                        .kill(&data.terminal_id.to_string())
+                        .map(|_| KillTerminalCommandResponse::new());
+                    sender.send(response).map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send terminal kill response for request '{}': {:?}",
+                            self.id, e
+                        ))
+                    })?;
                 }
             }
             self.finish()?;
