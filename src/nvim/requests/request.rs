@@ -5,20 +5,20 @@ use agent_client_protocol::{
     SelectedPermissionOutcome, TerminalOutputRequest, TerminalOutputResponse,
     WaitForTerminalExitRequest, WriteTextFileRequest, WriteTextFileResponse,
 };
-use nvim_oxi::conversion::FromObject;
 use nvim_oxi::Dictionary;
+use nvim_oxi::conversion::FromObject;
 use std::sync::Arc;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::acp::error::Error;
 use crate::acp::Result;
+use crate::acp::error::Error;
 use crate::nvim::autocommands::Commands;
 use crate::nvim::terminal::{Terminal, TerminalManager};
 use crate::utilities::{
-    acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
-    show_permission_ui, update_buffer_content, NvimMessenger, TransmitToNvim,
+    NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
+    save_buffer_to_disk, show_permission_ui, update_buffer_content,
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
@@ -31,23 +31,23 @@ pub enum Responder {
     ),
     WriteFileResponse(oneshot::Sender<WriteTextFileResponse>, WriteTextFileRequest),
     TerminalCreate(
-        oneshot::Sender<agent_client_protocol::Result<CreateTerminalResponse>>,
+        oneshot::Sender<Result<CreateTerminalResponse>>,
         CreateTerminalRequest,
     ),
     TerminalOutput(
-        oneshot::Sender<agent_client_protocol::Result<TerminalOutputResponse>>,
+        oneshot::Sender<Result<TerminalOutputResponse>>,
         TerminalOutputRequest,
     ),
     TerminalExit(
-        oneshot::Sender<(Option<u32>, Option<String>)>,
+        oneshot::Sender<Result<(Option<u32>, Option<String>)>>,
         WaitForTerminalExitRequest,
     ),
     TerminalRelease(
-        oneshot::Sender<agent_client_protocol::Result<ReleaseTerminalResponse>>,
+        oneshot::Sender<Result<ReleaseTerminalResponse>>,
         ReleaseTerminalRequest,
     ),
     TerminalKill(
-        oneshot::Sender<agent_client_protocol::Result<KillTerminalCommandResponse>>,
+        oneshot::Sender<Result<KillTerminalCommandResponse>>,
         KillTerminalCommandRequest,
     ),
 }
@@ -142,25 +142,24 @@ impl Request {
         Ok(())
     }
 
-    fn parse_terminal_output_response(
-        data: nvim_oxi::Object,
-    ) -> agent_client_protocol::Result<(String, bool)> {
+    fn parse_terminal_output_response(data: nvim_oxi::Object) -> Result<(String, bool)> {
         // First, try to parse as a plain String
         match String::from_object(data.clone()) {
             Ok(output) => Ok((output, false)),
             Err(_) => {
                 // Not a string, try Dictionary
                 let dict = Dictionary::from_object(data)
-                    .map_err(|_| agent_client_protocol::Error::invalid_params())?;
+                    .map_err(|e| Error::InvalidInput(e.to_string()))?;
 
                 // "output" field is required and must be a String
                 let output = dict
                     .get("output")
                     .cloned()
-                    .ok_or(agent_client_protocol::Error::invalid_params())
+                    .ok_or(Error::InvalidInput(
+                        "Missing 'output' field in terminal output response".to_string(),
+                    ))
                     .and_then(|o| {
-                        String::from_object(o)
-                            .map_err(|_| agent_client_protocol::Error::invalid_params())
+                        String::from_object(o).map_err(|e| Error::InvalidInput(e.to_string()))
                     })?;
 
                 // "truncated" field is optional, defaults to false
@@ -171,6 +170,55 @@ impl Request {
                 };
 
                 Ok((output, truncated))
+            }
+        }
+    }
+
+    fn parse_terminal_exit_response(
+        data: nvim_oxi::Object,
+    ) -> Result<(Option<u32>, Option<String>)> {
+        // First, try to parse as a plain String (signal name only)
+        match String::from_object(data.clone()) {
+            Ok(signal) => Ok(if signal.is_empty() {
+                (None, None)
+            } else {
+                (None, Some(signal))
+            }),
+            Err(_) => {
+                // Not a string, try Integer (exit code)
+                match i64::from_object(data.clone()) {
+                    Ok(exit_code) => Ok(if exit_code < 0 {
+                        (None, None)
+                    } else {
+                        (Some(exit_code as u32), None)
+                    }),
+                    Err(_) => {
+                        let dict = Dictionary::from_object(data)
+                            .map_err(|e| Error::Internal(e.to_string()))?;
+
+                        // "exitCode" field is optional
+                        let exit_code = match dict.get("exitCode").cloned() {
+                            Some(ec) => {
+                                let code: i64 = i64::from_object(ec)
+                                    .map_err(|e| Error::Internal(e.to_string()))?;
+                                if code < 0 { None } else { Some(code as u32) }
+                            }
+                            None => None,
+                        };
+
+                        // "signal" field is optional
+                        let signal = match dict.get("signal").cloned() {
+                            Some(s) => {
+                                let sig: String = String::from_object(s)
+                                    .map_err(|e| Error::Internal(e.to_string()))?;
+                                if sig.is_empty() { None } else { Some(sig) }
+                            }
+                            None => None,
+                        };
+
+                        Ok((exit_code, signal))
+                    }
+                }
             }
         }
     }
@@ -215,7 +263,7 @@ impl Request {
             Responder::TerminalCreate(sender, _) => {
                 let result = String::from_object(response)
                     .map(CreateTerminalResponse::new)
-                    .map_err(|_| agent_client_protocol::Error::invalid_params());
+                    .map_err(|e| Error::InvalidInput(e.to_string()));
                 sender.send(result).map_err(|e| {
                     Error::Internal(format!(
                         "Failed to send terminal response for request '{}': {:?}",
@@ -234,7 +282,8 @@ impl Request {
                 })?;
             }
             Responder::TerminalExit(sender, _) => {
-                sender.send((Some(0), Some(String::new()))).map_err(|e| {
+                let result = Self::parse_terminal_exit_response(response);
+                sender.send(result).map_err(|e| {
                     Error::Internal(format!(
                         "Failed to send terminal exit response for request '{}': {:?}",
                         self.id, e
@@ -383,7 +432,7 @@ impl Request {
                         .map(|terminal| {
                             TerminalOutputResponse::new(terminal.content(), terminal.truncated())
                         })
-                        .ok_or_else(|| agent_client_protocol::Error::resource_not_found(None));
+                        .ok_or_else(|| Error::Internal("No terminal found".to_string()));
                     sender.send(result).map_err(|e| {
                         Error::Internal(
                             format!("Failed to send terminal output response: {:?}", e,),
@@ -486,5 +535,115 @@ mod tests {
         let obj = Object::from(dict);
         let result = Request::parse_terminal_output_response(obj);
         assert!(result.is_err());
+    }
+
+    // Tests for parse_terminal_exit_response
+
+    #[test]
+    fn parse_terminal_exit_response_accepts_signal_string() {
+        let obj = Object::from("SIGTERM");
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (None, Some("SIGTERM".to_string())));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_accepts_exit_code_integer() {
+        let obj = Object::from(42i64);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (Some(42), None));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_accepts_exit_code_zero() {
+        let obj = Object::from(0i64);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (Some(0), None));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_accepts_negative_signal_number() {
+        let obj = Object::from(-9i64);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (None, Some("SIGKILL".to_string())));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_accepts_exit_code_128_plus_range() {
+        // 137 = 128 + 9, should return BOTH exit code AND signal
+        let obj = Object::from(137i64);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (Some(137), Some("SIGKILL".to_string())));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_accepts_dictionary_with_both_fields() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("exitCode", Object::from(9i64));
+        dict.insert("signal", Object::from("SIGKILL"));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (Some(9), Some("SIGKILL".to_string())));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_accepts_dictionary_exit_code_only() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("exitCode", Object::from(42i64));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (Some(42), None));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_accepts_dictionary_signal_only() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("signal", Object::from("SIGTERM"));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (None, Some("SIGTERM".to_string())));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_handles_empty_signal_string() {
+        let obj = Object::from("");
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (None, None));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_handles_empty_dictionary_signal() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("exitCode", Object::from(1i64));
+        dict.insert("signal", Object::from(""));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (Some(1), None));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_handles_unknown_negative_signal() {
+        let obj = Object::from(-999i64);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (None, Some("SIG999".to_string())));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_handles_unknown_128_plus_range() {
+        // 255 = 128 + 127, should return exit code with generic signal name
+        let obj = Object::from(255i64);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (Some(255), Some("SIG127".to_string())));
     }
 }

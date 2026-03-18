@@ -1,4 +1,5 @@
 use crate::acp::{error::Error, Result};
+use crate::nvim::terminal::signal::map_exit_code_to_signal;
 use agent_client_protocol::EnvVariable;
 use nvim_oxi::{Array, Dictionary, Function, Object};
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
@@ -6,14 +7,16 @@ use strip_ansi_escapes;
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
+type ExitStatus = (Option<u32>, Option<String>);
+
 #[derive(Debug, Clone)]
 pub struct TerminalInfo {
     id: Uuid,
     job_id: Option<i64>,
     pub truncated: Rc<RefCell<Option<bool>>>,
     pub output: Rc<RefCell<String>>,
-    pub exit_status: Rc<RefCell<Option<(Option<u32>, Option<String>)>>>,
-    pub exit_response: Rc<RefCell<Option<oneshot::Sender<(Option<u32>, Option<String>)>>>>,
+    pub exit_status: Rc<RefCell<Option<ExitStatus>>>,
+    pub exit_response: Rc<RefCell<Option<oneshot::Sender<Result<ExitStatus>>>>>,
     buffer: Option<nvim_oxi::api::Buffer>,
     pub configuration: Dictionary,
 }
@@ -52,113 +55,25 @@ pub fn process_terminal_input(
     }
 }
 
-/// Maps exit codes to Unix signal names
-/// Handles both direct signal numbers (negative) and exit codes (128 + signal)
-/// Returns (exit_code, signal) tuple where both can be present
-fn map_exit_code_to_signal(exit_code: i64) -> (Option<u32>, Option<String>) {
-    // Handle negative values first (direct signal numbers from Neovim)
-    if exit_code < 0 {
-        let signal_num = -exit_code;
-        let signal_name = match signal_num {
-            1 => "SIGHUP",
-            2 => "SIGINT", // Ctrl+C
-            3 => "SIGQUIT",
-            4 => "SIGILL",
-            5 => "SIGTRAP",
-            6 => "SIGABRT",
-            7 => "SIGBUS",
-            8 => "SIGFPE",
-            9 => "SIGKILL", // kill -9
-            10 => "SIGUSR1",
-            11 => "SIGSEGV", // Segfault
-            12 => "SIGUSR2",
-            13 => "SIGPIPE",
-            14 => "SIGALRM",
-            15 => "SIGTERM", // kill (default)
-            16 => "SIGSTKFLT",
-            17 => "SIGCHLD",
-            18 => "SIGCONT",
-            19 => "SIGSTOP",
-            20 => "SIGTSTP", // Ctrl+Z
-            21 => "SIGTTIN",
-            22 => "SIGTTOU",
-            23 => "SIGURG",
-            24 => "SIGXCPU",
-            25 => "SIGXFSZ",
-            26 => "SIGVTALRM",
-            27 => "SIGPROF",
-            28 => "SIGWINCH",
-            29 => "SIGIO",
-            30 => "SIGPWR",
-            31 => "SIGSYS",
-            _ => return (None, Some(format!("SIG{}", signal_num))), // Unknown signal
-        };
-        return (None, Some(signal_name.to_string()));
-    }
-
-    // Handle exit codes in range 128-255 (128 + signal number convention)
-    // Return BOTH the exit code AND the signal name
-    if exit_code >= 128 && exit_code <= 255 {
-        let signal_num = exit_code - 128;
-        let signal_name = match signal_num {
-            1 => "SIGHUP",
-            2 => "SIGINT",
-            3 => "SIGQUIT",
-            4 => "SIGILL",
-            5 => "SIGTRAP",
-            6 => "SIGABRT",
-            7 => "SIGBUS",
-            8 => "SIGFPE",
-            9 => "SIGKILL",
-            10 => "SIGUSR1",
-            11 => "SIGSEGV",
-            12 => "SIGUSR2",
-            13 => "SIGPIPE",
-            14 => "SIGALRM",
-            15 => "SIGTERM",
-            16 => "SIGSTKFLT",
-            17 => "SIGCHLD",
-            18 => "SIGCONT",
-            19 => "SIGSTOP",
-            20 => "SIGTSTP",
-            21 => "SIGTTIN",
-            22 => "SIGTTOU",
-            23 => "SIGURG",
-            24 => "SIGXCPU",
-            25 => "SIGXFSZ",
-            26 => "SIGVTALRM",
-            27 => "SIGPROF",
-            28 => "SIGWINCH",
-            29 => "SIGIO",
-            30 => "SIGPWR",
-            31 => "SIGSYS",
-            _ => return (Some(exit_code as u32), Some(format!("SIG{}", signal_num))),
-        };
-        return (Some(exit_code as u32), Some(signal_name.to_string()));
-    }
-
-    // Normal exit codes (0-127) - return exit code only, no signal
-    (Some(exit_code as u32), None)
-}
-
 /// Pure function to handle terminal exit
 /// Maps exit_code (i64 from Neovim) to (Option<u32>, Option<String>) using Unix signal conventions
 /// Returns Err if the oneshot channel is closed (recipient dropped)
 pub fn handle_terminal_exit(
     exit_code: i64,
     _event: String,
-    exit_status: &mut Option<(Option<u32>, Option<String>)>,
-    exit_response: &mut Option<oneshot::Sender<(Option<u32>, Option<String>)>>,
+    exit_status: &mut Option<ExitStatus>,
+    exit_response: &mut Option<oneshot::Sender<Result<ExitStatus>>>,
 ) -> std::result::Result<(), String> {
     // Use signal mapping function to convert exit code
-    let (parsed_exit, parsed_signal) = map_exit_code_to_signal(exit_code);
+    let parsed_exit = map_exit_code_to_signal(exit_code);
+    let data: ExitStatus = (parsed_exit.0, parsed_exit.1);
 
     if let Some(sender) = exit_response.take() {
-        sender.send((parsed_exit, parsed_signal)).map_err(|_| {
+        sender.send(Ok(data)).map_err(|_| {
             "Error occurred while sending terminal exit notification: channel closed".to_string()
         })
     } else {
-        *exit_status = Some((parsed_exit, parsed_signal));
+        *exit_status = Some(data);
         Ok(())
     }
 }
@@ -168,7 +83,7 @@ impl TerminalInfo {
         let output = Rc::new(RefCell::new(String::new()));
         let exit_status: Rc<RefCell<Option<(Option<u32>, Option<String>)>>> =
             Rc::new(RefCell::new(None));
-        let exit_response: Rc<RefCell<Option<oneshot::Sender<(Option<u32>, Option<String>)>>>> =
+        let exit_response: Rc<RefCell<Option<oneshot::Sender<Result<ExitStatus>>>>> =
             Rc::new(RefCell::new(None));
         let truncated = Rc::new(RefCell::new(None));
 
@@ -202,8 +117,8 @@ impl TerminalInfo {
     }
 
     fn create_exit_callback(
-        exit_status: Rc<RefCell<Option<(Option<u32>, Option<String>)>>>,
-        exit_response: Rc<RefCell<Option<oneshot::Sender<(Option<u32>, Option<String>)>>>>,
+        exit_status: Rc<RefCell<Option<ExitStatus>>>,
+        exit_response: Rc<RefCell<Option<oneshot::Sender<Result<ExitStatus>>>>>,
     ) -> ExitCallback {
         Function::from_fn(move |(_, exit_code, event): (i64, i64, String)| {
             let mut status = exit_status.borrow_mut();
@@ -258,7 +173,7 @@ pub trait Terminal {
     fn content(&self) -> String;
     fn truncated(&self) -> bool;
     fn close(&self) -> Result<()>;
-    fn report_exit_to(&self, sender: oneshot::Sender<(Option<u32>, Option<String>)>) -> Result<()>;
+    fn report_exit_to(&self, sender: oneshot::Sender<Result<ExitStatus>>) -> Result<()>;
     fn id(&self) -> Uuid;
     fn from_request(data: agent_client_protocol::CreateTerminalRequest) -> Self;
 }
@@ -276,7 +191,7 @@ impl Terminal for TerminalInfo {
         self.truncated.borrow().is_some()
     }
 
-    fn report_exit_to(&self, sender: oneshot::Sender<(Option<u32>, Option<String>)>) -> Result<()> {
+    fn report_exit_to(&self, sender: oneshot::Sender<Result<ExitStatus>>) -> Result<()> {
         if let Some(exit_code) = self.exit_status.borrow_mut().take() {
             sender.send(exit_code).map_err(|e| {
                 Error::Internal(format!(

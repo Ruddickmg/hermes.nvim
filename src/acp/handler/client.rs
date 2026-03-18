@@ -1,5 +1,5 @@
 use crate::{
-    Handler,
+    Handler, acp,
     nvim::{autocommands::Commands, parse, requests::Responder},
 };
 use agent_client_protocol::{
@@ -106,7 +106,7 @@ impl Client for Handler {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
         }
-        let (sender, receiver) = oneshot::channel::<Result<CreateTerminalResponse>>();
+        let (sender, receiver) = oneshot::channel::<acp::Result<CreateTerminalResponse>>();
         self.execute_autocommand_request(
             args.session_id.to_string(),
             Commands::TerminalCreate,
@@ -114,10 +114,10 @@ impl Client for Handler {
             Responder::TerminalCreate(sender, args),
         )
         .await?;
-        receiver.await.map_err(|e| {
+        Ok(receiver.await.map_err(|e| {
             error!("{:?}", e);
             Error::internal_error()
-        })?
+        })??)
     }
 
     /// Gets the terminal output and exit status
@@ -125,7 +125,7 @@ impl Client for Handler {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
         }
-        let (sender, receiver) = oneshot::channel::<Result<TerminalOutputResponse>>();
+        let (sender, receiver) = oneshot::channel::<acp::Result<TerminalOutputResponse>>();
         self.execute_autocommand_request(
             args.session_id.to_string(),
             Commands::TerminalOutput,
@@ -133,10 +133,10 @@ impl Client for Handler {
             Responder::TerminalOutput(sender, args),
         )
         .await?;
-        receiver.await.map_err(|e| {
+        Ok(receiver.await.map_err(|e| {
             error!("{:?}", e);
             Error::internal_error()
-        })?
+        })??)
     }
 
     /// Waits for a terminal command to exit
@@ -147,7 +147,7 @@ impl Client for Handler {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
         }
-        let (sender, receiver) = oneshot::channel::<(Option<u32>, Option<String>)>();
+        let (sender, receiver) = oneshot::channel::<acp::Result<(Option<u32>, Option<String>)>>();
         self.execute_autocommand_request(
             args.session_id.to_string(),
             Commands::TerminalOutput,
@@ -155,13 +155,15 @@ impl Client for Handler {
             Responder::TerminalExit(sender, args),
         )
         .await?;
-        receiver
+        Ok(receiver
             .await
-            .map_err(|_| Error::internal_error())
+            .map_err(|_| Error::internal_error())?
             .and_then(|(exit_code, signal)| {
                 // Validate that at least one field is present
                 if exit_code.is_none() && signal.is_none() {
-                    Err(Error::invalid_params())
+                    Err(acp::error::Error::InvalidInput(
+                        "Both exit code and signal are undefined".to_string(),
+                    ))
                 } else {
                     let mut status = TerminalExitStatus::new();
                     if let Some(code) = exit_code {
@@ -173,7 +175,7 @@ impl Client for Handler {
 
                     Ok(WaitForTerminalExitResponse::new(status))
                 }
-            })
+            })?)
     }
 
     async fn kill_terminal_command(
@@ -183,7 +185,7 @@ impl Client for Handler {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
         }
-        let (sender, receiver) = oneshot::channel::<Result<KillTerminalCommandResponse>>();
+        let (sender, receiver) = oneshot::channel::<acp::Result<KillTerminalCommandResponse>>();
         self.execute_autocommand_request(
             args.session_id.to_string(),
             Commands::TerminalKill,
@@ -191,10 +193,10 @@ impl Client for Handler {
             Responder::TerminalKill(sender, args),
         )
         .await?;
-        receiver.await.map_err(|e| {
+        Ok(receiver.await.map_err(|e| {
             error!("{:?}", e);
             Error::internal_error()
-        })?
+        })??)
     }
 
     /// Releases a terminal resource
@@ -205,7 +207,7 @@ impl Client for Handler {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
         }
-        let (sender, receiver) = oneshot::channel::<Result<ReleaseTerminalResponse>>();
+        let (sender, receiver) = oneshot::channel::<acp::Result<ReleaseTerminalResponse>>();
         self.execute_autocommand_request(
             args.session_id.to_string(),
             Commands::TerminalRelease,
@@ -213,9 +215,9 @@ impl Client for Handler {
             Responder::TerminalRelease(sender, args),
         )
         .await?;
-        receiver.await.map_err(|e| {
+        Ok(receiver.await.map_err(|e| {
             error!("{:?}", e);
             Error::internal_error()
-        })?
+        })??)
     }
 }

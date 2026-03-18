@@ -10,6 +10,7 @@ pub enum Error {
     Connection(String),
     Permissions(String),
     NoListenerAttached(Commands),
+    InvalidInput(String),
 }
 
 impl std::fmt::Display for Error {
@@ -18,6 +19,7 @@ impl std::fmt::Display for Error {
             Error::Connection(msg) => write!(f, "Connection error: {}", msg),
             Error::Permissions(msg) => write!(f, "Permissions error: {}", msg),
             Error::Internal(msg) => write!(f, "Internal error: {}", msg),
+            Error::InvalidInput(input) => write!(f, "Invalid input provided: {}", input),
             Error::NoListenerAttached(command) => {
                 write!(f, "No listener attached for autocommand: {}", command)
             }
@@ -37,6 +39,7 @@ impl From<Error> for agent_client_protocol::Error {
     fn from(e: Error) -> Self {
         match e {
             Error::NoListenerAttached(_) => AcpError::method_not_found(),
+            Error::InvalidInput(_) => AcpError::invalid_params(),
             e => AcpError::into_internal_error(e),
         }
     }
