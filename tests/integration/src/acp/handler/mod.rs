@@ -85,3 +85,132 @@ fn test_session_notification_permissions_denied_does_not_call_handler() -> nvim_
     
     Ok(())
 }
+
+// Tests for can_write permission
+#[nvim_oxi::test]
+fn test_can_write_returns_true_by_default() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
+
+    let result = tokio_test::block_on(handler.can_write());
+    assert!(result, "Should return true by default");
+    
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_can_write_returns_false_when_disabled() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    state.blocking_lock().config.permissions.fs_write_access = false;
+
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
+
+    let result = tokio_test::block_on(handler.can_write());
+    assert!(!result, "Should return false when disabled");
+    
+    Ok(())
+}
+
+// Tests for can_read permission
+#[nvim_oxi::test]
+fn test_can_read_returns_true_by_default() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
+
+    let result = tokio_test::block_on(handler.can_read());
+    assert!(result, "Should return true by default");
+    
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_can_read_returns_false_when_disabled() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    state.blocking_lock().config.permissions.fs_read_access = false;
+
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
+
+    let result = tokio_test::block_on(handler.can_read());
+    assert!(!result, "Should return false when disabled");
+    
+    Ok(())
+}
+
+// Tests for can_access_terminal permission
+#[nvim_oxi::test]
+fn test_can_access_terminal_returns_true_by_default() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
+
+    let result = tokio_test::block_on(handler.can_access_terminal());
+    assert!(result, "Should return true by default");
+    
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_can_access_terminal_returns_false_when_disabled() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    state.blocking_lock().config.permissions.terminal_access = false;
+
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
+
+    let result = tokio_test::block_on(handler.can_access_terminal());
+    assert!(!result, "Should return false when disabled");
+    
+    Ok(())
+}
+
+// Tests for can_request_permissions
+#[nvim_oxi::test]
+fn test_can_request_permissions_returns_true_by_default() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
+
+    let result = tokio_test::block_on(handler.can_request_permissions());
+    assert!(result, "Should return true by default");
+    
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_can_request_permissions_returns_false_when_disabled() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    state.blocking_lock().config.permissions.can_request_permissions = false;
+
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
+
+    let result = tokio_test::block_on(handler.can_request_permissions());
+    assert!(!result, "Should return false when disabled");
+    
+    Ok(())
+}
+
+// Tests for get_agent and set_agent_info
+#[nvim_oxi::test]
+fn test_get_agent_returns_default_assistant() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
+
+    let agent = tokio_test::block_on(handler.get_agent());
+    assert_eq!(agent, hermes::acp::connection::Assistant::default(), "Should return default assistant");
+    
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_set_agent_info_updates_agent_information() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
+
+    let agent = hermes::acp::connection::Assistant::from("test-agent");
+    let info = agent_client_protocol::InitializeResponse::new(agent_client_protocol::ProtocolVersion::LATEST);
+    
+    tokio_test::block_on(handler.set_agent_info(agent.clone(), info.clone()));
+    
+    // Verify agent info was set
+    let stored_info = state.blocking_lock().agent_info.get(&agent).cloned();
+    assert!(stored_info.is_some(), "Agent info should be stored");
+    
+    Ok(())
+}

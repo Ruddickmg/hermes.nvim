@@ -1,9 +1,10 @@
 //! Integration tests for RequestHandler trait and Requests implementation
 use crate::helpers::ui::wait_for;
 use agent_client_protocol::{
-    RequestPermissionOutcome, RequestPermissionRequest, SessionId, ToolCallId, ToolCallUpdate,
-    ToolCallUpdateFields, WriteTextFileRequest, WriteTextFileResponse,
+    CreateTerminalResponse, RequestPermissionOutcome, RequestPermissionRequest, SessionId,
+    ToolCallId, ToolCallUpdate, ToolCallUpdateFields, WriteTextFileRequest, WriteTextFileResponse,
 };
+use hermes::acp::Result;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use pretty_assertions::assert_eq;
 use std::sync::Arc;
@@ -527,5 +528,272 @@ fn test_second_response_to_cleaned_up_request_fails() -> nvim_oxi::Result<()> {
 
     // Now drop the receiver
     drop(receiver);
+    Ok(())
+}
+
+// Tests for Request::respond with different responder types
+#[nvim_oxi::test]
+fn test_request_respond_with_permission_response_sends_outcome() -> nvim_oxi::Result<()> {
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let session_id = String::from("test-session");
+    let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let responder = Responder::PermissionResponse(sender);
+
+    let request_id = requests.add_request(session_id, responder);
+    let request = requests
+        .get_request(&request_id)
+        .expect("Request should exist");
+
+    // Respond with an option ID
+    let response_obj = nvim_oxi::Object::from("selected-option-id");
+    request
+        .respond(response_obj)
+        .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
+
+    // Verify outcome was sent
+    let outcome = receiver.try_recv().expect("Should receive outcome");
+    match outcome {
+        RequestPermissionOutcome::Selected(selected) => {
+            assert_eq!(selected.option_id.0.as_ref(), "selected-option-id");
+        }
+        _ => panic!("Expected Selected outcome"),
+    }
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_request_respond_with_permission_empty_string_sends_cancelled() -> nvim_oxi::Result<()> {
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let session_id = String::from("test-session");
+    let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let responder = Responder::PermissionResponse(sender);
+
+    let request_id = requests.add_request(session_id, responder);
+    let request = requests
+        .get_request(&request_id)
+        .expect("Request should exist");
+
+    // Respond with empty string (cancels the request)
+    let response_obj = nvim_oxi::Object::from("");
+    request
+        .respond(response_obj)
+        .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
+
+    // Verify cancelled outcome was sent
+    let outcome = receiver.try_recv().expect("Should receive outcome");
+    assert_eq!(
+        outcome,
+        RequestPermissionOutcome::Cancelled,
+        "Empty string should send Cancelled"
+    );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_request_cancel_sends_cancelled_outcome() -> nvim_oxi::Result<()> {
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let session_id = String::from("test-session");
+    let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let responder = Responder::PermissionResponse(sender);
+
+    let request_id = requests.add_request(session_id, responder);
+    let request = requests
+        .get_request(&request_id)
+        .expect("Request should exist");
+
+    // Cancel the request
+    request
+        .cancel()
+        .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
+
+    // Verify cancelled outcome was sent
+    let outcome = receiver.try_recv().expect("Should receive outcome");
+    assert_eq!(
+        outcome,
+        RequestPermissionOutcome::Cancelled,
+        "Cancel should send Cancelled"
+    );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_request_cancel_on_non_permission_request_returns_ok() -> nvim_oxi::Result<()> {
+    use assert_fs::NamedTempFile;
+
+    let temp_file = NamedTempFile::new("cancel_test.txt").unwrap();
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let session_id = String::from("test-session");
+    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let write_request = WriteTextFileRequest::new(
+        SessionId::from("test-session"),
+        temp_file.path().to_path_buf(),
+        "test content",
+    );
+    let responder = Responder::WriteFileResponse(sender, write_request);
+
+    let request_id = requests.add_request(session_id, responder);
+    let request = requests
+        .get_request(&request_id)
+        .expect("Request should exist");
+
+    // Cancel on non-permission request should succeed (no-op)
+    let result = request.cancel();
+    assert!(
+        result.is_ok(),
+        "Cancel on non-permission request should succeed"
+    );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_request_is_permission_request_true_for_permission() -> nvim_oxi::Result<()> {
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let session_id = String::from("test-session");
+    let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let responder = Responder::PermissionResponse(sender);
+
+    let request_id = requests.add_request(session_id, responder);
+    let request = requests
+        .get_request(&request_id)
+        .expect("Request should exist");
+
+    assert!(
+        request.is_permission_request(),
+        "Should be permission request"
+    );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_request_is_permission_request_false_for_write_file() -> nvim_oxi::Result<()> {
+    use assert_fs::NamedTempFile;
+
+    let temp_file = NamedTempFile::new("perm_test.txt").unwrap();
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let session_id = String::from("test-session");
+    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let write_request = WriteTextFileRequest::new(
+        SessionId::from("test-session"),
+        temp_file.path().to_path_buf(),
+        "test content",
+    );
+    let responder = Responder::WriteFileResponse(sender, write_request);
+
+    let request_id = requests.add_request(session_id, responder);
+    let request = requests
+        .get_request(&request_id)
+        .expect("Request should exist");
+
+    assert!(
+        !request.is_permission_request(),
+        "Write file should not be permission request"
+    );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_request_terminal_true_for_terminal_create() -> nvim_oxi::Result<()> {
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let session_id = String::from("test-session");
+    let (sender, _receiver) = oneshot::channel::<Result<CreateTerminalResponse>>();
+    let create_request = agent_client_protocol::CreateTerminalRequest::new(
+        SessionId::from("test-session"),
+        "echo".to_string(),
+    );
+    let responder = Responder::TerminalCreate(sender, create_request);
+
+    let request_id = requests.add_request(session_id, responder);
+    let request = requests
+        .get_request(&request_id)
+        .expect("Request should exist");
+
+    assert!(
+        request.terminal(),
+        "Terminal create should be terminal request"
+    );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_request_terminal_false_for_permission() -> nvim_oxi::Result<()> {
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let session_id = String::from("test-session");
+    let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let responder = Responder::PermissionResponse(sender);
+
+    let request_id = requests.add_request(session_id, responder);
+    let request = requests
+        .get_request(&request_id)
+        .expect("Request should exist");
+
+    assert!(
+        !request.terminal(),
+        "Permission request should not be terminal request"
+    );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_request_is_session_true_for_matching() -> nvim_oxi::Result<()> {
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let session_id = String::from("test-session");
+    let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let responder = Responder::PermissionResponse(sender);
+
+    let request_id = requests.add_request(session_id.clone(), responder);
+    let request = requests
+        .get_request(&request_id)
+        .expect("Request should exist");
+
+    assert!(request.is_session(session_id), "Should match session");
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_request_is_session_false_for_non_matching() -> nvim_oxi::Result<()> {
+    let requests =
+        Arc::new(Requests::new().map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    let session_id = String::from("test-session");
+    let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let responder = Responder::PermissionResponse(sender);
+
+    let request_id = requests.add_request(session_id, responder);
+    let request = requests
+        .get_request(&request_id)
+        .expect("Request should exist");
+
+    assert!(
+        !request.is_session("other-session".to_string()),
+        "Should not match different session"
+    );
     Ok(())
 }
