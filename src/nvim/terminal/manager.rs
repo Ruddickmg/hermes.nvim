@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::result;
 use tokio::sync::oneshot;
 
 use crate::acp::Result;
@@ -51,17 +52,18 @@ impl<T: Terminal + Clone> TerminalManager<T> {
     }
 
     pub fn kill(&self, id: &str) -> Result<()> {
-        let mut terminals = self.terminals.borrow_mut();
+        let terminals = self.terminals.borrow();
         let terminal = terminals.get(id);
-        drop(terminals);
-        if let Some(t) = terminal {
-            t.close()
+        let result = if let Some(t) = terminal {
+            t.stop()
         } else {
             Err(Error::InvalidInput(format!(
                 "Terminal with id '{}' was not present when release was called",
                 id
             )))
-        }
+        };
+        drop(terminals);
+        result
     }
 
     pub fn release(&self, id: &str) -> Result<()> {

@@ -171,8 +171,7 @@ pub trait Terminal {
     fn run(&mut self, command: String, args: Vec<String>) -> Result<i64>;
     fn content(&self) -> String;
     fn truncated(&self) -> bool;
-    fn close(&self) -> Result<()>;
-    fn kill(&self) -> Result<()>;
+    fn stop(&self) -> Result<()>;
     fn report_exit_to(&self, sender: oneshot::Sender<Result<ExitStatus>>) -> Result<()>;
     fn id(&self) -> Uuid;
     fn from_request(data: agent_client_protocol::CreateTerminalRequest) -> Self;
@@ -189,14 +188,6 @@ impl Terminal for TerminalInfo {
 
     fn truncated(&self) -> bool {
         self.truncated.borrow().is_some()
-    }
-
-    fn kill(&self) -> Result<()> {
-        self.job_id
-            .map(|id| nvim_oxi::api::chan_send(id as u32, "\003"))
-            .transpose()
-            .map_err(|e| Error::Internal(e.to_string()))?;
-        Ok(())
     }
 
     fn report_exit_to(&self, sender: oneshot::Sender<Result<ExitStatus>>) -> Result<()> {
@@ -229,12 +220,15 @@ impl Terminal for TerminalInfo {
         self.output.borrow().clone()
     }
 
-    fn close(&self) -> Result<()> {
-        self.job_id
-            .map(|id| nvim_oxi::api::call_function::<(i64,), ()>("jobstop", (id,)))
-            .transpose()
-            .map_err(|e| Error::Internal(e.to_string()))?;
-        Ok(())
+    fn stop(&self) -> Result<()> {
+        if let Some(id) = self.job_id {
+            nvim_oxi::api::call_function::<(i64,), ()>("jobstop", (id,))
+                .map_err(|e| Error::Internal(e.to_string()))
+        } else {
+            Err(Error::Internal(
+                "Cannot stop terminal: job ID not found".to_string(),
+            ))
+        }
     }
 }
 
