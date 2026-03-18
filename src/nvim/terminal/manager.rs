@@ -4,8 +4,8 @@ use std::rc::Rc;
 use std::result;
 use tokio::sync::oneshot;
 
-use crate::acp::Result;
 use crate::acp::error::Error;
+use crate::acp::Result;
 use crate::nvim::terminal::Terminal;
 
 /// Manages all terminal (job) instances for a session
@@ -71,7 +71,7 @@ impl<T: Terminal + Clone> TerminalManager<T> {
         let terminal = terminals.remove(id);
         drop(terminals);
         if let Some(t) = terminal {
-            t.close()
+            t.stop()
         } else {
             Err(Error::InvalidInput(format!(
                 "Terminal with id '{}' was not present when release was called",
@@ -101,7 +101,7 @@ mod tests {
         id: Uuid,
         content: String,
         exit_sender: Rc<RefCell<Option<oneshot::Sender<Result<ExitStatus>>>>>,
-        closed: Rc<RefCell<bool>>,
+        killed: Rc<RefCell<bool>>,
     }
 
     impl MockTerminal {
@@ -110,7 +110,7 @@ mod tests {
                 id: Uuid::parse_str(id).unwrap_or_else(|_| Uuid::new_v4()),
                 content: content.to_string(),
                 exit_sender: Rc::new(RefCell::new(None)),
-                closed: Rc::new(RefCell::new(false)),
+                killed: Rc::new(RefCell::new(false)),
             }
         }
     }
@@ -136,8 +136,8 @@ mod tests {
             Ok(())
         }
 
-        fn close(&self) -> Result<()> {
-            *self.closed.borrow_mut() = true;
+        fn stop(&self) -> Result<()> {
+            *self.killed.borrow_mut() = true;
             Ok(())
         }
 
@@ -228,7 +228,7 @@ mod tests {
         assert!(manager.get_terminal("term-1").is_none());
 
         // Verify close was called
-        assert!(*terminal.closed.borrow());
+        assert!(*terminal.killed.borrow());
     }
 
     #[test]

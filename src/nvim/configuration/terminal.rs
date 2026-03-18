@@ -1,3 +1,4 @@
+#[derive(Clone, Debug)]
 pub struct TerminalConfig {
     pub shell: String,
     pub hidden: bool,

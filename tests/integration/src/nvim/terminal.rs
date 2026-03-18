@@ -240,15 +240,15 @@ fn terminal_info_run_returns_positive_job_id() -> nvim_oxi::Result<()> {
     Ok(())
 }
 
-/// Integration test: Verifies close() succeeds on non-running terminal
+/// Integration test: Verifies stop() returns error on non-running terminal
 #[nvim_oxi::test]
-fn terminal_info_close_succeeds_on_non_running_terminal() -> nvim_oxi::Result<()> {
+fn terminal_info_stop_fails_on_non_running_terminal() -> nvim_oxi::Result<()> {
     let terminal = TerminalInfo::new(None);
 
-    // Close on a terminal that was never run should succeed (no-op)
-    let result = terminal.close();
+    // Stop on a terminal that was never run should fail (no job ID)
+    let result = terminal.stop();
 
-    assert_eq!(result.is_ok(), true);
+    assert_eq!(result.is_err(), true);
 
     Ok(())
 }

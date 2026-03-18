@@ -1284,7 +1284,7 @@ Your options for log formats are:
 - [x] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
 
 -- infra
-- [ ] separate main thread logic from background threads
+- [x] separate main thread logic from background threads
 - [ ] use smol instead of tokio to reduce build size
 - [ ] use async for all the things
 

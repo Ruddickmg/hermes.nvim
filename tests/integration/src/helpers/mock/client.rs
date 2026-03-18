@@ -19,6 +19,7 @@ pub struct MockClient {
     terminal_output_called: Arc<Mutex<bool>>,
     wait_for_terminal_exit_called: Arc<Mutex<bool>>,
     release_terminal_called: Arc<Mutex<bool>>,
+    kill_terminal_called: Arc<Mutex<bool>>,
     pub notification_called: Arc<Mutex<bool>>,
 }
 
@@ -37,6 +38,7 @@ impl MockClient {
             terminal_output_called: Arc::new(Mutex::new(false)),
             wait_for_terminal_exit_called: Arc::new(Mutex::new(false)),
             release_terminal_called: Arc::new(Mutex::new(false)),
+            kill_terminal_called: Arc::new(Mutex::new(false)),
             notification_called: Arc::new(Mutex::new(false)),
         }
     }
