@@ -443,7 +443,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-> **Responds to:** [TerminalCreate](#createterminal) autocommand.
+> **Responds to:** [TerminalCreate](#terminalcreate) autocommand.
 >
 > **Default behavior:** If no autocommand handler is defined for `TerminalCreate`, Hermes will:
 > - Create a terminal attached to a buffer (hidden by default)
@@ -831,62 +831,6 @@ Below is a list of all autocommands and their associated data (passed to the cal
   }
 }</code></pre></td>
     </tr>
-    <tr id="terminalcreate">
-      <td><code>TerminalCreate</code></td>
-      <td>Agent requests to create a terminal for command execution</td>
-      <td>🤖 Agent (requires -> <a href="#create-terminal-for-agent-communication">respond()</a>)</td>
-      <td><pre><code class="language-json">{
-  "requestId": "uuid string",
-  "sessionId": "string",
-  "command": "string",
-  "args": ["string"],
-  "env": [{"name": "string", "value": "string"}],
-  "cwd": "string (optional)",
-  "outputByteLimit": "number (optional)"
-}</code></pre></td>
-    </tr>
-    <tr id="terminalexit">
-      <td><code>TerminalExit</code></td>
-      <td>Agent requests notification when terminal process exits</td>
-      <td>🤖 Agent (requires -> <a href="#reporting-terminal-exit">respond()</a>)</td>
-      <td><pre><code class="language-json">{
-  "requestId": "uuid string",
-  "sessionId": "string",
-  "terminalId": "string"
-}</code></pre></td>
-    </tr>
-    <tr id="terminalkill">
-      <td><code>TerminalKill</code></td>
-      <td>Agent requests to kill a terminal process</td>
-      <td>🤖 Agent (requires -> <a href="#kill-terminal-process">respond()</a>)</td>
-      <td><pre><code class="language-json">{
-  "requestId": "uuid string",
-  "sessionId": "string",
-  "terminalId": "string",
-  "signal": "string (optional, e.g., 'SIGTERM', 'SIGKILL')"
-}</code></pre></td>
-    </tr>
-    <tr id="terminaloutput">
-      <td><code>TerminalOutput</code></td>
-      <td>Agent requests terminal output</td>
-      <td>🤖 Agent (requires -> <a href="#provide-terminal-output-to-the-assistant">respond()</a>)</td>
-      <td><pre><code class="language-json">{
-  "requestId": "uuid string",
-  "sessionId": "string",
-  "terminalId": "string",
-  "byteLimit": "number (optional)"
-}</code></pre></td>
-    </tr>
-    <tr id="terminalrelease">
-      <td><code>TerminalRelease</code></td>
-      <td>Agent requests to release a terminal</td>
-      <td>🤖 Agent (requires -> <a href="#release-terminal-process">respond()</a>)</td>
-      <td><pre><code class="language-json">{
-  "requestId": "uuid string",
-  "sessionId": "string",
-  "terminalId": "string"
-}</code></pre></td>
-    </tr>
     <tr id="modecurrent">
       <td><code>ModeCurrent</code></td>
       <td>Current mode changes</td>
@@ -1153,6 +1097,62 @@ Below is a list of all autocommands and their associated data (passed to the cal
     }
   ],
   "nextCursor": "string (optional)"
+}</code></pre></td>
+    </tr>
+    <tr id="terminalcreate">
+      <td><code>TerminalCreate</code></td>
+      <td>Agent requests to create a terminal for command execution</td>
+      <td>🤖 Agent (requires -> <a href="#create-terminal-for-agent-communication">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "command": "string",
+  "args": ["string"],
+  "env": [{"name": "string", "value": "string"}],
+  "cwd": "string (optional)",
+  "outputByteLimit": "number (optional)"
+}</code></pre></td>
+    </tr>
+    <tr id="terminalexit">
+      <td><code>TerminalExit</code></td>
+      <td>Agent requests notification when terminal process exits</td>
+      <td>🤖 Agent (requires -> <a href="#reporting-terminal-exit">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "terminalId": "string"
+}</code></pre></td>
+    </tr>
+    <tr id="terminalkill">
+      <td><code>TerminalKill</code></td>
+      <td>Agent requests to kill a terminal process</td>
+      <td>🤖 Agent (requires -> <a href="#kill-terminal-process">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "terminalId": "string",
+  "signal": "string (optional, e.g., 'SIGTERM', 'SIGKILL')"
+}</code></pre></td>
+    </tr>
+    <tr id="terminaloutput">
+      <td><code>TerminalOutput</code></td>
+      <td>Agent requests terminal output</td>
+      <td>🤖 Agent (requires -> <a href="#provide-terminal-output-to-the-assistant">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "terminalId": "string",
+  "byteLimit": "number (optional)"
+}</code></pre></td>
+    </tr>
+    <tr id="terminalrelease">
+      <td><code>TerminalRelease</code></td>
+      <td>Agent requests to release a terminal</td>
+      <td>🤖 Agent (requires -> <a href="#release-terminal-process">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "terminalId": "string"
 }</code></pre></td>
     </tr>
     <tr>
