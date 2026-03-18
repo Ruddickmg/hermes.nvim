@@ -74,8 +74,8 @@ impl<T: Terminal + Clone> Default for TerminalManager<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::nvim::terminal::ExitStatus;
     use std::cell::RefCell;
-    use std::process::ExitStatus;
     use std::rc::Rc;
     use uuid::Uuid;
 

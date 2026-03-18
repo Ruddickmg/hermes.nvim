@@ -9,7 +9,7 @@ use strip_ansi_escapes;
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
-type ExitStatus = (Option<u32>, Option<String>);
+pub type ExitStatus = (Option<u32>, Option<String>);
 
 #[derive(Debug, Clone)]
 pub struct TerminalInfo {

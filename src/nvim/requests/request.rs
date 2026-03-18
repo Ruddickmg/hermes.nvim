@@ -5,20 +5,20 @@ use agent_client_protocol::{
     SelectedPermissionOutcome, TerminalOutputRequest, TerminalOutputResponse,
     WaitForTerminalExitRequest, WriteTextFileRequest, WriteTextFileResponse,
 };
-use nvim_oxi::Dictionary;
 use nvim_oxi::conversion::FromObject;
+use nvim_oxi::Dictionary;
 use std::sync::Arc;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::acp::Result;
 use crate::acp::error::Error;
+use crate::acp::Result;
 use crate::nvim::autocommands::Commands;
-use crate::nvim::terminal::{Terminal, TerminalManager, parse_exit_code};
+use crate::nvim::terminal::{parse_exit_code, Terminal, TerminalManager};
 use crate::utilities::{
-    NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
-    save_buffer_to_disk, show_permission_ui, update_buffer_content,
+    acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
+    show_permission_ui, update_buffer_content, NvimMessenger, TransmitToNvim,
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
@@ -209,7 +209,11 @@ impl Request {
                             Some(s) => {
                                 let sig: String = String::from_object(s)
                                     .map_err(|e| Error::Internal(e.to_string()))?;
-                                if sig.is_empty() { None } else { Some(sig) }
+                                if sig.is_empty() {
+                                    None
+                                } else {
+                                    Some(sig)
+                                }
                             }
                             None => None,
                         };
@@ -654,5 +658,113 @@ mod tests {
         let result = Request::parse_terminal_exit_response(obj);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), (Some(255), None));
+    }
+
+    // Tests for Responder -> Commands conversion
+    #[test]
+    fn responder_terminal_output_maps_to_terminal_output_command() {
+        let (sender, _) = oneshot::channel::<Result<TerminalOutputResponse>>();
+        let responder = Responder::TerminalOutput(
+            sender,
+            TerminalOutputRequest::new(
+                agent_client_protocol::SessionId::from("test"),
+                agent_client_protocol::TerminalId::from("term-1"),
+            ),
+        );
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::TerminalOutput);
+    }
+
+    #[test]
+    fn responder_terminal_kill_maps_to_terminal_kill_command() {
+        let (sender, _) = oneshot::channel::<Result<KillTerminalCommandResponse>>();
+        let responder = Responder::TerminalKill(
+            sender,
+            KillTerminalCommandRequest::new(
+                agent_client_protocol::SessionId::from("test"),
+                agent_client_protocol::TerminalId::from("term-1"),
+            ),
+        );
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::TerminalKill);
+    }
+
+    #[test]
+    fn responder_read_file_maps_to_read_text_file_command() {
+        let (sender, _) = oneshot::channel::<agent_client_protocol::Result<ReadTextFileResponse>>();
+        let responder = Responder::ReadFileResponse(
+            sender,
+            ReadTextFileRequest::new(
+                agent_client_protocol::SessionId::from("test"),
+                std::path::PathBuf::from("/test.txt"),
+            ),
+        );
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::ReadTextFile);
+    }
+
+    #[test]
+    fn responder_permission_maps_to_permission_request_command() {
+        let (sender, _) = oneshot::channel::<RequestPermissionOutcome>();
+        let responder = Responder::PermissionResponse(sender);
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::PermissionRequest);
+    }
+
+    #[test]
+    fn responder_write_file_maps_to_write_text_file_command() {
+        let (sender, _) = oneshot::channel::<WriteTextFileResponse>();
+        let responder = Responder::WriteFileResponse(
+            sender,
+            WriteTextFileRequest::new(
+                agent_client_protocol::SessionId::from("test"),
+                std::path::PathBuf::from("/test.txt"),
+                "content".to_string(),
+            ),
+        );
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::WriteTextFile);
+    }
+
+    #[test]
+    fn responder_terminal_create_maps_to_terminal_create_command() {
+        let (sender, _) = oneshot::channel::<Result<CreateTerminalResponse>>();
+        let responder = Responder::TerminalCreate(
+            sender,
+            CreateTerminalRequest::new(
+                agent_client_protocol::SessionId::from("test"),
+                "echo".to_string(),
+            ),
+        );
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::TerminalCreate);
+    }
+
+    #[test]
+    fn responder_terminal_exit_maps_to_terminal_exit_command() {
+        let (sender, _) = oneshot::channel::<Result<(Option<u32>, Option<String>)>>();
+        let responder = Responder::TerminalExit(
+            sender,
+            WaitForTerminalExitRequest::new(
+                agent_client_protocol::SessionId::from("test"),
+                agent_client_protocol::TerminalId::from("term-1"),
+            ),
+        );
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::TerminalExit);
+    }
+
+    #[test]
+    fn responder_terminal_release_maps_to_terminal_release_command() {
+        let (sender, _) = oneshot::channel::<Result<ReleaseTerminalResponse>>();
+        let responder = Responder::TerminalRelease(
+            sender,
+            ReleaseTerminalRequest::new(
+                agent_client_protocol::SessionId::from("test"),
+                agent_client_protocol::TerminalId::from("term-1"),
+            ),
+        );
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::TerminalRelease);
     }
 }

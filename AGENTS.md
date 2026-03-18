@@ -584,6 +584,32 @@ Every test should verify behavior from the codebase being tested. Do NOT write t
       let _cloned = handler.clone();
       assert!(true);
   }
+  
+  // ❌ BAD - Creating test-only structs that reimplement production code
+  struct TestHandler { state: Arc<Mutex<PluginState>> }
+  impl TestHandler {
+      fn can_write(&self) -> bool {
+          // This reimplements the production code - NOT testing it!
+          self.state.lock().await.permissions.fs_write_access
+      }
+  }
+  #[test]
+  fn test_can_write() {
+      let handler = TestHandler::new();
+      assert!(handler.can_write()); // Tests YOUR reimplementation, not the real Handler
+  }
+  ```
+  
+  **Why this is wrong:** When you create a `TestHandler` struct with methods that mirror the production `Handler` methods, you're testing YOUR reimplementation, not the actual production code. This gives false coverage numbers and doesn't verify the real behavior.
+  
+  **DO write tests like:**
+  ```rust
+  // ✅ GOOD - Test the actual Handler implementation
+  #[test]
+  fn test_handler_can_write() {
+      let handler = create_real_handler(); // Use the actual Handler::new() or similar
+      assert!(handler.can_write());
+  }
   ```
   
   The `#[derive(Clone)]` macro is provided by Rust and guaranteed to work. Testing it wastes time and creates maintenance burden.
