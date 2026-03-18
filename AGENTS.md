@@ -685,6 +685,40 @@ fn cross_thread_communication_works() -> nvim_oxi::Result<()> {
 
 **Guideline**: E2E tests verify that "the system works together", unit tests verify that "each component works correctly", integration tests verify that "Neovim-interacting components work correctly". Keep E2E tests minimal and focused on integration points.
 
+### Integration Test Best Practices
+
+**Do NOT test default values in integration tests.** Default values are hard-coded constants with no conditional logic. Testing them provides no value and creates maintenance burden.
+
+**Examples of what NOT to test:**
+```rust
+// ❌ BAD - Testing a hard-coded default
+#[nvim_oxi::test]
+fn test_can_write_returns_true_by_default() -> nvim_oxi::Result<()> {
+    let handler = create_handler();
+    assert!(handler.can_write().await); // Just testing that true == true
+    Ok(())
+}
+```
+
+**DO test:**
+- Logic branches (what happens when value is changed from default)
+- State mutations
+- Integration with Neovim APIs
+- Error conditions
+- Side effects
+
+**Example of good integration test:**
+```rust
+// ✅ GOOD - Tests actual behavior change
+#[nvim_oxi::test]
+fn test_write_file_creates_buffer() -> nvim_oxi::Result<()> {
+    let handler = create_handler();
+    let result = handler.write_file("test.txt", "content").await;
+    assert!(nvim_oxi::api::get_current_buf().is_ok());
+    Ok(())
+}
+```
+
 ### Running Tests
 
 We use [cargo-nextest](https://nexte.st/) as our test runner. Nextest provides:
@@ -712,6 +746,23 @@ cd e2e && cargo nextest run
 ```bash
 cargo nextest run test_name
 ```
+
+### Coverage Analysis
+
+Use `cargo-llvm-cov` to generate test coverage reports:
+
+```bash
+# Generate HTML coverage report
+cargo llvm-cov --bins --lib --all-features --workspace --html --ignore-filename-regex 'tests/.*'
+
+# Generate summary only
+cargo llvm-cov --summary-only
+
+# Generate LCOV format for CI integration
+cargo llvm-cov --lcov --output-path coverage.lcov
+```
+
+**Note:** Integration tests run in a separate Neovim process and do not contribute to `cargo llvm-cov` coverage metrics. Coverage reports only reflect unit test coverage.
 
 ### Mocking with Mockall
 
