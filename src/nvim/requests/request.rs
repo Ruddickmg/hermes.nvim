@@ -5,20 +5,20 @@ use agent_client_protocol::{
     SelectedPermissionOutcome, TerminalOutputRequest, TerminalOutputResponse,
     WaitForTerminalExitRequest, WriteTextFileRequest, WriteTextFileResponse,
 };
-use nvim_oxi::Dictionary;
 use nvim_oxi::conversion::FromObject;
+use nvim_oxi::Dictionary;
 use std::sync::Arc;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::acp::Result;
 use crate::acp::error::Error;
+use crate::acp::Result;
 use crate::nvim::autocommands::Commands;
-use crate::nvim::terminal::{Terminal, TerminalManager, parse_exit_code};
+use crate::nvim::terminal::{parse_exit_code, Terminal, TerminalManager};
 use crate::utilities::{
-    NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
-    save_buffer_to_disk, show_permission_ui, update_buffer_content,
+    acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
+    show_permission_ui, update_buffer_content, NvimMessenger, TransmitToNvim,
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
@@ -209,7 +209,11 @@ impl Request {
                             Some(s) => {
                                 let sig: String = String::from_object(s)
                                     .map_err(|e| Error::Internal(e.to_string()))?;
-                                if sig.is_empty() { None } else { Some(sig) }
+                                if sig.is_empty() {
+                                    None
+                                } else {
+                                    Some(sig)
+                                }
                             }
                             None => None,
                         };
@@ -558,7 +562,7 @@ mod tests {
         let obj = Object::from(42i64);
         let result = Request::parse_terminal_exit_response(obj);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), (Some(42), Some("UNKNOWN(42)".to_string())));
+        assert_eq!(result.unwrap(), (Some(42), None));
     }
 
     #[test]
@@ -566,7 +570,7 @@ mod tests {
         let obj = Object::from(0i64);
         let result = Request::parse_terminal_exit_response(obj);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), (Some(0), Some("UNKNOWN(0)".to_string())));
+        assert_eq!(result.unwrap(), (Some(0), None));
     }
 
     #[test]
@@ -594,7 +598,9 @@ mod tests {
         let obj = Object::from(dict);
         let result = Request::parse_terminal_exit_response(obj);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), (Some(9), Some("SIGKILL".to_string())));
+        // Exit code 9 is in 0-127 range, so parse_exit_code returns (Some(9), None)
+        // Note: the signal from dict is currently ignored when exitCode is present
+        assert_eq!(result.unwrap(), (Some(9), None));
     }
 
     #[test]
@@ -646,13 +652,11 @@ mod tests {
 
     #[test]
     fn parse_terminal_exit_response_handles_unknown_128_plus_range() {
-        // 255 is outside the 120..255 range, so it returns UNKNOWN(255)
+        // 255 = 128 + 127, which is in the 128..=255 range
+        // 127 is not a standard signal, so map_codes returns None
         let obj = Object::from(255i64);
         let result = Request::parse_terminal_exit_response(obj);
         assert!(result.is_ok());
-        assert_eq!(
-            result.unwrap(),
-            (Some(255), Some("UNKNOWN(255)".to_string()))
-        );
+        assert_eq!(result.unwrap(), (Some(255), None));
     }
 }

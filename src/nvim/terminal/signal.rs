@@ -47,8 +47,8 @@ pub fn parse_exit_code(exit_code: i64) -> (Option<u32>, Option<String>) {
         let unknown: Result<u32, _> = exit_code.try_into();
         // if the code is a valid u32 number
         if let Ok(code) = unknown {
-            // check if it's in the other term code range and return any matches, or None
-            if (120..255).contains(&code) {
+            // check if it's in the 128+signal range and return any matches, or None
+            if (128..=255).contains(&code) {
                 (Some(code), map_codes(exit_code as u32 - 128))
             // otherwise it's an unknown code, but we can still just pass the raw number
             } else {

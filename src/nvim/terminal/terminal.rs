@@ -1,5 +1,5 @@
 use crate::{
-    acp::{Result, error::Error},
+    acp::{error::Error, Result},
     nvim::terminal::parse_exit_code,
 };
 use agent_client_protocol::EnvVariable;
@@ -342,13 +342,10 @@ mod tests {
             &mut exit_response,
         );
 
-        // Exit code 42 is normal (0-127 range), signal should be "UNKNOWN(42)"
+        // Exit code 42 is normal (0-127 range), no signal
         let received = receiver.try_recv().unwrap();
         assert!(received.is_ok());
-        assert_eq!(
-            received.unwrap(),
-            (Some(42), Some("UNKNOWN(42)".to_string()))
-        );
+        assert_eq!(received.unwrap(), (Some(42), None));
         assert!(exit_status.is_none());
     }
 
@@ -365,8 +362,8 @@ mod tests {
         );
 
         assert!(result.is_ok());
-        // Exit code 1 is normal (0-127 range), signal should be "UNKNOWN(1)"
-        assert_eq!(exit_status, Some((Some(1), Some("UNKNOWN(1)".to_string()))));
+        // Exit code 1 is normal (0-127 range), no signal
+        assert_eq!(exit_status, Some((Some(1), None)));
         assert!(exit_response.is_none());
     }
 
@@ -467,6 +464,6 @@ mod tests {
         );
 
         assert!(result.is_ok());
-        assert_eq!(exit_status, Some((Some(0), Some("UNKNOWN(0)".to_string()))));
+        assert_eq!(exit_status, Some((Some(0), None)));
     }
 }
