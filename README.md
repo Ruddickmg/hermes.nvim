@@ -845,6 +845,48 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "outputByteLimit": "number (optional)"
 }</code></pre></td>
     </tr>
+    <tr id="terminalexit">
+      <td><code>TerminalExit</code></td>
+      <td>Agent requests notification when terminal process exits</td>
+      <td>🤖 Agent (requires -> <a href="#reporting-terminal-exit">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "terminalId": "string"
+}</code></pre></td>
+    </tr>
+    <tr id="terminalkill">
+      <td><code>TerminalKill</code></td>
+      <td>Agent requests to kill a terminal process</td>
+      <td>🤖 Agent (requires -> <a href="#kill-terminal-process">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "terminalId": "string",
+  "signal": "string (optional, e.g., 'SIGTERM', 'SIGKILL')"
+}</code></pre></td>
+    </tr>
+    <tr id="terminaloutput">
+      <td><code>TerminalOutput</code></td>
+      <td>Agent requests terminal output</td>
+      <td>🤖 Agent (requires -> <a href="#provide-terminal-output-to-the-assistant">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "terminalId": "string",
+  "byteLimit": "number (optional)"
+}</code></pre></td>
+    </tr>
+    <tr id="terminalrelease">
+      <td><code>TerminalRelease</code></td>
+      <td>Agent requests to release a terminal</td>
+      <td>🤖 Agent (requires -> <a href="#release-terminal-process">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "terminalId": "string"
+}</code></pre></td>
+    </tr>
     <tr id="modecurrent">
       <td><code>ModeCurrent</code></td>
       <td>Current mode changes</td>

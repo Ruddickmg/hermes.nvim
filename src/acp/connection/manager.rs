@@ -1,6 +1,6 @@
-use crate::acp::connection::{stdio, Connection};
 use crate::PluginState;
-use crate::{acp::error::Error, Handler};
+use crate::acp::connection::{Connection, stdio};
+use crate::{Handler, acp::error::Error};
 use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolVersion};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;

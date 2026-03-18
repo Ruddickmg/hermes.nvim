@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use tokio::sync::oneshot;
 
-use crate::acp::error::Error;
 use crate::acp::Result;
+use crate::acp::error::Error;
 use crate::nvim::terminal::Terminal;
 
 /// Manages all terminal (job) instances for a session
