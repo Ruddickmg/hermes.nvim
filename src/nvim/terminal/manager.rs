@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::result;
 use tokio::sync::oneshot;
 
 use crate::acp::error::Error;
