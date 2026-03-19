@@ -1,23 +1,35 @@
 use std::time::Duration;
 
-use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
+use crate::{TIMEOUT_IN_SECONDS, utilities::autocommand};
 use agent_client_protocol::{
-    CreateTerminalRequest, InitializeResponse, NewSessionResponse, PromptResponse, StopReason,
-    TerminalOutputRequest, WaitForTerminalExitRequest,
+    CreateTerminalRequest, InitializeResponse, NewSessionResponse, PermissionOption,
+    PromptResponse, RequestPermissionRequest, SessionId, StopReason, TerminalOutputRequest,
+    ToolCallUpdate, WaitForTerminalExitRequest,
 };
 use hermes::{
     api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
     nvim::{autocommands::Commands, hermes},
 };
-use nvim_oxi::{conversion::FromObject, Dictionary, Function, Object};
+use nvim_oxi::{Dictionary, Function, Object, conversion::FromObject};
 use pretty_assertions::assert_eq;
+use serde::{Deserialize, Serialize};
+use tracing::info;
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct PermissionRequest {
+    pub request_id: String,
+    pub session_id: SessionId,
+    pub tool_call: ToolCallUpdate,
+    pub options: Vec<PermissionOption>,
+}
 /// Test that verifies the default terminal workflow handles a simple echo command
 /// This test validates the complete terminal lifecycle:
 /// 1. TerminalCreate - Agent requests terminal creation
 /// 2. TerminalOutput - Agent requests terminal output
 /// 3. TerminalExit - Agent requests notification when terminal exits
 /// 4. TerminalRelease - Agent requests terminal release
+#[ignore = "I can't find an agent that uses the ACP terminal/* commands, I won't be able to test until agent's use the functionality"]
 #[nvim_oxi::test]
 fn test_default_terminal_echo_workflow() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;
@@ -29,6 +41,8 @@ fn test_default_terminal_echo_workflow() -> Result<(), nvim_oxi::Error> {
         FromObject::from_object(dict.get("createSession").unwrap().clone())?;
     let prompt: Function<PromptArgs, ()> =
         FromObject::from_object(dict.get("prompt").unwrap().clone())?;
+    let respond: Function<(String, String), ()> =
+        FromObject::from_object(dict.get("respond").unwrap().clone())?;
 
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
@@ -40,12 +54,13 @@ fn test_default_terminal_echo_workflow() -> Result<(), nvim_oxi::Error> {
         autocommand::listen_for_autocommand::<TerminalOutputRequest>(Commands::TerminalOutput);
     let wait_for_terminal_exit =
         autocommand::listen_for_autocommand::<WaitForTerminalExitRequest>(Commands::TerminalExit);
+    let wait_for_permission_request =
+        autocommand::listen_for_autocommand::<PermissionRequest>(Commands::PermissionRequest);
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     // Step 1: Connect to agent
-    connect.call((nvim_oxi::String::from("opencode"), None))?;
-    wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
-
+    connect.call((nvim_oxi::String::from("copilot"), None))?;
+    let _init_response = wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
     // Step 2: Create session
     create_session.call(CreateSessionArgs::Default)?;
     let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
@@ -54,15 +69,28 @@ fn test_default_terminal_echo_workflow() -> Result<(), nvim_oxi::Error> {
     // Step 3: Send prompt requesting terminal execution
     let mut content_dict = Dictionary::new();
     content_dict.insert("type", "text");
+    // Explicitly request ACP terminal protocol
     content_dict.insert(
         "text",
-        "Please run the command 'echo \"hello world!\"' in a terminal and show me the output",
+        "Run 'echo success && exit 0' in a terminal and tell me when it completes",
     );
     let content = PromptContent::Single(FromObject::from_object(Object::from(content_dict))?);
 
     prompt.call((session_id.to_string(), content))?;
 
+    let permission_request = wait_for_permission_request(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+    let permission_id = permission_request
+        .clone()
+        .options
+        .into_iter()
+        .find(|option| option.option_id.to_string().as_str() == "allow_always")
+        .unwrap()
+        .option_id;
+
+    let request_id = permission_request.request_id;
     // Step 4: Wait for TerminalCreate autocommand
+    respond.call((request_id.to_string(), permission_id.to_string()))?;
+
     let terminal_create = wait_for_terminal_create(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
     // Verify TerminalCreate contains expected command data
@@ -125,6 +153,7 @@ fn test_default_terminal_echo_workflow() -> Result<(), nvim_oxi::Error> {
 /// Test that verifies specific exit codes are captured correctly
 /// This test runs a command that exits with a specific code and verifies
 /// the exit code is properly communicated back to the agent.
+#[ignore = "I can't find an agent that uses the ACP terminal/* commands, I won't be able to test until agent's use the functionality"]
 #[nvim_oxi::test]
 fn test_terminal_exit_code_capture() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;
@@ -148,7 +177,7 @@ fn test_terminal_exit_code_capture() -> Result<(), nvim_oxi::Error> {
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     // Connect and create session
-    connect.call((nvim_oxi::String::from("opencode"), None))?;
+    connect.call((nvim_oxi::String::from("copilot"), None))?;
     wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
     create_session.call(CreateSessionArgs::Default)?;

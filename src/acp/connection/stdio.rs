@@ -84,6 +84,10 @@ pub async fn connect(
             trace!("Starting opencode connection");
             stdio_connection(receiver, client, &agent, "opencode", ["acp"]).await
         }
+        Assistant::Gemini => {
+            trace!("Starting gemini connection");
+            stdio_connection(receiver, client, &agent, "gemini", ["--acp"]).await
+        }
         Assistant::Custom { command, args, .. } => {
             trace!("Starting custom agent connection: {}", agent);
             stdio_connection(receiver, client, &agent, &command, args).await

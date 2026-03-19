@@ -2,6 +2,7 @@ use hermes::nvim::autocommands::Commands;
 use nvim_oxi::api::{self, opts::CreateAutocmdOpts, types::AutocmdCallbackArgs};
 use nvim_oxi::{serde::Deserializer, Object};
 use serde::de::DeserializeOwned;
+use tracing::warn;
 use std::sync::mpsc;
 use std::{
     fmt::Debug,
@@ -30,6 +31,7 @@ where
         .group("hermes")
         .patterns(vec![pattern.as_str()])
         .callback(move |v: AutocmdCallbackArgs| {
+            warn!("Received autocommand with data: {:#?}", v.data);
             match nvim_object_to_struct(v.data) {
                Ok(parsed) => sender.send(parsed).unwrap(),
                Err(e) => println!("Error occurred while parsing: {:#?}", e),

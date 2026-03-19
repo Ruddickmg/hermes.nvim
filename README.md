@@ -30,6 +30,11 @@ Methods marked “Optional” are implemented by Hermes but are not mandatory fo
 
 This method allows you to connect to an agent, it takes the agent name and the protocol for the connection (defaults to `stdio`).
 
+supported agents:
+- opencode
+- copilot
+- gemini
+
 ```lua
 local hermes = require("hermes")
 

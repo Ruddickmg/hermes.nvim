@@ -34,6 +34,12 @@ impl Handler {
         let channel = NvimMessenger::<NvimHandleArgs>::initialize(
             move |(command, mut data, response_data)| {
                 debug!("Received autocommand: {}, with data: {:#?}", command, data);
+                let request = response_data.map(|(res, session_id)| {
+                    let request_id = nvim_requests.add_request(session_id, res);
+                    data["requestId"] = serde_json::Value::String(request_id.to_string());
+                    error!("data: {:#?}", data);
+                    request_id
+                });
                 if Self::listener_attached(command.to_string()) {
                     match serde_json::from_value::<Object>(data) {
                         Ok(obj) => {
@@ -55,13 +61,11 @@ impl Handler {
                             command, e
                         ),
                     }
-                } else if let Some((res, session_id)) = response_data {
+                } else if let Some(request_id) = request {
                     warn!(
                         "No listener attached for command '{}'. Using default implementation",
                         command
                     );
-                    let request_id = nvim_requests.add_request(session_id, res);
-                    data["requestId"] = serde_json::Value::String(request_id.to_string());
                     nvim_requests
                         .default_response(&request_id, data)
                         .map_err(|e| {

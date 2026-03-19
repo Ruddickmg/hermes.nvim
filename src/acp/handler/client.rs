@@ -11,7 +11,7 @@ use agent_client_protocol::{
     WriteTextFileRequest, WriteTextFileResponse,
 };
 use tokio::sync::oneshot;
-use tracing::error;
+use tracing::{error, info};
 
 #[async_trait::async_trait(?Send)]
 impl Client for Handler {
@@ -24,6 +24,7 @@ impl Client for Handler {
         }
         let (sender, receiver) =
             oneshot::channel::<agent_client_protocol::RequestPermissionOutcome>();
+        info!("Requesting permission for: {:?}", args);
 
         self.execute_autocommand_request(
             args.session_id.to_string(),

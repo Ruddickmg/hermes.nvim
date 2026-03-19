@@ -57,6 +57,7 @@ pub enum Assistant {
     #[default]
     Copilot,
     Opencode,
+    Gemini,
     Custom {
         name: String,
         command: String,
@@ -69,6 +70,7 @@ impl std::fmt::Display for Assistant {
         match self {
             Assistant::Copilot => write!(f, "copilot"),
             Assistant::Opencode => write!(f, "opencode"),
+            Assistant::Gemini => write!(f, "gemini"),
             Assistant::Custom { name, .. } => write!(f, "{}", name),
         }
     }

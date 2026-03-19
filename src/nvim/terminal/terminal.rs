@@ -38,6 +38,7 @@ type ExitCallback = Function<(i64, i64, String), std::result::Result<(), nvim_ox
 
 /// Pure function to process terminal input data
 /// Joins lines, strips ANSI codes, and applies byte limit truncation
+#[tracing::instrument(level = "trace")]
 pub fn process_terminal_input(
     data: Vec<String>,
     output: &mut String,
@@ -60,6 +61,7 @@ pub fn process_terminal_input(
 /// Pure function to handle terminal exit
 /// Maps exit_code (i64 from Neovim) to (Option<u32>, Option<String>) using Unix signal conventions
 /// Returns Err if the oneshot channel is closed (recipient dropped)
+#[tracing::instrument(level = "trace", skip(exit_status, exit_response))]
 pub fn handle_terminal_exit(
     exit_code: i64,
     _event: String,
@@ -108,6 +110,7 @@ impl TerminalInfo {
         byte_limit: Option<u64>,
     ) -> InputCallback {
         Function::from_fn(move |(_, data): (i64, Vec<String>)| {
+            tracing::trace!("Terminal input callback: {:?}", data);
             let mut input = output.borrow_mut();
             let mut trunc = truncated.borrow_mut();
             process_terminal_input(data, &mut *input, &mut *trunc, byte_limit);
@@ -120,6 +123,7 @@ impl TerminalInfo {
         exit_response: Rc<RefCell<Option<oneshot::Sender<Result<ExitStatus>>>>>,
     ) -> ExitCallback {
         Function::from_fn(move |(_, exit_code, event): (i64, i64, String)| {
+            tracing::trace!("On exit callback: (code: {}, event: {})", exit_code, event);
             let mut status = exit_status.borrow_mut();
             let mut response = exit_response.borrow_mut();
             match handle_terminal_exit(exit_code, event, &mut *status, &mut *response) {
