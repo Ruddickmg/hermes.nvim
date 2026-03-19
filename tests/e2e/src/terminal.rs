@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::{TIMEOUT_IN_SECONDS, utilities::autocommand};
 use agent_client_protocol::{
     CreateTerminalRequest, InitializeResponse, NewSessionResponse, PermissionOption,
-    PromptResponse, RequestPermissionRequest, SessionId, StopReason, TerminalOutputRequest,
+    PromptResponse, SessionId, StopReason, TerminalOutputRequest,
     ToolCallUpdate, WaitForTerminalExitRequest,
 };
 use hermes::{
@@ -13,7 +13,6 @@ use hermes::{
 use nvim_oxi::{Dictionary, Function, Object, conversion::FromObject};
 use pretty_assertions::assert_eq;
 use serde::{Deserialize, Serialize};
-use tracing::info;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]

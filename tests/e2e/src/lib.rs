@@ -4,6 +4,7 @@ pub mod response;
 pub mod connection;
 pub mod mode;
 pub mod prompt;
+pub mod read_file;
 pub mod session;
 pub mod terminal;
 pub mod utilities;
