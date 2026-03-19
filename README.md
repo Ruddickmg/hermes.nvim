@@ -1349,40 +1349,24 @@ Your options for log formats are:
 
 ## TODO:
 
--- user requests
+-- functionality
+- [ ] Add setup function for user configuration
+- [ ] Complete configuration object and integration with app
 - [x] Allow connecting to Agents
   - [x] Via stdio
   - [ ] Via http
   - [ ] Via linux socket
-- [x] initialize connections
-- [x] handle authentication
-- [x] Allow user to send prompts
-  - [x] Send files
-  - [x] Send text
-  - [x] Send images 
-  - [x] Send resource links
-  - [x] Send audio
-- [x] Allow mode selection
-- [x] Allow cancel command to stop ai actions
-- [ ] Handle sessions
-  - [x] Create session
-  - [x] Load session
-  - [ ] List sessions
-  - [ ] Merge sessions
-  - [ ] Fork sessions
-- [ ] Allow model selection
+- [ ] Support "unstable" ACP methods
+  - [ ] session methods
+    - [ ] List sessions
+    - [ ] Merge sessions
+    - [ ] Fork sessions
+  - [ ] Allow model selection
 
--- agent requests
-- [x] Allow permission request
-- [x] Allow agent to write to files
-  - [x] Automatically refresh open buffers that have been modified
-- [x] Allow agent to read files
-- [x] Allow agent to use terminal
-  - [x] Create autocommands for Agent progress in the terminal
-- [x] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
+-- testing
+- [ ]  create fake/mock Agent used to test agent functionality that is not currently supported by any/many ai agents
 
 -- infra
-- [x] separate main thread logic from background threads
 - [ ] use smol instead of tokio to reduce build size
 - [ ] use async for all the things
 
