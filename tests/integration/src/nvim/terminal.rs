@@ -45,7 +45,7 @@ fn terminal_info_from_request_creates_with_correct_defaults() -> nvim_oxi::Resul
     let request = CreateTerminalRequest::new(SessionId::from("test-session"), "test".to_string());
     let terminal = TerminalInfo::from_request(request);
 
-    assert!(terminal.truncated());
+    assert!(!terminal.truncated());
 
     Ok(())
 }
