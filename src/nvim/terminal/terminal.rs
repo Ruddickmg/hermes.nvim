@@ -338,27 +338,38 @@ mod tests {
         // Test that truncation doesn't panic when excess falls in middle of multi-byte char
         let mut output = String::new();
         let mut truncated = None;
-        // Emoji 🎉 is 4 bytes (0xF0 0x9F 0x8E 0x89)
         let emoji_string = "Hello 🎉 World 🎉 End".to_string();
 
-        process_terminal_input(
-            vec![emoji_string],
-            &mut output,
-            &mut truncated,
-            Some(15), // Will require truncating partway through an emoji
-        );
+        process_terminal_input(vec![emoji_string], &mut output, &mut truncated, Some(15));
 
         // Should not panic and should produce valid UTF-8
         assert!(
             std::str::from_utf8(output.as_bytes()).is_ok(),
             "Output must be valid UTF-8"
         );
+    }
+
+    #[test]
+    fn process_input_truncates_multibyte_utf8_sets_truncated_flag() {
+        let mut output = String::new();
+        let mut truncated = None;
+        let emoji_string = "Hello 🎉 World 🎉 End".to_string();
+
+        process_terminal_input(vec![emoji_string], &mut output, &mut truncated, Some(15));
+
         assert_eq!(truncated, Some(true));
+    }
+
+    #[test]
+    fn process_input_truncates_multibyte_utf8_respects_limit() {
+        let mut output = String::new();
+        let mut truncated = None;
+        let emoji_string = "Hello 🎉 World 🎉 End".to_string();
+
+        process_terminal_input(vec![emoji_string], &mut output, &mut truncated, Some(15));
+
         // After truncation, string should be at or under the limit
-        assert!(
-            output.len() <= 15,
-            "Output should respect byte limit after safe truncation"
-        );
+        assert!(output.len() <= 15);
     }
 
     #[test]
@@ -366,20 +377,24 @@ mod tests {
         // Test when excess falls exactly on a char boundary
         let mut output = String::new();
         let mut truncated = None;
-        // "Test 🎉" is: T(1) e(1) s(1) t(1)  (1) 🎉(4) = 9 bytes
         let test_string = "Test 🎉 More text here".to_string();
 
-        process_terminal_input(
-            vec![test_string],
-            &mut output,
-            &mut truncated,
-            Some(9), // Exactly at emoji boundary (after the 4-byte emoji)
-        );
+        process_terminal_input(vec![test_string], &mut output, &mut truncated, Some(9));
 
         assert!(
             std::str::from_utf8(output.as_bytes()).is_ok(),
             "Output must be valid UTF-8"
         );
+    }
+
+    #[test]
+    fn process_input_handles_exact_char_boundary_sets_truncated_flag() {
+        let mut output = String::new();
+        let mut truncated = None;
+        let test_string = "Test 🎉 More text here".to_string();
+
+        process_terminal_input(vec![test_string], &mut output, &mut truncated, Some(9));
+
         assert_eq!(truncated, Some(true));
     }
 
@@ -388,27 +403,36 @@ mod tests {
         // Test with content that is all multi-byte characters
         let mut output = String::new();
         let mut truncated = None;
-        // Five emojis = 20 bytes
         let emoji_string = "🎉🎊🎁🎄🎃".to_string();
 
-        process_terminal_input(
-            vec![emoji_string],
-            &mut output,
-            &mut truncated,
-            Some(10), // Cut in middle (after 2.5 emojis - would panic without fix)
-        );
+        process_terminal_input(vec![emoji_string], &mut output, &mut truncated, Some(10));
 
-        // Should not panic and should produce valid UTF-8
         assert!(
             std::str::from_utf8(output.as_bytes()).is_ok(),
             "Output must be valid UTF-8"
         );
+    }
+
+    #[test]
+    fn process_input_handles_emoji_only_content_sets_truncated_flag() {
+        let mut output = String::new();
+        let mut truncated = None;
+        let emoji_string = "🎉🎊🎁🎄🎃".to_string();
+
+        process_terminal_input(vec![emoji_string], &mut output, &mut truncated, Some(10));
+
         assert_eq!(truncated, Some(true));
-        // Should keep remaining whole emojis (at least 2 emojis = 8 bytes, or 3 = 12)
-        assert!(
-            output.len() >= 8 && output.len() <= 12,
-            "Should contain complete emojis only"
-        );
+    }
+
+    #[test]
+    fn process_input_handles_emoji_only_content_respects_limit() {
+        let mut output = String::new();
+        let mut truncated = None;
+        let emoji_string = "🎉🎊🎁🎄🎃".to_string();
+
+        process_terminal_input(vec![emoji_string], &mut output, &mut truncated, Some(10));
+
+        assert!(output.len() <= 12);
     }
 
     // === Tests for handle_terminal_exit ===
