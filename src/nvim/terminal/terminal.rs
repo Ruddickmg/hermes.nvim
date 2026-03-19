@@ -112,9 +112,15 @@ impl TerminalInfo {
     ) -> InputCallback {
         Function::from_fn(move |(_, data): (i64, Vec<String>)| {
             tracing::trace!("Terminal input callback: {:?}", data);
-            let mut input = output.borrow_mut();
-            let mut trunc = truncated.borrow_mut();
-            process_terminal_input(data, &mut input, &mut trunc, byte_limit);
+            // Use catch_unwind to prevent panics from crossing Lua boundary
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let mut input = output.borrow_mut();
+                let mut trunc = truncated.borrow_mut();
+                process_terminal_input(data, &mut input, &mut trunc, byte_limit);
+            }));
+            if let Err(e) = result {
+                tracing::error!("Panic in terminal input callback: {:?}", e);
+            }
             Ok(())
         })
     }
@@ -125,11 +131,21 @@ impl TerminalInfo {
     ) -> ExitCallback {
         Function::from_fn(move |(_, exit_code, event): (i64, i64, String)| {
             tracing::trace!("On exit callback: (code: {}, event: {})", exit_code, event);
-            let mut status = exit_status.borrow_mut();
-            let mut response = exit_response.borrow_mut();
-            match handle_terminal_exit(exit_code, event, &mut status, &mut response) {
-                Ok(()) => Ok(()),
-                Err(e) => Err(nvim_oxi::lua::Error::MemoryError(e)),
+            // Use catch_unwind to prevent panics from crossing Lua boundary
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let mut status = exit_status.borrow_mut();
+                let mut response = exit_response.borrow_mut();
+                handle_terminal_exit(exit_code, event, &mut status, &mut response)
+            }));
+            match result {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(e)) => Err(nvim_oxi::lua::Error::MemoryError(e)),
+                Err(e) => {
+                    tracing::error!("Panic in terminal exit callback: {:?}", e);
+                    Err(nvim_oxi::lua::Error::MemoryError(
+                        "Terminal exit callback panicked".to_string(),
+                    ))
+                }
             }
         })
     }
