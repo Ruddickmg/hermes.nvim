@@ -53,7 +53,7 @@ pub fn process_terminal_input(
         if current_bytes > limit {
             *truncated = Some(true);
             let excess = (current_bytes - limit) as usize;
-            let safe_boundary = output.floor_char_boundary(excess);
+            let safe_boundary = output.ceil_char_boundary(excess);
             output.drain(0..safe_boundary);
         }
     }
@@ -432,7 +432,7 @@ mod tests {
 
         process_terminal_input(vec![emoji_string], &mut output, &mut truncated, Some(10));
 
-        assert!(output.len() <= 12);
+        assert!(output.len() <= 10);
     }
 
     // === Tests for handle_terminal_exit ===
