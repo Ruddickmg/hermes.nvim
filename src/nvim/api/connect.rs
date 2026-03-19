@@ -77,9 +77,7 @@ pub fn connect(connection: Rc<RefCell<ConnectionManager>>, handler: Arc<Handler>
                 agent,
                 protocol: protocol.unwrap_or_default(),
             };
-            connection
-                .borrow_mut()
-                .connect(handler.clone(), details)?;
+            connection.borrow_mut().connect(handler.clone(), details)?;
             Ok(())
         },
     );

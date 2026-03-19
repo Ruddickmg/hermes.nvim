@@ -1,5 +1,5 @@
 use crate::{
-    acp::{error::Error, Result},
+    acp::{Result, error::Error},
     nvim::terminal::parse_exit_code,
 };
 use agent_client_protocol::EnvVariable;
