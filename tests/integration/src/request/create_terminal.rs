@@ -39,7 +39,9 @@ fn create_terminal_cleanup_after_response() -> nvim_oxi::Result<()> {
 
     // User responds with their generated terminal ID
     let response_obj = nvim_oxi::Object::from(terminal_id);
-    requests.handle_response(&request_id, response_obj).ok();
+    requests
+        .handle_response(&request_id, response_obj)
+        .expect("Failed to handle response");
 
     // Wait for cleanup
     let cleaned_up = crate::helpers::ui::wait_for(
@@ -63,7 +65,9 @@ fn create_terminal_user_handler_response_received() -> nvim_oxi::Result<()> {
 
     // User responds with their generated terminal ID
     let response_obj = nvim_oxi::Object::from(terminal_id);
-    requests.handle_response(&request_id, response_obj).ok();
+    requests
+        .handle_response(&request_id, response_obj)
+        .expect("Failed to handle response");
 
     // Agent should receive the response with user-generated ID
     let response = receiver
@@ -87,7 +91,9 @@ fn create_terminal_invalid_response_sends_error() -> nvim_oxi::Result<()> {
 
     // Send invalid response (integer instead of string)
     let response_obj = nvim_oxi::Object::from(42i64);
-    requests.handle_response(&request_id, response_obj).ok();
+    requests
+        .handle_response(&request_id, response_obj)
+        .expect("Failed to handle response");
 
     // Agent should receive an error
     let response = receiver.try_recv().expect("Should receive response");
