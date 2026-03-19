@@ -106,7 +106,16 @@ impl Request {
 
     pub fn terminal(&self) -> bool {
         let responder = self.responder.blocking_lock();
-        let is_terminal = matches!(responder.as_ref(), Some(Responder::TerminalCreate(..)));
+        let is_terminal = matches!(
+            responder.as_ref(),
+            Some(
+                Responder::TerminalCreate(..)
+                    | Responder::TerminalOutput(..)
+                    | Responder::TerminalExit(..)
+                    | Responder::TerminalRelease(..)
+                    | Responder::TerminalKill(..)
+            )
+        );
         drop(responder);
         is_terminal
     }
@@ -209,7 +218,7 @@ impl Request {
                         let signal = match dict.get("signal").cloned() {
                             Some(s) => {
                                 let sig: String = String::from_object(s)
-                                    .map_err(|e| Error::Internal(e.to_string()))?;
+                                    .map_err(|e| Error::InvalidInput(e.to_string()))?;
                                 if sig.is_empty() { None } else { Some(sig) }
                             }
                             None => None,
@@ -220,7 +229,12 @@ impl Request {
                                 "Terminal exit response must contain at least 'exitCode' or 'signal'".to_string(),
                             ))
                         } else if let Some(code) = exit_code {
-                            Ok(parse_exit_code(code))
+                            let (parsed_exit_code, parsed_signal) = parse_exit_code(code);
+                            let final_signal = match (signal, parsed_signal) {
+                                (Some(explicit_sig), _) => Some(explicit_sig),
+                                (None, inferred_sig) => inferred_sig,
+                            };
+                            Ok((parsed_exit_code, final_signal))
                         } else {
                             Ok((None, signal))
                         }
