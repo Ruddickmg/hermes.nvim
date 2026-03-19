@@ -79,7 +79,7 @@ pub fn connect(connection: Rc<RefCell<ConnectionManager>>, handler: Arc<Handler>
             };
             connection
                 .borrow_mut()
-                .connect::<Handler>(handler.clone(), details)?;
+                .connect(handler.clone(), details)?;
             Ok(())
         },
     );
