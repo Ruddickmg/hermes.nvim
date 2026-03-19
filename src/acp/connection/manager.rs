@@ -144,7 +144,7 @@ impl ConnectionManager {
     }
 
     #[instrument(level = "trace", skip(self, handler))]
-    pub fn connect<H: Client + Send + Sync + 'static>(
+    pub fn connect(
         &mut self,
         handler: Arc<Handler>,
         ConnectionDetails { agent, protocol }: ConnectionDetails,

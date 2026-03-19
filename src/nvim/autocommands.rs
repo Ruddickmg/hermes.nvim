@@ -56,7 +56,11 @@ impl From<&str> for Commands {
         match value {
             // Permission and tool commands
             "CreateTerminal" => Commands::TerminalCreate,
+            "TerminalCreate" => Commands::TerminalCreate,
+            "TerminalRelease" => Commands::TerminalRelease,
             "TerminalKill" => Commands::TerminalKill,
+            "TerminalExit" => Commands::TerminalExit,
+            "TerminalOutput" => Commands::TerminalOutput,
             "WriteTextFile" => Commands::WriteTextFile,
             "ReadTextFile" => Commands::ReadTextFile,
             "PermissionRequest" => Commands::PermissionRequest,

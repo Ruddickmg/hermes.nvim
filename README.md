@@ -423,19 +423,19 @@ hermes.respond("requestId", "terminalId")
 vim.api.nvim_create_autocmd("User", {
     group = "hermes",
     pattern = "TerminalCreate",
-    callback = function(args)
+    callback = function(event)
         local terminalId = "your-generated-terminal-id" -- generate a unique id for terminal
-        local requestId = args.data.requestId
-        local comand = args.data.command
-        local args = args.data.args
-        local byte_limit = args.data.output_byte_limit
+        local requestId = event.data.requestId
+        local command = event.data.command
+        local term_args = event.data.args or {}
+        local byte_limit = event.data.output_byte_limit
 
         -- lua combines args and command (add command to the beginning of args)
-        table.insert(args, 1, command)
+        table.insert(term_args, 1, command)
 
-        terminals[terminalId] = vim.fn.startJob(args, {
-            env = args.data.env,
-            cwd = args.data.cwd,
+        terminals[terminalId] = vim.fn.jobstart(term_args, {
+            env = event.data.env,
+            cwd = event.data.cwd,
         })
 
         hermes.respond(requestId, terminalId);
