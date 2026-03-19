@@ -106,9 +106,9 @@ impl Request {
 
     pub fn terminal(&self) -> bool {
         let responder = self.responder.blocking_lock();
-        let requries = matches!(responder.as_ref(), Some(Responder::TerminalCreate(..)));
+        let is_terminal = matches!(responder.as_ref(), Some(Responder::TerminalCreate(..)));
         drop(responder);
-        requries
+        is_terminal
     }
 
     pub fn is_session(&self, session_id: String) -> bool {
@@ -165,7 +165,7 @@ impl Request {
                 // "truncated" field is optional, defaults to false
                 let truncated = match dict.get("truncated").cloned() {
                     Some(t) => bool::from_object(t)
-                        .map_err(|_| agent_client_protocol::Error::invalid_params())?,
+                        .map_err(|e| Error::InvalidInput(e.to_string()))?,
                     None => false,
                 };
 

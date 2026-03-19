@@ -150,7 +150,7 @@ impl Client for Handler {
         let (sender, receiver) = oneshot::channel::<acp::Result<(Option<u32>, Option<String>)>>();
         self.execute_autocommand_request(
             args.session_id.to_string(),
-            Commands::TerminalOutput,
+            Commands::TerminalExit,
             args.clone(),
             Responder::TerminalExit(sender, args),
         )
