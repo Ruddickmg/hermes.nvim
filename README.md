@@ -1364,7 +1364,9 @@ Your options for log formats are:
   - [ ] Allow model selection
 
 -- testing
-- [ ]  create fake/mock Agent used to test agent functionality that is not currently supported by any/many ai agents
+- [ ] Create fake/mock Agent used to test agent functionality that is not currently supported by any/many ai agents
+- [ ] Only test "required" methods against actual agents
+- [ ] Create an e2e test suite for running against each supported agent to confirm integration
 
 -- infra
 - [ ] use smol instead of tokio to reduce build size
