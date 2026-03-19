@@ -58,7 +58,10 @@ fn terminal_info_run_returns_positive_job_id() -> nvim_oxi::Result<()> {
     // Start a simple echo command
     let job_id = terminal.run("echo".to_string(), vec!["hello".to_string()]);
 
-    assert!(job_id.unwrap() > 0);
+    match job_id {
+        Ok(id) => assert!(id > 0, "Job ID should be positive, got: {}", id),
+        Err(e) => panic!("Failed to start terminal job: {:?}", e),
+    }
 
     Ok(())
 }
