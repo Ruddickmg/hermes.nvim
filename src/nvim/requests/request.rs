@@ -5,20 +5,20 @@ use agent_client_protocol::{
     SelectedPermissionOutcome, TerminalOutputRequest, TerminalOutputResponse,
     WaitForTerminalExitRequest, WriteTextFileRequest, WriteTextFileResponse,
 };
-use nvim_oxi::Dictionary;
 use nvim_oxi::conversion::FromObject;
+use nvim_oxi::Dictionary;
 use std::sync::Arc;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::acp::Result;
 use crate::acp::error::Error;
+use crate::acp::Result;
 use crate::nvim::autocommands::Commands;
-use crate::nvim::terminal::{Terminal, TerminalManager, parse_exit_code};
+use crate::nvim::terminal::{parse_exit_code, Terminal, TerminalManager};
 use crate::utilities::{
-    NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
-    save_buffer_to_disk, show_permission_ui, update_buffer_content,
+    acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
+    show_permission_ui, update_buffer_content, NvimMessenger, TransmitToNvim,
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
@@ -209,7 +209,11 @@ impl Request {
                             Some(s) => {
                                 let sig: String = String::from_object(s)
                                     .map_err(|e| Error::Internal(e.to_string()))?;
-                                if sig.is_empty() { None } else { Some(sig) }
+                                if sig.is_empty() {
+                                    None
+                                } else {
+                                    Some(sig)
+                                }
                             }
                             None => None,
                         };
@@ -384,6 +388,7 @@ impl Request {
         }
     }
 
+    // TODO: return error to both the caller and agent
     pub fn default<T: Terminal + Clone>(
         &mut self,
         data: serde_json::Value,
@@ -428,11 +433,12 @@ impl Request {
                 }
                 Responder::TerminalCreate(sender, data) => {
                     // Create terminal using the TerminalManager
-                    let terminal = T::from_request(data);
+                    let mut terminal = T::from_request(data.clone());
                     let terminal_id = terminal.id().to_string();
-                    terminal_manager.intitialize_terminal(terminal_id.clone(), terminal);
+                    let response = terminal.run(data.command.clone(), data.args);
+                    terminal_manager.initialize_terminal(terminal_id.clone(), terminal);
                     sender
-                        .send(Ok(CreateTerminalResponse::new(terminal_id)))
+                        .send(response.map(|_| CreateTerminalResponse::new(terminal_id)))
                         .map_err(|e| {
                             Error::Internal(format!(
                                 "Failed to send terminal creation response for request '{}': {:?}",

@@ -11,13 +11,17 @@ use tokio::sync::Mutex;
 
 #[nvim_oxi::test]
 fn test_write_text_file_permissions_allowed() -> nvim_oxi::Result<()> {
-    let _mock = MockClient::new();
+    let mock = MockClient::new();
     let state = Arc::new(Mutex::new(PluginState::default()));
 
     let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
 
     let req = WriteTextFileRequest::new("session_id", "test.txt", "test");
-    let _ = tokio_test::block_on(handler.write_text_file(req));
+    let res = tokio_test::block_on(handler.write_text_file(req));
+    let was_called = tokio_test::block_on(async {
+        *mock.write_called.lock().await
+    });
+    assert!(was_called && res.is_ok(), "Handler should be called and succeed when permissions allowed");
     
     Ok(())
 }
@@ -76,13 +80,17 @@ fn test_write_text_file_permissions_denied_does_not_call_handler() -> nvim_oxi::
 
 #[nvim_oxi::test]
 fn test_read_text_file_permissions_allowed() -> nvim_oxi::Result<()> {
-    let _mock = MockClient::new();
+    let mock = MockClient::new();
     let state = Arc::new(Mutex::new(PluginState::default()));
 
     let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
 
     let req = ReadTextFileRequest::new("session_id", "test.txt");
-    let _ = tokio_test::block_on(handler.read_text_file(req));
+    let res = tokio_test::block_on(handler.read_text_file(req));
+    let was_called = tokio_test::block_on(async {
+        *mock.read_called.lock().await
+    });
+    assert!(was_called && res.is_ok(), "Handler should be called and succeed when permissions allowed");
     
     Ok(())
 }
@@ -149,7 +157,8 @@ fn test_create_terminal_permissions_allowed() -> nvim_oxi::Result<()> {
     let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
 
     let req = agent_client_protocol::CreateTerminalRequest::new("session_id", "echo");
-    let _ = tokio_test::block_on(handler.create_terminal(req));
+    let res = tokio_test::block_on(handler.create_terminal(req));
+    assert!(res.is_ok(), "Handler should succeed when permissions allowed");
     
     Ok(())
 }
@@ -177,7 +186,8 @@ fn test_terminal_output_permissions_allowed() -> nvim_oxi::Result<()> {
     let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
 
     let req = agent_client_protocol::TerminalOutputRequest::new("session_id", "term-1");
-    let _ = tokio_test::block_on(handler.terminal_output(req));
+    let res = tokio_test::block_on(handler.terminal_output(req));
+    assert!(res.is_ok(), "Handler should succeed when permissions allowed");
     
     Ok(())
 }
@@ -205,7 +215,8 @@ fn test_wait_for_terminal_exit_permissions_allowed() -> nvim_oxi::Result<()> {
     let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
 
     let req = agent_client_protocol::WaitForTerminalExitRequest::new("session_id", "term-1");
-    let _ = tokio_test::block_on(handler.wait_for_terminal_exit(req));
+    let res = tokio_test::block_on(handler.wait_for_terminal_exit(req));
+    assert!(res.is_ok(), "Handler should succeed when permissions allowed");
     
     Ok(())
 }
@@ -233,7 +244,8 @@ fn test_release_terminal_permissions_allowed() -> nvim_oxi::Result<()> {
     let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new())).expect("Handler creation should succeed");
 
     let req = agent_client_protocol::ReleaseTerminalRequest::new("session_id", "term-1");
-    let _ = tokio_test::block_on(handler.release_terminal(req));
+    let res = tokio_test::block_on(handler.release_terminal(req));
+    assert!(res.is_ok(), "Handler should succeed when permissions allowed");
     
     Ok(())
 }

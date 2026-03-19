@@ -31,7 +31,6 @@ where
         .group("hermes")
         .patterns(vec![pattern.as_str()])
         .callback(move |v: AutocmdCallbackArgs| {
-            warn!("Received autocommand with data: {:#?}", v.data);
             match nvim_object_to_struct(v.data) {
                Ok(parsed) => sender.send(parsed).unwrap(),
                Err(e) => println!("Error occurred while parsing: {:#?}", e),

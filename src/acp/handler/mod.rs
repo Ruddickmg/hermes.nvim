@@ -37,7 +37,7 @@ impl Handler {
                 let request = response_data.map(|(res, session_id)| {
                     let request_id = nvim_requests.add_request(session_id, res);
                     data["requestId"] = serde_json::Value::String(request_id.to_string());
-                    error!("data: {:#?}", data);
+                    debug!("Request data: {:#?}", data);
                     request_id
                 });
                 if Self::listener_attached(command.to_string()) {
