@@ -3,8 +3,7 @@ use crate::acp::connection::{Connection, stdio};
 use crate::nvim::configuration::Permissions;
 use crate::{Handler, acp::error::Error};
 use agent_client_protocol::{
-    Client, ClientCapabilities, FileSystemCapability, Implementation, InitializeRequest,
-    ProtocolVersion,
+    ClientCapabilities, FileSystemCapability, Implementation, InitializeRequest, ProtocolVersion,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;

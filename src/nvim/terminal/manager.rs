@@ -232,7 +232,7 @@ mod tests {
 
     #[test]
     fn terminal_manager_release_fails_for_missing_terminal() {
-        let mut manager: TerminalManager<MockTerminal> = TerminalManager::new();
+        let manager: TerminalManager<MockTerminal> = TerminalManager::new();
         let result = manager.release("nonexistent");
         assert!(result.is_err());
     }

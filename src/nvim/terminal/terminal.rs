@@ -114,7 +114,7 @@ impl TerminalInfo {
             tracing::trace!("Terminal input callback: {:?}", data);
             let mut input = output.borrow_mut();
             let mut trunc = truncated.borrow_mut();
-            process_terminal_input(data, &mut *input, &mut *trunc, byte_limit);
+            process_terminal_input(data, &mut input, &mut trunc, byte_limit);
             Ok(())
         })
     }
@@ -127,7 +127,7 @@ impl TerminalInfo {
             tracing::trace!("On exit callback: (code: {}, event: {})", exit_code, event);
             let mut status = exit_status.borrow_mut();
             let mut response = exit_response.borrow_mut();
-            match handle_terminal_exit(exit_code, event, &mut *status, &mut *response) {
+            match handle_terminal_exit(exit_code, event, &mut status, &mut response) {
                 Ok(()) => Ok(()),
                 Err(e) => Err(nvim_oxi::lua::Error::MemoryError(e)),
             }
@@ -440,7 +440,7 @@ mod tests {
     #[test]
     fn handle_exit_sends_immediately_when_sender_available() {
         let mut exit_status: Option<ExitStatus> = None;
-        let mut exit_response: Option<oneshot::Sender<Result<ExitStatus>>> = None;
+        let mut exit_response: Option<oneshot::Sender<Result<ExitStatus>>>;
 
         let (sender, mut receiver) = oneshot::channel();
         exit_response = Some(sender);

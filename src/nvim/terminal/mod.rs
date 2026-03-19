@@ -1,3 +1,5 @@
+#![allow(clippy::module_inception)]
+
 pub mod manager;
 pub mod signal;
 pub mod terminal;
