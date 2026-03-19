@@ -469,7 +469,7 @@ hermes.respond("requestId", "terminal output text")
 
 -- call signature with truncation defined
 hermes.respond("requestId", {
-    output = "erminal output text",
+    output = "terminal output text",
     truncated = is_truncated,
 })
 
