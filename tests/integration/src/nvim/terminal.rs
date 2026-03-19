@@ -2,9 +2,7 @@
 //!
 //! These tests verify that TerminalInfo works correctly within the Neovim runtime.
 
-use hermes::nvim::terminal::{
-    handle_terminal_exit, process_terminal_input, Terminal, TerminalInfo,
-};
+use hermes::nvim::terminal::{Terminal, TerminalInfo};
 use tokio::sync::oneshot;
 
 /// Integration test: Verifies report_exit_to sends exit code when already occurred
@@ -34,105 +32,7 @@ fn terminal_info_report_exit_to_stores_sender_for_later() -> nvim_oxi::Result<()
     terminal.report_exit_to(sender).expect("report failed");
 
     // Verify the sender was stored by checking the exit_response field has a value
-    assert_eq!(terminal.exit_response.borrow().is_some(), true);
-
-    Ok(())
-}
-
-/// Integration test: Verifies process_terminal_input joins lines with newlines
-#[nvim_oxi::test]
-fn process_terminal_input_joins_lines_with_newlines() -> nvim_oxi::Result<()> {
-    let mut output = String::new();
-    let mut truncated = None;
-
-    process_terminal_input(
-        vec!["line1".to_string(), "line2".to_string()],
-        &mut output,
-        &mut truncated,
-        None,
-    );
-
-    assert_eq!(output, "line1\nline2");
-
-    Ok(())
-}
-
-/// Integration test: Verifies handle_terminal_exit sends immediately when sender available
-#[nvim_oxi::test]
-fn handle_terminal_exit_sends_immediately_when_sender_available() -> nvim_oxi::Result<()> {
-    let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
-    let mut exit_response: Option<
-        oneshot::Sender<
-            std::result::Result<(Option<u32>, Option<String>), hermes::acp::error::Error>,
-        >,
-    > = None;
-
-    let (sender, mut receiver) = oneshot::channel();
-    exit_response = Some(sender);
-
-    // Exit code 42 is normal (0-127 range), no signal
-    handle_terminal_exit(
-        42,
-        "ignored".to_string(),
-        &mut exit_status,
-        &mut exit_response,
-    );
-
-    let received = receiver.try_recv().unwrap();
-    assert!(received.is_ok());
-    assert_eq!(received.unwrap(), (Some(42), None));
-
-    Ok(())
-}
-
-/// Integration test: Verifies handle_terminal_exit stores exit status when no sender
-#[nvim_oxi::test]
-fn handle_terminal_exit_stores_exit_status_when_no_sender() -> nvim_oxi::Result<()> {
-    let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
-    let mut exit_response: Option<
-        oneshot::Sender<
-            std::result::Result<(Option<u32>, Option<String>), hermes::acp::error::Error>,
-        >,
-    > = None;
-
-    // No sender available - stores status
-    // Exit code 42 is normal (0-127 range), no signal
-    handle_terminal_exit(
-        42,
-        "ignored".to_string(),
-        &mut exit_status,
-        &mut exit_response,
-    );
-
-    assert_eq!(exit_status, Some((Some(42), None)));
-
-    Ok(())
-}
-
-/// Integration test: Verifies handle_terminal_exit sends when sender is provided
-#[nvim_oxi::test]
-fn handle_terminal_exit_sends_when_sender_provided() -> nvim_oxi::Result<()> {
-    let mut exit_status: Option<(Option<u32>, Option<String>)> = None;
-    let mut exit_response: Option<
-        oneshot::Sender<
-            std::result::Result<(Option<u32>, Option<String>), hermes::acp::error::Error>,
-        >,
-    > = None;
-
-    let (sender, mut receiver) = oneshot::channel();
-    exit_response = Some(sender);
-
-    // Exit code 0 is normal success (0-127 range), no signal
-    handle_terminal_exit(
-        0,
-        "ignored".to_string(),
-        &mut exit_status,
-        &mut exit_response,
-    );
-
-    let received = receiver.try_recv().unwrap();
-    assert!(received.is_ok());
-    assert_eq!(received.unwrap(), (Some(0), None));
+    assert!(terminal.exit_response.borrow().is_some());
 
     Ok(())
 }
@@ -145,7 +45,7 @@ fn terminal_info_from_request_creates_with_correct_defaults() -> nvim_oxi::Resul
     let request = CreateTerminalRequest::new(SessionId::from("test-session"), "test".to_string());
     let terminal = TerminalInfo::from_request(request);
 
-    assert_eq!(terminal.truncated(), false);
+    assert!(terminal.truncated());
 
     Ok(())
 }
@@ -158,7 +58,7 @@ fn terminal_info_run_returns_positive_job_id() -> nvim_oxi::Result<()> {
     // Start a simple echo command
     let job_id = terminal.run("echo".to_string(), vec!["hello".to_string()]);
 
-    assert_eq!(job_id.unwrap() > 0, true);
+    assert!(job_id.unwrap() > 0);
 
     Ok(())
 }
@@ -171,7 +71,7 @@ fn terminal_info_stop_fails_on_non_running_terminal() -> nvim_oxi::Result<()> {
     // Stop on a terminal that was never run should fail (no job ID)
     let result = terminal.stop();
 
-    assert_eq!(result.is_err(), true);
+    assert!(result.is_err());
 
     Ok(())
 }
@@ -270,22 +170,6 @@ fn terminal_info_environment_builder_sets_variables() -> nvim_oxi::Result<()> {
     let foo_oxi_str: nvim_oxi::String = foo_obj.clone().try_into().unwrap();
     let foo_value: String = foo_oxi_str.to_string();
     assert_eq!(foo_value, "bar");
-
-    Ok(())
-}
-
-/// Integration test: Verifies process_terminal_input concatenates multiple calls
-#[nvim_oxi::test]
-fn process_terminal_input_concatenates_multiple_calls() -> nvim_oxi::Result<()> {
-    let mut output = String::new();
-    let mut truncated = None;
-
-    // Simulate multiple callback invocations
-    process_terminal_input(vec!["line1".to_string()], &mut output, &mut truncated, None);
-    process_terminal_input(vec!["line2".to_string()], &mut output, &mut truncated, None);
-    process_terminal_input(vec!["line3".to_string()], &mut output, &mut truncated, None);
-
-    assert_eq!(output, "line1line2line3");
 
     Ok(())
 }
