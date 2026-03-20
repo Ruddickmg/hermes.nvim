@@ -3,7 +3,7 @@ use nvim_oxi::{
     Dictionary, Object,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TerminalConfig {
     pub delete: bool,
     pub hidden: bool,

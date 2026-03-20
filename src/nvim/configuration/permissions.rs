@@ -4,7 +4,7 @@ use nvim_oxi::{
     Dictionary, Object,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Permissions {
     pub fs_write_access: bool,
     pub fs_read_access: bool,

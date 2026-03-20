@@ -4,7 +4,7 @@ use nvim_oxi::{
     Dictionary, Object,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct LogFileConfig {
     pub enabled: bool,
     pub path: String,
@@ -92,7 +92,7 @@ impl FromObject for LogFileConfigPartial {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct LogConfig {
     pub file: Option<LogFileConfig>,
     pub level: LogLevel,

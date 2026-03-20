@@ -3,7 +3,7 @@ use nvim_oxi::{
     Dictionary, Object,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BufferConfig {
     pub auto_save: bool,
 }

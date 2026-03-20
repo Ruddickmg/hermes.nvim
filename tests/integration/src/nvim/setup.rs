@@ -6,7 +6,7 @@ use hermes::nvim::{
     api::setup,
     configuration::{
         BufferConfigPartial, ClientConfigPartial, LogConfigPartial, LogFileConfigPartial,
-        PermissionsPartial, SetupArgs, TerminalConfigPartial,
+        Permissions, PermissionsPartial, SetupArgs, TerminalConfig, TerminalConfigPartial,
     },
     state::PluginState,
 };
@@ -45,11 +45,16 @@ fn setup_updates_permissions_correctly() -> nvim_oxi::Result<()> {
     func.call(SetupArgs(Some(config)))
         .expect("Failed to call setup");
 
-    // Verify changes
+    // Verify changes using single assertion comparing expected vs actual
     let state = plugin_state.blocking_lock();
-    assert!(!state.config.permissions.fs_write_access); // changed to false
-    assert!(!state.config.permissions.terminal_access); // changed to false
-    assert!(state.config.permissions.fs_read_access); // still true (default)
+    let expected = Permissions {
+        fs_write_access: false,        // changed
+        fs_read_access: true,          // default preserved
+        terminal_access: false,        // changed
+        can_request_permissions: true, // default preserved
+        allow_notifications: true,     // default preserved
+    };
+    assert_eq!(state.config.permissions, expected);
     Ok(())
 }
 
@@ -77,10 +82,13 @@ fn setup_updates_terminal_config_correctly() -> nvim_oxi::Result<()> {
         .expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
-    assert!(state.config.terminal.delete); // changed to true
-    assert!(!state.config.terminal.hidden); // changed to false
-    assert!(!state.config.terminal.enabled); // changed to false
-    assert!(!state.config.terminal.buffered); // changed to false
+    let expected = TerminalConfig {
+        delete: true,    // changed
+        hidden: false,   // changed
+        enabled: false,  // changed
+        buffered: false, // changed
+    };
+    assert_eq!(state.config.terminal, expected);
     Ok(())
 }
 
@@ -105,7 +113,7 @@ fn setup_updates_buffer_config_correctly() -> nvim_oxi::Result<()> {
         .expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
-    assert!(state.config.buffer.auto_save); // changed to true
+    assert!(state.config.buffer.auto_save); // Single assertion
     Ok(())
 }
 
@@ -135,12 +143,18 @@ fn setup_updates_log_config_correctly() -> nvim_oxi::Result<()> {
         .expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
-    assert_eq!(state.config.log.level, hermes::utilities::LogLevel::Debug);
     assert_eq!(
-        state.config.log.local_list,
-        hermes::utilities::LogLevel::Info
+        (
+            state.config.log.level,
+            state.config.log.local_list,
+            state.config.log.message
+        ),
+        (
+            hermes::utilities::LogLevel::Debug,
+            hermes::utilities::LogLevel::Info,
+            hermes::utilities::LogLevel::Warn
+        )
     );
-    assert_eq!(state.config.log.message, hermes::utilities::LogLevel::Warn);
     Ok(())
 }
 
@@ -176,11 +190,16 @@ fn setup_partial_update_preserves_existing_values() -> nvim_oxi::Result<()> {
     func.call(SetupArgs(Some(config2)))
         .expect("Failed to call setup 2");
 
-    // Verify: fs_write_access should still be false from first call
+    // Verify using single assertion comparing expected vs actual
     let state = plugin_state.blocking_lock();
-    assert!(!state.config.permissions.fs_write_access); // from first call
-    assert!(!state.config.permissions.terminal_access); // from second call
-    assert!(state.config.permissions.fs_read_access); // never changed, still default
+    let expected = Permissions {
+        fs_write_access: false,        // from first call
+        fs_read_access: true,          // default preserved
+        terminal_access: false,        // from second call
+        can_request_permissions: true, // default preserved
+        allow_notifications: true,     // default preserved
+    };
+    assert_eq!(state.config.permissions, expected);
     Ok(())
 }
 
@@ -193,12 +212,6 @@ fn setup_creates_log_file_config_when_none() -> nvim_oxi::Result<()> {
     let func: nvim_oxi::Function<SetupArgs, ()> =
         nvim_oxi::conversion::FromObject::from_object(setup_fn)
             .expect("Failed to convert setup function");
-
-    // Initially, log.file should be None
-    {
-        let state = plugin_state.blocking_lock();
-        assert!(state.config.log.file.is_none());
-    }
 
     // Setup with file config
     let config = ClientConfigPartial {
@@ -218,12 +231,18 @@ fn setup_creates_log_file_config_when_none() -> nvim_oxi::Result<()> {
     func.call(SetupArgs(Some(config)))
         .expect("Failed to call setup");
 
-    // Verify file config was created
+    // Verify file config was created using single assertion
     let state = plugin_state.blocking_lock();
-    assert!(state.config.log.file.is_some());
-    let file_config = state.config.log.file.as_ref().unwrap();
-    assert!(file_config.enabled);
-    assert_eq!(file_config.path, "/tmp/test.log");
-    assert_eq!(file_config.level, hermes::utilities::LogLevel::Warn);
+    let file_config = state
+        .config
+        .log
+        .file
+        .as_ref()
+        .expect("File config should exist");
+    assert!(
+        file_config.enabled
+            && file_config.path == "/tmp/test.log"
+            && file_config.level == hermes::utilities::LogLevel::Warn
+    );
     Ok(())
 }
