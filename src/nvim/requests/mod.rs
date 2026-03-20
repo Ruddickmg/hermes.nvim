@@ -1,7 +1,8 @@
 pub mod request;
 use crate::{
     acp::{Result, error::Error},
-    utilities::NvimHandler,
+    nvim::terminal::{TerminalInfo, TerminalManager},
+    utilities::NvimMessenger,
 };
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
@@ -12,14 +13,15 @@ pub use request::*;
 
 pub struct Requests {
     pending: Arc<Mutex<HashMap<Uuid, Request>>>,
-    nvim_handler: NvimHandler<Uuid>,
+    nvim_handler: NvimMessenger<Uuid>,
+    terminal_manager: TerminalManager<TerminalInfo>,
 }
 
 impl Requests {
     pub fn new() -> Result<Self> {
         let list = Arc::new(Mutex::new(HashMap::new()));
         let pending = list.clone();
-        let nvim_handler = NvimHandler::initialize(move |id| {
+        let nvim_handler = NvimMessenger::initialize(move |id| {
             let mut lock = list.blocking_lock();
             lock.remove(&id);
             drop(lock);
@@ -27,6 +29,7 @@ impl Requests {
         Ok(Self {
             pending,
             nvim_handler,
+            terminal_manager: TerminalManager::new(),
         })
     }
 }
@@ -44,8 +47,8 @@ impl RequestHandler for Requests {
         let pending = self.pending.blocking_lock();
         let retrieved = pending.get(request_id).cloned();
         drop(pending);
-        if let Some(request) = retrieved {
-            request.default(data)
+        if let Some(mut request) = retrieved {
+            request.default(data, self.terminal_manager.clone())
         } else {
             Err(Error::Internal(format!(
                 "No pending request found for ID: '{}'",

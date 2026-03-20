@@ -1,7 +1,11 @@
 use agent_client_protocol::{
-    ReadTextFileRequest, ReadTextFileResponse, RequestPermissionOutcome, RequestPermissionRequest,
-    SelectedPermissionOutcome, WriteTextFileRequest, WriteTextFileResponse,
+    CreateTerminalRequest, CreateTerminalResponse, KillTerminalCommandRequest,
+    KillTerminalCommandResponse, ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest,
+    ReleaseTerminalResponse, RequestPermissionOutcome, RequestPermissionRequest,
+    SelectedPermissionOutcome, TerminalOutputRequest, TerminalOutputResponse,
+    WaitForTerminalExitRequest, WriteTextFileRequest, WriteTextFileResponse,
 };
+use nvim_oxi::Dictionary;
 use nvim_oxi::conversion::FromObject;
 use std::sync::Arc;
 use tokio::sync::{Mutex, oneshot};
@@ -10,8 +14,10 @@ use uuid::Uuid;
 
 use crate::acp::Result;
 use crate::acp::error::Error;
+use crate::nvim::autocommands::Commands;
+use crate::nvim::terminal::{Terminal, TerminalManager, parse_exit_code};
 use crate::utilities::{
-    NvimHandler, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
+    NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
     save_buffer_to_disk, show_permission_ui, update_buffer_content,
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
@@ -24,6 +30,41 @@ pub enum Responder {
         ReadTextFileRequest,
     ),
     WriteFileResponse(oneshot::Sender<WriteTextFileResponse>, WriteTextFileRequest),
+    TerminalCreate(
+        oneshot::Sender<Result<CreateTerminalResponse>>,
+        CreateTerminalRequest,
+    ),
+    TerminalOutput(
+        oneshot::Sender<Result<TerminalOutputResponse>>,
+        TerminalOutputRequest,
+    ),
+    TerminalExit(
+        oneshot::Sender<Result<(Option<u32>, Option<String>)>>,
+        WaitForTerminalExitRequest,
+    ),
+    TerminalRelease(
+        oneshot::Sender<Result<ReleaseTerminalResponse>>,
+        ReleaseTerminalRequest,
+    ),
+    TerminalKill(
+        oneshot::Sender<Result<KillTerminalCommandResponse>>,
+        KillTerminalCommandRequest,
+    ),
+}
+
+impl From<Responder> for Commands {
+    fn from(responder: Responder) -> Self {
+        match responder {
+            Responder::TerminalOutput(..) => Commands::TerminalOutput,
+            Responder::TerminalKill(..) => Commands::TerminalKill,
+            Responder::ReadFileResponse(..) => Commands::ReadTextFile,
+            Responder::PermissionResponse(..) => Commands::PermissionRequest,
+            Responder::WriteFileResponse(..) => Commands::WriteTextFile,
+            Responder::TerminalCreate(..) => Commands::TerminalCreate,
+            Responder::TerminalExit(..) => Commands::TerminalExit,
+            Responder::TerminalRelease(..) => Commands::TerminalRelease,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -31,14 +72,14 @@ pub struct Request {
     id: Uuid,
     session_id: String,
     responder: Arc<Mutex<Option<Responder>>>,
-    remove: NvimHandler<Uuid>,
+    remove: NvimMessenger<Uuid>,
 }
 
 impl Request {
     pub fn id(&self) -> Uuid {
         self.id
     }
-    pub fn new(session_id: String, remove: NvimHandler<Uuid>, responder: Responder) -> Self {
+    pub fn new(session_id: String, remove: NvimMessenger<Uuid>, responder: Responder) -> Self {
         Self {
             id: Uuid::new_v4(),
             session_id,
@@ -61,6 +102,22 @@ impl Request {
         let is_permission = matches!(*responder, Some(Responder::PermissionResponse(..)));
         drop(responder);
         is_permission
+    }
+
+    pub fn terminal(&self) -> bool {
+        let responder = self.responder.blocking_lock();
+        let is_terminal = matches!(
+            responder.as_ref(),
+            Some(
+                Responder::TerminalCreate(..)
+                    | Responder::TerminalOutput(..)
+                    | Responder::TerminalExit(..)
+                    | Responder::TerminalRelease(..)
+                    | Responder::TerminalKill(..)
+            )
+        );
+        drop(responder);
+        is_terminal
     }
 
     pub fn is_session(&self, session_id: String) -> bool {
@@ -92,6 +149,99 @@ impl Request {
                 })?;
         }
         Ok(())
+    }
+
+    fn parse_terminal_output_response(data: nvim_oxi::Object) -> Result<(String, bool)> {
+        // First, try to parse as a plain String
+        match String::from_object(data.clone()) {
+            Ok(output) => Ok((output, false)),
+            Err(_) => {
+                // Not a string, try Dictionary
+                let dict = Dictionary::from_object(data)
+                    .map_err(|e| Error::InvalidInput(e.to_string()))?;
+
+                // "output" field is required and must be a String
+                let output = dict
+                    .get("output")
+                    .cloned()
+                    .ok_or(Error::InvalidInput(
+                        "Missing 'output' field in terminal output response".to_string(),
+                    ))
+                    .and_then(|o| {
+                        String::from_object(o).map_err(|e| Error::InvalidInput(e.to_string()))
+                    })?;
+
+                // "truncated" field is optional, defaults to false
+                let truncated = match dict.get("truncated").cloned() {
+                    Some(t) => {
+                        bool::from_object(t).map_err(|e| Error::InvalidInput(e.to_string()))?
+                    }
+                    None => false,
+                };
+
+                Ok((output, truncated))
+            }
+        }
+    }
+
+    fn parse_terminal_exit_response(
+        data: nvim_oxi::Object,
+    ) -> Result<(Option<u32>, Option<String>)> {
+        // First, try to parse as a plain String (signal name only)
+        match String::from_object(data.clone()) {
+            Ok(signal) => Ok(if signal.is_empty() {
+                return Err(Error::InvalidInput(
+                    "Signal string cannot be empty".to_string(),
+                ));
+            } else {
+                (None, Some(signal))
+            }),
+            Err(_) => {
+                // Not a string, try Integer (exit code)
+                match i64::from_object(data.clone()) {
+                    Ok(exit_code) => Ok(parse_exit_code(exit_code)),
+                    Err(_) => {
+                        let dict = Dictionary::from_object(data)
+                            .map_err(|e| Error::InvalidInput(e.to_string()))?;
+
+                        // "exitCode" field is optional
+                        let exit_code = match dict.get("exitCode").cloned() {
+                            Some(ec) => {
+                                let code: i64 = i64::from_object(ec)
+                                    .map_err(|e| Error::InvalidInput(e.to_string()))?;
+                                Some(code)
+                            }
+                            None => None,
+                        };
+
+                        // "signal" field is optional
+                        let signal = match dict.get("signal").cloned() {
+                            Some(s) => {
+                                let sig: String = String::from_object(s)
+                                    .map_err(|e| Error::InvalidInput(e.to_string()))?;
+                                if sig.is_empty() { None } else { Some(sig) }
+                            }
+                            None => None,
+                        };
+
+                        if signal.is_none() && exit_code.is_none() {
+                            Err(Error::InvalidInput(
+                                "Terminal exit response must contain at least 'exitCode' or 'signal'".to_string(),
+                            ))
+                        } else if let Some(code) = exit_code {
+                            let (parsed_exit_code, parsed_signal) = parse_exit_code(code);
+                            let final_signal = match (signal, parsed_signal) {
+                                (Some(explicit_sig), _) => Some(explicit_sig),
+                                (None, inferred_sig) => inferred_sig,
+                            };
+                            Ok((parsed_exit_code, final_signal))
+                        } else {
+                            Ok((None, signal))
+                        }
+                    }
+                }
+            }
+        }
     }
 
     pub fn respond(&self, response: nvim_oxi::Object) -> Result<()> {
@@ -130,6 +280,56 @@ impl Request {
                         self.id, e
                     ))
                 })?;
+            }
+            Responder::TerminalCreate(sender, _) => {
+                let result = String::from_object(response)
+                    .map(CreateTerminalResponse::new)
+                    .map_err(|e| Error::InvalidInput(e.to_string()));
+                sender.send(result).map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send terminal response for request '{}': {:?}",
+                        self.id, e
+                    ))
+                })?;
+            }
+            Responder::TerminalOutput(sender, _) => {
+                let result = Self::parse_terminal_output_response(response)
+                    .map(|(output, truncated)| TerminalOutputResponse::new(output, truncated));
+                sender.send(result).map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send terminal output response for request '{}': {:?}",
+                        self.id, e
+                    ))
+                })?;
+            }
+            Responder::TerminalExit(sender, _) => {
+                let result = Self::parse_terminal_exit_response(response);
+                sender.send(result).map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send terminal exit response for request '{}': {:?}",
+                        self.id, e
+                    ))
+                })?;
+            }
+            Responder::TerminalRelease(sender, _) => {
+                sender
+                    .send(Ok(ReleaseTerminalResponse::new()))
+                    .map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send terminal release response for request '{}': {:?}",
+                            self.id, e
+                        ))
+                    })?;
+            }
+            Responder::TerminalKill(sender, _) => {
+                sender
+                    .send(Ok(KillTerminalCommandResponse::new()))
+                    .map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send terminal kill response for request '{}': {:?}",
+                            self.id, e
+                        ))
+                    })?;
             }
         };
         self.finish()
@@ -199,7 +399,12 @@ impl Request {
         }
     }
 
-    pub fn default(&self, data: serde_json::Value) -> Result<()> {
+    // TODO: return error to both the caller and agent
+    pub fn default<T: Terminal + Clone>(
+        &mut self,
+        data: serde_json::Value,
+        mut terminal_manager: TerminalManager<T>,
+    ) -> Result<()> {
         if self.is_permission_request() {
             self.ask_user_for_permission(data)?;
         } else {
@@ -237,9 +442,360 @@ impl Request {
                         )
                     })?;
                 }
+                Responder::TerminalCreate(sender, data) => {
+                    // Create terminal using the TerminalManager
+                    let mut terminal = T::from_request(data.clone());
+                    let terminal_id = terminal.id().to_string();
+                    let response = terminal.run(data.command.clone(), data.args);
+                    terminal_manager.initialize_terminal(terminal_id.clone(), terminal);
+                    sender
+                        .send(response.map(|_| CreateTerminalResponse::new(terminal_id)))
+                        .map_err(|e| {
+                            Error::Internal(format!(
+                                "Failed to send terminal creation response for request '{}': {:?}",
+                                self.id, e
+                            ))
+                        })?;
+                }
+                Responder::TerminalOutput(sender, data) => {
+                    let result = terminal_manager
+                        .get_terminal(&data.terminal_id.to_string())
+                        .map(|terminal| {
+                            TerminalOutputResponse::new(terminal.content(), terminal.truncated())
+                        })
+                        .ok_or_else(|| Error::Internal("No terminal found".to_string()));
+                    sender.send(result).map_err(|e| {
+                        Error::Internal(
+                            format!("Failed to send terminal output response: {:?}", e,),
+                        )
+                    })?;
+                }
+                Responder::TerminalExit(sender, data) => {
+                    terminal_manager.notify_when_finished(&data.terminal_id.to_string(), sender)?;
+                }
+                Responder::TerminalRelease(sender, data) => {
+                    let response = terminal_manager
+                        .release(&data.terminal_id.to_string())
+                        .map(|_| ReleaseTerminalResponse::new());
+                    sender.send(response).map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send terminal release response for request '{}': {:?}",
+                            self.id, e
+                        ))
+                    })?;
+                }
+                Responder::TerminalKill(sender, data) => {
+                    let response = terminal_manager
+                        .kill(&data.terminal_id.to_string())
+                        .map(|_| KillTerminalCommandResponse::new());
+                    sender.send(response).map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send terminal kill response for request '{}': {:?}",
+                            self.id, e
+                        ))
+                    })?;
+                }
             }
             self.finish()?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nvim_oxi::Object;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn parse_terminal_output_accepts_plain_string() {
+        let obj = Object::from("hello world");
+        let result = Request::parse_terminal_output_response(obj);
+        assert_eq!(result.unwrap(), ("hello world".to_string(), false));
+    }
+
+    #[test]
+    fn parse_terminal_output_accepts_empty_string() {
+        let obj = Object::from("");
+        let result = Request::parse_terminal_output_response(obj);
+        assert_eq!(result.unwrap(), ("".to_string(), false));
+    }
+
+    #[test]
+    fn parse_terminal_output_accepts_dictionary_with_output_field() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("output", Object::from("test output"));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_output_response(obj);
+        assert_eq!(result.unwrap(), ("test output".to_string(), false));
+    }
+
+    #[test]
+    fn parse_terminal_output_accepts_dictionary_with_truncated_true() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("output", Object::from("test output"));
+        dict.insert("truncated", Object::from(true));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_output_response(obj);
+        assert_eq!(result.unwrap(), ("test output".to_string(), true));
+    }
+
+    #[test]
+    fn parse_terminal_output_accepts_dictionary_with_truncated_false() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("output", Object::from("test output"));
+        dict.insert("truncated", Object::from(false));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_output_response(obj);
+        assert_eq!(result.unwrap(), ("test output".to_string(), false));
+    }
+
+    #[test]
+    fn parse_terminal_output_rejects_missing_output_field() {
+        let dict = nvim_oxi::Dictionary::default();
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_output_response(obj);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_terminal_output_rejects_invalid_output_type() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("output", Object::from(123i64));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_output_response(obj);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_terminal_output_rejects_invalid_truncated_type() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("output", Object::from("test"));
+        dict.insert("truncated", Object::from("yes"));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_output_response(obj);
+        assert!(result.is_err());
+    }
+
+    // Tests for parse_terminal_exit_response
+
+    #[test]
+    fn parse_terminal_exit_response_accepts_signal_string() {
+        let obj = Object::from("SIGTERM");
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (None, Some("SIGTERM".to_string())));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_accepts_exit_code_integer() {
+        let obj = Object::from(42i64);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (Some(42), None));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_accepts_exit_code_zero() {
+        let obj = Object::from(0i64);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (Some(0), None));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_accepts_negative_signal_number() {
+        let obj = Object::from(-9i64);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (None, Some("SIGKILL".to_string())));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_accepts_exit_code_128_plus_range() {
+        // 137 = 128 + 9, should return BOTH exit code AND signal
+        let obj = Object::from(137i64);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (Some(137), Some("SIGKILL".to_string())));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_accepts_dictionary_with_both_fields() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("exitCode", Object::from(9i64));
+        dict.insert("signal", Object::from("SIGKILL"));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        // Exit code 9 is in 0-127 range, so parse_exit_code returns (Some(9), None)
+        // But explicit signal from dict takes precedence over inferred signal
+        assert_eq!(result.unwrap(), (Some(9), Some("SIGKILL".to_string())));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_accepts_dictionary_exit_code_only() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("exitCode", Object::from(42i64));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (Some(42), None));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_accepts_dictionary_signal_only() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("signal", Object::from("SIGTERM"));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (None, Some("SIGTERM".to_string())));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_handles_empty_signal_string() {
+        let obj = Object::from("");
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_handles_empty_dictionary_signal() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("exitCode", Object::from(1i64));
+        dict.insert("signal", Object::from(""));
+        let obj = Object::from(dict);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        // When signal is empty but exitCode is present, signal becomes None
+        assert_eq!(result.unwrap(), (Some(1), None));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_handles_unknown_negative_signal() {
+        let obj = Object::from(-999i64);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (None, Some("UNKNOWN(-999)".to_string())));
+    }
+
+    #[test]
+    fn parse_terminal_exit_response_handles_unknown_128_plus_range() {
+        // 255 = 128 + 127, which is in the 128..=255 range
+        // 127 is not a standard signal, so map_codes returns None
+        let obj = Object::from(255i64);
+        let result = Request::parse_terminal_exit_response(obj);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (Some(255), None));
+    }
+
+    // Tests for Responder -> Commands conversion
+    #[test]
+    fn responder_terminal_output_maps_to_terminal_output_command() {
+        let (sender, _) = oneshot::channel::<Result<TerminalOutputResponse>>();
+        let responder = Responder::TerminalOutput(
+            sender,
+            TerminalOutputRequest::new(
+                agent_client_protocol::SessionId::from("test"),
+                agent_client_protocol::TerminalId::from("term-1"),
+            ),
+        );
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::TerminalOutput);
+    }
+
+    #[test]
+    fn responder_terminal_kill_maps_to_terminal_kill_command() {
+        let (sender, _) = oneshot::channel::<Result<KillTerminalCommandResponse>>();
+        let responder = Responder::TerminalKill(
+            sender,
+            KillTerminalCommandRequest::new(
+                agent_client_protocol::SessionId::from("test"),
+                agent_client_protocol::TerminalId::from("term-1"),
+            ),
+        );
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::TerminalKill);
+    }
+
+    #[test]
+    fn responder_read_file_maps_to_read_text_file_command() {
+        let (sender, _) = oneshot::channel::<agent_client_protocol::Result<ReadTextFileResponse>>();
+        let responder = Responder::ReadFileResponse(
+            sender,
+            ReadTextFileRequest::new(
+                agent_client_protocol::SessionId::from("test"),
+                std::path::PathBuf::from("/test.txt"),
+            ),
+        );
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::ReadTextFile);
+    }
+
+    #[test]
+    fn responder_permission_maps_to_permission_request_command() {
+        let (sender, _) = oneshot::channel::<RequestPermissionOutcome>();
+        let responder = Responder::PermissionResponse(sender);
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::PermissionRequest);
+    }
+
+    #[test]
+    fn responder_write_file_maps_to_write_text_file_command() {
+        let (sender, _) = oneshot::channel::<WriteTextFileResponse>();
+        let responder = Responder::WriteFileResponse(
+            sender,
+            WriteTextFileRequest::new(
+                agent_client_protocol::SessionId::from("test"),
+                std::path::PathBuf::from("/test.txt"),
+                "content".to_string(),
+            ),
+        );
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::WriteTextFile);
+    }
+
+    #[test]
+    fn responder_terminal_create_maps_to_terminal_create_command() {
+        let (sender, _) = oneshot::channel::<Result<CreateTerminalResponse>>();
+        let responder = Responder::TerminalCreate(
+            sender,
+            CreateTerminalRequest::new(
+                agent_client_protocol::SessionId::from("test"),
+                "echo".to_string(),
+            ),
+        );
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::TerminalCreate);
+    }
+
+    #[test]
+    fn responder_terminal_exit_maps_to_terminal_exit_command() {
+        let (sender, _) = oneshot::channel::<Result<(Option<u32>, Option<String>)>>();
+        let responder = Responder::TerminalExit(
+            sender,
+            WaitForTerminalExitRequest::new(
+                agent_client_protocol::SessionId::from("test"),
+                agent_client_protocol::TerminalId::from("term-1"),
+            ),
+        );
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::TerminalExit);
+    }
+
+    #[test]
+    fn responder_terminal_release_maps_to_terminal_release_command() {
+        let (sender, _) = oneshot::channel::<Result<ReleaseTerminalResponse>>();
+        let responder = Responder::TerminalRelease(
+            sender,
+            ReleaseTerminalRequest::new(
+                agent_client_protocol::SessionId::from("test"),
+                agent_client_protocol::TerminalId::from("term-1"),
+            ),
+        );
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::TerminalRelease);
     }
 }

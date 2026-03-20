@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use tokio::sync::mpsc::Receiver;
 
-use agent_client_protocol::{Agent, Client, ClientSideConnection};
+use agent_client_protocol::{Agent, ClientSideConnection};
 use tracing::{debug, instrument};
 
 use crate::{
@@ -11,14 +11,13 @@ use crate::{
         connection::{Assistant, UserRequest},
         error::Error,
     },
-    nvim::autocommands::ResponseHandler,
 };
 
 #[instrument(level = "trace", skip_all)]
-pub async fn handle_request<H: Client + ResponseHandler>(
+pub async fn handle_request(
     connection: ClientSideConnection,
     mut receiver: Receiver<UserRequest>,
-    client: Arc<Handler<H>>,
+    client: Arc<Handler>,
     agent: &Assistant,
 ) -> Result<(), Error> {
     while let Some(msg) = receiver.recv().await {

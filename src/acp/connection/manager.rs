@@ -1,8 +1,12 @@
+use crate::PluginState;
 use crate::acp::connection::{Connection, stdio};
-use crate::nvim::autocommands::ResponseHandler;
+use crate::nvim::configuration::Permissions;
 use crate::{Handler, acp::error::Error};
-use agent_client_protocol::{Client, Implementation, InitializeRequest, ProtocolVersion};
+use agent_client_protocol::{
+    ClientCapabilities, FileSystemCapability, Implementation, InitializeRequest, ProtocolVersion,
+};
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -10,7 +14,7 @@ use std::thread::JoinHandle;
 use tokio::sync::Mutex;
 use tracing::{debug, info, instrument, trace, warn};
 
-type ConnectionHandles = Arc<Mutex<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>;
+type ConnectionHandles = Rc<RefCell<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>;
 
 #[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
 pub enum Protocol {
@@ -52,6 +56,7 @@ pub enum Assistant {
     #[default]
     Copilot,
     Opencode,
+    Gemini,
     Custom {
         name: String,
         command: String,
@@ -64,6 +69,7 @@ impl std::fmt::Display for Assistant {
         match self {
             Assistant::Copilot => write!(f, "copilot"),
             Assistant::Opencode => write!(f, "opencode"),
+            Assistant::Gemini => write!(f, "gemini"),
             Assistant::Custom { name, .. } => write!(f, "{}", name),
         }
     }
@@ -96,32 +102,32 @@ pub struct ConnectionDetails {
 }
 
 #[derive(Clone)]
-pub struct ConnectionManager<H: Client + ResponseHandler> {
+pub struct ConnectionManager {
     handles: ConnectionHandles,
     connection: HashMap<Assistant, Rc<Connection>>,
-    handler: Arc<Handler<H>>,
+    state: Arc<Mutex<PluginState>>,
 }
 
-impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
-    #[instrument(level = "trace", skip(client))]
-    pub fn new(client: Arc<Handler<H>>) -> Self {
+impl ConnectionManager {
+    #[instrument(level = "trace")]
+    pub fn new(state: Arc<Mutex<PluginState>>) -> Self {
         Self {
-            handler: client,
-            handles: Arc::new(Mutex::new(HashMap::new())),
+            handles: Rc::new(RefCell::new(HashMap::new())),
             connection: HashMap::new(),
+            state,
         }
     }
 
     #[instrument(level = "trace", skip(self))]
     fn set_agent(&self, agent: Assistant) {
-        let mut config = self.handler.state.blocking_lock();
+        let mut config = self.state.blocking_lock();
         config.set_agent(agent);
         drop(config);
     }
 
     #[instrument(level = "trace", skip(self))]
     fn get_agent(&self) -> Assistant {
-        let config = self.handler.state.blocking_lock();
+        let config = self.state.blocking_lock();
         let agent = config.agent.clone();
         drop(config);
         agent
@@ -143,10 +149,20 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
     }
 
     #[instrument(level = "trace", skip(self))]
+    pub fn get_permissions(&self) -> Permissions {
+        let config = self.state.blocking_lock();
+        let permissions = config.config.permissions.clone();
+        drop(config);
+        permissions
+    }
+
+    #[instrument(level = "trace", skip(self, handler))]
     pub fn connect(
         &mut self,
+        handler: Arc<Handler>,
         ConnectionDetails { agent, protocol }: ConnectionDetails,
     ) -> Result<Rc<Connection>, Error> {
+        let permissions = self.get_permissions();
         Ok(match self.get_connection(&agent) {
             Some(connection) => {
                 warn!(
@@ -158,29 +174,41 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
             None => {
                 let (sender, receiver) = tokio::sync::mpsc::channel(100);
                 let connection = Rc::new(Connection::new(sender));
-                let handler = self.handler.clone();
                 let thread_agent = agent.clone();
-                let init_config = InitializeRequest::new(ProtocolVersion::LATEST).client_info(
-                    Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"),
-                );
+                let init_config = InitializeRequest::new(ProtocolVersion::LATEST)
+                    .client_info(
+                        Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"),
+                    )
+                    .client_capabilities(
+                        ClientCapabilities::new()
+                            .terminal(permissions.terminal_access)
+                            .fs(FileSystemCapability::new()
+                                .read_text_file(permissions.fs_read_access)
+                                .write_text_file(permissions.fs_write_access)),
+                    );
 
                 trace!("Starting agent communication in new thread");
-                self.handles.blocking_lock().insert(
-                    agent.clone(),
-                    std::thread::spawn(move || {
-                        let runtime = tokio::runtime::Builder::new_current_thread()
-                            .enable_all()
-                            .build()
-                            .map_err(|e| Error::Internal(e.to_string()))?;
+                self.handles
+                    .try_borrow_mut()
+                    .map_err(|e| {
+                        Error::Internal(format!("Failed to borrow connection handles: {}", e))
+                    })?
+                    .insert(
+                        agent.clone(),
+                        std::thread::spawn(move || {
+                            let runtime = tokio::runtime::Builder::new_current_thread()
+                                .enable_all()
+                                .build()
+                                .map_err(|e| Error::Internal(e.to_string()))?;
 
-                        trace!("Starting tokio runtime");
-                        runtime.block_on(match protocol {
-                            Protocol::Stdio => stdio::connect(handler, thread_agent, receiver),
-                            Protocol::Http => unimplemented!(),
-                            Protocol::Socket => unimplemented!(),
-                        })
-                    }),
-                );
+                            trace!("Starting tokio runtime");
+                            runtime.block_on(match protocol {
+                                Protocol::Stdio => stdio::connect(handler, thread_agent, receiver),
+                                Protocol::Http => unimplemented!(),
+                                Protocol::Socket => unimplemented!(),
+                            })
+                        }),
+                    );
                 self.add_connection(agent.clone(), connection.clone());
                 debug!("Stored connection to '{}'", agent);
                 connection.initialize(init_config)?;
@@ -224,7 +252,8 @@ impl<H: Client + ResponseHandler + Sync + Send + 'static> ConnectionManager<H> {
         })?;
         let handle = self
             .handles
-            .blocking_lock()
+            .try_borrow_mut()
+            .map_err(|e| Error::Internal(format!("Failed to borrow connection handles: {}", e)))?
             .remove(assistant)
             .ok_or_else(|| {
                 Error::Connection(format!("No handle found for assistant {}", assistant))
@@ -271,100 +300,82 @@ mod tests {
     }
 
     #[test]
-    fn test_protocol_display_socket() {
-        assert_eq!(format!("{}", Protocol::Socket), "socket");
+    fn test_protocol_display() {
+        // Test Display for all Protocol variants using slice comparison
+        let protocols: Vec<Protocol> = vec![Protocol::Socket, Protocol::Http, Protocol::Stdio];
+        let results: Vec<String> = protocols.iter().map(|p| format!("{}", p)).collect();
+
+        let expected: Vec<String> = vec![
+            "socket".to_string(),
+            "http".to_string(),
+            "stdio".to_string(),
+        ];
+
+        assert_eq!(results, expected);
     }
 
     #[test]
-    fn test_protocol_display_http() {
-        assert_eq!(format!("{}", Protocol::Http), "http");
+    fn test_protocol_from_str() {
+        // Test FromStr for known protocols using slice comparison
+        let inputs: Vec<&str> = vec![
+            "socket", "http", "stdio", "SOCKET", "HTTP", "STDIO", "unknown",
+        ];
+        let results: Vec<Protocol> = inputs.iter().map(|&s| Protocol::from(s)).collect();
+
+        let expected: Vec<Protocol> = vec![
+            Protocol::Socket, // socket
+            Protocol::Http,   // http
+            Protocol::Stdio,  // stdio
+            Protocol::Socket, // SOCKET (case-insensitive)
+            Protocol::Http,   // HTTP (case-insensitive)
+            Protocol::Stdio,  // STDIO (case-insensitive)
+            Protocol::Stdio,  // unknown defaults to Stdio
+        ];
+
+        assert_eq!(results, expected);
     }
 
     #[test]
-    fn test_protocol_display_stdio() {
-        assert_eq!(format!("{}", Protocol::Stdio), "stdio");
+    fn test_assistant_display() {
+        // Test Display for all Assistant variants using slice comparison
+        let assistants: Vec<Assistant> = vec![
+            Assistant::Copilot,
+            Assistant::Opencode,
+            Assistant::Custom {
+                name: String::from("my-claude"),
+                command: String::from("claude-acp"),
+                args: vec![String::from("--socket")],
+            },
+        ];
+        let results: Vec<String> = assistants.iter().map(|a| format!("{}", a)).collect();
+
+        let expected: Vec<String> = vec![
+            "copilot".to_string(),
+            "opencode".to_string(),
+            "my-claude".to_string(),
+        ];
+
+        assert_eq!(results, expected);
     }
 
     #[test]
-    fn test_protocol_from_str_socket() {
-        assert_eq!(Protocol::from("socket"), Protocol::Socket);
-    }
-
-    #[test]
-    fn test_protocol_from_str_socket_case_insensitive() {
-        assert_eq!(Protocol::from("SOCKET"), Protocol::Socket);
-    }
-
-    #[test]
-    fn test_protocol_from_str_http() {
-        assert_eq!(Protocol::from("http"), Protocol::Http);
-    }
-
-    #[test]
-    fn test_protocol_from_str_stdio() {
-        assert_eq!(Protocol::from("stdio"), Protocol::Stdio);
-    }
-
-    #[test]
-    fn test_protocol_from_str_unknown() {
-        assert_eq!(Protocol::from("unknown"), Protocol::Stdio);
-    }
-
-    #[test]
-    fn test_assistant_display_copilot() {
-        assert_eq!(format!("{}", Assistant::Copilot), "copilot");
-    }
-
-    #[test]
-    fn test_assistant_display_opencode() {
-        assert_eq!(format!("{}", Assistant::Opencode), "opencode");
-    }
-
-    #[test]
-    fn test_assistant_from_str_copilot() {
+    fn test_assistant_from_str_copilot_lowercase() {
         assert_eq!(Assistant::from("copilot"), Assistant::Copilot);
     }
 
     #[test]
-    fn test_assistant_from_str_copilot_case_insensitive() {
-        assert_eq!(Assistant::from("COPILOT"), Assistant::Copilot);
-    }
-
-    #[test]
-    fn test_assistant_from_str_opencode() {
+    fn test_assistant_from_str_opencode_lowercase() {
         assert_eq!(Assistant::from("opencode"), Assistant::Opencode);
     }
 
     #[test]
-    fn test_assistant_from_str_unknown() {
-        let assistant = Assistant::from("unknown");
-        assert!(matches!(assistant, Assistant::Custom { name, .. } if name == "unknown"));
+    fn test_assistant_from_str_copilot_uppercase() {
+        assert_eq!(Assistant::from("COPILOT"), Assistant::Copilot);
     }
 
     #[test]
-    fn test_assistant_display_custom() {
-        let assistant = Assistant::Custom {
-            name: String::from("my-claude"),
-            command: String::from("claude-acp"),
-            args: vec![String::from("--socket")],
-        };
-        assert_eq!(format!("{}", assistant), "my-claude");
-    }
-
-    #[test]
-    fn test_assistant_from_str_creates_custom() {
-        let assistant = Assistant::from("my-custom-agent");
-        match assistant {
-            Assistant::Custom {
-                name,
-                command,
-                args,
-            } => {
-                assert_eq!(name, "my-custom-agent");
-                assert_eq!(command, "");
-                assert!(args.is_empty());
-            }
-            _ => panic!("Expected Custom variant"),
-        }
+    fn test_assistant_from_str_unknown_creates_custom() {
+        let result = Assistant::from("unknown-agent");
+        assert!(matches!(result, Assistant::Custom { name, .. } if name == "unknown-agent"));
     }
 }

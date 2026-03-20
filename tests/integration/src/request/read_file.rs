@@ -59,7 +59,7 @@ fn setup_read_request(
 
 #[nvim_oxi::test]
 fn read_file_default_response_succeeds() -> nvim_oxi::Result<()> {
-    let (temp_file, path) = create_file_with_lines(5);
+    let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, _receiver) = setup_read_request(&path, None, None);
 
     let result = requests.default_response(&request_id, serde_json::Value::Null);
@@ -70,7 +70,7 @@ fn read_file_default_response_succeeds() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn read_file_returns_all_content() -> nvim_oxi::Result<()> {
-    let (temp_file, path) = create_file_with_lines(5);
+    let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, mut receiver) = setup_read_request(&path, None, None);
 
     requests
@@ -88,7 +88,7 @@ fn read_file_returns_all_content() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn read_file_creates_request_in_pending() -> nvim_oxi::Result<()> {
-    let (temp_file, path) = create_file_with_lines(5);
+    let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, _receiver) = setup_read_request(&path, None, None);
 
     assert!(requests.get_request(&request_id).is_some());
@@ -98,7 +98,7 @@ fn read_file_creates_request_in_pending() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn read_file_gets_removed_from_pending() -> nvim_oxi::Result<()> {
-    let (temp_file, path) = create_file_with_lines(5);
+    let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, _receiver) = setup_read_request(&path, None, None);
 
     requests
@@ -167,7 +167,7 @@ fn read_file_buffer_cleanup_works() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn read_file_line_range_returns_correct_lines() -> nvim_oxi::Result<()> {
-    let (temp_file, path) = create_file_with_lines(5);
+    let (_temp_file, path) = create_file_with_lines(5);
     // ACP uses 1-based indexing, so line=2, limit=4 means lines 2-4 (1-based)
     // After conversion to 0-based: start=1, end=3, so we get lines 1, 2 (indices 1..3)
     let (requests, request_id, mut receiver) = setup_read_request(&path, Some(2), Some(4));
@@ -188,7 +188,7 @@ fn read_file_line_range_returns_correct_lines() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn read_file_line_range_cleanup_works() -> nvim_oxi::Result<()> {
-    let (temp_file, path) = create_file_with_lines(5);
+    let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, _receiver) = setup_read_request(&path, Some(1), Some(4));
 
     requests
@@ -413,7 +413,7 @@ fn read_file_buffer_and_file_apply_same_conversion() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn read_file_line_zero_returns_invalid_params_error() -> nvim_oxi::Result<()> {
-    let (temp_file, path) = create_file_with_lines(5);
+    let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, mut receiver) = setup_read_request(&path, Some(0), None);
 
     requests
@@ -431,7 +431,7 @@ fn read_file_line_zero_returns_invalid_params_error() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn read_file_limit_zero_returns_invalid_params_error() -> nvim_oxi::Result<()> {
-    let (temp_file, path) = create_file_with_lines(5);
+    let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, mut receiver) = setup_read_request(&path, None, Some(0));
 
     requests
@@ -449,7 +449,7 @@ fn read_file_limit_zero_returns_invalid_params_error() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn read_file_line_zero_cleanup_works() -> nvim_oxi::Result<()> {
-    let (temp_file, path) = create_file_with_lines(5);
+    let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, _receiver) = setup_read_request(&path, Some(0), None);
 
     requests
@@ -470,7 +470,7 @@ fn read_file_line_zero_cleanup_works() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn read_file_invalid_line_error_sent_to_agent() -> nvim_oxi::Result<()> {
-    let (temp_file, path) = create_file_with_lines(5);
+    let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, mut receiver) = setup_read_request(&path, Some(0), Some(3));
 
     requests
@@ -572,7 +572,7 @@ fn read_file_empty_file_cleanup_works() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn read_file_start_beyond_length_returns_empty() -> nvim_oxi::Result<()> {
-    let (temp_file, path) = create_file_with_lines(3);
+    let (_temp_file, path) = create_file_with_lines(3);
     let (requests, request_id, mut receiver) = setup_read_request(&path, Some(10), None);
 
     requests
@@ -590,7 +590,7 @@ fn read_file_start_beyond_length_returns_empty() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn read_file_start_beyond_length_cleanup_works() -> nvim_oxi::Result<()> {
-    let (temp_file, path) = create_file_with_lines(3);
+    let (_temp_file, path) = create_file_with_lines(3);
     let (requests, request_id, _receiver) = setup_read_request(&path, Some(10), None);
 
     requests
@@ -610,7 +610,7 @@ fn read_file_start_beyond_length_cleanup_works() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn read_file_respond_path_sends_custom_content() -> nvim_oxi::Result<()> {
-    let (temp_file, path) = create_file_with_lines(5);
+    let (_temp_file, path) = create_file_with_lines(5);
     let requests = Arc::new(Requests::new().unwrap());
     let (sender, mut receiver) = oneshot::channel::<Result<ReadTextFileResponse, _>>();
     let responder = Responder::ReadFileResponse(sender, create_read_request(&path, None, None));
@@ -633,7 +633,7 @@ fn read_file_respond_path_sends_custom_content() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn read_file_respond_path_cleanup_works() -> nvim_oxi::Result<()> {
-    let (temp_file, path) = create_file_with_lines(5);
+    let (_temp_file, path) = create_file_with_lines(5);
     let requests = Arc::new(Requests::new().unwrap());
     let (sender, _receiver) = oneshot::channel::<Result<ReadTextFileResponse, _>>();
     let responder = Responder::ReadFileResponse(sender, create_read_request(&path, None, None));
@@ -657,7 +657,7 @@ fn read_file_respond_path_cleanup_works() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn read_file_large_returns_correct_range() -> nvim_oxi::Result<()> {
-    let (temp_file, path) = create_file_with_lines(300);
+    let (_temp_file, path) = create_file_with_lines(300);
     // ACP uses 1-based indexing: line=101, limit=201 means lines 101-201 (1-based)
     // After conversion to 0-based: start=100, end=200, so we get lines 100-199
     let (requests, request_id, mut receiver) = setup_read_request(&path, Some(101), Some(201));
@@ -678,7 +678,7 @@ fn read_file_large_returns_correct_range() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn read_file_large_cleanup_works() -> nvim_oxi::Result<()> {
-    let (temp_file, path) = create_file_with_lines(300);
+    let (_temp_file, path) = create_file_with_lines(300);
     let (requests, request_id, _receiver) = setup_read_request(&path, Some(101), Some(201));
 
     requests

@@ -4,12 +4,12 @@ use nvim_oxi::libuv::AsyncHandle;
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct NvimHandler<T: 'static> {
+pub struct NvimMessenger<T: 'static> {
     handle: Arc<AsyncHandle>,
     sender: Arc<tokio::sync::mpsc::Sender<T>>,
 }
 
-impl<T> NvimHandler<T> {
+impl<T> NvimMessenger<T> {
     pub fn initialize<F, R>(mut callback: F) -> Result<Self>
     where
         F: FnMut(T) -> R + 'static,
@@ -39,7 +39,7 @@ pub trait TransmitToNvim<T> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl<T> TransmitToNvim<T> for NvimHandler<T> {
+impl<T> TransmitToNvim<T> for NvimMessenger<T> {
     fn blocking_send(&self, data: T) -> Result<()> {
         self.sender
             .blocking_send(data)
