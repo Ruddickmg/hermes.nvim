@@ -5,15 +5,19 @@ use nvim_oxi::{
 
 #[derive(Clone, Debug)]
 pub struct TerminalConfig {
-    pub delete_on_end: bool,
+    pub delete: bool,
     pub hidden: bool,
+    pub enabled: bool,
+    pub buffered: bool,
 }
 
 impl Default for TerminalConfig {
     fn default() -> Self {
         TerminalConfig {
-            delete_on_end: false,
+            enabled: true,
+            delete: false,
             hidden: true,
+            buffered: true,
         }
     }
 }
@@ -23,13 +27,15 @@ impl Default for TerminalConfig {
 pub struct TerminalConfigPartial {
     pub delete_on_end: Option<bool>,
     pub hidden: Option<bool>,
+    pub buffered: Option<bool>,
+    pub enabled: Option<bool>,
 }
 
 impl TerminalConfigPartial {
     /// Apply only Some() values to existing config
     pub fn apply_to(self, config: &mut TerminalConfig) {
         if let Some(val) = self.delete_on_end {
-            config.delete_on_end = val;
+            config.delete = val;
         }
         if let Some(val) = self.hidden {
             config.hidden = val;

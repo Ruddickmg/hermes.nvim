@@ -1,3 +1,5 @@
+mod buffer;
+mod log;
 mod permissions;
 mod terminal;
 
@@ -8,11 +10,15 @@ use nvim_oxi::{
 };
 pub use permissions::{Permissions, PermissionsPartial};
 pub use terminal::{TerminalConfig, TerminalConfigPartial};
+pub use buffer::*;
+pub use log::*;
 
 #[derive(Clone, Debug, Default)]
 pub struct ClientConfig {
     pub permissions: Permissions,
     pub terminal: TerminalConfig,
+    pub buffer: BufferConfig,
+    pub log: LogConfig,
 }
 
 /// Partial client configuration for setup function
@@ -20,6 +26,7 @@ pub struct ClientConfig {
 pub struct ClientConfigPartial {
     pub permissions: Option<PermissionsPartial>,
     pub terminal: Option<TerminalConfigPartial>,
+    pub log: Option<LogConfig>,
 }
 
 impl ClientConfigPartial {

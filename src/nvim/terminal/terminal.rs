@@ -1,9 +1,12 @@
 use crate::{
     acp::{Result, error::Error},
-    nvim::terminal::parse_exit_code,
+    nvim::{self, terminal::parse_exit_code},
 };
 use agent_client_protocol::EnvVariable;
-use nvim_oxi::{Array, Dictionary, Function, Object};
+use nvim_oxi::{
+    Array, Dictionary, Function, Object,
+    api::opts::{OptionOpts, OptionScope},
+};
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 use strip_ansi_escapes;
 use tokio::sync::oneshot;
@@ -233,6 +236,18 @@ impl Terminal for TerminalInfo {
         let job_id = buffer
             .call(|_| Self::start_terminal(command, args, configuration))
             .map_err(|e| Error::Internal(e.to_string()))?;
+        let opts = OptionOpts::builder()
+            .buffer(buffer.clone())
+            .scope(OptionScope::Local)
+            .build();
+        nvim_oxi::api::set_option_value("buftype", "terminal", &opts);
+        nvim_oxi::api::set_option_value("swapfile", false, &opts);
+        nvim_oxi::api::set_option_value("bufhidden", "hide", &opts);
+        nvim_oxi::api::set_option_value("nonumber", "norelativenumber", &opts);
+        nvim_oxi::api::set_option_value("signcolumn", "no", &opts);
+        nvim_oxi::api::set_option_value("wrap", "nofoldcolumn", &opts);
+        nvim_oxi::api::set_option_value("scrollback", "10000", &opts);
+        nvim_oxi::api::set_option_value("nomodified", "true", &opts);
         self.job_id = Some(job_id as i64);
         self.buffer = Some(buffer);
         Ok(job_id)

@@ -1361,6 +1361,7 @@ Your options for log formats are:
   - [x] Via stdio
   - [ ] Via http
   - [ ] Via linux socket
+- [ ] Add autocommand that triggers on all events
 - [ ] Support "unstable" ACP methods
   - [ ] session methods
     - [ ] List sessions
@@ -1378,6 +1379,19 @@ Your options for log formats are:
 - [ ] use async for all the things
 
 -- nice to haves
+- [ ] Status bar integration
+  - [ ] Configurable
+  - [ ] Report mode
+  - [ ] Report model
+  - [ ] Report status
+    - [ ] waiting on user response
+    - [ ] thinking
+    - [ ] Finished/Responded
+    - [ ] etc?
+  - [ ] Update on events (no polling required)
+- [ ] Integrate with signs
+  - [ ] Configurable
+  - [ ] Show lines edited by agent
 - [ ] look into ways of improving ai integration
   - [ ] research RLM ([example](https://github.com/JaredStewart/coderlm))
   - [ ] connect agent to lsp (try to set it up as a tool call/connect to neovim lsp)
