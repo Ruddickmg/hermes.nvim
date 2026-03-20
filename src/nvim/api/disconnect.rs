@@ -1,8 +1,8 @@
 use nvim_oxi::{
+    Function, Object, ObjectKind,
     conversion::{self, FromObject},
     lua::{self, Error, Poppable, Pushable},
     serde::SerializeError,
-    Function, Object, ObjectKind,
 };
 use std::{cell::RefCell, rc::Rc};
 use tracing::{debug, instrument};

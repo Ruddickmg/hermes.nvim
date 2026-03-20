@@ -77,8 +77,11 @@ pub fn connect(connection: Rc<RefCell<ConnectionManager>>, handler: Arc<Handler>
                 agent,
                 protocol: protocol.unwrap_or_default(),
             };
-            connection.try_borrow_mut()
-                .map_err(|e| Error::RuntimeError(format!("Failed to borrow connection manager: {}", e)))?
+            connection
+                .try_borrow_mut()
+                .map_err(|e| {
+                    Error::RuntimeError(format!("Failed to borrow connection manager: {}", e))
+                })?
                 .connect(handler.clone(), details)?;
             Ok(())
         },
