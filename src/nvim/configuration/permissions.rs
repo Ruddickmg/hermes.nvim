@@ -1,7 +1,7 @@
 use nvim_oxi::{
-    Dictionary, Object,
     conversion::{Error, FromObject},
     lua::{self, Poppable, Pushable},
+    Dictionary, Object,
 };
 
 #[derive(Debug, Clone)]
@@ -168,5 +168,71 @@ mod tests {
         assert!(!perms.terminal_access);
         assert!(perms.can_request_permissions);
         assert!(!perms.allow_notifications);
+    }
+}
+
+/// Partial permissions configuration where each field is optional
+#[derive(Clone, Debug, Default)]
+pub struct PermissionsPartial {
+    pub fs_write_access: Option<bool>,
+    pub fs_read_access: Option<bool>,
+    pub terminal_access: Option<bool>,
+    pub can_request_permissions: Option<bool>,
+    pub allow_notifications: Option<bool>,
+}
+
+impl PermissionsPartial {
+    /// Apply only Some() values to existing permissions
+    pub fn apply_to(self, permissions: &mut Permissions) {
+        if let Some(val) = self.fs_write_access {
+            permissions.fs_write_access = val;
+        }
+        if let Some(val) = self.fs_read_access {
+            permissions.fs_read_access = val;
+        }
+        if let Some(val) = self.terminal_access {
+            permissions.terminal_access = val;
+        }
+        if let Some(val) = self.can_request_permissions {
+            permissions.can_request_permissions = val;
+        }
+        if let Some(val) = self.allow_notifications {
+            permissions.allow_notifications = val;
+        }
+    }
+}
+
+impl FromObject for PermissionsPartial {
+    fn from_object(obj: Object) -> Result<Self, Error> {
+        let dict = Dictionary::from_object(obj)?;
+
+        let fs_write_access = dict
+            .get("fs_write_access")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?;
+        let fs_read_access = dict
+            .get("fs_read_access")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?;
+        let terminal_access = dict
+            .get("terminal_access")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?;
+        let can_request_permissions = dict
+            .get("can_request_permissions")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?;
+        let allow_notifications = dict
+            .get("allow_notifications")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?;
+
+        Ok(Self {
+            fs_write_access,
+            fs_read_access,
+            terminal_access,
+            can_request_permissions,
+            allow_notifications,
+        })
     }
 }

@@ -1,7 +1,7 @@
-use crate::PluginState;
-use crate::acp::connection::{Connection, stdio};
+use crate::acp::connection::{stdio, Connection};
 use crate::nvim::configuration::Permissions;
-use crate::{Handler, acp::error::Error};
+use crate::PluginState;
+use crate::{acp::error::Error, Handler};
 use agent_client_protocol::{
     ClientCapabilities, FileSystemCapability, Implementation, InitializeRequest, ProtocolVersion,
 };
@@ -154,6 +154,14 @@ impl ConnectionManager {
         let permissions = config.config.permissions.clone();
         drop(config);
         permissions
+    }
+
+    #[instrument(level = "trace", skip(self, config_update))]
+    pub fn update_config(&self, config_update: crate::nvim::configuration::ClientConfigPartial) {
+        let mut state = self.state.blocking_lock();
+        config_update.apply_to(&mut state.config);
+        drop(state);
+        debug!("Updated client configuration via setup()");
     }
 
     #[instrument(level = "trace", skip(self, handler))]

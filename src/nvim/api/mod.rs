@@ -8,6 +8,7 @@ pub mod mcp_servers;
 pub mod prompt;
 pub mod respond;
 pub mod set_mode;
+pub mod setup;
 
 pub use authenticate::*;
 pub use cancel::*;
@@ -18,3 +19,4 @@ pub use load_session::*;
 pub use prompt::*;
 pub use respond::*;
 pub use set_mode::*;
+pub use setup::*;
