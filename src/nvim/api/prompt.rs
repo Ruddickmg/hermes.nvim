@@ -7,11 +7,10 @@ use nvim_oxi::{
     conversion::{Error as ConversionError, FromObject},
     lua::{Error, Poppable, Pushable},
 };
-use std::rc::Rc;
-use tokio::sync::Mutex;
+use std::{cell::RefCell, rc::Rc};
 use tracing::{debug, instrument};
 
-use crate::{acp::connection::ConnectionManager, nvim::autocommands::ResponseHandler};
+use crate::acp::connection::ConnectionManager;
 
 /// Extracts a required string field from a Lua dictionary.
 fn required_string(dict: &Dictionary, key: &str) -> Result<String, ConversionError> {
@@ -324,9 +323,7 @@ impl Pushable for PromptContent {
 pub type PromptArgs = (String, PromptContent);
 
 #[instrument(level = "trace", skip_all)]
-pub fn prompt<H: agent_client_protocol::Client + ResponseHandler + Send + Sync + 'static>(
-    connection: Rc<Mutex<ConnectionManager<H>>>,
-) -> Object {
+pub fn prompt(connection: Rc<RefCell<ConnectionManager>>) -> Object {
     let function: Function<PromptArgs, Result<(), Error>> =
         Function::from_fn(move |(session_id, content): PromptArgs| {
             debug!("Prompt function called with session_id: {}", session_id);
@@ -337,7 +334,7 @@ pub fn prompt<H: agent_client_protocol::Client + ResponseHandler + Send + Sync +
             let request = PromptRequest::new(session_id, content_blocks);
 
             connection
-                .blocking_lock()
+                .borrow()
                 .get_current_connection()
                 .ok_or_else(|| {
                     Error::RuntimeError(

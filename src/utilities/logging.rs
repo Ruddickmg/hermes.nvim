@@ -174,104 +174,67 @@ mod tests {
     }
 
     #[test]
-    fn test_log_level_from_i64_trace() {
-        assert_eq!(LogLevel::from(0), LogLevel::Trace);
+    fn test_log_level_from_i64_known_values() {
+        // Test known mapping values using slice comparison
+        let inputs: Vec<i64> = vec![0, 1, 2, 3, 4, 5, 99];
+        let results: Vec<LogLevel> = inputs.iter().map(|&i| LogLevel::from(i)).collect();
+
+        let expected: Vec<LogLevel> = vec![
+            LogLevel::Trace, // 0
+            LogLevel::Debug, // 1
+            LogLevel::Info,  // 2
+            LogLevel::Warn,  // 3
+            LogLevel::Error, // 4
+            LogLevel::Off,   // 5
+            LogLevel::Off,   // 99 (unknown)
+        ];
+
+        assert_eq!(results, expected);
     }
 
     #[test]
-    fn test_log_level_from_i64_debug() {
-        assert_eq!(LogLevel::from(1), LogLevel::Debug);
+    fn test_log_level_from_str_known_values() {
+        // Test known string mappings (case-insensitive)
+        let inputs: Vec<&str> = vec!["trace", "debug", "info", "warn", "error", "unknown"];
+        let results: Vec<LogLevel> = inputs.iter().map(|&s| LogLevel::from(s)).collect();
+
+        let expected: Vec<LogLevel> = vec![
+            LogLevel::Trace, // trace
+            LogLevel::Debug, // debug
+            LogLevel::Info,  // info
+            LogLevel::Warn,  // warn
+            LogLevel::Error, // error
+            LogLevel::Off,   // unknown
+        ];
+
+        assert_eq!(results, expected);
     }
 
     #[test]
-    fn test_log_level_from_i64_info() {
-        assert_eq!(LogLevel::from(2), LogLevel::Info);
+    fn test_log_level_into_level_filter() {
+        // Test conversion to tracing LevelFilter using slice comparison
+        let inputs: Vec<LogLevel> = vec![LogLevel::Trace, LogLevel::Off];
+        let results: Vec<LevelFilter> = inputs.iter().map(|&l| l.into()).collect();
+
+        let expected: Vec<LevelFilter> = vec![LevelFilter::TRACE, LevelFilter::OFF];
+
+        assert_eq!(results, expected);
     }
 
     #[test]
-    fn test_log_level_from_i64_warn() {
-        assert_eq!(LogLevel::from(3), LogLevel::Warn);
-    }
+    fn test_log_format_from_str_known_values() {
+        // Test known LogFormat mappings
+        let inputs: Vec<&str> = vec!["pretty", "compact", "full", "json", "unknown"];
+        let results: Vec<LogFormat> = inputs.iter().map(|&s| LogFormat::from(s)).collect();
 
-    #[test]
-    fn test_log_level_from_i64_error() {
-        assert_eq!(LogLevel::from(4), LogLevel::Error);
-    }
+        let expected: Vec<LogFormat> = vec![
+            LogFormat::Pretty,  // pretty
+            LogFormat::Compact, // compact
+            LogFormat::Full,    // full
+            LogFormat::Json,    // json
+            LogFormat::Pretty,  // unknown (default)
+        ];
 
-    #[test]
-    fn test_log_level_from_i64_off() {
-        assert_eq!(LogLevel::from(5), LogLevel::Off);
-    }
-
-    #[test]
-    fn test_log_level_from_i64_unknown() {
-        assert_eq!(LogLevel::from(99), LogLevel::Off);
-    }
-
-    #[test]
-    fn test_log_level_from_str_trace() {
-        assert_eq!(LogLevel::from("trace"), LogLevel::Trace);
-    }
-
-    #[test]
-    fn test_log_level_from_str_debug() {
-        assert_eq!(LogLevel::from("debug"), LogLevel::Debug);
-    }
-
-    #[test]
-    fn test_log_level_from_str_info() {
-        assert_eq!(LogLevel::from("info"), LogLevel::Info);
-    }
-
-    #[test]
-    fn test_log_level_from_str_warn() {
-        assert_eq!(LogLevel::from("warn"), LogLevel::Warn);
-    }
-
-    #[test]
-    fn test_log_level_from_str_error() {
-        assert_eq!(LogLevel::from("error"), LogLevel::Error);
-    }
-
-    #[test]
-    fn test_log_level_from_str_unknown() {
-        assert_eq!(LogLevel::from("unknown"), LogLevel::Off);
-    }
-
-    #[test]
-    fn test_log_level_into_level_filter_trace() {
-        let filter: LevelFilter = LogLevel::Trace.into();
-        assert_eq!(filter, LevelFilter::TRACE);
-    }
-
-    #[test]
-    fn test_log_level_into_level_filter_off() {
-        let filter: LevelFilter = LogLevel::Off.into();
-        assert_eq!(filter, LevelFilter::OFF);
-    }
-
-    #[test]
-    fn test_log_format_from_str_pretty() {
-        assert_eq!(LogFormat::from("pretty"), LogFormat::Pretty);
-    }
-
-    #[test]
-    fn test_log_format_from_str_compact() {
-        assert_eq!(LogFormat::from("compact"), LogFormat::Compact);
-    }
-
-    #[test]
-    fn test_log_format_from_str_full() {
-        assert_eq!(LogFormat::from("full"), LogFormat::Full);
-    }
-
-    #[test]
-    fn test_log_format_from_str_json() {
-        assert_eq!(LogFormat::from("json"), LogFormat::Json);
-    }
-
-    #[test]
-    fn test_log_format_from_str_unknown() {
-        assert_eq!(LogFormat::from("unknown"), LogFormat::Pretty);
+        assert_eq!(results, expected);
     }
 }

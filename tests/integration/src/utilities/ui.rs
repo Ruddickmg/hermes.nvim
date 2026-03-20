@@ -90,7 +90,11 @@ fn show_permission_ui_options_can_be_selected() -> nvim_oxi::Result<()> {
 
     let result = wait_for_some(Duration::from_secs(5), || {
         debug!("Waiting for selection...");
-        thing2.borrow_mut().try_recv().ok()
+        thing2
+            .try_borrow_mut()
+            .expect("Failed to borrow receiver in test")
+            .try_recv()
+            .ok()
     })?;
 
     println!("Received selection: {}", result);

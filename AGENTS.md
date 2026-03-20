@@ -7,8 +7,8 @@ Hermes is an interface between [Neovim](https://neovim.io/) and [ACP](https://ag
 The architecture separates Neovim logic from Rust ACP interactions:
 
 - **Directory Structure:**
-  - `src/acp`: Contains all direct interactions with the ACP SDK.
-  - `src/nvim`: Contains Neovim-specific bindings and logic.
+  - `src/acp`: Contains all direct interactions with the ACP SDK (code in this directory is multi threaded as it needs to communicate back and forth with the main neovim thread).
+  - `src/nvim`: Contains Neovim-specific bindings and logic (code in this direcory is generally single threaded as it must stay on the same thread as Neovim).
   - tests/integration: Contains integration tests.
   - tests/e2e: Contains end to end tests.
 
@@ -37,6 +37,304 @@ Essential references for development:
 - **Test Runner:** [cargo-nextest documentation](https://nexte.st/)
 - **Property Testing:** [proptest documentation](https://docs.rs/proptest/latest/proptest/)
 - **Mocking:** [mockall documentation](https://docs.rs/mockall/latest/mockall/)
+
+## Thread Safety in Rust
+
+This section documents Rust's thread-safety types and how they are used in the Hermes project.
+
+### The Send and Sync Traits
+
+Rust's concurrency safety is enforced at compile time through two marker traits:
+
+- **`Send`**: A type is `Send` if it is safe to transfer ownership to another thread. This means you can move a value of this type to a different thread without causing data races.
+- **`Sync`**: A type is `Sync` if it is safe to share between multiple threads. This means `&T` (an immutable reference to `T`) is `Send`, so multiple threads can safely hold references to the same value.
+
+**Key Insight**: Most Rust types automatically implement both `Send` and `Sync`. However, types that enable unsynchronized shared mutable state are explicitly **not** `Send` or `Sync`:
+- `Rc` is neither `Send` nor `Sync`
+- `RefCell` and `Cell` are `Send` but not `Sync`
+- `Mutex` and `RwLock` are both `Send` and `Sync`
+
+### Single-Threaded Types: `Rc`, `RefCell`, `Cell`
+
+These types are designed for use within a single thread only. They are **not thread-safe** but have **zero runtime overhead** for thread synchronization.
+
+#### `Rc<T>` - Reference Counting
+
+Use `Rc` when you need **multiple owners** of the same data within a single thread.
+
+```rust
+use std::rc::Rc;
+
+// CORRECT: Using Rc for shared ownership on a single thread
+let data: Rc<String> = Rc::new(String::from("shared"));
+let data2: Rc<String> = Rc::clone(&data);  // Increments refcount
+
+// The compiler WILL NOT LET you send Rc across threads:
+// std::thread::spawn(move || {
+//     println!("{}", data);  // ERROR: Rc<String> is not Send
+// });
+```
+
+**Why Rc is NOT Send/Sync**: `Rc` uses a non-atomic reference counter. If two threads cloned the same `Rc` simultaneously, the reference count could be corrupted, leading to memory leaks or use-after-free bugs. The compiler prevents this at compile time.
+
+**Performance**: `Rc` uses regular increment/decrement operations - extremely fast with no synchronization overhead.
+
+#### `RefCell<T>` - Runtime Borrow Checking
+
+Use `RefCell` when you need **interior mutability** (mutating data through an immutable reference) within a single thread.
+
+```rust
+use std::cell::RefCell;
+
+// CORRECT: Using RefCell for single-threaded interior mutability
+let data: RefCell<Vec<i32>> = RefCell::new(vec![1, 2, 3]);
+
+// You can mutate through an immutable reference
+data.borrow_mut().push(4);
+
+// Runtime borrow checking (panics if rules violated at runtime)
+let _borrow1 = data.borrow();  // OK
+let _borrow2 = data.borrow();  // OK - multiple immutable borrows
+// let _borrow3 = data.borrow_mut();  // Would panic! Already borrowed immutably
+```
+
+**Compile-Time vs Runtime Borrowing**: 
+- Regular references (`&T`, `&mut T`) are checked at **compile time** by the borrow checker
+- `RefCell` moves these checks to **runtime** using a counter to track active borrows
+- If you violate the rules (e.g., mutable borrow while immutable borrows exist), the program **panics** instead of failing to compile
+
+**When to use**: When you're certain your code follows borrowing rules but the compiler can't prove it (e.g., complex graph structures, callback patterns).
+
+#### `Cell<T>` - Value-Based Interior Mutability
+
+Use `Cell` for **simple Copy types** when you need to mutate without references.
+
+```rust
+use std::cell::Cell;
+
+// CORRECT: Using Cell for simple Copy types
+let counter: Cell<i32> = Cell::new(0);
+counter.set(5);
+let value = counter.get();  // Returns a copy (5)
+
+// Cell only works with Copy types (integers, bools, etc.)
+// Cell<String> would NOT compile - String is not Copy
+```
+
+**`Cell` vs `RefCell`**:
+- `Cell`: Works by copying values in/out. No references allowed. Only for `Copy` types. Zero runtime checks.
+- `RefCell`: Works by lending references. Runtime borrow checking. Works with any type.
+- **Performance**: `Cell` is faster for `Copy` types (5-10x in some cases). Use `Cell` when possible.
+
+**Common Pattern in Hermes**: `Rc<RefCell<T>>` provides multiple ownership + interior mutability on a single thread.
+
+```rust
+use std::rc::Rc;
+use std::cell::RefCell;
+
+// CORRECT: Shared mutable state on the main Neovim thread
+let shared_data: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+let shared_data2 = Rc::clone(&shared_data);
+
+// Both can mutate the same data
+shared_data.borrow_mut().push("hello");
+shared_data2.borrow_mut().push("world");
+```
+
+### Multi-Threaded Types: `Arc`, `Mutex`, `RwLock`
+
+These types are designed for sharing data across multiple threads. They use atomic operations or locking mechanisms to ensure thread safety.
+
+#### `Arc<T>` - Atomically Reference Counted
+
+Use `Arc` when you need **shared ownership across multiple threads**.
+
+```rust
+use std::sync::Arc;
+use std::thread;
+
+// CORRECT: Using Arc to share data between threads
+let data: Arc<String> = Arc::new(String::from("shared across threads"));
+
+for i in 0..10 {
+    let data_clone = Arc::clone(&data);
+    thread::spawn(move || {
+        println!("Thread {}: {}", i, data_clone);  // OK: Arc is Send + Sync
+    });
+}
+```
+
+**Why Arc IS Send/Sync**: `Arc` uses **atomic operations** (specifically, atomic increment/decrement) for its reference counter. This ensures that even when multiple threads clone or drop `Arc` instances simultaneously, the count remains correct.
+
+**Performance Cost**: Atomic operations are more expensive than regular memory operations. Only use `Arc` when you actually need to share across threads. If staying on one thread, `Rc` is faster.
+
+#### `Mutex<T>` - Mutual Exclusion
+
+Use `Mutex` when you need **interior mutability across multiple threads**.
+
+```rust
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+// CORRECT: Thread-safe shared mutable state
+let counter: Arc<Mutex<i32>> = Arc::new(Mutex::new(0));
+
+let mut handles = vec![];
+for _ in 0..10 {
+    let counter_clone = Arc::clone(&counter);
+    let handle = thread::spawn(move || {
+        let mut num = counter_clone.lock().unwrap();  // Acquire lock
+        *num += 1;  // Mutate while holding lock
+        // Lock automatically released when `num` goes out of scope
+    });
+    handles.push(handle);
+}
+
+// Wait for all threads
+for handle in handles {
+    handle.join().unwrap();
+}
+
+println!("Final count: {}", *counter.lock().unwrap());
+```
+
+**How it works**: 
+- `Mutex` ensures only one thread can access the data at a time
+- `lock()` returns a `MutexGuard` - a smart pointer that unlocks automatically when dropped
+- If another thread has the lock, `lock()` blocks until it becomes available
+
+**RefCell vs Mutex**:
+- Both provide interior mutability
+- `RefCell`: Single-threaded, runtime borrow checking, panics on violations
+- `Mutex`: Multi-threaded, uses OS-level locking, blocks threads on contention
+
+#### `RwLock<T>` - Read-Write Lock
+
+Use `RwLock` when you have **many readers and few writers**.
+
+```rust
+use std::sync::{Arc, RwLock};
+
+let data: Arc<RwLock<Vec<i32>>> = Arc::new(RwLock::new(vec![1, 2, 3]));
+
+// Multiple readers allowed simultaneously
+let read_guard1 = data.read().unwrap();
+let read_guard2 = data.read().unwrap();
+println!("{:?}", *read_guard1);
+
+// Writer gets exclusive access (blocks until all readers/writers done)
+// let mut write_guard = data.write().unwrap();  // Would block if readers active
+```
+
+**Mutex vs RwLock**:
+- `Mutex`: Exclusive access only (1 reader OR 1 writer at a time)
+- `RwLock`: Multiple readers OR 1 writer (no readers during writes)
+- `RwLock` has more overhead but better for read-heavy workloads
+
+### Summary Table
+
+| Type | Thread-Safe | Interior Mutability | Performance | Use Case |
+|------|------------|---------------------|-------------|----------|
+| `Rc` | ❌ NO | ❌ NO | Fastest | Single-threaded shared ownership |
+| `RefCell` | ❌ NO | ✅ YES (runtime) | Fast | Single-threaded interior mutability |
+| `Cell` | ❌ NO | ✅ YES (value) | Fastest | Simple Copy types, single-threaded |
+| `Arc` | ✅ YES | ❌ NO | Slower (atomic ops) | Multi-threaded shared ownership |
+| `Mutex` | ✅ YES | ✅ YES (locks) | Slowest (blocking) | Multi-threaded interior mutability |
+| `RwLock` | ✅ YES | ✅ YES (locks) | Slow | Read-heavy multi-threaded access |
+
+### Hermes-Specific Patterns
+
+#### On the Main Neovim Thread
+
+The main thread uses `Rc<RefCell<T>>` for data that stays on that thread:
+
+```rust
+use std::rc::Rc;
+use std::cell::RefCell;
+use std::collections::HashMap;
+
+// Requests struct stays on main thread, uses Rc (not Arc)
+pub struct Requests {
+    responders: Rc<RefCell<HashMap<RequestId, Responder>>>,
+}
+```
+
+**Why Rc here?** The `Requests` struct manages in-flight ACP requests. It only needs to be accessed from the main Neovim thread, so `Rc` is sufficient and faster than `Arc`.
+
+#### Crossing Thread Boundaries
+
+Data sent through mpsc channels uses `Arc<Mutex<T>>`:
+
+```rust
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+// Data that crosses thread boundaries needs Arc + Mutex
+let shared_state: Arc<Mutex<Vec<Message>>> = Arc::new(Mutex::new(Vec::new()));
+let state_for_thread = Arc::clone(&shared_state);
+
+thread::spawn(move || {
+    // Thread-safe mutation
+    state_for_thread.lock().unwrap().push(Message::new());
+});
+```
+
+**Key Rule**: Only use `Arc`/`Mutex` when data actually needs to be shared across threads. For single-threaded data, `Rc`/`RefCell` is faster and semantically clearer.
+
+### Common Mistakes to Avoid
+
+```rust
+use std::rc::Rc;
+use std::cell::RefCell;
+use std::thread;
+
+// ❌ WRONG: Trying to send Rc across threads
+let data: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(vec![1, 2, 3]));
+thread::spawn(move || {
+    data.borrow_mut().push(4);  // COMPILE ERROR: Rc is not Send!
+});
+
+// ✅ CORRECT: Use Arc<Mutex<T>> for thread-safe sharing
+use std::sync::{Arc, Mutex};
+let data: Arc<Mutex<Vec<i32>>> = Arc::new(Mutex::new(vec![1, 2, 3]));
+let data_clone = Arc::clone(&data);
+thread::spawn(move || {
+    data_clone.lock().unwrap().push(4);  // OK!
+});
+```
+
+```rust
+// ❌ WRONG: Unnecessary Arc on single thread
+use std::sync::Arc;
+let data: Arc<String> = Arc::new(String::from("hello"));
+// You're paying atomic operation costs for no benefit!
+
+// ✅ CORRECT: Use Rc when staying on one thread
+use std::rc::Rc;
+let data: Rc<String> = Rc::new(String::from("hello"));
+// No atomic overhead, same functionality
+```
+
+```rust
+use std::cell::Cell;
+
+// ❌ WRONG: Cell with non-Copy type
+let data: Cell<String> = Cell::new(String::from("hello"));
+// COMPILE ERROR: String does not implement Copy
+
+// ✅ CORRECT: Use RefCell for non-Copy types
+use std::cell::RefCell;
+let data: RefCell<String> = RefCell::new(String::from("hello"));
+data.replace(String::from("world"));  // OK!
+```
+
+### References
+
+- [Rust Book: Shared-State Concurrency](https://doc.rust-lang.org/book/ch16-03-shared-state.html)
+- [Rust Book: Send and Sync Traits](https://doc.rust-lang.org/book/ch16-04-extensible-concurrency-sync-and-send.html)
+- [Rustonomicon: Send and Sync](https://doc.rust-lang.org/nomicon/send-and-sync.html)
+- [std::rc::Rc documentation](https://doc.rust-lang.org/std/rc/struct.Rc.html)
+- [std::sync::Arc documentation](https://doc.rust-lang.org/std/sync/struct.Arc.html)
 
 ## Practices
 
@@ -85,6 +383,21 @@ Essential references for development:
 - Web documentation lookup (use webfetch/codesearch)
 
 **Priority:** LSP > grep > read > other tools when working with code.
+
+### Following Instructions
+
+**CRITICAL:** When you encounter a situation where your opinion or interpretation conflicts with an instruction in this document, you MUST:
+
+1. **ASK for permission** to deviate from the instruction, OR
+2. **FOLLOW THE INSTRUCTION** instead of your opinion
+
+**Never act on contradictory opinions without explicit permission.** If an instruction seems wrong, unclear, or suboptimal, ask the user before proceeding rather than making assumptions.
+
+**Example:** If AGENTS.md says "write comprehensive tests" and you believe tests should be consolidated, you must either:
+- Ask: "The instructions say to write comprehensive tests, but I think they should be consolidated. Is that okay?"
+- Follow: Write comprehensive tests as instructed
+
+**Never consolidate, skip, or modify instructions based on your own judgment without asking first.**
 
 ### Code Style
 Adhere to "Clean Code" patterns.
@@ -270,6 +583,10 @@ fn write_request_response_sent() -> nvim_oxi::Result<()> {
 
 Aim for the **minimum number of tests that cover all code paths**. Avoid testing the same logic multiple times.
 
+**⚠️ CRITICAL: All tests must test application code**
+
+Every test should verify behavior from the codebase being tested. Do NOT write tests that only exercise Rust language features, standard library functions, or external crate functionality without involving your application logic.
+
 **Examples of redundancy to avoid:**
 
 - **Language features:** Do not test Rust's built-in functionality (e.g., auto-derived traits like `PartialEq`, `Clone`, `Debug`, field access, Arc/Mutex usage). Assume the Rust compiler and standard library work correctly. Only test your own logic and custom trait implementations. Reading a field from a struct through an Arc/Mutex is standard Rust - don't test it.
@@ -281,6 +598,32 @@ Aim for the **minimum number of tests that cover all code paths**. Avoid testing
       let handler = create_handler();
       let _cloned = handler.clone();
       assert!(true);
+  }
+  
+  // ❌ BAD - Creating test-only structs that reimplement production code
+  struct TestHandler { state: Arc<Mutex<PluginState>> }
+  impl TestHandler {
+      fn can_write(&self) -> bool {
+          // This reimplements the production code - NOT testing it!
+          self.state.lock().await.permissions.fs_write_access
+      }
+  }
+  #[test]
+  fn test_can_write() {
+      let handler = TestHandler::new();
+      assert!(handler.can_write()); // Tests YOUR reimplementation, not the real Handler
+  }
+  ```
+  
+  **Why this is wrong:** When you create a `TestHandler` struct with methods that mirror the production `Handler` methods, you're testing YOUR reimplementation, not the actual production code. This gives false coverage numbers and doesn't verify the real behavior.
+  
+  **DO write tests like:**
+  ```rust
+  // ✅ GOOD - Test the actual Handler implementation
+  #[test]
+  fn test_handler_can_write() {
+      let handler = create_real_handler(); // Use the actual Handler::new() or similar
+      assert!(handler.can_write());
   }
   ```
   
@@ -357,6 +700,40 @@ fn cross_thread_communication_works() -> nvim_oxi::Result<()> {
 
 **Guideline**: E2E tests verify that "the system works together", unit tests verify that "each component works correctly", integration tests verify that "Neovim-interacting components work correctly". Keep E2E tests minimal and focused on integration points.
 
+### Integration Test Best Practices
+
+**Do NOT test default values in integration tests.** Default values are hard-coded constants with no conditional logic. Testing them provides no value and creates maintenance burden.
+
+**Examples of what NOT to test:**
+```rust
+// ❌ BAD - Testing a hard-coded default
+#[nvim_oxi::test]
+fn test_can_write_returns_true_by_default() -> nvim_oxi::Result<()> {
+    let handler = create_handler();
+    assert!(handler.can_write().await); // Just testing that true == true
+    Ok(())
+}
+```
+
+**DO test:**
+- Logic branches (what happens when value is changed from default)
+- State mutations
+- Integration with Neovim APIs
+- Error conditions
+- Side effects
+
+**Example of good integration test:**
+```rust
+// ✅ GOOD - Tests actual behavior change
+#[nvim_oxi::test]
+fn test_write_file_creates_buffer() -> nvim_oxi::Result<()> {
+    let handler = create_handler();
+    let result = handler.write_file("test.txt", "content").await;
+    assert!(nvim_oxi::api::get_current_buf().is_ok());
+    Ok(())
+}
+```
+
 ### Running Tests
 
 We use [cargo-nextest](https://nexte.st/) as our test runner. Nextest provides:
@@ -384,6 +761,23 @@ cd e2e && cargo nextest run
 ```bash
 cargo nextest run test_name
 ```
+
+### Coverage Analysis
+
+Use `cargo-llvm-cov` to generate test coverage reports:
+
+```bash
+# Generate HTML coverage report
+cargo llvm-cov --bins --lib --all-features --workspace --html --ignore-filename-regex 'tests/.*'
+
+# Generate summary only
+cargo llvm-cov --summary-only
+
+# Generate LCOV format for CI integration
+cargo llvm-cov --lcov --output-path coverage.lcov
+```
+
+**Note:** Integration tests run in a separate Neovim process and do not contribute to `cargo llvm-cov` coverage metrics. Coverage reports only reflect unit test coverage.
 
 ### Mocking with Mockall
 

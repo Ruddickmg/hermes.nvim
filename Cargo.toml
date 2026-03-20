@@ -18,6 +18,7 @@ mlua = { version = "0.10", features = ["module"] }
 nvim-oxi = { version = "0.6.0", features = ["libuv", "mlua", "neovim-0-11"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+strip-ansi-escapes = "0.2"
 tokio = { version = "1.49", features = ["full"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 tracing = "0.1"

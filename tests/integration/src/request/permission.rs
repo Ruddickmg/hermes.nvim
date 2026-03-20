@@ -10,7 +10,7 @@ use agent_client_protocol::{
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use std::sync::Arc;
 
-fn create_permission_option(id: &str, name: &str) -> PermissionOption {
+fn _create_permission_option(id: &str, name: &str) -> PermissionOption {
     PermissionOption::new(
         PermissionOptionId::new(id),
         name.to_string(),
@@ -18,7 +18,7 @@ fn create_permission_option(id: &str, name: &str) -> PermissionOption {
     )
 }
 
-fn create_permission_request(
+fn _create_permission_request(
     session_id: impl Into<String>,
     options: Vec<PermissionOption>,
 ) -> RequestPermissionRequest {

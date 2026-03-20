@@ -1,18 +1,15 @@
-use agent_client_protocol::{Client, SetSessionModeRequest};
+use agent_client_protocol::SetSessionModeRequest;
 use nvim_oxi::{Function, Object, lua::Error};
-use std::rc::Rc;
-use tokio::sync::Mutex;
+use std::{cell::RefCell, rc::Rc};
 use tracing::{debug, instrument};
 
-use crate::{acp::connection::ConnectionManager, nvim::autocommands::ResponseHandler};
+use crate::acp::connection::ConnectionManager;
 
 /// Tuple for two positional arguments: (session_id, mode_id)
 pub type SetModeArgs = (String, String);
 
 #[instrument(level = "trace", skip_all)]
-pub fn set_mode<H: Client + ResponseHandler + Send + Sync + 'static>(
-    connection: Rc<Mutex<ConnectionManager<H>>>,
-) -> Object {
+pub fn set_mode(connection: Rc<RefCell<ConnectionManager>>) -> Object {
     let function: Function<SetModeArgs, Result<(), Error>> = Function::from_fn(
         move |(session_id, mode_id): SetModeArgs| -> Result<(), Error> {
             debug!(
@@ -23,7 +20,7 @@ pub fn set_mode<H: Client + ResponseHandler + Send + Sync + 'static>(
             let request = SetSessionModeRequest::new(session_id, mode_id);
 
             connection
-                .blocking_lock()
+                .borrow()
                 .get_current_connection()
                 .ok_or_else(|| {
                     Error::RuntimeError(

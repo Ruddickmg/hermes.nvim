@@ -3,7 +3,7 @@ use agent_client_protocol::InitializeResponse;
 use std::collections::HashMap;
 use tracing::{debug, instrument};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PluginState {
     pub config: ClientConfig,
     pub agent_info: HashMap<Assistant, InitializeResponse>,

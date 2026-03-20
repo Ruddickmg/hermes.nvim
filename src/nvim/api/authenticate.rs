@@ -1,21 +1,18 @@
-use agent_client_protocol::{AuthenticateRequest, Client};
+use agent_client_protocol::AuthenticateRequest;
 use nvim_oxi::{Function, Object, lua::Error};
-use std::rc::Rc;
-use tokio::sync::Mutex;
+use std::{cell::RefCell, rc::Rc};
 use tracing::{debug, instrument};
 
-use crate::{acp::connection::ConnectionManager, nvim::autocommands::ResponseHandler};
+use crate::acp::connection::ConnectionManager;
 
 #[instrument(level = "trace", skip_all)]
-pub fn authenticate<H: Client + ResponseHandler + Send + Sync + 'static>(
-    connection: Rc<Mutex<ConnectionManager<H>>>,
-) -> Object {
+pub fn authenticate(connection: Rc<RefCell<ConnectionManager>>) -> Object {
     let function: Function<String, Result<(), Error>> =
         Function::from_fn(move |id: String| -> Result<(), Error> {
             debug!("Authenticate function called with: {}", id);
             let args: AuthenticateRequest = AuthenticateRequest::new(id);
             connection
-                .blocking_lock()
+                .borrow()
                 .get_current_connection()
                 .ok_or_else(|| {
                     Error::RuntimeError(

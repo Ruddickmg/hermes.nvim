@@ -1,17 +1,13 @@
-use agent_client_protocol::{Client, LoadSessionRequest, SessionId};
+use agent_client_protocol::{LoadSessionRequest, SessionId};
 use nvim_oxi::{
     Dictionary, Function, Object,
     conversion::{Error, FromObject},
     lua::{Error as LuaError, Poppable, Pushable},
 };
-use std::{path::PathBuf, rc::Rc};
-use tokio::sync::Mutex;
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
 use tracing::{debug, instrument};
 
-use crate::{
-    acp::connection::ConnectionManager, api::mcp_servers::parse_mcp_servers,
-    nvim::autocommands::ResponseHandler, utilities,
-};
+use crate::{acp::connection::ConnectionManager, api::mcp_servers::parse_mcp_servers, utilities};
 
 /// Configuration for loading a session (second argument of the tuple)
 #[derive(Debug, Clone)]
@@ -82,9 +78,7 @@ impl Pushable for LoadSessionConfig {
 pub type LoadSessionArgs = (String, Option<LoadSessionConfig>);
 
 #[instrument(level = "trace", skip_all)]
-pub fn load_session<H: Client + ResponseHandler + Send + Sync + 'static>(
-    connection: Rc<Mutex<ConnectionManager<H>>>,
-) -> Object {
+pub fn load_session(connection: Rc<RefCell<ConnectionManager>>) -> Object {
     let function: Function<LoadSessionArgs, Result<(), LuaError>> =
         Function::from_fn(move |(session_id, maybe_config): LoadSessionArgs| {
             debug!(
@@ -101,7 +95,7 @@ pub fn load_session<H: Client + ResponseHandler + Send + Sync + 'static>(
             .mcp_servers(config.mcp_servers);
 
             connection
-                .blocking_lock()
+                .borrow()
                 .get_current_connection()
                 .ok_or_else(|| {
                     LuaError::RuntimeError(

@@ -16,9 +16,9 @@ Hermes focuses on:
 - [x] Full implementation of ACP Client
 - [x] Configurable capabilities (filesystem, terminal, etc)
 - [x] Trigger Autocommands for messages/notifications
-- [ ] Speech to text for audio prompting (If no audio capability is present for the agent)
 - [ ] Lsp integration
 - [ ] [Recursive language model](https://arxiv.org/abs/2512.24601) integration
+- [ ] Speech to text for audio prompting (If no audio capability is present for the agent)
 
 ## API
 
@@ -29,6 +29,11 @@ Methods marked “Optional” are implemented by Hermes but are not mandatory fo
 ### Connect
 
 This method allows you to connect to an agent, it takes the agent name and the protocol for the connection (defaults to `stdio`).
+
+supported agents:
+- opencode
+- copilot
+- gemini
 
 ```lua
 local hermes = require("hermes")
@@ -408,6 +413,179 @@ vim.api.nvim_create_autocmd("User", {
 > - Read the current state of the open buffer if the target file is open
 > - Start at the `line` number if defined
 > - End at the `limit` number if defined
+
+
+#### Create Terminal for agent communication 
+
+```lua
+local hermes = require("hermes")
+local terminals = {}
+
+-- call signature
+hermes.respond("requestId", "terminalId")
+
+-- example:     
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "TerminalCreate",
+    callback = function(event)
+        local terminalId = "your-generated-terminal-id" -- generate a unique id for terminal
+        local requestId = event.data.requestId
+        local command = event.data.command
+        local term_args = event.data.args or {}
+        local byte_limit = event.data.output_byte_limit
+
+        -- lua combines args and command (add command to the beginning of args)
+        table.insert(term_args, 1, command)
+
+        terminals[terminalId] = vim.fn.jobstart(term_args, {
+            env = event.data.env,
+            cwd = event.data.cwd,
+        })
+
+        hermes.respond(requestId, terminalId);
+    end,
+})
+```
+
+> **Responds to:** [TerminalCreate](#terminalcreate) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for `TerminalCreate`, Hermes will:
+> - Create a terminal attached to a buffer (hidden by default)
+> - Handle byte limit constraints if defined
+
+> [!WARNING]
+> If no `TerminalCreate` autocommand is registered, Hermes will use default functionality to manage **all** subsequent terminal interaction.
+
+#### Provide terminal output to the assistant 
+
+```lua
+local hermes = require("hermes")
+local terminals = {}
+local is_truncated = true;
+
+-- call signature (truncated defaults to false)
+hermes.respond("requestId", "terminal output text")
+
+-- call signature with truncation defined
+hermes.respond("requestId", {
+    output = "terminal output text",
+    truncated = is_truncated,
+})
+
+-- example:
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "TerminalOutput",
+    callback = function(args)
+        local requestId = args.data.requestId
+        local terminalId = args.data.terminalId
+        local terminalOutput = terminals[terminalId].output -- get output somehow
+
+        hermes.respond(requestId, terminalOutput);
+    end,
+})
+```
+
+> **Responds to:** [TerminalOutput](#terminaloutput) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for [TerminalCreate](#terminalcreate), Hermes will:
+> - Collect and send the terminal output to the agent
+
+#### Reporting terminal exit
+
+```lua
+local hermes = require("hermes")
+local terminals = {}
+
+-- call signature for termination signal
+hermes.respond("requestId", "SIGTERM")
+
+
+-- call signature for exit code
+hermes.respond("requestId", 0)
+
+-- call signature with exit code and termination signal
+hermes.respond("requestId", {
+    exitCode = 9,
+    signal = "SIGKILL"
+})
+
+-- example:
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "TerminalExit",
+    callback = function(args)
+        local requestId = args.data.requestId
+        local terminalId = args.data.terminalId
+
+        hermes.respond(requestId, {
+            exitCode = terminals[terminalId].exitCode, -- get output somehow
+            signal = terminals[terminalId].signal, -- get output somehow
+        });
+    end,
+})
+```
+
+> **Responds to:** [TerminalExit](#terminalexit) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for [TerminalCreate](#terminalcreate), Hermes will:
+> - Wait for and report terminal exit details
+
+#### Kill terminal process
+
+```lua
+local hermes = require("hermes")
+local terminals = {}
+
+-- call signature with exit code and termination signal
+hermes.respond("requestId")
+
+-- example:
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "TerminalKill",
+    callback = function(args)
+        local requestId = args.data.requestId
+
+        hermes.respond(requestId);
+    end,
+})
+```
+
+> **Responds to:** [TerminalKill](#terminalkill) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for [TerminalCreate](#terminalcreate), Hermes will:
+> - Stop the process running in the terminal
+
+#### Release terminal process
+
+```lua
+local hermes = require("hermes")
+local terminals = {}
+
+-- call signature with exit code and termination signal
+hermes.respond("requestId")
+
+-- example:
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "TerminalRelease",
+    callback = function(args)
+        local requestId = args.data.requestId
+
+        hermes.respond(requestId);
+    end,
+})
+```
+
+> **Responds to:** [TerminalRelease](#terminalrelease) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for [TerminalCreate](#terminalcreate), Hermes will:
+> - Stop any process running in the terminal
+> - Remove the terminal
+> - Delete the attached buffer (can be configured to omit this step)
+
 
 ## Autocommands
 
@@ -925,6 +1103,62 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "nextCursor": "string (optional)"
 }</code></pre></td>
     </tr>
+    <tr id="terminalcreate">
+      <td><code>TerminalCreate</code></td>
+      <td>Agent requests to create a terminal for command execution</td>
+      <td>🤖 Agent (requires -> <a href="#create-terminal-for-agent-communication">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "command": "string",
+  "args": ["string"],
+  "env": [{"name": "string", "value": "string"}],
+  "cwd": "string (optional)",
+  "outputByteLimit": "number (optional)"
+}</code></pre></td>
+    </tr>
+    <tr id="terminalexit">
+      <td><code>TerminalExit</code></td>
+      <td>Agent requests notification when terminal process exits</td>
+      <td>🤖 Agent (requires -> <a href="#reporting-terminal-exit">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "terminalId": "string"
+}</code></pre></td>
+    </tr>
+    <tr id="terminalkill">
+      <td><code>TerminalKill</code></td>
+      <td>Agent requests to kill a terminal process</td>
+      <td>🤖 Agent (requires -> <a href="#kill-terminal-process">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "terminalId": "string",
+  "signal": "string (optional, e.g., 'SIGTERM', 'SIGKILL')"
+}</code></pre></td>
+    </tr>
+    <tr id="terminaloutput">
+      <td><code>TerminalOutput</code></td>
+      <td>Agent requests terminal output</td>
+      <td>🤖 Agent (requires -> <a href="#provide-terminal-output-to-the-assistant">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "terminalId": "string",
+  "byteLimit": "number (optional)"
+}</code></pre></td>
+    </tr>
+    <tr id="terminalrelease">
+      <td><code>TerminalRelease</code></td>
+      <td>Agent requests to release a terminal</td>
+      <td>🤖 Agent (requires -> <a href="#release-terminal-process">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string",
+  "terminalId": "string"
+}</code></pre></td>
+    </tr>
     <tr>
       <td><code>ToolCall</code></td>
       <td>Agent makes a tool call</td>
@@ -1115,43 +1349,35 @@ Your options for log formats are:
 
 ## TODO:
 
--- user requests
+-- before v1
+- [ ] Add setup function for user configuration
+- [ ] Add logic for loading plugin into neovim
+  - [ ] Figure out how to use pre-built binaries
+  - [ ] Enable local build if pre-built binary doesn't exist for system
+
+-- functionality
+- [ ] Complete configuration object and integration with app
 - [x] Allow connecting to Agents
   - [x] Via stdio
   - [ ] Via http
   - [ ] Via linux socket
-- [x] initialize connections
-- [x] handle authentication
-- [x] Allow user to send prompts
-  - [x] Send files
-  - [x] Send text
-  - [x] Send images 
-  - [x] Send resource links
-  - [x] Send audio
-- [x] Allow mode selection
-- [x] Allow cancel command to stop ai actions
-- [ ] Handle sessions
-  - [x] Create session
-  - [x] Load session
-  - [ ] List sessions
-  - [ ] Merge sessions
-  - [ ] Fork sessions
-- [ ] Allow model selection
+- [ ] Support "unstable" ACP methods
+  - [ ] session methods
+    - [ ] List sessions
+    - [ ] Merge sessions
+    - [ ] Fork sessions
+  - [ ] Allow model selection
 
--- agent requests
-- [x] Allow permission request
-- [x] Allow agent to write to files
-  - [x] Automatically refresh open buffers that have been modified
-- [x] Allow agent to read files
-- [ ] Allow agent to use terminal
-  - [ ] Create autocommands for Agent progress in the terminal
+-- testing
+- [ ] Create fake/mock Agent used to test agent functionality that is not currently supported by any/many ai agents
+- [ ] Only test "required" methods against actual agents
+- [ ] Create an e2e test suite for running against each supported agent to confirm integration
 
-- [x] Allow user to configure/turn off any/all aspects of ACP (if, for example, you just want to send data to the agent but still interact with it via the CLI)
-
-- [x] figure out cleanup after permission selection
-
-- [ ] use async for all the things
+-- infra
 - [ ] use smol instead of tokio to reduce build size
+- [ ] use async for all the things
+
+-- nice to haves
 - [ ] look into ways of improving ai integration
   - [ ] research RLM ([example](https://github.com/JaredStewart/coderlm))
   - [ ] connect agent to lsp (try to set it up as a tool call/connect to neovim lsp)

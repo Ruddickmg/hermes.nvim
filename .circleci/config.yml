@@ -177,6 +177,8 @@ jobs:
           command: cargo fmt -- --check
 
   unit_tests:
+    environment:
+      CARGO_TARGET_DIR: target
     executor: ubuntu
     steps:
       - checkout
@@ -195,6 +197,7 @@ jobs:
 
   integration_tests:
     environment:
+      CARGO_TARGET_DIR: target
       NEOVIM_VERSION: 0.11.6
     executor: ubuntu
     steps:
@@ -220,6 +223,7 @@ jobs:
 
   e2e_tests:
     environment:
+      CARGO_TARGET_DIR: target
       NEOVIM_VERSION: 0.11.6
     executor: ubuntu
     steps:

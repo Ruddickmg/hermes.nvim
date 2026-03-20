@@ -6,12 +6,12 @@ use agent_client_protocol::{
 };
 use tracing::instrument;
 
+use crate::Handler;
 use crate::acp::connection::Assistant;
 use crate::acp::error::Error;
 use crate::nvim::autocommands::Commands;
-use crate::{Handler, nvim::autocommands::ResponseHandler};
 
-impl<H: agent_client_protocol::Client + ResponseHandler> Handler<H> {
+impl Handler {
     #[instrument(level = "trace", skip(self))]
     pub async fn initialized(
         &self,
@@ -51,28 +51,23 @@ impl<H: agent_client_protocol::Client + ResponseHandler> Handler<H> {
                 "title": i.title,
             })),
         });
-        self.handler
-            .schedule_autocommand(Commands::ConnectionInitialized, value)
+        self.execute_autocommand(Commands::ConnectionInitialized, value)
             .await
     }
     #[instrument(level = "trace", skip(self))]
     pub async fn session_created(&self, session: NewSessionResponse) -> Result<(), Error> {
-        self.handler
-            .schedule_autocommand(Commands::SessionCreated, session)
+        self.execute_autocommand(Commands::SessionCreated, session)
             .await
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn prompted(&self, response: PromptResponse) -> Result<(), Error> {
-        self.handler
-            .schedule_autocommand(Commands::Prompted, response)
-            .await
+        self.execute_autocommand(Commands::Prompted, response).await
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn authenticated(&self, response: AuthenticateResponse) -> Result<(), Error> {
-        self.handler
-            .schedule_autocommand(Commands::Authenticated, response)
+        self.execute_autocommand(Commands::Authenticated, response)
             .await
     }
 
@@ -81,22 +76,19 @@ impl<H: agent_client_protocol::Client + ResponseHandler> Handler<H> {
         &self,
         response: SetSessionConfigOptionResponse,
     ) -> Result<(), Error> {
-        self.handler
-            .schedule_autocommand(Commands::ConfigurationUpdated, response)
+        self.execute_autocommand(Commands::ConfigurationUpdated, response)
             .await
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn mode_set(&self, response: SetSessionModeResponse) -> Result<(), Error> {
-        self.handler
-            .schedule_autocommand(Commands::ModeUpdated, response)
+        self.execute_autocommand(Commands::ModeUpdated, response)
             .await
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn session_loaded(&self, response: LoadSessionResponse) -> Result<(), Error> {
-        self.handler
-            .schedule_autocommand(Commands::SessionLoaded, response)
+        self.execute_autocommand(Commands::SessionLoaded, response)
             .await
     }
 
@@ -107,29 +99,25 @@ impl<H: agent_client_protocol::Client + ResponseHandler> Handler<H> {
 
     #[instrument(level = "trace", skip(self))]
     pub async fn sessions_listed(&self, response: ListSessionsResponse) -> Result<(), Error> {
-        self.handler
-            .schedule_autocommand(Commands::SessionsListed, response)
+        self.execute_autocommand(Commands::SessionsListed, response)
             .await
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn session_forked(&self, response: ForkSessionResponse) -> Result<(), Error> {
-        self.handler
-            .schedule_autocommand(Commands::SessionForked, response)
+        self.execute_autocommand(Commands::SessionForked, response)
             .await
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn session_resumed(&self, response: ResumeSessionResponse) -> Result<(), Error> {
-        self.handler
-            .schedule_autocommand(Commands::SessionResumed, response)
+        self.execute_autocommand(Commands::SessionResumed, response)
             .await
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn session_model_set(&self, response: SetSessionModelResponse) -> Result<(), Error> {
-        self.handler
-            .schedule_autocommand(Commands::SessionModelUpdated, response)
+        self.execute_autocommand(Commands::SessionModelUpdated, response)
             .await
     }
 }
