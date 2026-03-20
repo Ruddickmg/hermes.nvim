@@ -156,14 +156,6 @@ impl ConnectionManager {
         permissions
     }
 
-    #[instrument(level = "trace", skip(self, config_update))]
-    pub fn update_config(&self, config_update: crate::nvim::configuration::ClientConfigPartial) {
-        let mut state = self.state.blocking_lock();
-        config_update.apply_to(&mut state.config);
-        drop(state);
-        debug!("Updated client configuration via setup()");
-    }
-
     #[instrument(level = "trace", skip(self, handler))]
     pub fn connect(
         &mut self,
