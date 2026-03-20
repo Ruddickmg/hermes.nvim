@@ -2,9 +2,10 @@ use nvim_oxi::api::{self, opts::OptionOpts};
 use std::sync::OnceLock;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{
-    EnvFilter, Registry, fmt,
+    fmt,
     prelude::*,
     reload::{self, Handle},
+    EnvFilter, Registry,
 };
 
 use crate::acp::error::Error;
@@ -19,6 +20,19 @@ pub enum LogLevel {
     Warn = 3,
     Error = 4,
     Off = 5,
+}
+
+impl std::fmt::Display for LogLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LogLevel::Trace => write!(f, "trace"),
+            LogLevel::Debug => write!(f, "debug"),
+            LogLevel::Info => write!(f, "info"),
+            LogLevel::Warn => write!(f, "warn"),
+            LogLevel::Error => write!(f, "error"),
+            LogLevel::Off => write!(f, "off"),
+        }
+    }
 }
 
 impl From<LogLevel> for LevelFilter {
@@ -63,6 +77,22 @@ impl From<&str> for LogLevel {
 impl From<String> for LogLevel {
     fn from(value: String) -> Self {
         Self::from(value.as_str())
+    }
+}
+
+impl nvim_oxi::conversion::FromObject for LogLevel {
+    fn from_object(obj: nvim_oxi::Object) -> Result<Self, nvim_oxi::conversion::Error> {
+        // Try to parse as string first
+        if let Ok(s) = String::from_object(obj.clone()) {
+            Ok(LogLevel::from(s))
+        } else if let Ok(n) = i64::from_object(obj) {
+            // Try to parse as integer
+            Ok(LogLevel::from(n))
+        } else {
+            Err(nvim_oxi::conversion::Error::Other(
+                "LogLevel must be a string or integer".to_string(),
+            ))
+        }
     }
 }
 
