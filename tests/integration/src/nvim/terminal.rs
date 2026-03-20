@@ -55,6 +55,7 @@ fn terminal_info_from_request_creates_with_correct_defaults() -> nvim_oxi::Resul
 }
 
 /// Integration test: Verifies run() returns positive job ID
+#[tracing_test::traced_test]
 #[nvim_oxi::test]
 fn terminal_info_run_returns_positive_job_id() -> nvim_oxi::Result<()> {
     let mut terminal = TerminalInfo::new(None);
