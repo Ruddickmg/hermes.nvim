@@ -59,13 +59,24 @@ fn terminal_info_from_request_creates_with_correct_defaults() -> nvim_oxi::Resul
 fn terminal_info_run_returns_positive_job_id() -> nvim_oxi::Result<()> {
     let mut terminal = TerminalInfo::new(None);
 
-    // Start a simple echo command
-    let job_id = terminal.run("echo".to_string(), vec!["hello".to_string()]);
+    // Start a simple echo command with detailed error logging for CI debugging
+    let job_id_result = terminal.run("echo".to_string(), vec!["hello".to_string()]);
 
-    match job_id {
-        Ok(id) => assert!(id > 0, "Job ID should be positive, got: {}", id),
-        Err(e) => panic!("Failed to start terminal job: {:?}", e),
+    match &job_id_result {
+        Ok(id) => {
+            tracing::info!("Successfully started terminal job with ID: {}", id);
+        }
+        Err(e) => {
+            tracing::error!("Failed to start terminal job: {:?}", e);
+            // Log additional diagnostic information for CI debugging
+            tracing::info!("Current working directory: {:?}", std::env::current_dir());
+            tracing::info!("PATH: {:?}", std::env::var("PATH"));
+        }
     }
+
+    let job_id = job_id_result.expect("Failed to start terminal job");
+
+    assert!(job_id > 0, "Job ID should be positive, got: {}", job_id);
 
     Ok(())
 }
