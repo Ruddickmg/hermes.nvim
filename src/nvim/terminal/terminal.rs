@@ -204,7 +204,11 @@ impl Terminal for TerminalInfo {
     }
 
     fn report_exit_to(&self, sender: oneshot::Sender<Result<ExitStatus>>) -> Result<()> {
-        if let Some(exit_code) = self.exit_status.borrow_mut().take() {
+        let mut exit_status = self
+            .exit_status
+            .try_borrow_mut()
+            .map_err(|e| Error::Internal(format!("Failed to borrow exit status: {}", e)))?;
+        if let Some(exit_code) = exit_status.take() {
             sender.send(Ok(exit_code)).map_err(|e| {
                 Error::Internal(format!(
                     "Error occurred while sending terminal exit notification: {:?}",
@@ -212,7 +216,12 @@ impl Terminal for TerminalInfo {
                 ))
             })
         } else {
-            *self.exit_response.borrow_mut() = Some(sender);
+            drop(exit_status);
+            let mut exit_response = self
+                .exit_response
+                .try_borrow_mut()
+                .map_err(|e| Error::Internal(format!("Failed to borrow exit response: {}", e)))?;
+            *exit_response = Some(sender);
             Ok(())
         }
     }

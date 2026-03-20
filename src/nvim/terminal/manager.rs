@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use tokio::sync::oneshot;
 
-use crate::acp::Result;
 use crate::acp::error::Error;
+use crate::acp::Result;
 use crate::nvim::terminal::Terminal;
 
 /// Manages all terminal (job) instances for a session
@@ -66,7 +66,10 @@ impl<T: Terminal + Clone> TerminalManager<T> {
     }
 
     pub fn release(&self, id: &str) -> Result<()> {
-        let mut terminals = self.terminals.borrow_mut();
+        let mut terminals = self
+            .terminals
+            .try_borrow_mut()
+            .map_err(|e| Error::Internal(format!("Failed to borrow terminal manager: {}", e)))?;
         let terminal = terminals.remove(id);
         drop(terminals);
         if let Some(t) = terminal {

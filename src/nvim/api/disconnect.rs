@@ -1,8 +1,8 @@
 use nvim_oxi::{
-    Function, Object, ObjectKind,
     conversion::{self, FromObject},
     lua::{self, Error, Poppable, Pushable},
     serde::SerializeError,
+    Function, Object, ObjectKind,
 };
 use std::{cell::RefCell, rc::Rc};
 use tracing::{debug, instrument};
@@ -111,7 +111,9 @@ pub fn disconnect(connection: Rc<RefCell<ConnectionManager>>) -> Object {
     let function: Function<DisconnectArgs, Result<(), Error>> =
         Function::from_fn(move |args: DisconnectArgs| -> Result<(), Error> {
             debug!("Disconnect function called with {:#?}", args);
-            let mut manager = connection.borrow_mut();
+            let mut manager = connection.try_borrow_mut().map_err(|e| {
+                Error::RuntimeError(format!("Failed to borrow connection manager: {}", e))
+            })?;
             match args {
                 DisconnectArgs::Multiple(agents) => manager.disconnect(agents),
                 DisconnectArgs::Single(agent) => manager.disconnect(vec![agent.clone()]),

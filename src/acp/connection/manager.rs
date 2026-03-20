@@ -1,7 +1,7 @@
-use crate::PluginState;
-use crate::acp::connection::{Connection, stdio};
+use crate::acp::connection::{stdio, Connection};
 use crate::nvim::configuration::Permissions;
-use crate::{Handler, acp::error::Error};
+use crate::PluginState;
+use crate::{acp::error::Error, Handler};
 use agent_client_protocol::{
     ClientCapabilities, FileSystemCapability, Implementation, InitializeRequest, ProtocolVersion,
 };
@@ -188,22 +188,27 @@ impl ConnectionManager {
                     );
 
                 trace!("Starting agent communication in new thread");
-                self.handles.borrow_mut().insert(
-                    agent.clone(),
-                    std::thread::spawn(move || {
-                        let runtime = tokio::runtime::Builder::new_current_thread()
-                            .enable_all()
-                            .build()
-                            .map_err(|e| Error::Internal(e.to_string()))?;
+                self.handles
+                    .try_borrow_mut()
+                    .map_err(|e| {
+                        Error::Internal(format!("Failed to borrow connection handles: {}", e))
+                    })?
+                    .insert(
+                        agent.clone(),
+                        std::thread::spawn(move || {
+                            let runtime = tokio::runtime::Builder::new_current_thread()
+                                .enable_all()
+                                .build()
+                                .map_err(|e| Error::Internal(e.to_string()))?;
 
-                        trace!("Starting tokio runtime");
-                        runtime.block_on(match protocol {
-                            Protocol::Stdio => stdio::connect(handler, thread_agent, receiver),
-                            Protocol::Http => unimplemented!(),
-                            Protocol::Socket => unimplemented!(),
-                        })
-                    }),
-                );
+                            trace!("Starting tokio runtime");
+                            runtime.block_on(match protocol {
+                                Protocol::Stdio => stdio::connect(handler, thread_agent, receiver),
+                                Protocol::Http => unimplemented!(),
+                                Protocol::Socket => unimplemented!(),
+                            })
+                        }),
+                    );
                 self.add_connection(agent.clone(), connection.clone());
                 debug!("Stored connection to '{}'", agent);
                 connection.initialize(init_config)?;
@@ -245,9 +250,14 @@ impl ConnectionManager {
         let sender = self.connection.remove(assistant).ok_or_else(|| {
             Error::Connection(format!("No connection found for assistant {}", assistant))
         })?;
-        let handle = self.handles.borrow_mut().remove(assistant).ok_or_else(|| {
-            Error::Connection(format!("No handle found for assistant {}", assistant))
-        })?;
+        let handle = self
+            .handles
+            .try_borrow_mut()
+            .map_err(|e| Error::Internal(format!("Failed to borrow connection handles: {}", e)))?
+            .remove(assistant)
+            .ok_or_else(|| {
+                Error::Connection(format!("No handle found for assistant {}", assistant))
+            })?;
         debug!("Disconnecting from agent {}", assistant);
         drop(sender);
         handle

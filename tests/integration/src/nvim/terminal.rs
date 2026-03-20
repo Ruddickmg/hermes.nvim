@@ -11,7 +11,11 @@ fn terminal_info_report_exit_to_sends_exit_code_when_already_occurred() -> nvim_
     let terminal = TerminalInfo::new(None);
 
     // Manually set exit status (simulating what exit callback would do)
-    *terminal.exit_status.borrow_mut() = Some((Some(5), Some("error".to_string())));
+    *terminal
+        .exit_status
+        .try_borrow_mut()
+        .expect("Failed to borrow exit_status for test setup") =
+        Some((Some(5), Some("error".to_string())));
 
     let (sender, mut receiver) = oneshot::channel();
     terminal.report_exit_to(sender).expect("report failed");
