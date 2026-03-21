@@ -106,10 +106,10 @@ impl Default for LogConfig {
     fn default() -> Self {
         Self {
             file: None,
-            level: LogLevel::Info,
+            level: LogLevel::Off,
             local_list: LogLevel::Off,
             message: LogLevel::Off,
-            notification: LogLevel::Off,
+            notification: LogLevel::Error,
             quick_fix_list: LogLevel::Off,
         }
     }
