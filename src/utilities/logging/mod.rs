@@ -1,9 +1,11 @@
 use nvim_oxi::api::{self, opts::OptionOpts};
+use std::sync::Mutex as StdMutex; // For non-async file writer
 use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{
     fmt,
+    layer::Layered,
     prelude::*,
     reload::{self, Handle},
     EnvFilter, Registry,
@@ -141,13 +143,13 @@ impl From<String> for LogFormat {
 }
 
 pub struct Logger {
-    #[allow(dead_code)]
     filter: Handle<EnvFilter, Registry>,
-    state: Arc<Mutex<PluginState>>,
+    file_handle: Handle<EnvFilter, Layered<reload::Layer<EnvFilter, Registry>, Registry>>,
+    file_writer: Arc<StdMutex<Option<Box<dyn std::io::Write + Send + 'static>>>>,
 }
 
 impl Logger {
-    pub fn inititalize(state: Arc<Mutex<PluginState>>) -> &'static Self {
+    pub fn inititalize() -> &'static Self {
         let opts = OptionOpts::default();
         let format: LogFormat = api::get_var::<String>("HERMES_LOG_FORMAT")
             .map(LogFormat::from)
@@ -156,14 +158,38 @@ impl Logger {
             .map(LogLevel::from)
             .unwrap_or_default()
             .into();
+
+        // Create reloadable filter for stdout
         let (filter_layer, filter) = reload::Layer::new(log_level);
+
+        // Create placeholder file layer (initially OFF)
+        let file_off_filter: EnvFilter = LogLevel::Off.into();
+        let (file_filter_layer, file_handle) = reload::Layer::new(file_off_filter);
+
+        // Create a swappable writer for file output (starts with no-op)
+        let file_writer: Arc<StdMutex<Option<Box<dyn std::io::Write + Send + 'static>>>> =
+            Arc::new(StdMutex::new(None));
+        let file_writer_clone = file_writer.clone();
+
+        // Create file layer with the swappable writer
+        let file_layer = fmt::layer()
+            .with_writer(move || -> FileWriterGuard {
+                FileWriterGuard {
+                    inner: file_writer_clone.clone(),
+                }
+            })
+            .with_filter(file_filter_layer);
+
         let base = fmt::layer()
             .with_ansi(true)
             .with_file(true)
             .with_line_number(true)
             .with_thread_ids(true)
             .with_thread_names(true);
-        let registry = tracing_subscriber::registry().with(filter_layer);
+
+        let registry = tracing_subscriber::registry()
+            .with(filter_layer)
+            .with(file_layer);
 
         LOGGER.get_or_init(|| {
             match format {
@@ -172,7 +198,11 @@ impl Logger {
                 LogFormat::Json => registry.with(base.json()).init(),
                 _ => registry.with(base.pretty()).init(),
             }
-            Self { filter, state }
+            Self {
+                filter,
+                file_handle,
+                file_writer,
+            }
         })
     }
 
@@ -185,24 +215,46 @@ impl Logger {
 
     pub fn set_file_logger(&self, config: LogFileConfig) -> Result<(), Error> {
         if !config.enabled {
+            // Disable file logging by setting filter to OFF
+            let off_filter: EnvFilter = LogLevel::Off.into();
+            self.file_handle
+                .reload(off_filter)
+                .map_err(|e| Error::Internal(format!("Failed to disable file logger: {}", e)))?;
+
+            // Clear the writer
+            let mut writer = self
+                .file_writer
+                .lock()
+                .map_err(|e| Error::Internal(format!("Failed to lock file writer: {}", e)))?;
+            *writer = None;
+
             return Ok(());
         }
 
-        // Validate the file appender can be created
-        let _max_size = config.max_size.unwrap_or(10_485_760); // 10MB default
-        let _max_files = config.max_files.unwrap_or(5) as usize;
+        // Get configuration values (defaults are defined in LogFileConfig)
+        let max_size = config.max_size.unwrap_or_default();
+        let max_files = config.max_files.unwrap_or_default() as usize;
 
-        // Verify the path is valid by attempting to create the appender
-        // This will fail early if there are permission issues
-        let _file_appender = files::SizeBasedFileAppender::new(&config.path, _max_size, _max_files)
+        // Create the file appender
+        let file_appender = files::SizeBasedFileAppender::new(&config.path, max_size, max_files)
             .map_err(|e| Error::Internal(format!("Failed to create file appender: {}", e)))?;
 
-        // Note: Registry is already initialized, we can't add layers dynamically
-        // The file logger needs to be set up during initialization in `inititalize()`
-        // This method is here for API compatibility but returns an error
-        Err(Error::Internal(
-            "File logger must be configured during initialization. The file appender was validated but cannot be added to an already-initialized logger.".to_string()
-        ))
+        // Store the appender in the shared writer
+        {
+            let mut writer = self
+                .file_writer
+                .lock()
+                .map_err(|e| Error::Internal(format!("Failed to lock file writer: {}", e)))?;
+            *writer = Some(Box::new(file_appender));
+        }
+
+        // Enable the file layer by reloading the filter
+        let file_filter: EnvFilter = config.level.into();
+        self.file_handle
+            .reload(file_filter)
+            .map_err(|e| Error::Internal(format!("Failed to enable file logger: {}", e)))?;
+
+        Ok(())
     }
 
     pub fn configure(&self, config: LogConfig) -> Result<(), Error> {
@@ -213,6 +265,37 @@ impl Logger {
     }
 }
 
+/// Guard struct for thread-safe file writer access
+pub struct FileWriterGuard {
+    inner: Arc<StdMutex<Option<Box<dyn std::io::Write + Send + 'static>>>>,
+}
+
+impl std::io::Write for FileWriterGuard {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| std::io::Error::other(format!("Lock poisoned: {}", e)))?;
+
+        match guard.as_mut() {
+            Some(writer) => writer.write(buf),
+            None => Ok(buf.len()), // No-op if no writer configured
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| std::io::Error::other(format!("Lock poisoned: {}", e)))?;
+
+        match guard.as_mut() {
+            Some(writer) => writer.flush(),
+            None => Ok(()),
+        }
+    }
+}
+
 /// Guard struct for thread-safe file appender access
 pub struct FileAppenderGuard {
     appender: std::sync::Arc<std::sync::Mutex<files::SizeBasedFileAppender>>,
@@ -220,16 +303,18 @@ pub struct FileAppenderGuard {
 
 impl std::io::Write for FileAppenderGuard {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let mut guard = self.appender.lock().map_err(|e| {
-            std::io::Error::other(format!("Lock poisoned: {:?}", e))
-        })?;
+        let mut guard = self
+            .appender
+            .lock()
+            .map_err(|e| std::io::Error::other(format!("Lock poisoned: {:?}", e)))?;
         guard.write(buf)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        let mut guard = self.appender.lock().map_err(|e| {
-            std::io::Error::other(format!("Lock poisoned: {:?}", e))
-        })?;
+        let mut guard = self
+            .appender
+            .lock()
+            .map_err(|e| std::io::Error::other(format!("Lock poisoned: {:?}", e)))?;
         guard.flush()
     }
 }

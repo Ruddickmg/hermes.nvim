@@ -20,8 +20,8 @@ impl Default for LogFileConfig {
             // TODO: figure out default path
             path: "".to_string(),
             level: LogLevel::Warn,
-            max_size: None,
-            max_files: None,
+            max_size: Some(10_485_760), // 10MB default
+            max_files: Some(5),         // Keep 5 backup files
         }
     }
 }
