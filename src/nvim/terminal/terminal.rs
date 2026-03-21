@@ -1,12 +1,11 @@
 use crate::{
-    acp::{Result, error::Error},
+    acp::{error::Error, Result},
     nvim::{configuration::TerminalConfig, terminal::parse_exit_code},
 };
 use agent_client_protocol::EnvVariable;
 use nvim_oxi::{
+    api::opts::{BufDeleteOpts, OptionOpts},
     Array, Dictionary, Function, Object,
-    api::opts::{BufDeleteOpts, OptionOpts, OptionScope},
-    conversion::ToObject,
 };
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 use strip_ansi_escapes;
@@ -108,6 +107,10 @@ impl TerminalInfo {
         };
         terminal.set_on_output_callback(update_content);
         terminal.set_on_exit_callback(on_exit);
+        // Set default terminal options (same as old configuration() function)
+        terminal.configuration.insert("term", true);
+        terminal.configuration.insert("stdout_buffered", true);
+        terminal.configuration.insert("stderr_buffered", true);
         terminal
     }
 
@@ -174,18 +177,34 @@ impl TerminalInfo {
         args: Vec<String>,
         configuration: Dictionary,
     ) -> Result<i64> {
+        tracing::debug!(
+            "Starting terminal with command: {}, args: {:?}",
+            command,
+            args
+        );
+        tracing::debug!(
+            "Configuration keys: {:?}",
+            configuration.keys().collect::<Vec<_>>()
+        );
+
         let commands: Array =
             Array::from_iter(vec![command].into_iter().chain(args).map(Object::from));
+
+        tracing::debug!("Calling jobstart with {} commands", commands.len());
+
         nvim_oxi::api::call_function::<(Array, Dictionary), i64>(
             "jobstart",
             (commands, configuration),
         )
-        .map_err(|e| Error::Internal(e.to_string()))
+        .map_err(|e| {
+            tracing::error!("jobstart failed: {:?}", e);
+            Error::Internal(e.to_string())
+        })
     }
 
     fn set_option<T>(option: &str, value: T, opts: &OptionOpts) -> Result<()>
     where
-        T: ToObject,
+        T: nvim_oxi::conversion::ToObject,
     {
         nvim_oxi::api::set_option_value(option, value, opts)
             .map_err(|e| Error::Internal(e.to_string()))
@@ -202,6 +221,21 @@ pub trait Terminal {
     fn id(&self) -> Uuid;
     fn from_request(data: agent_client_protocol::CreateTerminalRequest) -> Self;
     fn delete(&mut self) -> Result<()>;
+
+    // TODO: Implement toggle_visibility() method to handle window-local terminal options
+    // When a terminal buffer becomes visible (e.g., via split or switch), these window-local
+    // options need to be set:
+    //   - number = false
+    //   - relativenumber = false
+    //   - signcolumn = "no"
+    //   - wrap = false
+    //   - foldcolumn = "0"
+    //
+    // Implementation approach (Option C):
+    //   Add fn toggle_visibility(&self) -> Result<bool> to Terminal trait
+    //   When showing: open buffer in window + set window-local options above
+    //   When hiding: close window (bufhidden=hide keeps buffer alive)
+    //   Return true if buffer is now visible, false if hidden
 }
 
 impl Terminal for TerminalInfo {
@@ -219,10 +253,10 @@ impl Terminal for TerminalInfo {
 
     fn configure(mut self, config: TerminalConfig) -> Self {
         self.configuration.insert("term", config.enabled);
-        self.configuration
-            .insert("stdout_buffered", config.buffered);
-        self.configuration
-            .insert("stderr_buffered", config.buffered);
+        if config.buffered {
+            self.configuration.insert("stdout_buffered", true);
+            self.configuration.insert("stderr_buffered", true);
+        }
         self
     }
 
@@ -256,18 +290,14 @@ impl Terminal for TerminalInfo {
         let job_id = buffer
             .call(|_| Self::start_terminal(command, args, configuration))
             .map_err(|e| Error::Internal(e.to_string()))?;
-        let opts = OptionOpts::builder()
-            .buffer(buffer.clone())
-            .scope(OptionScope::Local)
-            .build();
+
+        let opts = OptionOpts::builder().buffer(buffer.clone()).build();
         Self::set_option("buftype", "terminal", &opts)?;
         Self::set_option("swapfile", false, &opts)?;
         Self::set_option("bufhidden", "hide", &opts)?;
-        Self::set_option("nonumber", "norelativenumber", &opts)?;
-        Self::set_option("signcolumn", "no", &opts)?;
-        Self::set_option("wrap", "nofoldcolumn", &opts)?;
-        Self::set_option("scrollback", "10000", &opts)?;
-        Self::set_option("nomodified", "true", &opts)?;
+        Self::set_option("scrollback", 10000, &opts)?;
+        Self::set_option("modified", false, &opts)?;
+
         self.job_id = Some(job_id as i64);
         self.buffer = Some(buffer);
         Ok(job_id)
