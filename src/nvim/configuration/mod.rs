@@ -4,7 +4,10 @@ mod permissions;
 mod terminal;
 
 pub use buffer::{BufferConfig, BufferConfigPartial};
-pub use log::{LogConfig, LogConfigPartial, LogFileConfig, LogFileConfigPartial, LogTargetConfig};
+pub use log::{
+    LogConfig, LogConfigPartial, LogFileConfig, LogFileConfigPartial, LogTargetConfig,
+    LogTargetConfigPartial,
+};
 use nvim_oxi::{
     conversion::{Error, FromObject},
     lua::{self, Poppable},
@@ -171,8 +174,15 @@ impl nvim_oxi::lua::Pushable for ClientConfigPartial {
                 }
                 log_dict.insert("file", file_dict);
             }
-            if let Some(val) = log.level {
-                log_dict.insert("level", val.to_string());
+            if let Some(ref val) = log.stdio {
+                let mut stdio_dict = Dictionary::new();
+                if let Some(level) = val.level {
+                    stdio_dict.insert("level", level.to_string());
+                }
+                if let Some(format) = val.format {
+                    stdio_dict.insert("format", format.to_string());
+                }
+                log_dict.insert("stdio", stdio_dict);
             }
             if let Some(ref val) = log.notification {
                 let mut target_dict = Dictionary::new();
@@ -285,7 +295,10 @@ mod tests {
                 auto_save: Some(true),
             }),
             log: Some(LogConfigPartial {
-                level: Some(crate::utilities::LogLevel::Debug),
+                stdio: Some(LogTargetConfigPartial {
+                    level: Some(crate::utilities::LogLevel::Debug),
+                    format: None,
+                }),
                 ..Default::default()
             }),
         };
@@ -295,7 +308,7 @@ mod tests {
         assert!(!config.permissions.fs_write_access);
         assert!(!config.terminal.hidden);
         assert!(config.buffer.auto_save);
-        assert_eq!(config.log.level, crate::utilities::LogLevel::Debug);
+        assert_eq!(config.log.stdio.level, crate::utilities::LogLevel::Debug);
 
         // Verify unspecified fields preserved defaults
         assert!(config.permissions.fs_read_access); // default true
@@ -322,7 +335,10 @@ mod tests {
             buffer: BufferConfig { auto_save: true },
             log: LogConfig {
                 file: None,
-                level: crate::utilities::LogLevel::Warn,
+                stdio: LogTargetConfig {
+                    level: crate::utilities::LogLevel::Warn,
+                    format: None,
+                },
                 notification: LogTargetConfig {
                     level: crate::utilities::LogLevel::Warn,
                     format: None,
@@ -348,7 +364,7 @@ mod tests {
         assert!(!config.permissions.fs_write_access);
         assert!(config.terminal.delete);
         assert!(config.buffer.auto_save);
-        assert_eq!(config.log.level, crate::utilities::LogLevel::Warn);
+        assert_eq!(config.log.stdio.level, crate::utilities::LogLevel::Warn);
     }
 
     #[test]

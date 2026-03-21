@@ -156,7 +156,7 @@ impl FromObject for LogFileConfigPartial {
 #[derive(Clone, Debug, PartialEq)]
 pub struct LogConfig {
     pub file: Option<LogFileConfig>,
-    pub level: LogLevel, // Global default level (for stdout)
+    pub stdio: LogTargetConfig, // Stdout/stderr logging configuration
     pub notification: LogTargetConfig,
     pub message: LogTargetConfig,
     pub quickfix: LogTargetConfig,
@@ -167,7 +167,10 @@ impl Default for LogConfig {
     fn default() -> Self {
         Self {
             file: None,
-            level: LogLevel::Off,
+            stdio: LogTargetConfig {
+                level: LogLevel::Info,
+                format: None,
+            },
             notification: LogTargetConfig {
                 level: LogLevel::Error,
                 format: None,
@@ -183,7 +186,7 @@ impl Default for LogConfig {
 #[derive(Clone, Debug, Default)]
 pub struct LogConfigPartial {
     pub file: Option<LogFileConfigPartial>,
-    pub level: Option<LogLevel>,
+    pub stdio: Option<LogTargetConfigPartial>,
     pub notification: Option<LogTargetConfigPartial>,
     pub message: Option<LogTargetConfigPartial>,
     pub quickfix: Option<LogTargetConfigPartial>,
@@ -207,8 +210,8 @@ impl LogConfigPartial {
                 });
             }
         }
-        if let Some(val) = self.level {
-            config.level = val;
+        if let Some(val) = self.stdio {
+            val.apply_to(&mut config.stdio);
         }
         if let Some(val) = self.notification {
             val.apply_to(&mut config.notification);
@@ -233,9 +236,9 @@ impl FromObject for LogConfigPartial {
             .get("file")
             .map(|o| LogFileConfigPartial::from_object(o.clone()))
             .transpose()?;
-        let level = dict
-            .get("level")
-            .map(|o| LogLevel::from_object(o.clone()))
+        let stdio = dict
+            .get("stdio")
+            .map(|o| LogTargetConfigPartial::from_object(o.clone()))
             .transpose()?;
         let notification = dict
             .get("notification")
@@ -256,7 +259,7 @@ impl FromObject for LogConfigPartial {
 
         Ok(Self {
             file,
-            level,
+            stdio,
             notification,
             message,
             quickfix,

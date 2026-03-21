@@ -66,30 +66,35 @@ hermes.setup({
         auto_save = false,  -- Auto-save modified files after writing to them 
     },
     log = {
-        file = {
-            enabled = false,       -- Enable file logging 
-            path = vim.fn.stdpath('state') .. "/nvim/hermes.log",
-            level = vim.log.levels.WARN or "warn",      -- File log level
-            format = "json",          -- Format (nil = use default: "compact")
-            max_size = , -- Max bytes before rotation (optional)
-            max_files = ,       -- Max rotated files (optional)
+        -- send logs to stdio, You likely don't want this, used for development
+        stdio = {
+            -- only logs of the set value and above will be sent
+            level = vim.log.levels.OFF or "off",
+            -- logs  stdio logs will be formatted with the selected format 
+            format = "compact",
         },
-        level = vim.log.levels.INFO or "info", -- Global log level 
+        -- send logs to Neovim "notify"
         notification = {
-            level = vim.log.levels.OFF or "off", -- Notification log level
-            format = "compact",          -- Format (nil = use default: "compact")
+            level = vim.log.levels.ERROR or "error",
+            format = "compact",
         },
+        -- send logs to Neovim ":messages"
         message = {
-            level = vim.log.levels.OFF or "off",   -- Message history log level
-            format = "compact",          -- Format (nil = use default: "compact")
+            level = vim.log.levels.OFF or "off",
+            format = "compact",
         },
+        -- send logs to Neovim "quickfix" list
         quickfix = {
-            level = vim.log.levels.OFF or "off",   -- Quickfix list log level
-            format = "compact",          -- Format (nil = use default: "compact")
+            level = vim.log.levels.OFF or "off",
+            format = "compact",
         },
-        local_list = {
-            level = vim.log.levels.OFF or "off",   -- Local list log level
-            format = "compact",          -- Format override (nil = use global format)
+        -- send logs to log files
+        file = {
+            level = vim.log.levels.OFF or "off",
+            format = "json",
+            path = vim.fn.stdpath('state') .. "/nvim/hermes.log", -- path to log file(s)
+            max_size = 10485760, -- 10mb
+            max_files = 5, -- Max log files to generate
         },
     },
 })
