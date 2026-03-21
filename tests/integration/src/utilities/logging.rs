@@ -154,7 +154,7 @@ fn test_file_logging_disabled_stops_writing() -> nvim_oxi::Result<()> {
 
 /// Integration test: Verifies DEBUG messages are filtered at WARN level
 #[nvim_oxi::test]
-fn test_debug_filtered_at_warn_level() -> nvim_oxi::Result<()> {
+fn test_debug_filtered_at_warn_level_debug() -> nvim_oxi::Result<()> {
     let temp_dir = TempDir::new().unwrap();
     let log_path = temp_dir.path().join("test.log");
 
@@ -174,34 +174,89 @@ fn test_debug_filtered_at_warn_level() -> nvim_oxi::Result<()> {
 
     // Log different levels
     tracing::debug!("Debug message");
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Verify DEBUG is filtered at WARN level
+    let content = std::fs::read_to_string(&log_path).unwrap();
+    assert!(
+        !content.contains("Debug message"),
+        "DEBUG should be filtered at WARN level"
+    );
+
+    Ok(())
+}
+
+/// Integration test: Verifies INFO messages are filtered at WARN level
+#[nvim_oxi::test]
+fn test_debug_filtered_at_warn_level_info() -> nvim_oxi::Result<()> {
+    let temp_dir = TempDir::new().unwrap();
+    let log_path = temp_dir.path().join("test.log");
+
+    let logger = Logger::inititalize();
+
+    // Configure with WARN level
+    let file_config = LogFileConfig {
+        enabled: true,
+        path: log_path.to_string_lossy().to_string(),
+        level: LogLevel::Warn,
+        format: None,
+        max_size: Some(1024 * 1024),
+        max_files: Some(5),
+    };
+    let config = create_log_config_with_file(LogLevel::Warn, file_config);
+    logger.configure(config).unwrap();
+
+    // Log different levels
     tracing::info!("Info message");
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Verify INFO is filtered at WARN level
+    let content = std::fs::read_to_string(&log_path).unwrap();
+    assert!(
+        !content.contains("Info message"),
+        "INFO should be filtered at WARN level"
+    );
+
+    Ok(())
+}
+
+/// Integration test: Verifies WARN messages are written at WARN level
+#[nvim_oxi::test]
+fn test_debug_filtered_at_warn_level_warn() -> nvim_oxi::Result<()> {
+    let temp_dir = TempDir::new().unwrap();
+    let log_path = temp_dir.path().join("test.log");
+
+    let logger = Logger::inititalize();
+
+    // Configure with WARN level
+    let file_config = LogFileConfig {
+        enabled: true,
+        path: log_path.to_string_lossy().to_string(),
+        level: LogLevel::Warn,
+        format: None,
+        max_size: Some(1024 * 1024),
+        max_files: Some(5),
+    };
+    let config = create_log_config_with_file(LogLevel::Warn, file_config);
+    logger.configure(config).unwrap();
+
+    // Log different levels
     tracing::warn!("Warning message");
     std::thread::sleep(std::time::Duration::from_millis(100));
 
-    // Verify only WARN and above are written
+    // Verify WARN is written
     let content = std::fs::read_to_string(&log_path).unwrap();
-    assert_eq!(
-        content.contains("Debug message"),
-        false,
-        "DEBUG should be filtered at WARN level"
-    );
-    assert_eq!(
-        content.contains("Info message"),
-        false,
-        "INFO should be filtered at WARN level"
-    );
-    assert_eq!(
+    assert!(
         content.contains("Warning message"),
-        true,
         "WARN should be written"
     );
 
     Ok(())
 }
 
-/// Integration test: Verifies log level reconfiguration works
+/// Integration test: Verifies INFO is filtered at initial WARN level before reconfiguration
 #[nvim_oxi::test]
-fn test_log_level_reconfiguration() -> nvim_oxi::Result<()> {
+fn test_log_level_reconfiguration_filtered_before() -> nvim_oxi::Result<()> {
     let temp_dir = TempDir::new().unwrap();
     let log_path = temp_dir.path().join("test.log");
 
@@ -223,7 +278,39 @@ fn test_log_level_reconfiguration() -> nvim_oxi::Result<()> {
 
     // This should be filtered
     tracing::info!("Should be filtered");
-    std::thread::sleep(std::time::Duration::from_millis(50));
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Verify
+    let content = std::fs::read_to_string(&log_path).unwrap();
+    assert!(
+        !content.contains("Should be filtered"),
+        "INFO should be filtered at initial WARN level"
+    );
+
+    Ok(())
+}
+
+/// Integration test: Verifies INFO is written after reconfiguring to INFO level
+#[nvim_oxi::test]
+fn test_log_level_reconfiguration_written_after() -> nvim_oxi::Result<()> {
+    let temp_dir = TempDir::new().unwrap();
+    let log_path = temp_dir.path().join("test.log");
+
+    let logger = Logger::inititalize();
+
+    // Start with WARN level
+    let warn_config = create_log_config_with_file(
+        LogLevel::Warn,
+        LogFileConfig {
+            enabled: true,
+            path: log_path.to_string_lossy().to_string(),
+            level: LogLevel::Warn,
+            format: None,
+            max_size: Some(1024 * 1024),
+            max_files: Some(5),
+        },
+    );
+    logger.configure(warn_config).unwrap();
 
     // Reconfigure to INFO level
     let info_config = create_log_config_with_file(
@@ -245,14 +332,8 @@ fn test_log_level_reconfiguration() -> nvim_oxi::Result<()> {
 
     // Verify
     let content = std::fs::read_to_string(&log_path).unwrap();
-    assert_eq!(
-        content.contains("Should be filtered"),
-        false,
-        "INFO should be filtered at initial WARN level"
-    );
-    assert_eq!(
+    assert!(
         content.contains("Should be written"),
-        true,
         "INFO should be written after reconfiguring to INFO level"
     );
 
@@ -368,17 +449,11 @@ fn test_reconfigure_to_second_path() -> nvim_oxi::Result<()> {
     Ok(())
 }
 
-/// Integration test: Verifies log target configuration works
+/// Integration test: Verifies custom LogTargetConfig level
 #[nvim_oxi::test]
-fn test_log_target_config() -> nvim_oxi::Result<()> {
+fn test_log_target_config_custom_level() -> nvim_oxi::Result<()> {
     use hermes::nvim::configuration::LogTargetConfig;
 
-    // Test default LogTargetConfig
-    let default_config = LogTargetConfig::default();
-    assert_eq!(default_config.level, LogLevel::Off);
-    assert_eq!(default_config.format, None);
-
-    // Test custom LogTargetConfig
     let custom_config = LogTargetConfig {
         level: LogLevel::Debug,
         format: None,
@@ -388,18 +463,31 @@ fn test_log_target_config() -> nvim_oxi::Result<()> {
     Ok(())
 }
 
-/// Integration test: Verifies LogTargetConfig with format override
+/// Integration test: Verifies LogTargetConfig with format level
 #[nvim_oxi::test]
-fn test_log_target_config_with_format() -> nvim_oxi::Result<()> {
+fn test_log_target_config_with_format_level() -> nvim_oxi::Result<()> {
     use hermes::nvim::configuration::LogTargetConfig;
     use hermes::utilities::logging::LogFormat;
 
-    // Test LogTargetConfig with format
     let config = LogTargetConfig {
         level: LogLevel::Info,
         format: Some(LogFormat::Json),
     };
     assert_eq!(config.level, LogLevel::Info);
+
+    Ok(())
+}
+
+/// Integration test: Verifies LogTargetConfig with format override stores format correctly
+#[nvim_oxi::test]
+fn test_log_target_config_with_format_format() -> nvim_oxi::Result<()> {
+    use hermes::nvim::configuration::LogTargetConfig;
+    use hermes::utilities::logging::LogFormat;
+
+    let config = LogTargetConfig {
+        level: LogLevel::Info,
+        format: Some(LogFormat::Json),
+    };
     assert_eq!(config.format, Some(LogFormat::Json));
 
     Ok(())

@@ -598,26 +598,53 @@ mod tests {
     }
 
     #[test]
-    fn test_log_format_display() {
+    fn test_log_format_display_pretty() {
         assert_eq!(LogFormat::Pretty.to_string(), "pretty");
+    }
+
+    #[test]
+    fn test_log_format_display_compact() {
         assert_eq!(LogFormat::Compact.to_string(), "compact");
+    }
+
+    #[test]
+    fn test_log_format_display_full() {
         assert_eq!(LogFormat::Full.to_string(), "full");
+    }
+
+    #[test]
+    fn test_log_format_display_json() {
         assert_eq!(LogFormat::Json.to_string(), "json");
     }
 
     #[test]
-    fn test_log_format_from_string() {
+    fn test_log_format_from_string_pretty() {
         let pretty: LogFormat = "pretty".to_string().into();
-        let compact: LogFormat = "compact".to_string().into();
-        let full: LogFormat = "full".to_string().into();
-        let json: LogFormat = "json".to_string().into();
-        let unknown: LogFormat = "unknown".to_string().into();
-
         assert_eq!(pretty, LogFormat::Pretty);
+    }
+
+    #[test]
+    fn test_log_format_from_string_compact() {
+        let compact: LogFormat = "compact".to_string().into();
         assert_eq!(compact, LogFormat::Compact);
+    }
+
+    #[test]
+    fn test_log_format_from_string_full() {
+        let full: LogFormat = "full".to_string().into();
         assert_eq!(full, LogFormat::Full);
+    }
+
+    #[test]
+    fn test_log_format_from_string_json() {
+        let json: LogFormat = "json".to_string().into();
         assert_eq!(json, LogFormat::Json);
-        assert_eq!(unknown, LogFormat::Pretty); // defaults to pretty
+    }
+
+    #[test]
+    fn test_log_format_from_string_unknown_defaults_to_pretty() {
+        let unknown: LogFormat = "unknown".to_string().into();
+        assert_eq!(unknown, LogFormat::Pretty);
     }
 }
 
