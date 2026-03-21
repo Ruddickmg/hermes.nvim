@@ -6,10 +6,11 @@ use agent_client_protocol::{
 };
 use hermes::acp::Result;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
+use hermes::nvim::state::PluginState;
 use pretty_assertions::assert_eq;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Mutex};
 use uuid::Uuid;
 
 fn _create_test_permission_request(session_id: impl Into<String>) -> RequestPermissionRequest {
@@ -26,7 +27,7 @@ fn _create_test_permission_request(session_id: impl Into<String>) -> RequestPerm
 #[nvim_oxi::test]
 fn test_handle_response_success() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -45,7 +46,7 @@ fn test_handle_response_success() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_handle_response_outcome_contains_option_id() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -72,7 +73,7 @@ fn test_handle_response_outcome_contains_option_id() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_handle_response_not_found_returns_error() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let request_id = Uuid::new_v4();
@@ -87,7 +88,7 @@ fn test_handle_response_not_found_returns_error() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_cancel_session_requests_returns_ok() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -103,7 +104,7 @@ fn test_cancel_session_requests_returns_ok() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_cancel_session_requests_no_matches_returns_ok() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("nonexistent-session");
@@ -116,7 +117,7 @@ fn test_cancel_session_requests_no_matches_returns_ok() -> nvim_oxi::Result<()> 
 #[nvim_oxi::test]
 fn test_cancel_session_requests_only_affects_target_session() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("target-session");
@@ -152,7 +153,7 @@ fn test_cancel_session_requests_only_affects_target_session() -> nvim_oxi::Resul
 #[nvim_oxi::test]
 fn test_other_session_not_cancelled() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("target-session");
@@ -183,7 +184,7 @@ fn test_other_session_not_cancelled() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_get_request_returns_some_for_existing() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -200,7 +201,7 @@ fn test_get_request_returns_some_for_existing() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_get_request_returns_none_for_nonexistent() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let request_id = Uuid::new_v4();
@@ -214,7 +215,7 @@ fn test_get_request_returns_none_for_nonexistent() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_handle_response_removes_request_from_pending() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -245,7 +246,7 @@ fn test_handle_response_removes_request_from_pending() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_request_exists_before_response_handled() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -268,7 +269,7 @@ fn test_write_file_request_cleanup_via_handle_response() -> nvim_oxi::Result<()>
 
     let temp_file = NamedTempFile::new("cleanup_test.txt").unwrap();
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
 
@@ -296,7 +297,7 @@ fn test_write_file_handle_response_succeeds() -> nvim_oxi::Result<()> {
 
     let temp_file = NamedTempFile::new("cleanup_test.txt").unwrap();
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
 
@@ -329,7 +330,7 @@ fn test_write_file_request_cleaned_up_after_response() -> nvim_oxi::Result<()> {
 
     let temp_file = NamedTempFile::new("cleanup_test.txt").unwrap();
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
 
@@ -365,7 +366,7 @@ fn test_write_file_request_cleaned_up_after_response() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_multiple_requests_exist_after_adding() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
 
@@ -396,7 +397,7 @@ fn test_multiple_requests_exist_after_adding() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_multiple_requests_all_handled_successfully() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
 
@@ -429,7 +430,7 @@ fn test_multiple_requests_all_handled_successfully() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_multiple_requests_all_cleaned_up() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
 
@@ -477,7 +478,7 @@ fn test_multiple_requests_all_cleaned_up() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_first_response_to_request_succeeds() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -497,7 +498,7 @@ fn test_first_response_to_request_succeeds() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_second_response_to_cleaned_up_request_fails() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -535,7 +536,7 @@ fn test_second_response_to_cleaned_up_request_fails() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_request_respond_with_permission_response_sends_outcome() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -567,7 +568,7 @@ fn test_request_respond_with_permission_response_sends_outcome() -> nvim_oxi::Re
 #[nvim_oxi::test]
 fn test_request_respond_with_permission_empty_string_sends_cancelled() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -598,7 +599,7 @@ fn test_request_respond_with_permission_empty_string_sends_cancelled() -> nvim_o
 #[nvim_oxi::test]
 fn test_request_cancel_sends_cancelled_outcome() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -631,7 +632,7 @@ fn test_request_cancel_on_non_permission_request_returns_ok() -> nvim_oxi::Resul
 
     let temp_file = NamedTempFile::new("cancel_test.txt").unwrap();
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -660,7 +661,7 @@ fn test_request_cancel_on_non_permission_request_returns_ok() -> nvim_oxi::Resul
 #[nvim_oxi::test]
 fn test_request_is_permission_request_true_for_permission() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -685,7 +686,7 @@ fn test_request_is_permission_request_false_for_write_file() -> nvim_oxi::Result
 
     let temp_file = NamedTempFile::new("perm_test.txt").unwrap();
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -712,7 +713,7 @@ fn test_request_is_permission_request_false_for_write_file() -> nvim_oxi::Result
 #[nvim_oxi::test]
 fn test_request_terminal_true_for_terminal_create() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -738,7 +739,7 @@ fn test_request_terminal_true_for_terminal_create() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_request_terminal_false_for_permission() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -760,7 +761,7 @@ fn test_request_terminal_false_for_permission() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_request_is_session_true_for_matching() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");
@@ -779,7 +780,7 @@ fn test_request_is_session_true_for_matching() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_request_is_session_false_for_non_matching() -> nvim_oxi::Result<()> {
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let session_id = String::from("test-session");

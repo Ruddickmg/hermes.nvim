@@ -11,11 +11,13 @@ use agent_client_protocol::{
     SessionId, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
 };
 use hermes::nvim::requests::Responder;
+use hermes::nvim::state::PluginState;
 use hermes::utilities::ui::show_permission_ui;
 use std::cell::RefCell;
 #[allow(unused_imports)]
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Mutex;
 use tracing::debug;
 
 fn create_permission_option(id: &str, name: &str) -> PermissionOption {
@@ -117,8 +119,9 @@ fn test_non_permission_request_not_permission() -> nvim_oxi::Result<()> {
     use std::sync::Arc;
 
     // Create Requests handler and add a write file request
+    let state = Arc::new(Mutex::new(PluginState::default()));
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(state.clone()).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let (sender, _receiver) =

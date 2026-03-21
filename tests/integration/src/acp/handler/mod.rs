@@ -17,7 +17,7 @@ fn create_test_notification() -> SessionNotification {
 #[nvim_oxi::test]
 fn test_session_notification_permissions_denied() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    state.blocking_lock().config.permissions.allow_notifications = false;
+    state.blocking_lock().config.permissions.send_notifications = false;
 
     let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
         .expect("Handler creation should succeed");
@@ -93,11 +93,7 @@ fn test_can_access_terminal_returns_false_when_disabled() -> nvim_oxi::Result<()
 #[nvim_oxi::test]
 fn test_can_request_permissions_returns_false_when_disabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    state
-        .blocking_lock()
-        .config
-        .permissions
-        .can_request_permissions = false;
+    state.blocking_lock().config.permissions.request_permissions = false;
 
     let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
         .expect("Handler creation should succeed");

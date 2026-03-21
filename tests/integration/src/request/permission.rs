@@ -8,7 +8,9 @@ use agent_client_protocol::{
     RequestPermissionRequest, SessionId, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
 };
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
+use hermes::nvim::state::PluginState;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 fn _create_permission_option(id: &str, name: &str) -> PermissionOption {
     PermissionOption::new(
@@ -40,8 +42,9 @@ fn _create_permission_request(
 #[nvim_oxi::test]
 fn invalid_json_data_returns_error() -> nvim_oxi::Result<()> {
     // Create Requests handler and add a permission request
+    let state = Arc::new(Mutex::new(PluginState::default()));
     let requests =
-        Arc::new(Requests::new().map_err(|e| {
+        Arc::new(Requests::new(state.clone()).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let (sender, _receiver) = tokio::sync::oneshot::channel::<RequestPermissionOutcome>();

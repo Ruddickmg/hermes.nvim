@@ -36,8 +36,8 @@ fn setup_updates_permissions_correctly() -> nvim_oxi::Result<()> {
             fs_write_access: Some(false),
             fs_read_access: None,
             terminal_access: Some(false),
-            can_request_permissions: None,
-            allow_notifications: None,
+            request_permissions: None,
+            send_notifications: None,
         }),
         ..Default::default()
     };
@@ -48,11 +48,11 @@ fn setup_updates_permissions_correctly() -> nvim_oxi::Result<()> {
     // Verify changes using single assertion comparing expected vs actual
     let state = plugin_state.blocking_lock();
     let expected = Permissions {
-        fs_write_access: false,        // changed
-        fs_read_access: true,          // default preserved
-        terminal_access: false,        // changed
-        can_request_permissions: true, // default preserved
-        allow_notifications: true,     // default preserved
+        fs_write_access: false,    // changed
+        fs_read_access: true,      // default preserved
+        terminal_access: false,    // changed
+        request_permissions: true, // default preserved
+        send_notifications: true,  // default preserved
     };
     assert_eq!(state.config.permissions, expected);
     Ok(())
@@ -196,8 +196,8 @@ fn setup_partial_update_preserves_existing_values() -> nvim_oxi::Result<()> {
         fs_write_access: false,        // from first call
         fs_read_access: true,          // default preserved
         terminal_access: false,        // from second call
-        can_request_permissions: true, // default preserved
-        allow_notifications: true,     // default preserved
+        request_permissions: true, // default preserved
+        send_notifications: true,     // default preserved
     };
     assert_eq!(state.config.permissions, expected);
     Ok(())

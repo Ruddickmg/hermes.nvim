@@ -4,8 +4,9 @@
 use agent_client_protocol::{CreateTerminalRequest, CreateTerminalResponse, SessionId};
 use hermes::acp::Result;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
+use hermes::nvim::state::PluginState;
 use std::sync::Arc;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Mutex};
 use uuid::Uuid;
 
 fn create_terminal_request(command: &str, args: Vec<String>) -> CreateTerminalRequest {
@@ -22,7 +23,7 @@ fn setup_terminal_request(
     Uuid,
     oneshot::Receiver<Result<CreateTerminalResponse>>,
 ) {
-    let requests = Arc::new(Requests::new().unwrap());
+    let requests = Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).unwrap());
     let (sender, receiver) = oneshot::channel::<Result<CreateTerminalResponse>>();
     let responder = Responder::TerminalCreate(sender, create_terminal_request(command, args));
     let request_id = requests.add_request("test-session".to_string(), responder);
