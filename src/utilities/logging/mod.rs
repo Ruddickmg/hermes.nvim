@@ -3,10 +3,11 @@ use std::sync::Mutex as StdMutex; // For non-async file writer
 use std::sync::{Arc, OnceLock};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{
-    EnvFilter, Registry, fmt,
+    fmt,
     layer::Layered,
     prelude::*,
     reload::{self, Handle},
+    EnvFilter, Registry,
 };
 
 use crate::{
@@ -14,8 +15,8 @@ use crate::{
     nvim::configuration::{LogConfig, LogFileConfig},
 };
 
+pub mod channel;
 pub mod file;
-pub mod files;
 
 static LOGGER: OnceLock<Logger> = OnceLock::new();
 
@@ -143,7 +144,7 @@ impl From<String> for LogFormat {
 pub struct Logger {
     filter: Handle<EnvFilter, Registry>,
     file_handle: Handle<EnvFilter, Layered<reload::Layer<EnvFilter, Registry>, Registry>>,
-    channel_writer: StdMutex<Option<file::FileWriter>>,
+    channel_writer: StdMutex<Option<channel::ChannelWriter>>,
 }
 
 impl Logger {
@@ -165,7 +166,7 @@ impl Logger {
         let (file_filter_layer, file_handle) = reload::Layer::new(file_off_filter);
 
         // Create channel writer holder (starts empty, filled by set_file_logger)
-        let channel_writer_holder: Arc<StdMutex<Option<file::FileWriter>>> =
+        let channel_writer_holder: Arc<StdMutex<Option<channel::ChannelWriter>>> =
             Arc::new(StdMutex::new(None));
         let channel_writer_clone = channel_writer_holder.clone();
 
@@ -239,11 +240,11 @@ impl Logger {
         let max_files = config.max_files.unwrap_or_default() as usize;
 
         // Create the file appender
-        let file_appender = files::SizeBasedFileAppender::new(&config.path, max_size, max_files)
+        let file_appender = file::SizeBasedFileAppender::new(&config.path, max_size, max_files)
             .map_err(|e| Error::Internal(format!("Failed to create file appender: {}", e)))?;
 
         // Create channel writer
-        let channel_writer = file::FileWriter::new(file_appender)
+        let channel_writer = channel::ChannelWriter::new(file_appender)
             .map_err(|e| Error::Internal(format!("Failed to create channel writer: {}", e)))?;
 
         // Store the channel writer
@@ -275,7 +276,7 @@ impl Logger {
 /// Guard struct for channel writer access
 /// This is used by the tracing subscriber layer to access the channel writer
 pub struct ChannelWriterGuard {
-    inner: Arc<StdMutex<Option<file::FileWriter>>>,
+    inner: Arc<StdMutex<Option<channel::ChannelWriter>>>,
 }
 
 impl std::io::Write for ChannelWriterGuard {

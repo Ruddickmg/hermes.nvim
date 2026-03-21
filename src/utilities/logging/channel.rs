@@ -174,6 +174,7 @@ impl Worker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
     use std::io::Write;
     use tempfile::TempDir;
 
@@ -196,10 +197,45 @@ mod tests {
         // Shutdown (waits for drain)
         writer.shutdown();
 
-        // Verify file contents
+        // Verify file contains both lines
         let content = std::fs::read_to_string(&log_path).unwrap();
-        assert!(content.contains("Hello, World!"));
-        assert!(content.contains("Second line"));
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines.as_slice(), &["Hello, World!", "Second line"]);
+    }
+
+    #[test]
+    fn test_channel_writer_empty_message() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_path = temp_dir.path().join("test.log");
+
+        let appender = SizeBasedFileAppender::new(&log_path, 1024 * 1024, 5).unwrap();
+        let mut writer = ChannelWriter::new(appender).unwrap();
+
+        // Write empty message - should not fail
+        writer.write_all(b"").unwrap();
+        writer.shutdown();
+
+        // File should exist but be empty
+        let content = std::fs::read_to_string(&log_path).unwrap();
+        assert!(content.is_empty());
+    }
+
+    #[test]
+    fn test_channel_writer_unicode_content() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_path = temp_dir.path().join("test.log");
+
+        let appender = SizeBasedFileAppender::new(&log_path, 1024 * 1024, 5).unwrap();
+        let mut writer = ChannelWriter::new(appender).unwrap();
+
+        // Write unicode and special characters
+        let unicode_msg = "Unicode: 你好世界 émoji 🎉\n";
+        writer.write_all(unicode_msg.as_bytes()).unwrap();
+        writer.shutdown();
+
+        // Verify unicode preserved
+        let content = std::fs::read_to_string(&log_path).unwrap();
+        assert_eq!(content, unicode_msg);
     }
 
     #[test]
@@ -210,7 +246,7 @@ mod tests {
         let appender = SizeBasedFileAppender::new(&log_path, 1024 * 1024, 5).unwrap();
         let writer = ChannelWriter::new(appender).unwrap();
 
-        // Share writer across threads (requires Arc<Mutex<>>)
+        // Share writer across threads
         let writer = Arc::new(Mutex::new(writer));
 
         // Spawn 10 threads, each writing 100 lines
@@ -236,7 +272,7 @@ mod tests {
         let writer = Arc::try_unwrap(writer).unwrap().into_inner().unwrap();
         writer.shutdown();
 
-        // Verify all messages were written
+        // Verify all 1000 messages written
         let content = std::fs::read_to_string(&log_path).unwrap();
         let lines: Vec<&str> = content.lines().collect();
         assert_eq!(lines.len(), 1000); // 10 threads * 100 messages
