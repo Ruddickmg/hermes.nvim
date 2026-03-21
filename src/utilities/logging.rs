@@ -1,14 +1,18 @@
 use nvim_oxi::api::{self, opts::OptionOpts};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
+use tokio::sync::Mutex;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{
-    fmt,
+    EnvFilter, Registry, fmt,
     prelude::*,
     reload::{self, Handle},
-    EnvFilter, Registry,
 };
 
-use crate::acp::error::Error;
+use crate::{
+    PluginState,
+    acp::error::Error,
+    nvim::configuration::{LogConfig, LogFileConfig},
+};
 static LOGGER: OnceLock<Logger> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -135,10 +139,11 @@ impl From<String> for LogFormat {
 pub struct Logger {
     #[allow(dead_code)]
     filter: Handle<EnvFilter, Registry>,
+    state: Arc<Mutex<PluginState>>,
 }
 
 impl Logger {
-    pub fn inititalize() -> &'static Self {
+    pub fn inititalize(state: Arc<Mutex<PluginState>>) -> &'static Self {
         let opts = OptionOpts::default();
         let format: LogFormat = api::get_var::<String>("HERMES_LOG_FORMAT")
             .map(LogFormat::from)
@@ -163,7 +168,7 @@ impl Logger {
                 LogFormat::Json => registry.with(base.json()).init(),
                 _ => registry.with(base.pretty()).init(),
             }
-            Self { filter }
+            Self { filter, state }
         })
     }
 
@@ -173,6 +178,37 @@ impl Logger {
         self.filter
             .reload(filter)
             .map_err(|e| Error::Internal(e.to_string()))
+    }
+
+    pub fn set_file_logger(&self, config: LogFileConfig) -> Result<(), Error> {
+        // 1. Create a file appender for rolling daily logs in a "./logs" directory
+        let file_appender = daily("./logs", "app.log");
+
+        // 2. Wrap the file appender in a non-blocking writer for minimal performance impact
+        // The 'guard' must be held for the duration of the program, or logs may not be flushed correctly.
+        let (non_blocking_appender, _guard) = tracing_appender::non_blocking(file_appender);
+
+        // 3. Create a layer for formatting the logs to the non-blocking writer
+        let file_layer = fmt::layer()
+            .with_writer(non_blocking_appender)
+            .with_filter(LevelFilter::INFO); // Set minimum log level for this specific output
+
+        // 4. Create a stdout layer (optional, for console output)
+        let stdout_layer = fmt::layer()
+            .compact()
+            .with_ansi(true)
+            .with_filter(LevelFilter::DEBUG);
+
+        // 5. Compose the layers into a subscriber and set it as the global default
+        Registry::default()
+            .with(stdout_layer)
+            .with(file_layer)
+            .init();
+    }
+
+    pub fn configure(&self, config: LogConfig) -> Result<(), Error> {
+        self.set_file_logger(config.file.clone())?;
+        self.set_log_level(config.level)
     }
 }
 

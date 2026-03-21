@@ -50,6 +50,7 @@ hermes.setup({
 -- Full configuration with both string and integer log levels
 hermes.setup({
     root_markers = { ".git" }, -- project root markers, used to detect the project root by the files contained there
+
     permissions = {
         fs_write_access = true,      -- Allow file writes to the agent (default: true)
         fs_read_access = true,       -- Allow file reads to the agent (default: true)
