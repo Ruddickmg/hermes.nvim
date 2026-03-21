@@ -1,8 +1,9 @@
-use crossbeam_channel::{bounded, Receiver, Sender, TryRecvError};
+use crossbeam_channel::{bounded, Receiver, RecvTimeoutError, Sender};
 use std::{
     io::{self, Write},
     sync::{Arc, Mutex},
     thread::{self, JoinHandle},
+    time::Duration,
 };
 
 use super::sink::LogSink;
@@ -10,11 +11,11 @@ use super::sink::LogSink;
 const CHANNEL_CAPACITY: usize = 10_000;
 const FLUSH_INTERVAL_FILE: usize = 100;      // Flush file every 100 messages
 const FLUSH_INTERVAL_UI: usize = 10;       // Flush UI every 10 messages
-const FLUSH_TIMEOUT_MS: u64 = 100;         // Flush UI after 100ms
+const FLUSH_TIMEOUT_MS: u64 = 100;         // Flush after 100ms regardless
 
 #[derive(Debug)]
 enum LogMessage {
-    Data(String),  // Changed from Vec<u8> to String for easier processing
+    Data(String),
     Flush,
     Shutdown,
 }
@@ -124,27 +125,16 @@ impl<S: LogSink> Worker<S> {
         let handle = thread::spawn(move || {
             let mut message_buffer: Vec<String> = Vec::with_capacity(flush_interval);
             let mut shutdown_requested = false;
-            let mut last_flush_time = std::time::Instant::now();
+            let timeout = Duration::from_millis(FLUSH_TIMEOUT_MS);
 
             loop {
-                // Try to receive a message
+                // Try to receive a message with timeout
                 let msg = if shutdown_requested {
                     // In shutdown mode, drain remaining messages without blocking
                     match receiver.try_recv() {
                         Ok(msg) => msg,
-                        Err(TryRecvError::Empty) => {
-                            // Channel empty and shutdown requested, flush and exit
-                            if !message_buffer.is_empty() {
-                                if let Err(e) = sink.write_batch(&message_buffer) {
-                                    eprintln!("Failed to write final batch: {}", e);
-                                }
-                                message_buffer.clear();
-                            }
-                            let _ = sink.flush();
-                            break;
-                        }
-                        Err(TryRecvError::Disconnected) => {
-                            // Sender dropped, flush and exit
+                        Err(_) => {
+                            // Channel empty or disconnected, flush and exit
                             if !message_buffer.is_empty() {
                                 if let Err(e) = sink.write_batch(&message_buffer) {
                                     eprintln!("Failed to write final batch: {}", e);
@@ -156,31 +146,44 @@ impl<S: LogSink> Worker<S> {
                         }
                     }
                 } else {
-                    // Normal operation - blocking receive with timeout for UI responsiveness
-                    match receiver.recv() {
+                    // Normal operation - blocking receive with timeout
+                    match receiver.recv_timeout(timeout) {
                         Ok(msg) => msg,
-                        Err(_) => {
-                            // Sender dropped, exit
+                        Err(RecvTimeoutError::Timeout) => {
+                            // Timeout occurred - check if we need to flush
+                            if !message_buffer.is_empty() {
+                                if let Err(e) = sink.write_batch(&message_buffer) {
+                                    eprintln!("Failed to write batch on timeout: {}", e);
+                                }
+                                message_buffer.clear();
+                            }
+                            continue;
+                        }
+                        Err(RecvTimeoutError::Disconnected) => {
+                            // Sender dropped, flush and exit
+                            if !message_buffer.is_empty() {
+                                if let Err(e) = sink.write_batch(&message_buffer) {
+                                    eprintln!("Failed to write final batch: {}", e);
+                                }
+                                message_buffer.clear();
+                            }
+                            let _ = sink.flush();
                             break;
                         }
                     }
                 };
 
-                // Process the message
+                // Process the received message
                 match msg {
                     LogMessage::Data(data) => {
                         message_buffer.push(data);
 
-                        // Check if we should flush (buffer full or timeout)
-                        let should_flush = message_buffer.len() >= flush_interval
-                            || last_flush_time.elapsed().as_millis() >= FLUSH_TIMEOUT_MS as u128;
-
-                        if should_flush {
+                        // Check if we should flush (buffer full)
+                        if message_buffer.len() >= flush_interval {
                             if let Err(e) = sink.write_batch(&message_buffer) {
                                 eprintln!("Failed to write batch: {}", e);
                             }
                             message_buffer.clear();
-                            last_flush_time = std::time::Instant::now();
                         }
                     }
                     LogMessage::Flush => {
@@ -190,7 +193,6 @@ impl<S: LogSink> Worker<S> {
                                 eprintln!("Failed to write batch on flush: {}", e);
                             }
                             message_buffer.clear();
-                            last_flush_time = std::time::Instant::now();
                         }
                         if let Err(e) = sink.flush() {
                             eprintln!("Failed to flush sink: {}", e);

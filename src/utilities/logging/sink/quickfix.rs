@@ -38,12 +38,8 @@ impl QuickfixSink {
             "W"
         } else if message.contains("INFO") {
             "I"
-        } else if message.contains("DEBUG") {
-            "N" // Note for debug
-        } else if message.contains("TRACE") {
-            "N" // Note for trace
         } else {
-            "N"
+            "N" // Note for debug, trace, or unknown
         }
     }
 

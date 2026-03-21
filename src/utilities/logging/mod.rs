@@ -144,10 +144,8 @@ impl From<String> for LogFormat {
     }
 }
 
-/// Type aliases for different channel writers
+/// Type aliases for different channel writers (only for blocking operations)
 pub type FileChannel = channel::ChannelWriter<FileSink>;
-pub type NotificationChannel = channel::ChannelWriter<NotificationSink>;
-pub type MessageChannel = channel::ChannelWriter<MessageSink>;
 pub type QuickfixChannel = channel::ChannelWriter<QuickfixSink>;
 
 /// Logger that supports multiple output targets
@@ -155,8 +153,6 @@ pub struct Logger {
     filter: Handle<EnvFilter, Registry>,
     file_handle: Handle<EnvFilter, Layered<reload::Layer<EnvFilter, Registry>, Registry>>,
     file_writer: Arc<StdMutex<Option<FileChannel>>>,
-    notification_writer: Arc<StdMutex<Option<NotificationChannel>>>,
-    message_writer: Arc<StdMutex<Option<MessageChannel>>>,
     quickfix_writer: Arc<StdMutex<Option<QuickfixChannel>>>,
 }
 
@@ -178,21 +174,22 @@ impl Logger {
         let file_off_filter: EnvFilter = LogLevel::Off.into();
         let (file_filter_layer, file_handle) = reload::Layer::new(file_off_filter);
 
-        // Create channel writer holders (start empty)
+        // Create channel writer holders (start empty) - only for blocking operations
         let file_writer_holder: Arc<StdMutex<Option<FileChannel>>> = Arc::new(StdMutex::new(None));
         let file_writer_clone = file_writer_holder.clone();
-
-        let notification_writer_holder: Arc<StdMutex<Option<NotificationChannel>>> = Arc::new(StdMutex::new(None));
-        let notification_writer_clone = notification_writer_holder.clone();
-
-        let message_writer_holder: Arc<StdMutex<Option<MessageChannel>>> = Arc::new(StdMutex::new(None));
-        let message_writer_clone = message_writer_holder.clone();
 
         let quickfix_writer_holder: Arc<StdMutex<Option<QuickfixChannel>>> = Arc::new(StdMutex::new(None));
         let quickfix_writer_clone = quickfix_writer_holder.clone();
 
+        // Create direct sinks for non-blocking operations
+        let notification_sink = Arc::new(StdMutex::new(NotificationSink::new()));
+        let notification_sink_clone = notification_sink.clone();
+
+        let message_sink = Arc::new(StdMutex::new(MessageSink::new()));
+        let message_sink_clone = message_sink.clone();
+
         // Create layers with writers
-        // File layer uses full format
+        // File layer uses full format with channel writer
         let file_layer = fmt::layer()
             .with_writer(move || -> ChannelWriterGuard<FileSink> {
                 ChannelWriterGuard::new(file_writer_clone.clone())
@@ -204,10 +201,10 @@ impl Logger {
             .with_thread_names(true)
             .with_filter(file_filter_layer);
 
-        // UI layers use compact format
+        // Notification layer - direct write (non-blocking)
         let notification_layer = fmt::layer()
-            .with_writer(move || -> ChannelWriterGuard<NotificationSink> {
-                ChannelWriterGuard::new(notification_writer_clone.clone())
+            .with_writer(move || -> DirectWriterGuard<NotificationSink> {
+                DirectWriterGuard::new(notification_sink_clone.clone())
             })
             .with_ansi(false)
             .with_file(false)
@@ -216,9 +213,10 @@ impl Logger {
             .with_thread_names(false)
             .compact();
 
+        // Message layer - direct write (non-blocking)
         let message_layer = fmt::layer()
-            .with_writer(move || -> ChannelWriterGuard<MessageSink> {
-                ChannelWriterGuard::new(message_writer_clone.clone())
+            .with_writer(move || -> DirectWriterGuard<MessageSink> {
+                DirectWriterGuard::new(message_sink_clone.clone())
             })
             .with_ansi(true)
             .with_file(false)
@@ -227,6 +225,7 @@ impl Logger {
             .with_thread_names(false)
             .compact();
 
+        // Quickfix layer uses channel writer (blocking API)
         let quickfix_layer = fmt::layer()
             .with_writer(move || -> ChannelWriterGuard<QuickfixSink> {
                 ChannelWriterGuard::new(quickfix_writer_clone.clone())
@@ -256,8 +255,6 @@ impl Logger {
                 filter,
                 file_handle,
                 file_writer: file_writer_holder,
-                notification_writer: notification_writer_holder,
-                message_writer: message_writer_holder,
                 quickfix_writer: quickfix_writer_holder,
             }
         })
@@ -316,67 +313,17 @@ impl Logger {
         Ok(())
     }
 
-    pub fn set_notification_logger(&self, level: LogLevel) -> Result<(), Error> {
-        {
-            let mut writer_guard = self
-                .notification_writer
-                .lock()
-                .map_err(|e| Error::Internal(format!("Failed to lock notification writer: {}", e)))?;
-
-            if let Some(old_writer) = writer_guard.take() {
-                old_writer.shutdown();
-            }
-        }
-
-        if level == LogLevel::Off {
-            return Ok(());
-        }
-
-        let notification_sink = NotificationSink::new();
-
-        let channel_writer = channel::ChannelWriter::new_ui(notification_sink)
-            .map_err(|e| Error::Internal(format!("Failed to create notification channel writer: {}", e)))?;
-
-        {
-            let mut writer_guard = self
-                .notification_writer
-                .lock()
-                .map_err(|e| Error::Internal(format!("Failed to lock notification writer: {}", e)))?;
-            *writer_guard = Some(channel_writer);
-        }
-
+    pub fn set_notification_logger(&self, _level: LogLevel) -> Result<(), Error> {
+        // Notification sink is created directly in initialize()
+        // and writes immediately without buffering
+        // Level filtering is handled by the tracing layer
         Ok(())
     }
 
-    pub fn set_message_logger(&self, level: LogLevel) -> Result<(), Error> {
-        {
-            let mut writer_guard = self
-                .message_writer
-                .lock()
-                .map_err(|e| Error::Internal(format!("Failed to lock message writer: {}", e)))?;
-
-            if let Some(old_writer) = writer_guard.take() {
-                old_writer.shutdown();
-            }
-        }
-
-        if level == LogLevel::Off {
-            return Ok(());
-        }
-
-        let message_sink = MessageSink::new();
-
-        let channel_writer = channel::ChannelWriter::new_ui(message_sink)
-            .map_err(|e| Error::Internal(format!("Failed to create message channel writer: {}", e)))?;
-
-        {
-            let mut writer_guard = self
-                .message_writer
-                .lock()
-                .map_err(|e| Error::Internal(format!("Failed to lock message writer: {}", e)))?;
-            *writer_guard = Some(channel_writer);
-        }
-
+    pub fn set_message_logger(&self, _level: LogLevel) -> Result<(), Error> {
+        // Message sink is created directly in initialize()
+        // and writes immediately without buffering
+        // Level filtering is handled by the tracing layer
         Ok(())
     }
 
@@ -460,6 +407,36 @@ impl<S: LogSink> std::io::Write for ChannelWriterGuard<S> {
             Some(writer) => writer.flush(),
             None => Ok(()),
         }
+    }
+}
+
+/// Guard struct for direct writer access (non-blocking sinks)
+/// This is used by the tracing subscriber layer to access direct sinks
+pub struct DirectWriterGuard<S> {
+    inner: Arc<StdMutex<S>>,
+}
+
+impl<S> DirectWriterGuard<S> {
+    pub fn new(inner: Arc<StdMutex<S>>) -> Self {
+        Self { inner }
+    }
+}
+
+impl<S: std::io::Write> std::io::Write for DirectWriterGuard<S> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| std::io::Error::other(format!("Lock poisoned: {}", e)))?;
+        guard.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| std::io::Error::other(format!("Lock poisoned: {}", e)))?;
+        guard.flush()
     }
 }
 

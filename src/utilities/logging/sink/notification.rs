@@ -71,6 +71,12 @@ impl NotificationSink {
     }
 }
 
+impl Default for NotificationSink {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LogSink for NotificationSink {
     fn write_batch(&mut self, messages: &[String]) -> io::Result<()> {
         for message in messages {
@@ -96,9 +102,31 @@ impl LogSink for NotificationSink {
     }
 }
 
-impl Default for NotificationSink {
-    fn default() -> Self {
-        Self::new()
+impl io::Write for NotificationSink {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        // Convert bytes to string (lossy if invalid UTF-8)
+        let message = String::from_utf8_lossy(buf).to_string();
+
+        // Send notification immediately
+        let level_str = Self::extract_level(&message);
+        let nvim_level = Self::convert_level(level_str);
+        let formatted = Self::format_message(&message);
+
+        // Create opts with title using Dictionary
+        let mut opts = Dictionary::new();
+        opts.insert("title".to_string(), nvim_oxi::Object::from("Hermes"));
+
+        // Send notification - ignore errors to avoid crashing
+        if let Err(e) = api::notify(&formatted, nvim_level, &opts) {
+            eprintln!("Failed to send notification: {}", e);
+        }
+
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        // Notifications are sent immediately in write(), no buffering
+        Ok(())
     }
 }
 

@@ -51,6 +51,12 @@ impl MessageSink {
     }
 }
 
+impl Default for MessageSink {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LogSink for MessageSink {
     fn write_batch(&mut self, messages: &[String]) -> io::Result<()> {
         for message in messages {
@@ -73,9 +79,24 @@ impl LogSink for MessageSink {
     }
 }
 
-impl Default for MessageSink {
-    fn default() -> Self {
-        Self::new()
+impl io::Write for MessageSink {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        // Convert bytes to string (lossy if invalid UTF-8)
+        let message = String::from_utf8_lossy(buf).to_string();
+
+        // Send to message history using out_write
+        // Add newline for proper message formatting
+        let msg = format!("{}\n", message);
+
+        // Use out_write for message history
+        api::out_write(msg);
+
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        // Messages are sent immediately in write(), no buffering
+        Ok(())
     }
 }
 
