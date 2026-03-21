@@ -49,23 +49,12 @@ fn test_file_logging_can_be_enabled() -> nvim_oxi::Result<()> {
     // Give the channel writer time to process and flush
     std::thread::sleep(std::time::Duration::from_millis(500));
 
-    // Verify log file exists and show debug info
-    assert!(log_path.exists(), "Log file should exist at {:?}", log_path);
-
     // Verify log file contains the message
     let content = std::fs::read_to_string(&log_path).unwrap();
-    eprintln!("DEBUG: Log file content:\n{}", content);
-    eprintln!("DEBUG: Looking for: 'Test message from integration test'");
-    assert_eq!(
+    assert!(
         content.contains("Test message from integration test"),
-        true,
         "Log file should contain the test message. Content length: {}",
         content.len()
-    );
-    assert_eq!(
-        content.contains("Test message from integration test"),
-        true,
-        "Log file should contain the test message"
     );
 
     Ok(())
