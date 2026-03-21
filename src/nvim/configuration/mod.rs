@@ -157,9 +157,6 @@ impl nvim_oxi::lua::Pushable for ClientConfigPartial {
             let mut log_dict = Dictionary::new();
             if let Some(file) = log.file {
                 let mut file_dict = Dictionary::new();
-                if let Some(val) = file.enabled {
-                    file_dict.insert("enabled", val);
-                }
                 if let Some(ref val) = file.path {
                     file_dict.insert("path", val.as_str());
                 }
@@ -213,16 +210,6 @@ impl nvim_oxi::lua::Pushable for ClientConfigPartial {
                     target_dict.insert("format", format.to_string());
                 }
                 log_dict.insert("quickfix", target_dict);
-            }
-            if let Some(ref val) = log.local_list {
-                let mut target_dict = Dictionary::new();
-                if let Some(level) = val.level {
-                    target_dict.insert("level", level.to_string());
-                }
-                if let Some(format) = val.format {
-                    target_dict.insert("format", format.to_string());
-                }
-                log_dict.insert("local_list", target_dict);
             }
             dict.insert("log", log_dict);
         }

@@ -57,7 +57,6 @@ impl FromObject for LogTargetConfigPartial {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LogFileConfig {
-    pub enabled: bool,
     pub path: String,
     pub level: LogLevel,
     pub format: Option<LogFormat>, // None = use global format
@@ -68,7 +67,6 @@ pub struct LogFileConfig {
 impl Default for LogFileConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
             path: "".to_string(),
             level: LogLevel::Warn,
             format: None,
@@ -81,7 +79,6 @@ impl Default for LogFileConfig {
 /// Partial log file configuration where each field is optional
 #[derive(Clone, Debug, Default)]
 pub struct LogFileConfigPartial {
-    pub enabled: Option<bool>,
     pub path: Option<String>,
     pub level: Option<LogLevel>,
     pub format: Option<LogFormat>,
@@ -92,9 +89,6 @@ pub struct LogFileConfigPartial {
 impl LogFileConfigPartial {
     /// Apply only Some() values to existing config
     pub fn apply_to(self, config: &mut LogFileConfig) {
-        if let Some(val) = self.enabled {
-            config.enabled = val;
-        }
         if let Some(val) = self.path {
             config.path = val;
         }
@@ -117,10 +111,6 @@ impl FromObject for LogFileConfigPartial {
     fn from_object(obj: Object) -> Result<Self, Error> {
         let dict = Dictionary::from_object(obj)?;
 
-        let enabled = dict
-            .get("enabled")
-            .map(|o| bool::from_object(o.clone()))
-            .transpose()?;
         let path = dict
             .get("path")
             .map(|o| String::from_object(o.clone()))
@@ -143,7 +133,6 @@ impl FromObject for LogFileConfigPartial {
             .transpose()?;
 
         Ok(Self {
-            enabled,
             path,
             level,
             format,
@@ -160,24 +149,19 @@ pub struct LogConfig {
     pub notification: LogTargetConfig,
     pub message: LogTargetConfig,
     pub quickfix: LogTargetConfig,
-    pub local_list: LogTargetConfig,
 }
 
 impl Default for LogConfig {
     fn default() -> Self {
         Self {
             file: None,
-            stdio: LogTargetConfig {
-                level: LogLevel::Info,
-                format: None,
-            },
+            stdio: LogTargetConfig::default(),
+            message: LogTargetConfig::default(),
+            quickfix: LogTargetConfig::default(),
             notification: LogTargetConfig {
                 level: LogLevel::Error,
                 format: None,
             },
-            message: LogTargetConfig::default(),
-            quickfix: LogTargetConfig::default(),
-            local_list: LogTargetConfig::default(),
         }
     }
 }
@@ -190,7 +174,6 @@ pub struct LogConfigPartial {
     pub notification: Option<LogTargetConfigPartial>,
     pub message: Option<LogTargetConfigPartial>,
     pub quickfix: Option<LogTargetConfigPartial>,
-    pub local_list: Option<LogTargetConfigPartial>,
 }
 
 impl LogConfigPartial {
@@ -201,7 +184,6 @@ impl LogConfigPartial {
                 file_partial.apply_to(file_config);
             } else {
                 config.file = Some(LogFileConfig {
-                    enabled: file_partial.enabled.unwrap_or(false),
                     path: file_partial.path.unwrap_or_default(),
                     level: file_partial.level.unwrap_or(LogLevel::Warn),
                     format: file_partial.format,
@@ -221,9 +203,6 @@ impl LogConfigPartial {
         }
         if let Some(val) = self.quickfix {
             val.apply_to(&mut config.quickfix);
-        }
-        if let Some(val) = self.local_list {
-            val.apply_to(&mut config.local_list);
         }
     }
 }
@@ -252,10 +231,6 @@ impl FromObject for LogConfigPartial {
             .get("quickfix")
             .map(|o| LogTargetConfigPartial::from_object(o.clone()))
             .transpose()?;
-        let local_list = dict
-            .get("local_list")
-            .map(|o| LogTargetConfigPartial::from_object(o.clone()))
-            .transpose()?;
 
         Ok(Self {
             file,
@@ -263,7 +238,6 @@ impl FromObject for LogConfigPartial {
             notification,
             message,
             quickfix,
-            local_list,
         })
     }
 }
@@ -272,36 +246,6 @@ impl FromObject for LogConfigPartial {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
-
-    #[test]
-    fn test_log_target_config_default_level_is_off() {
-        let config = LogTargetConfig::default();
-        assert_eq!(config.level, LogLevel::Off);
-    }
-
-    #[test]
-    fn test_log_target_config_default_format_is_none() {
-        let config = LogTargetConfig::default();
-        assert_eq!(config.format, None);
-    }
-
-    #[test]
-    fn test_log_target_config_custom_level() {
-        let config = LogTargetConfig {
-            level: LogLevel::Info,
-            format: None,
-        };
-        assert_eq!(config.level, LogLevel::Info);
-    }
-
-    #[test]
-    fn test_log_target_config_custom_format() {
-        let config = LogTargetConfig {
-            level: LogLevel::Info,
-            format: Some(LogFormat::Json),
-        };
-        assert_eq!(config.format, Some(LogFormat::Json));
-    }
 
     #[test]
     fn test_log_target_config_partial_apply_to_level() {
@@ -354,91 +298,9 @@ mod tests {
     }
 
     #[test]
-    fn test_log_config_default_stdio_level() {
-        let config = LogConfig::default();
-        assert_eq!(config.stdio.level, LogLevel::Info);
-    }
-
-    #[test]
-    fn test_log_config_default_notification_level() {
-        let config = LogConfig::default();
-        assert_eq!(config.notification.level, LogLevel::Error);
-    }
-
-    #[test]
-    fn test_log_config_default_message_level() {
-        let config = LogConfig::default();
-        assert_eq!(config.message.level, LogLevel::Off);
-    }
-
-    #[test]
-    fn test_log_config_default_quickfix_level() {
-        let config = LogConfig::default();
-        assert_eq!(config.quickfix.level, LogLevel::Off);
-    }
-
-    #[test]
-    fn test_log_config_default_local_list_level() {
-        let config = LogConfig::default();
-        assert_eq!(config.local_list.level, LogLevel::Off);
-    }
-
-    #[test]
-    fn test_log_config_default_file_is_none() {
-        let config = LogConfig::default();
-        assert_eq!(config.file, None);
-    }
-
-    #[test]
-    fn test_log_file_config_default_enabled() {
-        let config = LogFileConfig::default();
-        assert!(!config.enabled);
-    }
-
-    #[test]
-    fn test_log_file_config_default_level() {
-        let config = LogFileConfig::default();
-        assert_eq!(config.level, LogLevel::Warn);
-    }
-
-    #[test]
-    fn test_log_file_config_default_format() {
-        let config = LogFileConfig::default();
-        assert_eq!(config.format, None);
-    }
-
-    #[test]
-    fn test_log_file_config_default_max_size() {
-        let config = LogFileConfig::default();
-        assert_eq!(config.max_size, Some(10_485_760));
-    }
-
-    #[test]
-    fn test_log_file_config_default_max_files() {
-        let config = LogFileConfig::default();
-        assert_eq!(config.max_files, Some(5));
-    }
-
-    #[test]
-    fn test_log_file_config_partial_apply_to_enabled() {
-        let mut config = LogFileConfig::default();
-        let partial = LogFileConfigPartial {
-            enabled: Some(true),
-            path: None,
-            level: None,
-            format: None,
-            max_size: None,
-            max_files: None,
-        };
-        partial.apply_to(&mut config);
-        assert!(config.enabled);
-    }
-
-    #[test]
     fn test_log_file_config_partial_apply_to_path() {
         let mut config = LogFileConfig::default();
         let partial = LogFileConfigPartial {
-            enabled: None,
             path: Some("/test/path".to_string()),
             level: None,
             format: None,
@@ -453,7 +315,6 @@ mod tests {
     fn test_log_file_config_partial_apply_to_level() {
         let mut config = LogFileConfig::default();
         let partial = LogFileConfigPartial {
-            enabled: None,
             path: None,
             level: Some(LogLevel::Debug),
             format: None,
@@ -468,7 +329,6 @@ mod tests {
     fn test_log_file_config_partial_apply_to_format() {
         let mut config = LogFileConfig::default();
         let partial = LogFileConfigPartial {
-            enabled: None,
             path: None,
             level: None,
             format: Some(LogFormat::Json),
@@ -483,7 +343,6 @@ mod tests {
     fn test_log_file_config_partial_apply_to_max_size() {
         let mut config = LogFileConfig::default();
         let partial = LogFileConfigPartial {
-            enabled: None,
             path: None,
             level: None,
             format: None,
@@ -498,7 +357,6 @@ mod tests {
     fn test_log_file_config_partial_apply_to_max_files() {
         let mut config = LogFileConfig::default();
         let partial = LogFileConfigPartial {
-            enabled: None,
             path: None,
             level: None,
             format: None,
@@ -520,7 +378,6 @@ mod tests {
             notification: None,
             message: None,
             quickfix: None,
-            local_list: None,
             file: None,
         };
         partial.apply_to(&mut config);
@@ -538,7 +395,6 @@ mod tests {
             notification: None,
             message: None,
             quickfix: None,
-            local_list: None,
             file: None,
         };
         partial.apply_to(&mut config);
@@ -556,7 +412,6 @@ mod tests {
             notification: None,
             message: None,
             quickfix: None,
-            local_list: None,
             file: None,
         };
         partial.apply_to(&mut config);

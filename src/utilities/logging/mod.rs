@@ -105,8 +105,8 @@ impl nvim_oxi::conversion::FromObject for LogLevel {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LogFormat {
-    #[default]
     Pretty,
+    #[default]
     Compact,
     Full,
     Json,
