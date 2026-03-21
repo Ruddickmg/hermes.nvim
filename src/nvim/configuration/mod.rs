@@ -189,7 +189,7 @@ impl nvim_oxi::lua::Pushable for ClientConfigPartial {
             dict.insert("log", log_dict);
         }
 
-       unsafe { dict.push(lua_state) }
+        unsafe { dict.push(lua_state) }
     }
 }
 
@@ -295,10 +295,14 @@ mod tests {
             log: LogConfig {
                 file: None,
                 level: crate::utilities::LogLevel::Warn,
+                format: crate::utilities::LogFormat::default(),
                 local_list: crate::utilities::LogLevel::Warn,
                 message: crate::utilities::LogLevel::Warn,
                 notification: crate::utilities::LogLevel::Warn,
                 quick_fix_list: crate::utilities::LogLevel::Warn,
+                notification_format: None,
+                message_format: None,
+                quickfix_format: None,
             },
         };
         let partial = ClientConfigPartial::default(); // all None

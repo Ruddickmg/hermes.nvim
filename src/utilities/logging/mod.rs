@@ -4,7 +4,6 @@ use std::sync::{Arc, OnceLock};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{
     fmt,
-    layer::Layered,
     prelude::*,
     reload::{self, Handle},
     EnvFilter, Registry,
@@ -129,18 +128,30 @@ impl From<&str> for LogFormat {
     }
 }
 
+impl From<String> for LogFormat {
+    fn from(value: String) -> Self {
+        Self::from(value.as_str())
+    }
+}
+
+impl nvim_oxi::conversion::FromObject for LogFormat {
+    fn from_object(obj: nvim_oxi::Object) -> Result<Self, nvim_oxi::conversion::Error> {
+        if let Ok(s) = String::from_object(obj.clone()) {
+            Ok(LogFormat::from(s))
+        } else {
+            Err(nvim_oxi::conversion::Error::Other(
+                "LogFormat must be a string".to_string(),
+            ))
+        }
+    }
+}
+
 impl From<LogLevel> for EnvFilter {
     fn from(level: LogLevel) -> Self {
         let filter: LevelFilter = level.into();
         EnvFilter::builder()
             .with_default_directive(filter.into())
             .from_env_lossy()
-    }
-}
-
-impl From<String> for LogFormat {
-    fn from(value: String) -> Self {
-        Self::from(value.as_str())
     }
 }
 
@@ -151,7 +162,7 @@ pub type QuickfixChannel = channel::ChannelWriter<QuickfixSink>;
 /// Logger that supports multiple output targets
 pub struct Logger {
     filter: Handle<EnvFilter, Registry>,
-    file_handle: Handle<EnvFilter, Layered<reload::Layer<EnvFilter, Registry>, Registry>>,
+    file_handle: Handle<EnvFilter, Registry>,
     file_writer: Arc<StdMutex<Option<FileChannel>>>,
     quickfix_writer: Arc<StdMutex<Option<QuickfixChannel>>>,
 }
@@ -167,29 +178,31 @@ impl Logger {
             .unwrap_or_default()
             .into();
 
-        // Create reloadable filter for stdout
-        let (filter_layer, filter) = reload::Layer::new(log_level);
-
-        // Create reloadable filter for file (initially OFF)
-        let file_off_filter: EnvFilter = LogLevel::Off.into();
-        let (file_filter_layer, file_handle) = reload::Layer::new(file_off_filter);
-
         // Create channel writer holders (start empty) - only for blocking operations
         let file_writer_holder: Arc<StdMutex<Option<FileChannel>>> = Arc::new(StdMutex::new(None));
         let file_writer_clone = file_writer_holder.clone();
 
         let quickfix_writer_holder: Arc<StdMutex<Option<QuickfixChannel>>> = Arc::new(StdMutex::new(None));
         let quickfix_writer_clone = quickfix_writer_holder.clone();
-
-        // Create direct sinks for non-blocking operations
+        
+        // Create sinks for notification and message (reused across format changes)
         let notification_sink = Arc::new(StdMutex::new(NotificationSink::new()));
         let notification_sink_clone = notification_sink.clone();
-
+        
         let message_sink = Arc::new(StdMutex::new(MessageSink::new()));
         let message_sink_clone = message_sink.clone();
 
-        // Create layers with writers
-        // File layer uses full format with channel writer
+        // Build all layers in a Vec to avoid complex type composition
+        // Each layer is boxed so they have uniform type
+        let mut layers: Vec<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>> = Vec::new();
+        
+        // Add stdout filter layer (reloadable)
+        let (filter_layer, filter) = reload::Layer::new(log_level);
+        layers.push(Box::new(filter_layer));
+        
+        // Add file layer with its filter
+        let file_off_filter: EnvFilter = LogLevel::Off.into();
+        let (file_filter_layer, file_handle) = reload::Layer::new(file_off_filter);
         let file_layer = fmt::layer()
             .with_writer(move || -> ChannelWriterGuard<FileSink> {
                 ChannelWriterGuard::new(file_writer_clone.clone())
@@ -200,32 +213,9 @@ impl Logger {
             .with_thread_ids(true)
             .with_thread_names(true)
             .with_filter(file_filter_layer);
+        layers.push(Box::new(file_layer));
 
-        // Notification layer - direct write (non-blocking)
-        let notification_layer = fmt::layer()
-            .with_writer(move || -> DirectWriterGuard<NotificationSink> {
-                DirectWriterGuard::new(notification_sink_clone.clone())
-            })
-            .with_ansi(false)
-            .with_file(false)
-            .with_line_number(false)
-            .with_thread_ids(false)
-            .with_thread_names(false)
-            .compact();
-
-        // Message layer - direct write (non-blocking)
-        let message_layer = fmt::layer()
-            .with_writer(move || -> DirectWriterGuard<MessageSink> {
-                DirectWriterGuard::new(message_sink_clone.clone())
-            })
-            .with_ansi(true)
-            .with_file(false)
-            .with_line_number(false)
-            .with_thread_ids(false)
-            .with_thread_names(false)
-            .compact();
-
-        // Quickfix layer uses channel writer (blocking API)
+        // Add quickfix layer (compact format for navigation)
         let quickfix_layer = fmt::layer()
             .with_writer(move || -> ChannelWriterGuard<QuickfixSink> {
                 ChannelWriterGuard::new(quickfix_writer_clone.clone())
@@ -236,21 +226,85 @@ impl Logger {
             .with_thread_ids(false)
             .with_thread_names(false)
             .compact();
+        layers.push(Box::new(quickfix_layer));
 
-        let registry = tracing_subscriber::registry()
-            .with(filter_layer)
-            .with(file_layer)
-            .with(notification_layer)
-            .with(message_layer)
-            .with(quickfix_layer);
+        // Add notification layer with user-selected format
+        let notification_layer: Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync> = match format {
+            LogFormat::Full => Box::new(
+                fmt::layer()
+                    .with_writer(move || -> DirectWriterGuard<NotificationSink> {
+                        DirectWriterGuard::new(notification_sink_clone.clone())
+                    })
+                    .with_ansi(false)
+            ),
+            LogFormat::Compact => Box::new(
+                fmt::layer()
+                    .with_writer(move || -> DirectWriterGuard<NotificationSink> {
+                        DirectWriterGuard::new(notification_sink_clone.clone())
+                    })
+                    .with_ansi(false)
+                    .compact()
+            ),
+            LogFormat::Json => Box::new(
+                fmt::layer()
+                    .with_writer(move || -> DirectWriterGuard<NotificationSink> {
+                        DirectWriterGuard::new(notification_sink_clone.clone())
+                    })
+                    .with_ansi(false)
+                    .json()
+            ),
+            LogFormat::Pretty => Box::new(
+                fmt::layer()
+                    .with_writer(move || -> DirectWriterGuard<NotificationSink> {
+                        DirectWriterGuard::new(notification_sink_clone.clone())
+                    })
+                    .with_ansi(false)
+                    .pretty()
+            ),
+        };
+        layers.push(notification_layer);
+
+        // Add message layer with user-selected format
+        let message_layer: Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync> = match format {
+            LogFormat::Full => Box::new(
+                fmt::layer()
+                    .with_writer(move || -> DirectWriterGuard<MessageSink> {
+                        DirectWriterGuard::new(message_sink_clone.clone())
+                    })
+                    .with_ansi(true)
+            ),
+            LogFormat::Compact => Box::new(
+                fmt::layer()
+                    .with_writer(move || -> DirectWriterGuard<MessageSink> {
+                        DirectWriterGuard::new(message_sink_clone.clone())
+                    })
+                    .with_ansi(true)
+                    .compact()
+            ),
+            LogFormat::Json => Box::new(
+                fmt::layer()
+                    .with_writer(move || -> DirectWriterGuard<MessageSink> {
+                        DirectWriterGuard::new(message_sink_clone.clone())
+                    })
+                    .with_ansi(true)
+                    .json()
+            ),
+            LogFormat::Pretty => Box::new(
+                fmt::layer()
+                    .with_writer(move || -> DirectWriterGuard<MessageSink> {
+                        DirectWriterGuard::new(message_sink_clone.clone())
+                    })
+                    .with_ansi(true)
+                    .pretty()
+            ),
+        };
+        layers.push(message_layer);
+        
+        // Build the subscriber with all layers
+        let subscriber = tracing_subscriber::registry().with(layers);
 
         LOGGER.get_or_init(|| {
-            match format {
-                LogFormat::Full => registry.with(fmt::layer().with_ansi(true)).init(),
-                LogFormat::Compact => registry.with(fmt::layer().compact().with_ansi(true)).init(),
-                LogFormat::Json => registry.with(fmt::layer().json().with_ansi(true)).init(),
-                _ => registry.with(fmt::layer().pretty().with_ansi(true)).init(),
-            }
+            subscriber.init();
             Self {
                 filter,
                 file_handle,
@@ -314,16 +368,14 @@ impl Logger {
     }
 
     pub fn set_notification_logger(&self, _level: LogLevel) -> Result<(), Error> {
-        // Notification sink is created directly in initialize()
-        // and writes immediately without buffering
-        // Level filtering is handled by the tracing layer
+        // Notification layer is created during initialize() with global format
+        // Level filtering is handled by the tracing filter layer
         Ok(())
     }
 
     pub fn set_message_logger(&self, _level: LogLevel) -> Result<(), Error> {
-        // Message sink is created directly in initialize()
-        // and writes immediately without buffering
-        // Level filtering is handled by the tracing layer
+        // Message layer is created during initialize() with global format
+        // Level filtering is handled by the tracing filter layer
         Ok(())
     }
 
@@ -360,10 +412,15 @@ impl Logger {
     }
 
     pub fn configure(&self, config: LogConfig) -> Result<(), Error> {
+        // Configure file logging
         if let Some(file_config) = config.file {
             self.set_file_logger(file_config)?;
         }
         
+        // Note: Formats are set during initialize() via HERMES_LOG_FORMAT
+        // Per-target format configuration would require reinitializing the logger
+        
+        // Configure levels for each target
         self.set_notification_logger(config.notification)?;
         self.set_message_logger(config.message)?;
         self.set_quickfix_logger(config.quick_fix_list)?;
@@ -411,7 +468,6 @@ impl<S: LogSink> std::io::Write for ChannelWriterGuard<S> {
 }
 
 /// Guard struct for direct writer access (non-blocking sinks)
-/// This is used by the tracing subscriber layer to access direct sinks
 pub struct DirectWriterGuard<S> {
     inner: Arc<StdMutex<S>>,
 }

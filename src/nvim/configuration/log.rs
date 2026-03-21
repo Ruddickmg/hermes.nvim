@@ -1,4 +1,4 @@
-use crate::utilities::LogLevel;
+use crate::utilities::{LogFormat, LogLevel};
 use nvim_oxi::{
     conversion::{Error, FromObject},
     Dictionary, Object,
@@ -96,10 +96,15 @@ impl FromObject for LogFileConfigPartial {
 pub struct LogConfig {
     pub file: Option<LogFileConfig>,
     pub level: LogLevel,
+    pub format: LogFormat, // Global format (fallback for all targets)
     pub local_list: LogLevel,
     pub message: LogLevel,
     pub notification: LogLevel,
     pub quick_fix_list: LogLevel,
+    // Per-target format overrides (None = use global format)
+    pub notification_format: Option<LogFormat>,
+    pub message_format: Option<LogFormat>,
+    pub quickfix_format: Option<LogFormat>,
 }
 
 impl Default for LogConfig {
@@ -107,10 +112,14 @@ impl Default for LogConfig {
         Self {
             file: None,
             level: LogLevel::Off,
+            format: LogFormat::default(), // Default global format
             local_list: LogLevel::Off,
             message: LogLevel::Off,
             notification: LogLevel::Error,
             quick_fix_list: LogLevel::Off,
+            notification_format: None, // None = use global format
+            message_format: None,
+            quickfix_format: None,
         }
     }
 }
@@ -120,10 +129,15 @@ impl Default for LogConfig {
 pub struct LogConfigPartial {
     pub file: Option<LogFileConfigPartial>,
     pub level: Option<LogLevel>,
+    pub format: Option<LogFormat>,
     pub local_list: Option<LogLevel>,
     pub message: Option<LogLevel>,
     pub notification: Option<LogLevel>,
     pub quick_fix_list: Option<LogLevel>,
+    // Per-target format overrides
+    pub notification_format: Option<LogFormat>,
+    pub message_format: Option<LogFormat>,
+    pub quickfix_format: Option<LogFormat>,
 }
 
 impl LogConfigPartial {
@@ -146,6 +160,9 @@ impl LogConfigPartial {
         if let Some(val) = self.level {
             config.level = val;
         }
+        if let Some(val) = self.format {
+            config.format = val;
+        }
         if let Some(val) = self.local_list {
             config.local_list = val;
         }
@@ -157,6 +174,16 @@ impl LogConfigPartial {
         }
         if let Some(val) = self.quick_fix_list {
             config.quick_fix_list = val;
+        }
+        // Apply per-target format overrides
+        if let Some(val) = self.notification_format {
+            config.notification_format = Some(val);
+        }
+        if let Some(val) = self.message_format {
+            config.message_format = Some(val);
+        }
+        if let Some(val) = self.quickfix_format {
+            config.quickfix_format = Some(val);
         }
     }
 }
@@ -172,6 +199,10 @@ impl FromObject for LogConfigPartial {
         let level = dict
             .get("level")
             .map(|o| LogLevel::from_object(o.clone()))
+            .transpose()?;
+        let format = dict
+            .get("format")
+            .map(|o| LogFormat::from_object(o.clone()))
             .transpose()?;
         let local_list = dict
             .get("local_list")
@@ -189,14 +220,31 @@ impl FromObject for LogConfigPartial {
             .get("quick_fix_list")
             .map(|o| LogLevel::from_object(o.clone()))
             .transpose()?;
+        // Parse per-target format overrides
+        let notification_format = dict
+            .get("notification_format")
+            .map(|o| LogFormat::from_object(o.clone()))
+            .transpose()?;
+        let message_format = dict
+            .get("message_format")
+            .map(|o| LogFormat::from_object(o.clone()))
+            .transpose()?;
+        let quickfix_format = dict
+            .get("quickfix_format")
+            .map(|o| LogFormat::from_object(o.clone()))
+            .transpose()?;
 
         Ok(Self {
             file,
             level,
+            format,
             local_list,
             message,
             notification,
             quick_fix_list,
+            notification_format,
+            message_format,
+            quickfix_format,
         })
     }
 }
