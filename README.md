@@ -1,6 +1,6 @@
 # Hermes
 
-An ACP (Agent Client Protocol) Client implementation designed for integration with Neovim
+An [ACP (Agent Client Protocol)](https://agentclientprotocol.com) client designed for integration with Neovim. 
 
 ## Overview
 
@@ -11,12 +11,12 @@ Hermes focuses on:
 - Hooks into requests from AI assistants that require responses (permission requests, access requests, etc)
 - Autocommands for updates on communication between the user (client) and assistant (agent) 
 
-> [!NOTE]
-> While Hermes is a complete ACP client, most agents available today don't fully utilize the protocol. Key [optional](https://agentclientprotocol.com/protocol/overview#optional-methods-2) features (file operations, terminal commands, etc) are often handled through agent-specific tools rather than ACP methods. This means some Hermes capabilities may not be exercised depending on which agent you use.
+> [!CAUTION]
+> While Hermes is a complete ACP client, most agents available today don't fully utilize the protocol. Key [optional features](https://agentclientprotocol.com/protocol/overview#optional-methods-2) (file operations, terminal commands, etc) are often handled through agent-specific tools rather than ACP methods. This means some Hermes capabilities may not be exercised depending on which agent you use.
 
 ## Features
 
-- [x] Full implementation of ACP Client
+- [x] Full implementation of ACP Client (Built on the official [Rust ACP Sdk](https://github.com/agentclientprotocol/rust-sdk))
 - [x] Configurable capabilities (filesystem, terminal, etc)
 - [x] Trigger Autocommands for messages/notifications
 - [ ] Lsp integration
@@ -25,13 +25,13 @@ Hermes focuses on:
 
 ## API
 
-Hermes exposes the following functions for sending requests to AI assistants. However, not all assistants support every method, and the level of support may vary by agent.
+Hermes exposes the following functions for sending requests to AI assistants.
 
 Methods marked “Optional” are implemented by Hermes but are not mandatory for agent implementations.
 
 ### Setup
 
-Configure Hermes plugin settings. All configuration options are optional - only specified values are updated, preserving existing values for unspecified options.
+Configure Hermes plugin settings.
 
 ```lua
 local hermes = require("hermes")
@@ -42,39 +42,38 @@ hermes.setup()
 -- Configure specific permissions
 hermes.setup({
     permissions = {
-        fs_write_access = false,
+        fs_write_access = true,
         terminal_access = true,
     }
 })
 
--- Full configuration with both string and integer log levels
+-- Full configuration defaults
 hermes.setup({
-    root_markers = { ".git" }, -- project root markers, used to detect the project root by the files contained there
-
+    root_markers = { ".git" }, -- used to detect the project root by matching file names in the root directory
     permissions = {
-        fs_write_access = true,      -- Allow file writes to the agent (default: true)
-        fs_read_access = true,       -- Allow file reads to the agent (default: true)
-        terminal_access = true,      -- Allow terminal access to the agent (default: true)
-        request_permissions = true,  -- Allow agent to send permission requests (default: true)
-        send_notifications = true,  -- Allow the agent to send notifications (default: true)
+        fs_write_access = true,      -- Allow file writes to the agent 
+        fs_read_access = true,       -- Allow file reads to the agent 
+        terminal_access = true,      -- Allow terminal access to the agent 
+        request_permissions = true,  -- Allow agent to send permission requests 
+        send_notifications = true,  -- Allow the agent to send notifications 
     },
     terminal = {
-        delete = false,    -- Auto-delete terminals on exit (default: false)
-        enabled = true,    -- Enable terminal functionality (default: true)
-        buffered = true,   -- Buffer terminal output (default: true)
+        delete = true,    -- Auto-delete terminals on exit
+        enabled = true,    -- Enable terminal functionality
+        buffered = true,   -- Buffer terminal output 
     },
     buffer = {
-        auto_save = false,  -- Auto-save modified files after writing to them (default: false)
+        auto_save = false,  -- Auto-save modified files after writing to them 
     },
     log = {
         file = {
-            enabled = false,       -- Enable file logging (default: false)
+            enabled = false,       -- Enable file logging 
             path = vim.fn.stdpath('state') .. "/nvim/hermes.log",
-            level = vim.log.levels.WARN or "warn",      -- File log level (default: "warn")
+            level = vim.log.levels.WARN or "warn",      -- File log level
             max_size = nil,        -- Max bytes before rotation (optional)
             max_files = nil,       -- Max rotated files (optional)
         },
-        level = vim.log.levels.INFO or "info", -- Global log level (default: "info")
+        level = vim.log.levels.INFO or "info", -- Global log level 
         local_list = vim.log.levels.OFF or "off",  -- send logs to local list
         message = vim.log.levels.OFF or "off",  -- send logs to messages
         notification = vim.log.levels.OFF or "off", -- send logs to notify
@@ -83,7 +82,7 @@ hermes.setup({
 })
 ```
 
-> **Notes:**
+> [!NOTE]
 > - `setup()` does not have to be called, hermes will operate off of defaults without it
 > - Configuration changes are applied immediately
 > - Multiple `setup()` calls merge configurations - only specified fields are updated

@@ -3,16 +3,20 @@ use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{
-    EnvFilter, Registry, fmt,
+    fmt,
     prelude::*,
     reload::{self, Handle},
+    EnvFilter, Registry,
 };
 
 use crate::{
-    PluginState,
     acp::error::Error,
     nvim::configuration::{LogConfig, LogFileConfig},
+    PluginState,
 };
+
+pub mod files;
+
 static LOGGER: OnceLock<Logger> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -172,7 +176,6 @@ impl Logger {
         })
     }
 
-    #[allow(dead_code)]
     pub fn set_log_level(&self, level: LogLevel) -> Result<(), Error> {
         let filter: EnvFilter = level.into();
         self.filter
@@ -181,34 +184,53 @@ impl Logger {
     }
 
     pub fn set_file_logger(&self, config: LogFileConfig) -> Result<(), Error> {
-        // 1. Create a file appender for rolling daily logs in a "./logs" directory
-        let file_appender = daily("./logs", "app.log");
+        if !config.enabled {
+            return Ok(());
+        }
 
-        // 2. Wrap the file appender in a non-blocking writer for minimal performance impact
-        // The 'guard' must be held for the duration of the program, or logs may not be flushed correctly.
-        let (non_blocking_appender, _guard) = tracing_appender::non_blocking(file_appender);
+        // Validate the file appender can be created
+        let _max_size = config.max_size.unwrap_or(10_485_760); // 10MB default
+        let _max_files = config.max_files.unwrap_or(5) as usize;
 
-        // 3. Create a layer for formatting the logs to the non-blocking writer
-        let file_layer = fmt::layer()
-            .with_writer(non_blocking_appender)
-            .with_filter(LevelFilter::INFO); // Set minimum log level for this specific output
+        // Verify the path is valid by attempting to create the appender
+        // This will fail early if there are permission issues
+        let _file_appender = files::SizeBasedFileAppender::new(&config.path, _max_size, _max_files)
+            .map_err(|e| Error::Internal(format!("Failed to create file appender: {}", e)))?;
 
-        // 4. Create a stdout layer (optional, for console output)
-        let stdout_layer = fmt::layer()
-            .compact()
-            .with_ansi(true)
-            .with_filter(LevelFilter::DEBUG);
-
-        // 5. Compose the layers into a subscriber and set it as the global default
-        Registry::default()
-            .with(stdout_layer)
-            .with(file_layer)
-            .init();
+        // Note: Registry is already initialized, we can't add layers dynamically
+        // The file logger needs to be set up during initialization in `inititalize()`
+        // This method is here for API compatibility but returns an error
+        Err(Error::Internal(
+            "File logger must be configured during initialization. The file appender was validated but cannot be added to an already-initialized logger.".to_string()
+        ))
     }
 
     pub fn configure(&self, config: LogConfig) -> Result<(), Error> {
-        self.set_file_logger(config.file.clone())?;
+        if let Some(file_config) = config.file {
+            self.set_file_logger(file_config)?;
+        }
         self.set_log_level(config.level)
+    }
+}
+
+/// Guard struct for thread-safe file appender access
+pub struct FileAppenderGuard {
+    appender: std::sync::Arc<std::sync::Mutex<files::SizeBasedFileAppender>>,
+}
+
+impl std::io::Write for FileAppenderGuard {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let mut guard = self.appender.lock().map_err(|e| {
+            std::io::Error::other(format!("Lock poisoned: {:?}", e))
+        })?;
+        guard.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        let mut guard = self.appender.lock().map_err(|e| {
+            std::io::Error::other(format!("Lock poisoned: {:?}", e))
+        })?;
+        guard.flush()
     }
 }
 
