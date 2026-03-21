@@ -144,7 +144,7 @@ impl From<String> for LogFormat {
 pub struct Logger {
     filter: Handle<EnvFilter, Registry>,
     file_handle: Handle<EnvFilter, Layered<reload::Layer<EnvFilter, Registry>, Registry>>,
-    channel_writer: StdMutex<Option<channel::ChannelWriter>>,
+    channel_writer: Arc<StdMutex<Option<channel::ChannelWriter>>>,
 }
 
 impl Logger {
@@ -200,7 +200,7 @@ impl Logger {
             Self {
                 filter,
                 file_handle,
-                channel_writer: StdMutex::new(None),
+                channel_writer: channel_writer_holder,
             }
         })
     }

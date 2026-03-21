@@ -17,7 +17,7 @@ use tokio::sync::Mutex;
 #[nvim_oxi::test]
 fn setup_function_can_be_created() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let _setup_fn = setup(plugin_state);
+    let _setup_fn = setup(plugin_state.clone(), hermes::utilities::logging::Logger::inititalize());
     Ok(())
 }
 
@@ -25,7 +25,7 @@ fn setup_function_can_be_created() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_updates_permissions_correctly() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(plugin_state.clone());
+    let setup_fn = setup(plugin_state.clone(), hermes::utilities::logging::Logger::inititalize());
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
         nvim_oxi::conversion::FromObject::from_object(setup_fn)
@@ -62,7 +62,7 @@ fn setup_updates_permissions_correctly() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_updates_terminal_config_correctly() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(plugin_state.clone());
+    let setup_fn = setup(plugin_state.clone(), hermes::utilities::logging::Logger::inititalize());
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
         nvim_oxi::conversion::FromObject::from_object(setup_fn)
@@ -96,7 +96,7 @@ fn setup_updates_terminal_config_correctly() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_updates_buffer_config_correctly() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(plugin_state.clone());
+    let setup_fn = setup(plugin_state.clone(), hermes::utilities::logging::Logger::inititalize());
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
         nvim_oxi::conversion::FromObject::from_object(setup_fn)
@@ -121,7 +121,7 @@ fn setup_updates_buffer_config_correctly() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_updates_log_config_correctly() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(plugin_state.clone());
+    let setup_fn = setup(plugin_state.clone(), hermes::utilities::logging::Logger::inititalize());
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
         nvim_oxi::conversion::FromObject::from_object(setup_fn)
@@ -162,7 +162,7 @@ fn setup_updates_log_config_correctly() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_partial_update_preserves_existing_values() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(plugin_state.clone());
+    let setup_fn = setup(plugin_state.clone(), hermes::utilities::logging::Logger::inititalize());
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
         nvim_oxi::conversion::FromObject::from_object(setup_fn)
@@ -207,7 +207,7 @@ fn setup_partial_update_preserves_existing_values() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_creates_log_file_config_when_none() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(plugin_state.clone());
+    let setup_fn = setup(plugin_state.clone(), hermes::utilities::logging::Logger::inititalize());
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
         nvim_oxi::conversion::FromObject::from_object(setup_fn)
