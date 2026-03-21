@@ -225,42 +225,6 @@ impl Poppable for ClientConfigPartial {
     }
 }
 
-/// Wrapper type for setup arguments that can be nil or a config table
-#[derive(Clone, Debug, Default)]
-pub struct SetupArgs(pub Option<ClientConfigPartial>);
-
-impl SetupArgs {
-    pub fn into_inner(self) -> ClientConfigPartial {
-        self.0.unwrap_or_default()
-    }
-}
-
-impl Poppable for SetupArgs {
-    unsafe fn pop(lua_state: *mut lua::ffi::State) -> Result<Self, lua::Error> {
-        let obj = unsafe { Object::pop(lua_state)? };
-        // If object is nil, return None
-        if obj.is_nil() {
-            Ok(Self(None))
-        } else {
-            // Otherwise, try to parse as ClientConfigPartial
-            ClientConfigPartial::from_object(obj)
-                .map(|c| Self(Some(c)))
-                .map_err(|e| lua::Error::RuntimeError(e.to_string()))
-        }
-    }
-}
-
-impl nvim_oxi::lua::Pushable for SetupArgs {
-    unsafe fn push(self, lua_state: *mut lua::ffi::State) -> Result<i32, lua::Error> {
-        if let Some(config) = self.0 {
-            unsafe { config.push(lua_state) }
-        } else {
-            // Push nil for None
-            Ok(0) // Pushing nil typically returns 0 values pushed
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

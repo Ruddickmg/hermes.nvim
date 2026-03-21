@@ -34,7 +34,6 @@ fn test_file_logging_can_be_enabled() -> nvim_oxi::Result<()> {
 
     // Configure file logging
     let file_config = LogFileConfig {
-        enabled: true,
         path: log_path.to_string_lossy().to_string(),
         level: LogLevel::Info,
         format: None,
@@ -74,7 +73,6 @@ fn test_file_logging_first_message_written() -> nvim_oxi::Result<()> {
 
     // Enable file logging
     let file_config = LogFileConfig {
-        enabled: true,
         path: log_path.to_string_lossy().to_string(),
         level: LogLevel::Info,
         format: None,
@@ -111,7 +109,6 @@ fn test_file_logging_disabled_stops_writing() -> nvim_oxi::Result<()> {
     let enable_config = create_log_config_with_file(
         LogLevel::Info,
         LogFileConfig {
-            enabled: true,
             path: log_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
             format: None,
@@ -127,7 +124,6 @@ fn test_file_logging_disabled_stops_writing() -> nvim_oxi::Result<()> {
     let disable_config = create_log_config_with_file(
         LogLevel::Info,
         LogFileConfig {
-            enabled: false,
             path: log_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
             format: None,
@@ -162,7 +158,6 @@ fn test_debug_filtered_at_warn_level_debug() -> nvim_oxi::Result<()> {
 
     // Configure with WARN level
     let file_config = LogFileConfig {
-        enabled: true,
         path: log_path.to_string_lossy().to_string(),
         level: LogLevel::Warn,
         format: None,
@@ -196,7 +191,6 @@ fn test_debug_filtered_at_warn_level_info() -> nvim_oxi::Result<()> {
 
     // Configure with WARN level
     let file_config = LogFileConfig {
-        enabled: true,
         path: log_path.to_string_lossy().to_string(),
         level: LogLevel::Warn,
         format: None,
@@ -230,7 +224,6 @@ fn test_debug_filtered_at_warn_level_warn() -> nvim_oxi::Result<()> {
 
     // Configure with WARN level
     let file_config = LogFileConfig {
-        enabled: true,
         path: log_path.to_string_lossy().to_string(),
         level: LogLevel::Warn,
         format: None,
@@ -266,7 +259,6 @@ fn test_log_level_reconfiguration_filtered_before() -> nvim_oxi::Result<()> {
     let warn_config = create_log_config_with_file(
         LogLevel::Warn,
         LogFileConfig {
-            enabled: true,
             path: log_path.to_string_lossy().to_string(),
             level: LogLevel::Warn,
             format: None,
@@ -302,7 +294,6 @@ fn test_log_level_reconfiguration_written_after() -> nvim_oxi::Result<()> {
     let warn_config = create_log_config_with_file(
         LogLevel::Warn,
         LogFileConfig {
-            enabled: true,
             path: log_path.to_string_lossy().to_string(),
             level: LogLevel::Warn,
             format: None,
@@ -316,7 +307,6 @@ fn test_log_level_reconfiguration_written_after() -> nvim_oxi::Result<()> {
     let info_config = create_log_config_with_file(
         LogLevel::Info,
         LogFileConfig {
-            enabled: true,
             path: log_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
             format: None,
@@ -350,7 +340,6 @@ fn test_log_rotation() -> nvim_oxi::Result<()> {
 
     // Configure with small max_size
     let file_config = LogFileConfig {
-        enabled: true,
         path: log_path.to_string_lossy().to_string(),
         level: LogLevel::Info,
         format: None,
@@ -404,7 +393,6 @@ fn test_reconfigure_to_second_path() -> nvim_oxi::Result<()> {
     let first_config = create_log_config_with_file(
         LogLevel::Info,
         LogFileConfig {
-            enabled: true,
             path: first_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
             format: None,
@@ -420,7 +408,6 @@ fn test_reconfigure_to_second_path() -> nvim_oxi::Result<()> {
     let second_config = create_log_config_with_file(
         LogLevel::Info,
         LogFileConfig {
-            enabled: true,
             path: second_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
             format: None,
@@ -489,6 +476,92 @@ fn test_log_target_config_with_format_format() -> nvim_oxi::Result<()> {
         format: Some(LogFormat::Json),
     };
     assert_eq!(config.format, Some(LogFormat::Json));
+
+    Ok(())
+}
+
+/// Integration test: Verifies that log format can be changed via configure()
+#[nvim_oxi::test]
+fn test_log_format_can_be_changed_via_configure() -> nvim_oxi::Result<()> {
+    use hermes::nvim::configuration::LogTargetConfig;
+    use hermes::utilities::logging::LogFormat;
+
+    let temp_dir = TempDir::new().unwrap();
+    let log_path = temp_dir.path().join("test.log");
+
+    let logger = Logger::inititalize();
+
+    // First, configure with Compact format
+    let compact_config = LogConfig {
+        stdio: LogTargetConfig {
+            level: LogLevel::Info,
+            format: Some(LogFormat::Compact),
+        },
+        file: Some(LogFileConfig {
+            path: log_path.to_string_lossy().to_string(),
+            level: LogLevel::Info,
+            format: Some(LogFormat::Compact),
+            max_size: Some(1024 * 1024),
+            max_files: Some(5),
+        }),
+        message: LogTargetConfig::default(),
+        notification: LogTargetConfig::default(),
+        quickfix: LogTargetConfig::default(),
+    };
+    logger
+        .configure(compact_config)
+        .expect("Failed to configure with Compact format");
+
+    // Log first message
+    tracing::info!("First message in compact format");
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Now reconfigure with Json format
+    let json_config = LogConfig {
+        stdio: LogTargetConfig {
+            level: LogLevel::Info,
+            format: Some(LogFormat::Json),
+        },
+        file: Some(LogFileConfig {
+            path: log_path.to_string_lossy().to_string(),
+            level: LogLevel::Info,
+            format: Some(LogFormat::Json),
+            max_size: Some(1024 * 1024),
+            max_files: Some(5),
+        }),
+        message: LogTargetConfig::default(),
+        notification: LogTargetConfig::default(),
+        quickfix: LogTargetConfig::default(),
+    };
+    logger
+        .configure(json_config)
+        .expect("Failed to reconfigure with Json format");
+
+    // Log second message
+    tracing::info!("Second message in json format");
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Verify log file contains both messages
+    let content = std::fs::read_to_string(&log_path).expect("Should be able to read log file");
+
+    // Verify first message is present (compact format)
+    assert!(
+        content.contains("First message in compact format"),
+        "Log file should contain first message"
+    );
+
+    // Verify second message is present (json format)
+    assert!(
+        content.contains("Second message in json format"),
+        "Log file should contain second message"
+    );
+
+    // Verify format actually changed by checking for JSON structure in second message
+    // JSON format includes fields like "message", "level", "target" etc.
+    assert!(
+        content.contains("\"message\":") || content.contains("\"level\":"),
+        "Second message should be in JSON format"
+    );
 
     Ok(())
 }

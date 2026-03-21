@@ -1,13 +1,10 @@
 use hermes::{
-    nvim::{
-        api::SetupArgs,
-        configuration::{
-            BufferConfigPartial, ClientConfigPartial, LogConfigPartial, LogFileConfigPartial,
-            LogTargetConfigPartial,
-        },
-        PluginState,
+    PluginState,
+    api::{SetupArgs, setup::setup},
+    nvim::configuration::{
+        BufferConfigPartial, ClientConfigPartial, LogConfigPartial, LogFileConfigPartial,
+        LogTargetConfigPartial,
     },
-    setup,
 };
 use nvim_oxi::{self, lua::Poppable};
 use pretty_assertions::assert_eq;
@@ -93,7 +90,6 @@ fn setup_updates_stdio_log_level() -> nvim_oxi::Result<()> {
             notification: None,
             message: None,
             quickfix: None,
-            local_list: None,
         }),
         ..Default::default()
     };
@@ -132,7 +128,6 @@ fn setup_updates_notification_log_level() -> nvim_oxi::Result<()> {
             }),
             message: None,
             quickfix: None,
-            local_list: None,
         }),
         ..Default::default()
     };
@@ -171,7 +166,6 @@ fn setup_updates_message_log_level() -> nvim_oxi::Result<()> {
                 format: None,
             }),
             quickfix: None,
-            local_list: None,
         }),
         ..Default::default()
     };
@@ -322,7 +316,6 @@ fn setup_enables_log_file_config() -> nvim_oxi::Result<()> {
     let config = ClientConfigPartial {
         log: Some(LogConfigPartial {
             file: Some(LogFileConfigPartial {
-                enabled: Some(true),
                 path: None,
                 level: None,
                 format: None,
@@ -364,7 +357,6 @@ fn setup_sets_log_file_path() -> nvim_oxi::Result<()> {
     let config = ClientConfigPartial {
         log: Some(LogConfigPartial {
             file: Some(LogFileConfigPartial {
-                enabled: None,
                 path: Some("/tmp/test.log".to_string()),
                 level: None,
                 format: None,
@@ -406,7 +398,6 @@ fn setup_sets_log_file_level() -> nvim_oxi::Result<()> {
     let config = ClientConfigPartial {
         log: Some(LogConfigPartial {
             file: Some(LogFileConfigPartial {
-                enabled: None,
                 path: None,
                 level: Some(hermes::utilities::LogLevel::Warn),
                 format: None,
@@ -455,7 +446,6 @@ fn setup_updates_stdio_log_format() -> nvim_oxi::Result<()> {
             notification: None,
             message: None,
             quickfix: None,
-            local_list: None,
         }),
         ..Default::default()
     };
@@ -494,7 +484,6 @@ fn setup_updates_notification_log_format() -> nvim_oxi::Result<()> {
             }),
             message: None,
             quickfix: None,
-            local_list: None,
         }),
         ..Default::default()
     };

@@ -174,12 +174,33 @@ type LoggerHolders = (
     Arc<StdMutex<MessageSink>>,
 );
 
+/// Type aliases for layer reload handles
+type FormatLayerHandle = Handle<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>, Registry>;
+
+/// Log target identifier for format updates
+#[derive(Clone, Copy, Debug)]
+pub enum LogTarget {
+    Stdio,
+    File,
+    Notification,
+    Message,
+    Quickfix,
+}
+
 /// Logger that supports multiple output targets
 pub struct Logger {
     filter: Handle<EnvFilter, Registry>,
     file_handle: Handle<EnvFilter, Registry>,
     file_writer: Arc<StdMutex<Option<FileChannel>>>,
     quickfix_writer: Arc<StdMutex<Option<QuickfixChannel>>>,
+    notification_sink: Arc<StdMutex<NotificationSink>>,
+    message_sink: Arc<StdMutex<MessageSink>>,
+    // Reload handles for format-dependent layers
+    stdio_handle: FormatLayerHandle,
+    file_format_handle: FormatLayerHandle,
+    quickfix_handle: FormatLayerHandle,
+    notification_handle: FormatLayerHandle,
+    message_handle: FormatLayerHandle,
 }
 
 impl Logger {
@@ -197,23 +218,43 @@ impl Logger {
         let mut layers: Vec<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>> =
             Vec::new();
 
-        // Stdio filter layer (controls all stdout output)
+        // Stdio layer with reload capability for format
+        let (stdio_reload_layer, stdio_handle) = reload::Layer::new(
+            Self::create_stdio_layer(format)
+        );
+        layers.push(Box::new(stdio_reload_layer));
+
+        // Stdio filter layer (controls all stdout output level)
         let (filter_layer, filter) = Self::create_stdio_filter(log_level);
         layers.push(Box::new(filter_layer));
 
-        // File layer with its filter (starts disabled)
+        // File layer with format reload capability
+        let (file_reload_layer, file_format_handle) = reload::Layer::new(
+            Self::create_file_layer_with_format(file_writer.clone(), format)
+        );
+        layers.push(Box::new(file_reload_layer));
+        
+        // File level filter (controls file output level, starts disabled)
         let (file_filter_layer, file_handle) = Self::create_file_filter();
-        let file_layer = Self::create_file_layer(file_writer.clone()).with_filter(file_filter_layer);
-        layers.push(Box::new(file_layer));
+        layers.push(Box::new(file_filter_layer));
 
-        // Quickfix layer
-        layers.push(Self::create_quickfix_layer(quickfix_writer.clone(), format));
+        // Quickfix layer with reload capability
+        let (quickfix_reload_layer, quickfix_handle) = reload::Layer::new(
+            Self::create_quickfix_layer(quickfix_writer.clone(), format)
+        );
+        layers.push(Box::new(quickfix_reload_layer));
 
-        // Notification layer
-        layers.push(Self::create_notification_layer(notification_sink.clone(), format));
+        // Notification layer with reload capability
+        let (notification_reload_layer, notification_handle) = reload::Layer::new(
+            Self::create_notification_layer(notification_sink.clone(), format)
+        );
+        layers.push(Box::new(notification_reload_layer));
 
-        // Message layer
-        layers.push(Self::create_message_layer(message_sink.clone(), format));
+        // Message layer with reload capability
+        let (message_reload_layer, message_handle) = reload::Layer::new(
+            Self::create_message_layer(message_sink.clone(), format)
+        );
+        layers.push(Box::new(message_reload_layer));
 
         // Build and init subscriber
         let subscriber = tracing_subscriber::registry().with(layers);
@@ -225,6 +266,13 @@ impl Logger {
                 file_handle,
                 file_writer,
                 quickfix_writer,
+                notification_sink,
+                message_sink,
+                stdio_handle,
+                file_format_handle,
+                quickfix_handle,
+                notification_handle,
+                message_handle,
             }
         })
     }
@@ -254,6 +302,21 @@ impl Logger {
         reload::Layer::new(log_level)
     }
 
+    /// Create stdio layer with format selection
+    fn create_stdio_layer(
+        format: LogFormat,
+    ) -> Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync> {
+        let base_layer = fmt::layer()
+            .with_ansi(true);
+
+        match format {
+            LogFormat::Full => Box::new(base_layer),
+            LogFormat::Compact => Box::new(base_layer.compact()),
+            LogFormat::Json => Box::new(base_layer.json()),
+            LogFormat::Pretty => Box::new(base_layer.pretty()),
+        }
+    }
+
     /// Create file filter layer (starts OFF, reloadable)
     fn create_file_filter() -> (reload::Layer<EnvFilter, Registry>, Handle<EnvFilter, Registry>) {
         let file_off_filter: EnvFilter = LogLevel::Off.into();
@@ -275,6 +338,29 @@ impl Logger {
                 .with_thread_ids(true)
                 .with_thread_names(true),
         )
+    }
+
+    /// Create file layer with channel writer and format selection
+    fn create_file_layer_with_format(
+        file_writer: Arc<StdMutex<Option<FileChannel>>>,
+        format: LogFormat,
+    ) -> Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync> {
+        let base_layer = fmt::layer()
+            .with_writer(move || -> ChannelWriterGuard<FileSink> {
+                ChannelWriterGuard::new(file_writer.clone())
+            })
+            .with_ansi(false)
+            .with_file(true)
+            .with_line_number(true)
+            .with_thread_ids(true)
+            .with_thread_names(true);
+
+        match format {
+            LogFormat::Full => Box::new(base_layer),
+            LogFormat::Compact => Box::new(base_layer.compact()),
+            LogFormat::Json => Box::new(base_layer.json()),
+            LogFormat::Pretty => Box::new(base_layer.pretty()),
+        }
     }
 
     /// Create quickfix layer with format selection
@@ -426,14 +512,68 @@ impl Logger {
         Ok(())
     }
 
+    /// Target identifier for format updates
+    pub fn set_format(&self, target: LogTarget, format: LogFormat) -> Result<(), Error> {
+        match target {
+            LogTarget::Quickfix => {
+                let new_layer = Self::create_quickfix_layer(self.quickfix_writer.clone(), format);
+                self.quickfix_handle
+                    .reload(new_layer)
+                    .map_err(|e| Error::Internal(format!("Failed to reload quickfix format: {}", e)))?;
+            }
+            LogTarget::Notification => {
+                let new_layer = Self::create_notification_layer(self.notification_sink.clone(), format);
+                self.notification_handle
+                    .reload(new_layer)
+                    .map_err(|e| Error::Internal(format!("Failed to reload notification format: {}", e)))?;
+            }
+            LogTarget::Message => {
+                let new_layer = Self::create_message_layer(self.message_sink.clone(), format);
+                self.message_handle
+                    .reload(new_layer)
+                    .map_err(|e| Error::Internal(format!("Failed to reload message format: {}", e)))?;
+            }
+            LogTarget::File => {
+                // Reload file layer with new format
+                let new_layer = Self::create_file_layer_with_format(self.file_writer.clone(), format);
+                self.file_format_handle
+                    .reload(new_layer)
+                    .map_err(|e| Error::Internal(format!("Failed to reload file format: {}", e)))?;
+            }
+            LogTarget::Stdio => {
+                // Reload stdio layer with new format
+                let new_layer = Self::create_stdio_layer(format);
+                self.stdio_handle
+                    .reload(new_layer)
+                    .map_err(|e| Error::Internal(format!("Failed to reload stdio format: {}", e)))?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn configure(&self, config: LogConfig) -> Result<(), Error> {
         // Configure file logging
         if let Some(file_config) = config.file {
-            self.set_file_logger(file_config)?;
+            self.set_file_logger(file_config.clone())?;
+            // Update file format if specified
+            if let Some(format) = file_config.format {
+                self.set_format(LogTarget::File, format)?;
+            }
         }
 
-        // Note: Formats are set during initialize() with default "compact"
-        // Per-target format configuration would require reinitializing the logger
+        // Update formats for each target if specified
+        if let Some(format) = config.stdio.format {
+            self.set_format(LogTarget::Stdio, format)?;
+        }
+        if let Some(format) = config.notification.format {
+            self.set_format(LogTarget::Notification, format)?;
+        }
+        if let Some(format) = config.message.format {
+            self.set_format(LogTarget::Message, format)?;
+        }
+        if let Some(format) = config.quickfix.format {
+            self.set_format(LogTarget::Quickfix, format)?;
+        }
 
         // Configure levels for each target
         self.set_notification_logger(config.notification.level)?;
@@ -628,6 +768,16 @@ mod tests {
     fn test_log_format_from_string_unknown_defaults_to_pretty() {
         let unknown: LogFormat = "unknown".to_string().into();
         assert_eq!(unknown, LogFormat::Pretty);
+    }
+
+    #[test]
+    fn test_log_target_variants_exist() {
+        // Verify all LogTarget variants can be constructed
+        let _stdio = LogTarget::Stdio;
+        let _file = LogTarget::File;
+        let _notification = LogTarget::Notification;
+        let _message = LogTarget::Message;
+        let _quickfix = LogTarget::Quickfix;
     }
 }
 
