@@ -4,7 +4,7 @@ mod permissions;
 mod terminal;
 
 pub use buffer::{BufferConfig, BufferConfigPartial};
-pub use log::{LogConfig, LogConfigPartial, LogFileConfig, LogFileConfigPartial};
+pub use log::{LogConfig, LogConfigPartial, LogFileConfig, LogFileConfigPartial, LogTargetConfig};
 use nvim_oxi::{
     conversion::{Error, FromObject},
     lua::{self, Poppable},
@@ -174,17 +174,45 @@ impl nvim_oxi::lua::Pushable for ClientConfigPartial {
             if let Some(val) = log.level {
                 log_dict.insert("level", val.to_string());
             }
-            if let Some(val) = log.local_list {
-                log_dict.insert("local_list", val.to_string());
+            if let Some(ref val) = log.notification {
+                let mut target_dict = Dictionary::new();
+                if let Some(level) = val.level {
+                    target_dict.insert("level", level.to_string());
+                }
+                if let Some(format) = val.format {
+                    target_dict.insert("format", format.to_string());
+                }
+                log_dict.insert("notification", target_dict);
             }
-            if let Some(val) = log.message {
-                log_dict.insert("message", val.to_string());
+            if let Some(ref val) = log.message {
+                let mut target_dict = Dictionary::new();
+                if let Some(level) = val.level {
+                    target_dict.insert("level", level.to_string());
+                }
+                if let Some(format) = val.format {
+                    target_dict.insert("format", format.to_string());
+                }
+                log_dict.insert("message", target_dict);
             }
-            if let Some(val) = log.notification {
-                log_dict.insert("notification", val.to_string());
+            if let Some(ref val) = log.quickfix {
+                let mut target_dict = Dictionary::new();
+                if let Some(level) = val.level {
+                    target_dict.insert("level", level.to_string());
+                }
+                if let Some(format) = val.format {
+                    target_dict.insert("format", format.to_string());
+                }
+                log_dict.insert("quickfix", target_dict);
             }
-            if let Some(val) = log.quick_fix_list {
-                log_dict.insert("quick_fix_list", val.to_string());
+            if let Some(ref val) = log.local_list {
+                let mut target_dict = Dictionary::new();
+                if let Some(level) = val.level {
+                    target_dict.insert("level", level.to_string());
+                }
+                if let Some(format) = val.format {
+                    target_dict.insert("format", format.to_string());
+                }
+                log_dict.insert("local_list", target_dict);
             }
             dict.insert("log", log_dict);
         }
@@ -295,14 +323,22 @@ mod tests {
             log: LogConfig {
                 file: None,
                 level: crate::utilities::LogLevel::Warn,
-                format: crate::utilities::LogFormat::default(),
-                local_list: crate::utilities::LogLevel::Warn,
-                message: crate::utilities::LogLevel::Warn,
-                notification: crate::utilities::LogLevel::Warn,
-                quick_fix_list: crate::utilities::LogLevel::Warn,
-                notification_format: None,
-                message_format: None,
-                quickfix_format: None,
+                notification: LogTargetConfig {
+                    level: crate::utilities::LogLevel::Warn,
+                    format: None,
+                },
+                message: LogTargetConfig {
+                    level: crate::utilities::LogLevel::Warn,
+                    format: None,
+                },
+                quickfix: LogTargetConfig {
+                    level: crate::utilities::LogLevel::Warn,
+                    format: None,
+                },
+                local_list: LogTargetConfig {
+                    level: crate::utilities::LogLevel::Warn,
+                    format: None,
+                },
             },
         };
         let partial = ClientConfigPartial::default(); // all None

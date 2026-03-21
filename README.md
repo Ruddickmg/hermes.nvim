@@ -70,14 +70,27 @@ hermes.setup({
             enabled = false,       -- Enable file logging 
             path = vim.fn.stdpath('state') .. "/nvim/hermes.log",
             level = vim.log.levels.WARN or "warn",      -- File log level
-            max_size = nil,        -- Max bytes before rotation (optional)
-            max_files = nil,       -- Max rotated files (optional)
+            format = "json",          -- Format (nil = use default: "compact")
+            max_size = , -- Max bytes before rotation (optional)
+            max_files = ,       -- Max rotated files (optional)
         },
         level = vim.log.levels.INFO or "info", -- Global log level 
-        local_list = vim.log.levels.OFF or "off",  -- send logs to local list
-        message = vim.log.levels.OFF or "off",  -- send logs to messages
-        notification = vim.log.levels.OFF or "off", -- send logs to notify
-        quick_fix_list = vim.log.levels.OFF or "off", -- send logs to quick fix list
+        notification = {
+            level = vim.log.levels.OFF or "off", -- Notification log level
+            format = "compact",          -- Format (nil = use default: "compact")
+        },
+        message = {
+            level = vim.log.levels.OFF or "off",   -- Message history log level
+            format = "compact",          -- Format (nil = use default: "compact")
+        },
+        quickfix = {
+            level = vim.log.levels.OFF or "off",   -- Quickfix list log level
+            format = "compact",          -- Format (nil = use default: "compact")
+        },
+        local_list = {
+            level = vim.log.levels.OFF or "off",   -- Local list log level
+            format = "compact",          -- Format override (nil = use global format)
+        },
     },
 })
 ```
@@ -1378,35 +1391,42 @@ Below is a list of all autocommands and their associated data (passed to the cal
 ## Logging
 
 ### Level
-Hermes defaults to the global neovim log level, or to `INFO` if there is no global log level set.
+Hermes defaults to `INFO` log level until configured via `setup()`.
 
-Global log level example:
-```lua
-vim.opt.verbose = vim.log.levels.DEBUG;
-```
-
- You can also use the neovim log levels to configure Hermes logging which will override the default behavior.
-
-Example: 
+Configure log levels and formats via the `setup()` function:
 ```lua
 require("hermes").setup({
-    logLevel: vim.log.levels.DEBUG,
+    log = {
+        level = vim.log.levels.DEBUG,                    -- Global log level
+        notification = { level = vim.log.levels.ERROR }, -- Per-target config
+        message = { 
+            level = vim.log.levels.INFO,
+            format = "pretty"  -- Each target has its own format
+        },
+    }
 })
 ```
 
 ### Format
 
-Logging defaults to pretty formatting, but you can change that format by setting a global variable in vim
+Log formats can be configured per-target via `setup()`. Each target has its own format setting that defaults to "compact" if not specified:
 
 ```lua
-vim.g.HERMES_LOG_FORMAT = "json"
+require("hermes").setup({
+    log = {
+        -- Each target has its own format (defaults to "compact" if not set):
+        notification = { format = "pretty" },
+        message = { format = "json" },
+        quickfix = { format = nil },  -- nil = use default ("compact")
+    }
+})
 ```
 
-Your options for log formats are:
-- json
-- pretty
-- compact
-- full
+Available formats:
+- **pretty** - Human-readable with colors and formatting
+- **compact** - Condensed single-line format (default)
+- **full** - Complete information including timestamps and metadata
+- **json** - Machine-readable JSON format
 
 ## TODO:
 

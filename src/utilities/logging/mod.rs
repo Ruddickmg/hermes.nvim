@@ -1,4 +1,3 @@
-use nvim_oxi::api::{self, opts::OptionOpts};
 use std::sync::Mutex as StdMutex;
 use std::sync::{Arc, OnceLock};
 use tracing::level_filters::LevelFilter;
@@ -116,6 +115,17 @@ pub enum LogFormat {
     Json,
 }
 
+impl std::fmt::Display for LogFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LogFormat::Pretty => write!(f, "pretty"),
+            LogFormat::Compact => write!(f, "compact"),
+            LogFormat::Full => write!(f, "full"),
+            LogFormat::Json => write!(f, "json"),
+        }
+    }
+}
+
 impl From<&str> for LogFormat {
     fn from(value: &str) -> Self {
         match value {
@@ -169,14 +179,10 @@ pub struct Logger {
 
 impl Logger {
     pub fn inititalize() -> &'static Self {
-        let opts = OptionOpts::default();
-        let format: LogFormat = api::get_var::<String>("HERMES_LOG_FORMAT")
-            .map(LogFormat::from)
-            .unwrap_or_default();
-        let log_level: EnvFilter = api::get_option_value::<i64>("verbose", &opts)
-            .map(LogLevel::from)
-            .unwrap_or_default()
-            .into();
+        // Use default format (Compact) until configure() is called
+        // This avoids needing global variables - configuration happens via setup()
+        let format = LogFormat::Compact;
+        let log_level = EnvFilter::new("info");
 
         // Create channel writer holders (start empty) - only for blocking operations
         let file_writer_holder: Arc<StdMutex<Option<FileChannel>>> = Arc::new(StdMutex::new(None));
@@ -215,18 +221,49 @@ impl Logger {
             .with_filter(file_filter_layer);
         layers.push(Box::new(file_layer));
 
-        // Add quickfix layer (compact format for navigation)
-        let quickfix_layer = fmt::layer()
-            .with_writer(move || -> ChannelWriterGuard<QuickfixSink> {
-                ChannelWriterGuard::new(quickfix_writer_clone.clone())
-            })
-            .with_ansi(false)
-            .with_file(true)
-            .with_line_number(true)
-            .with_thread_ids(false)
-            .with_thread_names(false)
-            .compact();
-        layers.push(Box::new(quickfix_layer));
+        // Add quickfix layer with user-selected format
+        let quickfix_layer: Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync> = match format {
+            LogFormat::Full => Box::new(
+                fmt::layer()
+                    .with_writer(move || -> ChannelWriterGuard<QuickfixSink> {
+                        ChannelWriterGuard::new(quickfix_writer_clone.clone())
+                    })
+                    .with_ansi(false)
+                    .with_file(true)
+                    .with_line_number(true)
+            ),
+            LogFormat::Compact => Box::new(
+                fmt::layer()
+                    .with_writer(move || -> ChannelWriterGuard<QuickfixSink> {
+                        ChannelWriterGuard::new(quickfix_writer_clone.clone())
+                    })
+                    .with_ansi(false)
+                    .with_file(true)
+                    .with_line_number(true)
+                    .compact()
+            ),
+            LogFormat::Json => Box::new(
+                fmt::layer()
+                    .with_writer(move || -> ChannelWriterGuard<QuickfixSink> {
+                        ChannelWriterGuard::new(quickfix_writer_clone.clone())
+                    })
+                    .with_ansi(false)
+                    .with_file(true)
+                    .with_line_number(true)
+                    .json()
+            ),
+            LogFormat::Pretty => Box::new(
+                fmt::layer()
+                    .with_writer(move || -> ChannelWriterGuard<QuickfixSink> {
+                        ChannelWriterGuard::new(quickfix_writer_clone.clone())
+                    })
+                    .with_ansi(false)
+                    .with_file(true)
+                    .with_line_number(true)
+                    .pretty()
+            ),
+        };
+        layers.push(quickfix_layer);
 
         // Add notification layer with user-selected format
         let notification_layer: Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync> = match format {
@@ -417,13 +454,13 @@ impl Logger {
             self.set_file_logger(file_config)?;
         }
         
-        // Note: Formats are set during initialize() via HERMES_LOG_FORMAT
+        // Note: Formats are set during initialize() with default "compact"
         // Per-target format configuration would require reinitializing the logger
         
         // Configure levels for each target
-        self.set_notification_logger(config.notification)?;
-        self.set_message_logger(config.message)?;
-        self.set_quickfix_logger(config.quick_fix_list)?;
+        self.set_notification_logger(config.notification.level)?;
+        self.set_message_logger(config.message.level)?;
+        self.set_quickfix_logger(config.quickfix.level)?;
         self.set_log_level(config.level)?;
 
         Ok(())
