@@ -598,18 +598,26 @@ mod tests {
     }
 
     #[test]
-    fn test_log_format_from_str_known_values() {
-        let inputs: Vec<&str> = vec!["pretty", "compact", "full", "json", "unknown"];
-        let results: Vec<LogFormat> = inputs.iter().map(|&s| LogFormat::from(s)).collect();
+    fn test_log_format_display() {
+        assert_eq!(LogFormat::Pretty.to_string(), "pretty");
+        assert_eq!(LogFormat::Compact.to_string(), "compact");
+        assert_eq!(LogFormat::Full.to_string(), "full");
+        assert_eq!(LogFormat::Json.to_string(), "json");
+    }
 
-        let expected: Vec<LogFormat> = vec![
-            LogFormat::Pretty,
-            LogFormat::Compact,
-            LogFormat::Full,
-            LogFormat::Json,
-            LogFormat::Pretty,
-        ];
+    #[test]
+    fn test_log_format_from_string() {
+        let pretty: LogFormat = "pretty".to_string().into();
+        let compact: LogFormat = "compact".to_string().into();
+        let full: LogFormat = "full".to_string().into();
+        let json: LogFormat = "json".to_string().into();
+        let unknown: LogFormat = "unknown".to_string().into();
 
-        assert_eq!(results, expected);
+        assert_eq!(pretty, LogFormat::Pretty);
+        assert_eq!(compact, LogFormat::Compact);
+        assert_eq!(full, LogFormat::Full);
+        assert_eq!(json, LogFormat::Json);
+        assert_eq!(unknown, LogFormat::Pretty); // defaults to pretty
     }
 }
+

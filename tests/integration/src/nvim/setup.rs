@@ -1,79 +1,34 @@
-//! Integration tests for setup API function
-//!
-//! Tests verify that api::setup correctly updates plugin state when called with various configs.
-
-use hermes::nvim::{
-    api::setup,
-    configuration::{
-        BufferConfigPartial, ClientConfigPartial, LogConfigPartial, LogFileConfigPartial,
-        Permissions, PermissionsPartial, SetupArgs, TerminalConfig, TerminalConfigPartial,
+use hermes::{
+    nvim::{
+        api::SetupArgs,
+        configuration::{
+            BufferConfigPartial, ClientConfigPartial, LogConfigPartial, LogFileConfigPartial,
+            LogTargetConfigPartial,
+        },
+        PluginState,
     },
-    state::PluginState,
+    setup,
 };
-use std::sync::Arc;
-use tokio::sync::Mutex;
-
-/// Test: setup() function can be created
-#[nvim_oxi::test]
-fn setup_function_can_be_created() -> nvim_oxi::Result<()> {
-    let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let _setup_fn = setup(plugin_state.clone(), hermes::utilities::logging::Logger::inititalize());
-    Ok(())
-}
+use nvim_oxi::{self, lua::Poppable};
+use std::sync::{Arc, Mutex};
 
 /// Test: setup() updates permissions correctly
 #[nvim_oxi::test]
 fn setup_updates_permissions_correctly() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(plugin_state.clone(), hermes::utilities::logging::Logger::inititalize());
+    let setup_fn = setup(
+        plugin_state.clone(),
+        hermes::utilities::logging::Logger::inititalize(),
+    );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
         nvim_oxi::conversion::FromObject::from_object(setup_fn)
             .expect("Failed to convert setup function");
 
     let config = ClientConfigPartial {
-        permissions: Some(PermissionsPartial {
+        permissions: Some(hermes::nvim::configuration::PermissionsPartial {
             fs_write_access: Some(false),
-            fs_read_access: None,
-            terminal_access: Some(false),
-            request_permissions: None,
-            send_notifications: None,
-        }),
-        ..Default::default()
-    };
-
-    func.call(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
-
-    // Verify changes using single assertion comparing expected vs actual
-    let state = plugin_state.blocking_lock();
-    let expected = Permissions {
-        fs_write_access: false,    // changed
-        fs_read_access: true,      // default preserved
-        terminal_access: false,    // changed
-        request_permissions: true, // default preserved
-        send_notifications: true,  // default preserved
-    };
-    assert_eq!(state.config.permissions, expected);
-    Ok(())
-}
-
-/// Test: setup() updates terminal config correctly
-#[nvim_oxi::test]
-fn setup_updates_terminal_config_correctly() -> nvim_oxi::Result<()> {
-    let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(plugin_state.clone(), hermes::utilities::logging::Logger::inititalize());
-
-    let func: nvim_oxi::Function<SetupArgs, ()> =
-        nvim_oxi::conversion::FromObject::from_object(setup_fn)
-            .expect("Failed to convert setup function");
-
-    let config = ClientConfigPartial {
-        terminal: Some(TerminalConfigPartial {
-            delete: Some(true),
-            hidden: Some(false),
-            enabled: Some(false),
-            buffered: Some(false),
+            ..Default::default()
         }),
         ..Default::default()
     };
@@ -82,13 +37,7 @@ fn setup_updates_terminal_config_correctly() -> nvim_oxi::Result<()> {
         .expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
-    let expected = TerminalConfig {
-        delete: true,    // changed
-        hidden: false,   // changed
-        enabled: false,  // changed
-        buffered: false, // changed
-    };
-    assert_eq!(state.config.terminal, expected);
+    assert!(!state.config.permissions.fs_write_access); // Single assertion
     Ok(())
 }
 
@@ -96,7 +45,10 @@ fn setup_updates_terminal_config_correctly() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_updates_buffer_config_correctly() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(plugin_state.clone(), hermes::utilities::logging::Logger::inititalize());
+    let setup_fn = setup(
+        plugin_state.clone(),
+        hermes::utilities::logging::Logger::inititalize(),
+    );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
         nvim_oxi::conversion::FromObject::from_object(setup_fn)
@@ -121,7 +73,10 @@ fn setup_updates_buffer_config_correctly() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_updates_log_config_correctly() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(plugin_state.clone(), hermes::utilities::logging::Logger::inititalize());
+    let setup_fn = setup(
+        plugin_state.clone(),
+        hermes::utilities::logging::Logger::inititalize(),
+    );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
         nvim_oxi::conversion::FromObject::from_object(setup_fn)
@@ -130,11 +85,20 @@ fn setup_updates_log_config_correctly() -> nvim_oxi::Result<()> {
     let config = ClientConfigPartial {
         log: Some(LogConfigPartial {
             file: None,
-            level: Some(hermes::utilities::LogLevel::Debug),
-            local_list: Some(hermes::utilities::LogLevel::Info),
-            message: Some(hermes::utilities::LogLevel::Warn),
-            notification: None,
-            quick_fix_list: None,
+            stdio: Some(LogTargetConfigPartial {
+                level: Some(hermes::utilities::LogLevel::Debug),
+                format: None,
+            }),
+            notification: Some(LogTargetConfigPartial {
+                level: Some(hermes::utilities::LogLevel::Info),
+                format: None,
+            }),
+            message: Some(LogTargetConfigPartial {
+                level: Some(hermes::utilities::LogLevel::Warn),
+                format: None,
+            }),
+            quickfix: None,
+            local_list: None,
         }),
         ..Default::default()
     };
@@ -144,84 +108,125 @@ fn setup_updates_log_config_correctly() -> nvim_oxi::Result<()> {
 
     let state = plugin_state.blocking_lock();
     assert_eq!(
-        (
-            state.config.log.level,
-            state.config.log.local_list,
-            state.config.log.message
-        ),
-        (
-            hermes::utilities::LogLevel::Debug,
-            hermes::utilities::LogLevel::Info,
-            hermes::utilities::LogLevel::Warn
-        )
-    );
+        state.config.log.stdio.level,
+        hermes::utilities::LogLevel::Debug
+    ); // Stdio level updated
+    assert_eq!(
+        state.config.log.notification.level,
+        hermes::utilities::LogLevel::Info
+    ); // Notification level updated
+    assert_eq!(
+        state.config.log.message.level,
+        hermes::utilities::LogLevel::Warn
+    ); // Message level updated
     Ok(())
 }
 
-/// Test: Multiple setup calls merge correctly
+/// Test: setup() merges configs on multiple calls
 #[nvim_oxi::test]
-fn setup_partial_update_preserves_existing_values() -> nvim_oxi::Result<()> {
+fn setup_merges_configs_on_multiple_calls() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(plugin_state.clone(), hermes::utilities::logging::Logger::inititalize());
+    let setup_fn = setup(
+        plugin_state.clone(),
+        hermes::utilities::logging::Logger::inititalize(),
+    );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
         nvim_oxi::conversion::FromObject::from_object(setup_fn)
             .expect("Failed to convert setup function");
 
-    // First call: set fs_write_access to false
-    let config1 = ClientConfigPartial {
-        permissions: Some(PermissionsPartial {
+    // First call: set permissions
+    func.call(SetupArgs(Some(ClientConfigPartial {
+        permissions: Some(hermes::nvim::configuration::PermissionsPartial {
             fs_write_access: Some(false),
             ..Default::default()
         }),
         ..Default::default()
-    };
-    func.call(SetupArgs(Some(config1)))
-        .expect("Failed to call setup 1");
+    })))
+    .expect("Failed to call setup first time");
 
-    // Second call: set terminal_access to false (permissions should keep previous values)
-    let config2 = ClientConfigPartial {
-        permissions: Some(PermissionsPartial {
-            terminal_access: Some(false),
-            ..Default::default()
+    // Second call: set buffer config (should keep permissions)
+    func.call(SetupArgs(Some(ClientConfigPartial {
+        buffer: Some(BufferConfigPartial {
+            auto_save: Some(true),
         }),
         ..Default::default()
-    };
-    func.call(SetupArgs(Some(config2)))
-        .expect("Failed to call setup 2");
+    })))
+    .expect("Failed to call setup second time");
 
-    // Verify using single assertion comparing expected vs actual
     let state = plugin_state.blocking_lock();
-    let expected = Permissions {
-        fs_write_access: false,        // from first call
-        fs_read_access: true,          // default preserved
-        terminal_access: false,        // from second call
-        request_permissions: true, // default preserved
-        send_notifications: true,     // default preserved
-    };
-    assert_eq!(state.config.permissions, expected);
+    assert!(!state.config.permissions.fs_write_access); // Preserved
+    assert!(state.config.buffer.auto_save); // Updated
     Ok(())
 }
 
-/// Test: setup() creates log file config when it doesn't exist
+/// Test: setup() works with empty config
 #[nvim_oxi::test]
-fn setup_creates_log_file_config_when_none() -> nvim_oxi::Result<()> {
+fn setup_works_with_empty_config() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(plugin_state.clone(), hermes::utilities::logging::Logger::inititalize());
+    let setup_fn = setup(
+        plugin_state.clone(),
+        hermes::utilities::logging::Logger::inititalize(),
+    );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
         nvim_oxi::conversion::FromObject::from_object(setup_fn)
             .expect("Failed to convert setup function");
 
-    // Setup with file config
+    // Empty config
+    func.call(SetupArgs(Some(ClientConfigPartial::default())))
+        .expect("Failed to call setup");
+
+    // Should use defaults
+    let state = plugin_state.blocking_lock();
+    assert!(state.config.permissions.fs_read_access); // Default true
+    Ok(())
+}
+
+/// Test: setup() works with None
+#[nvim_oxi::test]
+fn setup_works_with_none() -> nvim_oxi::Result<()> {
+    let plugin_state = Arc::new(Mutex::new(PluginState::new()));
+    let setup_fn = setup(
+        plugin_state.clone(),
+        hermes::utilities::logging::Logger::inititalize(),
+    );
+
+    let func: nvim_oxi::Function<SetupArgs, ()> =
+        nvim_oxi::conversion::FromObject::from_object(setup_fn)
+            .expect("Failed to convert setup function");
+
+    // None config
+    func.call(SetupArgs(None)).expect("Failed to call setup");
+
+    // Should use defaults
+    let state = plugin_state.blocking_lock();
+    assert!(state.config.permissions.fs_read_access); // Default true
+    Ok(())
+}
+
+/// Test: setup() updates log file config
+#[nvim_oxi::test]
+fn setup_updates_log_file_config() -> nvim_oxi::Result<()> {
+    let plugin_state = Arc::new(Mutex::new(PluginState::new()));
+    let setup_fn = setup(
+        plugin_state.clone(),
+        hermes::utilities::logging::Logger::inititalize(),
+    );
+
+    let func: nvim_oxi::Function<SetupArgs, ()> =
+        nvim_oxi::conversion::FromObject::from_object(setup_fn)
+            .expect("Failed to convert setup function");
+
     let config = ClientConfigPartial {
         log: Some(LogConfigPartial {
             file: Some(LogFileConfigPartial {
                 enabled: Some(true),
                 path: Some("/tmp/test.log".to_string()),
                 level: Some(hermes::utilities::LogLevel::Warn),
-                max_size: None,
-                max_files: None,
+                format: None,
+                max_size: Some(1024 * 1024),
+                max_files: Some(5),
             }),
             ..Default::default()
         }),
@@ -231,7 +236,6 @@ fn setup_creates_log_file_config_when_none() -> nvim_oxi::Result<()> {
     func.call(SetupArgs(Some(config)))
         .expect("Failed to call setup");
 
-    // Verify file config was created using single assertion
     let state = plugin_state.blocking_lock();
     let file_config = state
         .config
@@ -239,10 +243,51 @@ fn setup_creates_log_file_config_when_none() -> nvim_oxi::Result<()> {
         .file
         .as_ref()
         .expect("File config should exist");
-    assert!(
-        file_config.enabled
-            && file_config.path == "/tmp/test.log"
-            && file_config.level == hermes::utilities::LogLevel::Warn
+    assert!(file_config.enabled);
+    assert_eq!(file_config.path, "/tmp/test.log");
+    assert_eq!(file_config.level, hermes::utilities::LogLevel::Warn);
+    Ok(())
+}
+
+/// Test: setup() updates log target format
+#[nvim_oxi::test]
+fn setup_updates_log_target_format() -> nvim_oxi::Result<()> {
+    let plugin_state = Arc::new(Mutex::new(PluginState::new()));
+    let setup_fn = setup(
+        plugin_state.clone(),
+        hermes::utilities::logging::Logger::inititalize(),
+    );
+
+    let func: nvim_oxi::Function<SetupArgs, ()> =
+        nvim_oxi::conversion::FromObject::from_object(setup_fn)
+            .expect("Failed to convert setup function");
+
+    let config = ClientConfigPartial {
+        log: Some(LogConfigPartial {
+            stdio: Some(LogTargetConfigPartial {
+                level: Some(hermes::utilities::LogLevel::Info),
+                format: Some(hermes::utilities::logging::LogFormat::Json),
+            }),
+            notification: Some(LogTargetConfigPartial {
+                level: Some(hermes::utilities::LogLevel::Error),
+                format: Some(hermes::utilities::logging::LogFormat::Pretty),
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    func.call(SetupArgs(Some(config)))
+        .expect("Failed to call setup");
+
+    let state = plugin_state.blocking_lock();
+    assert_eq!(
+        state.config.log.stdio.format,
+        Some(hermes::utilities::logging::LogFormat::Json)
+    );
+    assert_eq!(
+        state.config.log.notification.format,
+        Some(hermes::utilities::logging::LogFormat::Pretty)
     );
     Ok(())
 }

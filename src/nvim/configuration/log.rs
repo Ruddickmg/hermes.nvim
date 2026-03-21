@@ -267,3 +267,115 @@ impl FromObject for LogConfigPartial {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_log_target_config_default() {
+        let config = LogTargetConfig::default();
+        assert_eq!(config.level, LogLevel::Off);
+        assert_eq!(config.format, None);
+    }
+
+    #[test]
+    fn test_log_target_config_custom() {
+        let config = LogTargetConfig {
+            level: LogLevel::Info,
+            format: Some(LogFormat::Json),
+        };
+        assert_eq!(config.level, LogLevel::Info);
+        assert_eq!(config.format, Some(LogFormat::Json));
+    }
+
+    #[test]
+    fn test_log_target_config_partial_apply_to() {
+        let mut config = LogTargetConfig::default();
+        let partial = LogTargetConfigPartial {
+            level: Some(LogLevel::Debug),
+            format: Some(LogFormat::Pretty),
+        };
+        partial.apply_to(&mut config);
+        assert_eq!(config.level, LogLevel::Debug);
+        assert_eq!(config.format, Some(LogFormat::Pretty));
+    }
+
+    #[test]
+    fn test_log_target_config_partial_apply_partial() {
+        let mut config = LogTargetConfig {
+            level: LogLevel::Error,
+            format: Some(LogFormat::Compact),
+        };
+        let partial = LogTargetConfigPartial {
+            level: Some(LogLevel::Warn),
+            format: None,
+        };
+        partial.apply_to(&mut config);
+        assert_eq!(config.level, LogLevel::Warn);
+        assert_eq!(config.format, Some(LogFormat::Compact)); // unchanged
+    }
+
+    #[test]
+    fn test_log_config_default() {
+        let config = LogConfig::default();
+        assert_eq!(config.file, None);
+        assert_eq!(config.stdio.level, LogLevel::Info);
+        assert_eq!(config.notification.level, LogLevel::Error);
+        assert_eq!(config.message.level, LogLevel::Off);
+        assert_eq!(config.quickfix.level, LogLevel::Off);
+        assert_eq!(config.local_list.level, LogLevel::Off);
+    }
+
+    #[test]
+    fn test_log_file_config_default() {
+        let config = LogFileConfig::default();
+        assert_eq!(config.enabled, false);
+        assert_eq!(config.level, LogLevel::Warn);
+        assert_eq!(config.format, None);
+        assert_eq!(config.max_size, Some(10_485_760));
+        assert_eq!(config.max_files, Some(5));
+    }
+
+    #[test]
+    fn test_log_file_config_partial_apply_to() {
+        let mut config = LogFileConfig::default();
+        let partial = LogFileConfigPartial {
+            enabled: Some(true),
+            path: Some("/test/path".to_string()),
+            level: Some(LogLevel::Debug),
+            format: Some(LogFormat::Json),
+            max_size: Some(2048),
+            max_files: Some(10),
+        };
+        partial.apply_to(&mut config);
+        assert!(config.enabled);
+        assert_eq!(config.path, "/test/path");
+        assert_eq!(config.level, LogLevel::Debug);
+        assert_eq!(config.format, Some(LogFormat::Json));
+        assert_eq!(config.max_size, Some(2048));
+        assert_eq!(config.max_files, Some(10));
+    }
+
+    #[test]
+    fn test_log_config_partial_apply_to() {
+        let mut config = LogConfig::default();
+        let partial = LogConfigPartial {
+            stdio: Some(LogTargetConfigPartial {
+                level: Some(LogLevel::Trace),
+                format: Some(LogFormat::Full),
+            }),
+            notification: None,
+            message: None,
+            quickfix: None,
+            local_list: None,
+            file: None,
+        };
+        partial.apply_to(&mut config);
+        assert_eq!(config.stdio.level, LogLevel::Trace);
+        assert_eq!(config.stdio.format, Some(LogFormat::Full));
+        // other fields should remain default
+        assert_eq!(config.notification.level, LogLevel::Error);
+    }
+}

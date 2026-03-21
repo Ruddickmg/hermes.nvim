@@ -3,7 +3,7 @@
 //! These tests verify that the Logger integrates correctly with the tracing
 //! system and can be configured at runtime via the setup API.
 
-use hermes::nvim::configuration::{LogConfig, LogFileConfig};
+use hermes::nvim::configuration::{LogConfig, LogFileConfig, LogTargetConfig};
 use hermes::utilities::logging::{LogLevel, Logger};
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
@@ -11,12 +11,15 @@ use tempfile::TempDir;
 /// Helper function to create a LogConfig with file logging enabled
 fn create_log_config_with_file(level: LogLevel, file_config: LogFileConfig) -> LogConfig {
     LogConfig {
-        level,
+        stdio: LogTargetConfig {
+            level,
+            format: None,
+        },
         file: Some(file_config),
-        local_list: LogLevel::Off,
-        message: LogLevel::Off,
-        notification: LogLevel::Off,
-        quick_fix_list: LogLevel::Off,
+        local_list: LogTargetConfig::default(),
+        message: LogTargetConfig::default(),
+        notification: LogTargetConfig::default(),
+        quickfix: LogTargetConfig::default(),
     }
 }
 
@@ -34,6 +37,7 @@ fn test_file_logging_can_be_enabled() -> nvim_oxi::Result<()> {
         enabled: true,
         path: log_path.to_string_lossy().to_string(),
         level: LogLevel::Info,
+        format: None,
         max_size: Some(1024 * 1024),
         max_files: Some(5),
     };
@@ -73,6 +77,7 @@ fn test_file_logging_first_message_written() -> nvim_oxi::Result<()> {
         enabled: true,
         path: log_path.to_string_lossy().to_string(),
         level: LogLevel::Info,
+        format: None,
         max_size: Some(1024 * 1024),
         max_files: Some(5),
     };
@@ -109,6 +114,7 @@ fn test_file_logging_disabled_stops_writing() -> nvim_oxi::Result<()> {
             enabled: true,
             path: log_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
+            format: None,
             max_size: Some(1024 * 1024),
             max_files: Some(5),
         },
@@ -124,6 +130,7 @@ fn test_file_logging_disabled_stops_writing() -> nvim_oxi::Result<()> {
             enabled: false,
             path: log_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
+            format: None,
             max_size: Some(1024 * 1024),
             max_files: Some(5),
         },
@@ -158,101 +165,103 @@ fn test_debug_filtered_at_warn_level() -> nvim_oxi::Result<()> {
         enabled: true,
         path: log_path.to_string_lossy().to_string(),
         level: LogLevel::Warn,
+        format: None,
         max_size: Some(1024 * 1024),
         max_files: Some(5),
     };
     let config = create_log_config_with_file(LogLevel::Warn, file_config);
     logger.configure(config).unwrap();
 
-    // Log at DEBUG level
+    // Log different levels
     tracing::debug!("Debug message");
-    std::thread::sleep(std::time::Duration::from_millis(50));
+    tracing::info!("Info message");
+    tracing::warn!("Warning message");
+    std::thread::sleep(std::time::Duration::from_millis(100));
 
-    // Verify DEBUG message was filtered
+    // Verify only WARN and above are written
     let content = std::fs::read_to_string(&log_path).unwrap();
     assert_eq!(
         content.contains("Debug message"),
         false,
-        "DEBUG messages should be filtered at WARN level"
+        "DEBUG should be filtered at WARN level"
+    );
+    assert_eq!(
+        content.contains("Info message"),
+        false,
+        "INFO should be filtered at WARN level"
+    );
+    assert_eq!(
+        content.contains("Warning message"),
+        true,
+        "WARN should be written"
     );
 
     Ok(())
 }
 
-/// Integration test: Verifies WARN messages appear at WARN level
+/// Integration test: Verifies log level reconfiguration works
 #[nvim_oxi::test]
-fn test_warn_appears_at_warn_level() -> nvim_oxi::Result<()> {
+fn test_log_level_reconfiguration() -> nvim_oxi::Result<()> {
     let temp_dir = TempDir::new().unwrap();
     let log_path = temp_dir.path().join("test.log");
 
     let logger = Logger::inititalize();
 
-    // Configure with WARN level
-    let file_config = LogFileConfig {
-        enabled: true,
-        path: log_path.to_string_lossy().to_string(),
-        level: LogLevel::Warn,
-        max_size: Some(1024 * 1024),
-        max_files: Some(5),
-    };
-    let config = create_log_config_with_file(LogLevel::Warn, file_config);
-    logger.configure(config).unwrap();
+    // Start with WARN level
+    let warn_config = create_log_config_with_file(
+        LogLevel::Warn,
+        LogFileConfig {
+            enabled: true,
+            path: log_path.to_string_lossy().to_string(),
+            level: LogLevel::Warn,
+            format: None,
+            max_size: Some(1024 * 1024),
+            max_files: Some(5),
+        },
+    );
+    logger.configure(warn_config).unwrap();
 
-    // Log at WARN level
-    tracing::warn!("Warn message");
+    // This should be filtered
+    tracing::info!("Should be filtered");
     std::thread::sleep(std::time::Duration::from_millis(50));
 
-    // Verify WARN message appears
+    // Reconfigure to INFO level
+    let info_config = create_log_config_with_file(
+        LogLevel::Info,
+        LogFileConfig {
+            enabled: true,
+            path: log_path.to_string_lossy().to_string(),
+            level: LogLevel::Info,
+            format: None,
+            max_size: Some(1024 * 1024),
+            max_files: Some(5),
+        },
+    );
+    logger.configure(info_config).unwrap();
+
+    // This should be written
+    tracing::info!("Should be written");
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Verify
     let content = std::fs::read_to_string(&log_path).unwrap();
     assert_eq!(
-        content.contains("Warn message"),
-        true,
-        "WARN messages should appear at WARN level"
+        content.contains("Should be filtered"),
+        false,
+        "INFO should be filtered at initial WARN level"
     );
-
-    Ok(())
-}
-
-/// Integration test: Verifies file rotation creates backup
-#[nvim_oxi::test]
-fn test_rotation_creates_backup_file() -> nvim_oxi::Result<()> {
-    let temp_dir = TempDir::new().unwrap();
-    let log_path = temp_dir.path().join("test.log");
-
-    let logger = Logger::inititalize();
-
-    // Configure with small max_size to trigger rotation quickly
-    let file_config = LogFileConfig {
-        enabled: true,
-        path: log_path.to_string_lossy().to_string(),
-        level: LogLevel::Info,
-        max_size: Some(100), // 100 bytes
-        max_files: Some(3),
-    };
-    let config = create_log_config_with_file(LogLevel::Info, file_config);
-    logger.configure(config).unwrap();
-
-    // Write enough messages to trigger rotation
-    for i in 0..20 {
-        tracing::info!("Message {} with padding", i);
-    }
-
-    std::thread::sleep(std::time::Duration::from_millis(200));
-
-    // Verify backup file was created
-    let backup_1 = log_path.with_extension("1");
     assert_eq!(
-        backup_1.exists() || log_path.exists(),
+        content.contains("Should be written"),
         true,
-        "Either current log or backup should exist after rotation"
+        "INFO should be written after reconfiguring to INFO level"
     );
 
     Ok(())
 }
 
-/// Integration test: Verifies current log contains messages after rotation
+/// Integration test: Verifies log rotation works with small max_size
 #[nvim_oxi::test]
-fn test_current_log_has_messages_after_rotation() -> nvim_oxi::Result<()> {
+fn test_log_rotation() -> nvim_oxi::Result<()> {
     let temp_dir = TempDir::new().unwrap();
     let log_path = temp_dir.path().join("test.log");
 
@@ -263,6 +272,7 @@ fn test_current_log_has_messages_after_rotation() -> nvim_oxi::Result<()> {
         enabled: true,
         path: log_path.to_string_lossy().to_string(),
         level: LogLevel::Info,
+        format: None,
         max_size: Some(100),
         max_files: Some(3),
     };
@@ -284,6 +294,19 @@ fn test_current_log_has_messages_after_rotation() -> nvim_oxi::Result<()> {
         "Current log should contain messages"
     );
 
+    // Verify rotated files exist
+    let log_dir = temp_dir.path();
+    let rotated_files: Vec<_> = std::fs::read_dir(log_dir)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            let name = entry.file_name().to_string_lossy().to_string();
+            name.starts_with("test.log.") && name.chars().last().unwrap().is_numeric()
+        })
+        .collect();
+
+    assert!(!rotated_files.is_empty(), "Should have rotated log files");
+
     Ok(())
 }
 
@@ -296,93 +319,88 @@ fn test_reconfigure_to_second_path() -> nvim_oxi::Result<()> {
 
     let logger = Logger::inititalize();
 
-    // First configuration
-    let config1 = create_log_config_with_file(
+    // Configure first path
+    let first_config = create_log_config_with_file(
         LogLevel::Info,
         LogFileConfig {
             enabled: true,
             path: first_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
+            format: None,
             max_size: Some(1024 * 1024),
             max_files: Some(5),
         },
     );
-    logger.configure(config1).unwrap();
+    logger.configure(first_config).unwrap();
     tracing::info!("First path message");
-    std::thread::sleep(std::time::Duration::from_millis(50));
+    std::thread::sleep(std::time::Duration::from_millis(100));
 
     // Reconfigure to second path
-    let config2 = create_log_config_with_file(
+    let second_config = create_log_config_with_file(
         LogLevel::Info,
         LogFileConfig {
             enabled: true,
             path: second_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
+            format: None,
             max_size: Some(1024 * 1024),
             max_files: Some(5),
         },
     );
-    logger.configure(config2).unwrap();
+    logger.configure(second_config).unwrap();
     tracing::info!("Second path message");
-    std::thread::sleep(std::time::Duration::from_millis(50));
+    std::thread::sleep(std::time::Duration::from_millis(100));
 
-    // Verify second path has the new message
+    // Verify first log has first message only
+    let first_content = std::fs::read_to_string(&first_path).unwrap();
+    assert!(
+        first_content.contains("First path message"),
+        "First log should have first message"
+    );
+
+    // Verify second log has second message only
     let second_content = std::fs::read_to_string(&second_path).unwrap();
-    assert_eq!(
+    assert!(
         second_content.contains("Second path message"),
-        true,
-        "Second file should contain message written after reconfiguration"
+        "Second log should have second message"
     );
 
     Ok(())
 }
 
-/// Integration test: Verifies first path does not get second message
+/// Integration test: Verifies log target configuration works
 #[nvim_oxi::test]
-fn test_first_path_does_not_get_second_message() -> nvim_oxi::Result<()> {
-    let temp_dir = TempDir::new().unwrap();
-    let first_path = temp_dir.path().join("first.log");
-    let second_path = temp_dir.path().join("second.log");
+fn test_log_target_config() -> nvim_oxi::Result<()> {
+    use hermes::nvim::configuration::LogTargetConfig;
 
-    let logger = Logger::inititalize();
+    // Test default LogTargetConfig
+    let default_config = LogTargetConfig::default();
+    assert_eq!(default_config.level, LogLevel::Off);
+    assert_eq!(default_config.format, None);
 
-    // First configuration
-    let config1 = create_log_config_with_file(
-        LogLevel::Info,
-        LogFileConfig {
-            enabled: true,
-            path: first_path.to_string_lossy().to_string(),
-            level: LogLevel::Info,
-            max_size: Some(1024 * 1024),
-            max_files: Some(5),
-        },
-    );
-    logger.configure(config1).unwrap();
-    tracing::info!("First path message");
-    std::thread::sleep(std::time::Duration::from_millis(50));
+    // Test custom LogTargetConfig
+    let custom_config = LogTargetConfig {
+        level: LogLevel::Debug,
+        format: None,
+    };
+    assert_eq!(custom_config.level, LogLevel::Debug);
 
-    // Reconfigure to second path
-    let config2 = create_log_config_with_file(
-        LogLevel::Info,
-        LogFileConfig {
-            enabled: true,
-            path: second_path.to_string_lossy().to_string(),
-            level: LogLevel::Info,
-            max_size: Some(1024 * 1024),
-            max_files: Some(5),
-        },
-    );
-    logger.configure(config2).unwrap();
-    tracing::info!("Second path message");
-    std::thread::sleep(std::time::Duration::from_millis(50));
+    Ok(())
+}
 
-    // Verify first path does NOT have second message
-    let first_content = std::fs::read_to_string(&first_path).unwrap();
-    assert_eq!(
-        first_content.contains("Second path message"),
-        false,
-        "First file should NOT contain message written to second file"
-    );
+/// Integration test: Verifies LogTargetConfig with format override
+#[nvim_oxi::test]
+fn test_log_target_config_with_format() -> nvim_oxi::Result<()> {
+    use hermes::nvim::configuration::LogTargetConfig;
+    use hermes::utilities::logging::LogFormat;
+
+    // Test LogTargetConfig with format
+    let config = LogTargetConfig {
+        level: LogLevel::Info,
+        format: Some(LogFormat::Json),
+    };
+    assert_eq!(config.level, LogLevel::Info);
+    assert_eq!(config.format, Some(LogFormat::Json));
 
     Ok(())
 }

@@ -93,7 +93,7 @@ hermes.setup({
             level = vim.log.levels.OFF or "off",
             format = "json",
             path = vim.fn.stdpath('state') .. "/nvim/hermes.log", -- path to log file(s)
-            max_size = 10485760, -- 10mb
+            max_size = 10485760, -- 10mb in bytes
             max_files = 5, -- Max log files to generate
         },
     },
