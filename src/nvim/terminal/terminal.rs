@@ -107,10 +107,6 @@ impl TerminalInfo {
         };
         terminal.set_on_output_callback(update_content);
         terminal.set_on_exit_callback(on_exit);
-        // Set default terminal options (same as old configuration() function)
-        terminal.configuration.insert("term", true);
-        terminal.configuration.insert("stdout_buffered", true);
-        terminal.configuration.insert("stderr_buffered", true);
         terminal
     }
 
@@ -221,6 +217,7 @@ pub trait Terminal {
     fn id(&self) -> Uuid;
     fn from_request(data: agent_client_protocol::CreateTerminalRequest) -> Self;
     fn delete(&mut self) -> Result<()>;
+    fn buffer(&self) -> Option<nvim_oxi::api::Buffer>;
 
     // TODO: Implement toggle_visibility() method to handle window-local terminal options
     // When a terminal buffer becomes visible (e.g., via split or switch), these window-local
@@ -253,10 +250,10 @@ impl Terminal for TerminalInfo {
 
     fn configure(mut self, config: TerminalConfig) -> Self {
         self.configuration.insert("term", config.enabled);
-        if config.buffered {
-            self.configuration.insert("stdout_buffered", true);
-            self.configuration.insert("stderr_buffered", true);
-        }
+        self.configuration
+            .insert("stdout_buffered", config.buffered);
+        self.configuration
+            .insert("stderr_buffered", config.buffered);
         self
     }
 
@@ -327,6 +324,10 @@ impl Terminal for TerminalInfo {
         } else {
             Err(Error::Internal("No buffer found for deletion".to_string()))
         }
+    }
+
+    fn buffer(&self) -> Option<nvim_oxi::api::Buffer> {
+        self.buffer.clone()
     }
 }
 

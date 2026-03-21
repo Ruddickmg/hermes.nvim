@@ -159,6 +159,10 @@ mod tests {
         fn delete(&mut self) -> Result<()> {
             Ok(())
         }
+
+        fn buffer(&self) -> Option<nvim_oxi::api::Buffer> {
+            None // Mock terminal doesn't have a real buffer
+        }
     }
 
     #[test]

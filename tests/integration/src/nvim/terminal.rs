@@ -2,6 +2,7 @@
 //!
 //! These tests verify that TerminalInfo works correctly within the Neovim runtime.
 
+use hermes::nvim::configuration::TerminalConfig;
 use hermes::nvim::terminal::{Terminal, TerminalInfo};
 use tokio::sync::oneshot;
 
@@ -57,7 +58,8 @@ fn terminal_info_from_request_creates_with_correct_defaults() -> nvim_oxi::Resul
 /// Integration test: Verifies run() returns positive job ID
 #[nvim_oxi::test]
 fn terminal_info_run_returns_positive_job_id() -> nvim_oxi::Result<()> {
-    let mut terminal = TerminalInfo::new(None);
+    let config = TerminalConfig::default();
+    let mut terminal = TerminalInfo::new(None).configure(config);
 
     // Start a simple echo command with detailed error logging for CI debugging
     let job_id = terminal
@@ -176,6 +178,232 @@ fn terminal_info_environment_builder_sets_variables() -> nvim_oxi::Result<()> {
     let foo_oxi_str: nvim_oxi::String = foo_obj.clone().try_into().unwrap();
     let foo_value: String = foo_oxi_str.to_string();
     assert_eq!(foo_value, "bar");
+
+    Ok(())
+}
+
+/// Integration test: Verifies run() sets buftype to terminal
+#[nvim_oxi::test]
+fn terminal_info_run_sets_buftype_to_terminal() -> nvim_oxi::Result<()> {
+    let config = TerminalConfig::default();
+    let mut terminal = TerminalInfo::new(None).configure(config);
+
+    terminal
+        .run("echo".to_string(), vec!["hello".to_string()])
+        .expect("Failed to start terminal job");
+
+    // Verify the buffer was created and buftype is set
+    let buffer = terminal.buffer().expect("Buffer should be created");
+    let buftype: String = nvim_oxi::api::get_option_value(
+        "buftype",
+        &nvim_oxi::api::opts::OptionOpts::builder()
+            .buffer(buffer.clone())
+            .build(),
+    )?;
+
+    assert_eq!(buftype, "terminal");
+
+    Ok(())
+}
+
+/// Integration test: Verifies run() sets swapfile to false
+#[nvim_oxi::test]
+fn terminal_info_run_sets_swapfile_to_false() -> nvim_oxi::Result<()> {
+    let config = TerminalConfig::default();
+    let mut terminal = TerminalInfo::new(None).configure(config);
+
+    terminal
+        .run("echo".to_string(), vec!["hello".to_string()])
+        .expect("Failed to start terminal job");
+
+    let buffer = terminal.buffer().expect("Buffer should be created");
+    let swapfile: bool = nvim_oxi::api::get_option_value(
+        "swapfile",
+        &nvim_oxi::api::opts::OptionOpts::builder()
+            .buffer(buffer.clone())
+            .build(),
+    )?;
+
+    assert!(!swapfile, "swapfile should be false for terminal buffers");
+
+    Ok(())
+}
+
+/// Integration test: Verifies run() sets bufhidden to hide
+#[nvim_oxi::test]
+fn terminal_info_run_sets_bufhidden_to_hide() -> nvim_oxi::Result<()> {
+    let config = TerminalConfig::default();
+    let mut terminal = TerminalInfo::new(None).configure(config);
+
+    terminal
+        .run("echo".to_string(), vec!["hello".to_string()])
+        .expect("Failed to start terminal job");
+
+    let buffer = terminal.buffer().expect("Buffer should be created");
+    let bufhidden: String = nvim_oxi::api::get_option_value(
+        "bufhidden",
+        &nvim_oxi::api::opts::OptionOpts::builder()
+            .buffer(buffer.clone())
+            .build(),
+    )?;
+
+    assert_eq!(bufhidden, "hide");
+
+    Ok(())
+}
+
+/// Integration test: Verifies run() sets scrollback to 10000
+#[nvim_oxi::test]
+fn terminal_info_run_sets_scrollback_to_10000() -> nvim_oxi::Result<()> {
+    let config = TerminalConfig::default();
+    let mut terminal = TerminalInfo::new(None).configure(config);
+
+    terminal
+        .run("echo".to_string(), vec!["hello".to_string()])
+        .expect("Failed to start terminal job");
+
+    let buffer = terminal.buffer().expect("Buffer should be created");
+    let scrollback: i64 = nvim_oxi::api::get_option_value(
+        "scrollback",
+        &nvim_oxi::api::opts::OptionOpts::builder()
+            .buffer(buffer.clone())
+            .build(),
+    )?;
+
+    assert_eq!(scrollback, 10000);
+
+    Ok(())
+}
+
+/// Integration test: Verifies run() sets modified to false
+#[nvim_oxi::test]
+fn terminal_info_run_sets_modified_to_false() -> nvim_oxi::Result<()> {
+    let config = TerminalConfig::default();
+    let mut terminal = TerminalInfo::new(None).configure(config);
+
+    terminal
+        .run("echo".to_string(), vec!["hello".to_string()])
+        .expect("Failed to start terminal job");
+
+    let buffer = terminal.buffer().expect("Buffer should be created");
+    let modified: bool = nvim_oxi::api::get_option_value(
+        "modified",
+        &nvim_oxi::api::opts::OptionOpts::builder()
+            .buffer(buffer.clone())
+            .build(),
+    )?;
+
+    assert!(!modified, "modified should be false for terminal buffers");
+
+    Ok(())
+}
+
+/// Integration test: Verifies configure() with enabled=true sets term option
+#[nvim_oxi::test]
+fn terminal_info_configure_enabled_true_sets_term_option() -> nvim_oxi::Result<()> {
+    let config = TerminalConfig {
+        enabled: true,
+        delete: false,
+        hidden: true,
+        buffered: false,
+    };
+
+    let terminal = TerminalInfo::new(None).configure(config);
+
+    let term_value = terminal
+        .configuration
+        .get("term")
+        .expect("term should be set");
+    let term_enabled = unsafe { term_value.as_boolean_unchecked() };
+
+    assert!(term_enabled, "term option should be true when enabled=true");
+
+    Ok(())
+}
+
+/// Integration test: Verifies configure() with enabled=false sets term to false
+#[nvim_oxi::test]
+fn terminal_info_configure_enabled_false_sets_term_to_false() -> nvim_oxi::Result<()> {
+    let config = TerminalConfig {
+        enabled: false,
+        delete: false,
+        hidden: true,
+        buffered: false,
+    };
+
+    let terminal = TerminalInfo::new(None).configure(config);
+
+    let term_value = terminal
+        .configuration
+        .get("term")
+        .expect("term should be set");
+    let term_enabled = unsafe { term_value.as_boolean_unchecked() };
+
+    assert!(
+        !term_enabled,
+        "term option should be false when enabled=false"
+    );
+
+    Ok(())
+}
+
+/// Integration test: Verifies configure() with buffered=true sets stdout/stderr_buffered to true
+#[nvim_oxi::test]
+fn terminal_info_configure_buffered_true_sets_stdout_stderr_buffered() -> nvim_oxi::Result<()> {
+    let config = TerminalConfig {
+        enabled: true,
+        delete: false,
+        hidden: true,
+        buffered: true,
+    };
+
+    let terminal = TerminalInfo::new(None).configure(config);
+
+    let stdout_buffered = terminal
+        .configuration
+        .get("stdout_buffered")
+        .expect("stdout_buffered should be set");
+    let stdout_val = unsafe { stdout_buffered.as_boolean_unchecked() };
+
+    let stderr_buffered = terminal
+        .configuration
+        .get("stderr_buffered")
+        .expect("stderr_buffered should be set");
+    let stderr_val = unsafe { stderr_buffered.as_boolean_unchecked() };
+
+    assert!(stdout_val, "stdout_buffered should be true");
+    assert!(stderr_val, "stderr_buffered should be true");
+
+    Ok(())
+}
+
+/// Integration test: Verifies configure() with buffered=false sets stdout/stderr_buffered to false
+#[nvim_oxi::test]
+fn terminal_info_configure_buffered_false_sets_stdout_stderr_buffered_to_false(
+) -> nvim_oxi::Result<()> {
+    let config = TerminalConfig {
+        enabled: true,
+        delete: false,
+        hidden: true,
+        buffered: false,
+    };
+
+    let terminal = TerminalInfo::new(None).configure(config);
+
+    let stdout_buffered = terminal
+        .configuration
+        .get("stdout_buffered")
+        .expect("stdout_buffered should be set");
+    let stdout_val = unsafe { stdout_buffered.as_boolean_unchecked() };
+
+    let stderr_buffered = terminal
+        .configuration
+        .get("stderr_buffered")
+        .expect("stderr_buffered should be set");
+    let stderr_val = unsafe { stderr_buffered.as_boolean_unchecked() };
+
+    assert!(!stdout_val, "stdout_buffered should be false");
+    assert!(!stderr_val, "stderr_buffered should be false");
 
     Ok(())
 }
