@@ -338,10 +338,6 @@ mod tests {
                     level: crate::utilities::LogLevel::Warn,
                     format: None,
                 },
-                local_list: LogTargetConfig {
-                    level: crate::utilities::LogLevel::Warn,
-                    format: None,
-                },
             },
         };
         let partial = ClientConfigPartial::default(); // all None
