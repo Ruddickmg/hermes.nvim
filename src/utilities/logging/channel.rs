@@ -57,11 +57,10 @@ impl ChannelWriter {
         let _ = self.sender.send(LogMessage::Shutdown);
 
         // Take ownership of worker and wait for it to finish
-        if let Ok(mut worker_guard) = self._worker.lock() {
-            if let Some(worker) = worker_guard.take() {
+        if let Ok(mut worker_guard) = self._worker.lock()
+            && let Some(worker) = worker_guard.take() {
                 let _ = worker.join();
             }
-        }
     }
 }
 

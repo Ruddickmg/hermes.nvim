@@ -132,8 +132,7 @@ impl Write for SizeBasedFileAppender {
         let written = match self.writer {
             Some(ref mut file) => file.write(buf)?,
             None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
+                return Err(io::Error::other(
                     "File writer not available",
                 ))
             }
