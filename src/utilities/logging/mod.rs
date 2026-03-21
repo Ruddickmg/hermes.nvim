@@ -1,22 +1,20 @@
 use nvim_oxi::api::{self, opts::OptionOpts};
 use std::sync::Mutex as StdMutex; // For non-async file writer
 use std::sync::{Arc, OnceLock};
-use tokio::sync::Mutex;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{
-    fmt,
+    EnvFilter, Registry, fmt,
     layer::Layered,
     prelude::*,
     reload::{self, Handle},
-    EnvFilter, Registry,
 };
 
 use crate::{
     acp::error::Error,
     nvim::configuration::{LogConfig, LogFileConfig},
-    PluginState,
 };
 
+pub mod file;
 pub mod files;
 
 static LOGGER: OnceLock<Logger> = OnceLock::new();
@@ -145,7 +143,7 @@ impl From<String> for LogFormat {
 pub struct Logger {
     filter: Handle<EnvFilter, Registry>,
     file_handle: Handle<EnvFilter, Layered<reload::Layer<EnvFilter, Registry>, Registry>>,
-    file_writer: Arc<StdMutex<Option<Box<dyn std::io::Write + Send + 'static>>>>,
+    channel_writer: StdMutex<Option<file::FileWriter>>,
 }
 
 impl Logger {
@@ -166,16 +164,16 @@ impl Logger {
         let file_off_filter: EnvFilter = LogLevel::Off.into();
         let (file_filter_layer, file_handle) = reload::Layer::new(file_off_filter);
 
-        // Create a swappable writer for file output (starts with no-op)
-        let file_writer: Arc<StdMutex<Option<Box<dyn std::io::Write + Send + 'static>>>> =
+        // Create channel writer holder (starts empty, filled by set_file_logger)
+        let channel_writer_holder: Arc<StdMutex<Option<file::FileWriter>>> =
             Arc::new(StdMutex::new(None));
-        let file_writer_clone = file_writer.clone();
+        let channel_writer_clone = channel_writer_holder.clone();
 
-        // Create file layer with the swappable writer
+        // Create file layer with writer that uses channel when available
         let file_layer = fmt::layer()
-            .with_writer(move || -> FileWriterGuard {
-                FileWriterGuard {
-                    inner: file_writer_clone.clone(),
+            .with_writer(move || -> ChannelWriterGuard {
+                ChannelWriterGuard {
+                    inner: channel_writer_clone.clone(),
                 }
             })
             .with_filter(file_filter_layer);
@@ -201,7 +199,7 @@ impl Logger {
             Self {
                 filter,
                 file_handle,
-                file_writer,
+                channel_writer: StdMutex::new(None),
             }
         })
     }
@@ -214,20 +212,25 @@ impl Logger {
     }
 
     pub fn set_file_logger(&self, config: LogFileConfig) -> Result<(), Error> {
+        // Stop current writer if exists
+        {
+            let mut writer_guard = self
+                .channel_writer
+                .lock()
+                .map_err(|e| Error::Internal(format!("Failed to lock channel writer: {}", e)))?;
+
+            if let Some(old_writer) = writer_guard.take() {
+                // Shutdown old writer (blocking, waits for drain)
+                old_writer.shutdown();
+            }
+        }
+
         if !config.enabled {
             // Disable file logging by setting filter to OFF
             let off_filter: EnvFilter = LogLevel::Off.into();
             self.file_handle
                 .reload(off_filter)
                 .map_err(|e| Error::Internal(format!("Failed to disable file logger: {}", e)))?;
-
-            // Clear the writer
-            let mut writer = self
-                .file_writer
-                .lock()
-                .map_err(|e| Error::Internal(format!("Failed to lock file writer: {}", e)))?;
-            *writer = None;
-
             return Ok(());
         }
 
@@ -239,13 +242,17 @@ impl Logger {
         let file_appender = files::SizeBasedFileAppender::new(&config.path, max_size, max_files)
             .map_err(|e| Error::Internal(format!("Failed to create file appender: {}", e)))?;
 
-        // Store the appender in the shared writer
+        // Create channel writer
+        let channel_writer = file::FileWriter::new(file_appender)
+            .map_err(|e| Error::Internal(format!("Failed to create channel writer: {}", e)))?;
+
+        // Store the channel writer
         {
-            let mut writer = self
-                .file_writer
+            let mut writer_guard = self
+                .channel_writer
                 .lock()
-                .map_err(|e| Error::Internal(format!("Failed to lock file writer: {}", e)))?;
-            *writer = Some(Box::new(file_appender));
+                .map_err(|e| Error::Internal(format!("Failed to lock channel writer: {}", e)))?;
+            *writer_guard = Some(channel_writer);
         }
 
         // Enable the file layer by reloading the filter
@@ -265,12 +272,13 @@ impl Logger {
     }
 }
 
-/// Guard struct for thread-safe file writer access
-pub struct FileWriterGuard {
-    inner: Arc<StdMutex<Option<Box<dyn std::io::Write + Send + 'static>>>>,
+/// Guard struct for channel writer access
+/// This is used by the tracing subscriber layer to access the channel writer
+pub struct ChannelWriterGuard {
+    inner: Arc<StdMutex<Option<file::FileWriter>>>,
 }
 
-impl std::io::Write for FileWriterGuard {
+impl std::io::Write for ChannelWriterGuard {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let mut guard = self
             .inner
@@ -279,7 +287,7 @@ impl std::io::Write for FileWriterGuard {
 
         match guard.as_mut() {
             Some(writer) => writer.write(buf),
-            None => Ok(buf.len()), // No-op if no writer configured
+            None => Ok(buf.len()), // No-op if no writer configured (file logging disabled)
         }
     }
 
@@ -293,29 +301,6 @@ impl std::io::Write for FileWriterGuard {
             Some(writer) => writer.flush(),
             None => Ok(()),
         }
-    }
-}
-
-/// Guard struct for thread-safe file appender access
-pub struct FileAppenderGuard {
-    appender: std::sync::Arc<std::sync::Mutex<files::SizeBasedFileAppender>>,
-}
-
-impl std::io::Write for FileAppenderGuard {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let mut guard = self
-            .appender
-            .lock()
-            .map_err(|e| std::io::Error::other(format!("Lock poisoned: {:?}", e)))?;
-        guard.write(buf)
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        let mut guard = self
-            .appender
-            .lock()
-            .map_err(|e| std::io::Error::other(format!("Lock poisoned: {:?}", e)))?;
-        guard.flush()
     }
 }
 
