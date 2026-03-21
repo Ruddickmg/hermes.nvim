@@ -4,27 +4,22 @@ use nvim_oxi::{
     conversion::{Error, FromObject},
     lua::{Error as LuaError, Poppable, Pushable},
 };
-use std::{cell::RefCell, path::PathBuf, rc::Rc};
-use tracing::{debug, instrument};
+use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
+use tokio::sync::Mutex;
+use tracing::{debug, error, instrument};
 
-use crate::{acp::connection::ConnectionManager, api::mcp_servers::parse_mcp_servers, utilities};
+use crate::{
+    PluginState,
+    acp::connection::ConnectionManager,
+    api::mcp_servers::parse_mcp_servers,
+    utilities::{self, get_project_root},
+};
 
 /// Configuration for loading a session (second argument of the tuple)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct LoadSessionConfig {
     pub cwd: Option<PathBuf>,
     pub mcp_servers: Vec<agent_client_protocol::McpServer>,
-}
-
-impl LoadSessionConfig {
-    fn default_with_root() -> Self {
-        let current_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let root = utilities::get_project_root(current_directory, vec![".git".to_string()]);
-        Self {
-            cwd: Some(root),
-            mcp_servers: Vec::new(),
-        }
-    }
 }
 
 impl FromObject for LoadSessionConfig {
@@ -73,12 +68,13 @@ impl Pushable for LoadSessionConfig {
     }
 }
 
-/// Tuple for two positional arguments: (session_id, config)
-/// Lua: loadSession({session_id, config_table})
 pub type LoadSessionArgs = (String, Option<LoadSessionConfig>);
 
 #[instrument(level = "trace", skip_all)]
-pub fn load_session(connection: Rc<RefCell<ConnectionManager>>) -> Object {
+pub fn load_session(
+    connection: Rc<RefCell<ConnectionManager>>,
+    state: Arc<Mutex<PluginState>>,
+) -> Object {
     let function: Function<LoadSessionArgs, Result<(), LuaError>> =
         Function::from_fn(move |(session_id, maybe_config): LoadSessionArgs| {
             debug!(
@@ -86,11 +82,23 @@ pub fn load_session(connection: Rc<RefCell<ConnectionManager>>) -> Object {
                 session_id
             );
 
-            let config = maybe_config.unwrap_or_else(LoadSessionConfig::default_with_root);
+            let config = maybe_config.unwrap_or_else(LoadSessionConfig::default);
+            let state = state.blocking_lock();
+            let root_markers = state.config.root_markers.clone();
+            drop(state);
 
             let request = LoadSessionRequest::new(
                 SessionId::from(session_id),
-                config.cwd.unwrap_or_else(|| PathBuf::from(".")),
+                config.cwd.unwrap_or_else(|| {
+                    let current_dir = std::env::current_dir().unwrap_or_else(|e| {
+                        error!(
+                            "Error getting current directory: {:?}, defaulting to: \".\"",
+                            e
+                        );
+                        PathBuf::from(".")
+                    });
+                    get_project_root(current_dir, root_markers)
+                }),
             )
             .mcp_servers(config.mcp_servers);
 
@@ -112,6 +120,16 @@ pub fn load_session(connection: Rc<RefCell<ConnectionManager>>) -> Object {
 mod tests {
     use super::*;
 
+    impl LoadSessionConfig {
+        fn default_with_root() -> Self {
+            let current_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let root = utilities::get_project_root(current_directory, vec![".git".to_string()]);
+            Self {
+                cwd: Some(root),
+                mcp_servers: Vec::new(),
+            }
+        }
+    }
     // Helper function to verify we can create config objects
     fn create_test_config(cwd: Option<&str>) -> LoadSessionConfig {
         if let Some(path) = cwd {

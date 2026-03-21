@@ -11,8 +11,8 @@ Hermes focuses on:
 - Hooks into requests from AI assistants that require responses (permission requests, access requests, etc)
 - Autocommands for updates on communication between the user (client) and assistant (agent) 
 
-> [!WARNING]
-> Hermes is a feature complete client implementation of the ACP protocol. However, the state of the is such that most agents do not fully support or utilize the protocol. Most notably agents will use their own tools to write to files or perform terminal commands. In my testing I have not found any agent implementations that make calls to the [optional](https://agentclientprotocol.com/protocol/overview#optional-methods-2) methods defined in the protocol. Hopefully as time goes on better integrations will be implemented, but until then not all of the functionality promised by ACP will be utilized. This is a limitation of the Agents themselves, not the Hermes plugin.
+> [!NOTE]
+> While Hermes is a complete ACP client, most agents available today don't fully utilize the protocol. Key [optional](https://agentclientprotocol.com/protocol/overview#optional-methods-2) features (file operations, terminal commands, etc) are often handled through agent-specific tools rather than ACP methods. This means some Hermes capabilities may not be exercised depending on which agent you use.
 
 ## Features
 
@@ -59,20 +59,17 @@ hermes.setup({
     },
     terminal = {
         delete = false,    -- Auto-delete terminals on exit (default: false)
-        hidden = true,     -- Create terminals hidden (default: true)
         enabled = true,    -- Enable terminal functionality (default: true)
         buffered = true,   -- Buffer terminal output (default: true)
     },
     buffer = {
-        mark_as_modified = true, -- mark open buffers as modified after writing to them
-        auto_save = false,  -- Auto-save modified files (default: false)
+        auto_save = false,  -- Auto-save modified files after writing to them (default: false)
     },
     log = {
         file = {
             enabled = false,       -- Enable file logging (default: false)
             path = vim.fn.stdpath('state') .. "/nvim/hermes.log",
             level = vim.log.levels.WARN or "warn",      -- File log level (default: "warn")
-            -- Or use: level = vim.log.levels.WARN
             max_size = nil,        -- Max bytes before rotation (optional)
             max_files = nil,       -- Max rotated files (optional)
         },

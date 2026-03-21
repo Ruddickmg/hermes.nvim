@@ -65,7 +65,7 @@ impl<T: Terminal + Clone> TerminalManager<T> {
         result
     }
 
-    pub fn release(&self, id: &str) -> Result<()> {
+    pub fn release(&self, id: &str) -> Result<T> {
         let mut terminals = self
             .terminals
             .try_borrow_mut()
@@ -73,7 +73,8 @@ impl<T: Terminal + Clone> TerminalManager<T> {
         let terminal = terminals.remove(id);
         drop(terminals);
         if let Some(t) = terminal {
-            t.stop()
+            t.stop()?;
+            Ok(t)
         } else {
             Err(Error::InvalidInput(format!(
                 "Terminal with id '{}' was not present when release was called",
@@ -150,17 +151,21 @@ mod tests {
         fn from_request(_data: agent_client_protocol::CreateTerminalRequest) -> Self {
             Self::new("550e8400-e29b-41d4-a716-446655440000", "")
         }
+
+        fn delete(&mut self) -> Result<()> {
+            Ok(())
+        }
     }
 
     #[test]
     fn terminal_manager_new_creates_empty_manager() {
-        let manager: TerminalManager<MockTerminal> = TerminalManager::new();
+        let manager: TerminalManager<MockTerminal> = TerminalManager::default();
         assert!(manager.get_terminal("any-id").is_none());
     }
 
     #[test]
     fn terminal_manager_initialize_terminal_adds_terminal() {
-        let mut manager = TerminalManager::new();
+        let mut manager = TerminalManager::default();
         let terminal = MockTerminal::new("550e8400-e29b-41d4-a716-446655440000", "initial output");
         let terminal_id = terminal.id;
         manager.initialize_terminal("term-1".to_string(), terminal);
@@ -172,14 +177,14 @@ mod tests {
 
     #[test]
     fn terminal_manager_get_terminal_returns_none_for_missing_id() {
-        let manager: TerminalManager<MockTerminal> = TerminalManager::new();
+        let manager: TerminalManager<MockTerminal> = TerminalManager::default();
         let result = manager.get_terminal("nonexistent");
         assert!(result.is_none());
     }
 
     #[test]
     fn terminal_manager_get_output_returns_terminal_content() {
-        let mut manager = TerminalManager::new();
+        let mut manager = TerminalManager::default();
         let terminal = MockTerminal::new("term-1", "test content");
         manager.initialize_terminal("term-1".to_string(), terminal);
 
@@ -189,14 +194,14 @@ mod tests {
 
     #[test]
     fn terminal_manager_get_output_returns_none_for_missing_terminal() {
-        let manager: TerminalManager<MockTerminal> = TerminalManager::new();
+        let manager: TerminalManager<MockTerminal> = TerminalManager::default();
         let output = manager.get_output("nonexistent");
         assert!(output.is_none());
     }
 
     #[test]
     fn terminal_manager_notify_when_finished_registers_sender() {
-        let mut manager = TerminalManager::new();
+        let mut manager = TerminalManager::default();
         let terminal = MockTerminal::new("term-1", "");
         manager.initialize_terminal("term-1".to_string(), terminal.clone());
 
@@ -211,7 +216,7 @@ mod tests {
 
     #[test]
     fn terminal_manager_notify_when_finished_fails_for_missing_terminal() {
-        let manager: TerminalManager<MockTerminal> = TerminalManager::new();
+        let manager: TerminalManager<MockTerminal> = TerminalManager::default();
         let (sender, _receiver) = oneshot::channel();
         let result = manager.notify_when_finished("nonexistent", sender);
         assert!(result.is_err());
@@ -219,7 +224,7 @@ mod tests {
 
     #[test]
     fn terminal_manager_release_removes_and_closes_terminal() {
-        let mut manager = TerminalManager::new();
+        let mut manager = TerminalManager::default();
         let terminal = MockTerminal::new("term-1", "");
         manager.initialize_terminal("term-1".to_string(), terminal.clone());
 
@@ -235,7 +240,7 @@ mod tests {
 
     #[test]
     fn terminal_manager_release_fails_for_missing_terminal() {
-        let manager: TerminalManager<MockTerminal> = TerminalManager::new();
+        let manager: TerminalManager<MockTerminal> = TerminalManager::default();
         let result = manager.release("nonexistent");
         assert!(result.is_err());
     }

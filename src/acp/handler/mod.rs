@@ -153,7 +153,7 @@ impl Handler {
     #[instrument(level = "trace", skip(self))]
     pub async fn can_request_permissions(&self) -> bool {
         let config = self.state.lock().await;
-        let can_request_permissions = config.config.permissions.can_request_permissions;
+        let can_request_permissions = config.config.permissions.request_permissions;
         drop(config);
         can_request_permissions
     }
@@ -161,9 +161,9 @@ impl Handler {
     #[instrument(level = "trace", skip(self))]
     pub async fn can_receive_notifications(&self) -> bool {
         let config = self.state.lock().await;
-        let allow_notifications = config.config.permissions.allow_notifications;
+        let send_notifications = config.config.permissions.send_notifications;
         drop(config);
-        allow_notifications
+        send_notifications
     }
 
     #[instrument(level = "trace", skip(self))]

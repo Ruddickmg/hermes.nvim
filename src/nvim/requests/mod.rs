@@ -1,11 +1,13 @@
 pub mod request;
 use crate::{
+    PluginState,
     acp::{Result, error::Error},
     nvim::terminal::{TerminalInfo, TerminalManager},
     utilities::NvimMessenger,
 };
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
+
 use tracing::error;
 use uuid::Uuid;
 
@@ -15,10 +17,11 @@ pub struct Requests {
     pending: Arc<Mutex<HashMap<Uuid, Request>>>,
     nvim_handler: NvimMessenger<Uuid>,
     terminal_manager: TerminalManager<TerminalInfo>,
+    state: Arc<Mutex<PluginState>>,
 }
 
 impl Requests {
-    pub fn new() -> Result<Self> {
+    pub fn new(state: Arc<Mutex<PluginState>>) -> Result<Self> {
         let list = Arc::new(Mutex::new(HashMap::new()));
         let pending = list.clone();
         let nvim_handler = NvimMessenger::initialize(move |id| {
@@ -27,6 +30,7 @@ impl Requests {
             drop(lock);
         })?;
         Ok(Self {
+            state: state.clone(),
             pending,
             nvim_handler,
             terminal_manager: TerminalManager::new(),
@@ -60,7 +64,7 @@ impl RequestHandler for Requests {
     fn add_request(&self, session_id: String, responder: Responder) -> Uuid {
         let mut pending = self.pending.blocking_lock();
         let finisher = self.nvim_handler.clone();
-        let request = Request::new(session_id, finisher, responder);
+        let request = Request::new(session_id, finisher, responder, self.state.clone());
         let request_id = request.id();
         pending.insert(request_id, request);
         drop(pending);

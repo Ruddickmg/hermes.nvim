@@ -13,12 +13,13 @@ use nvim_oxi::{
 pub use permissions::{Permissions, PermissionsPartial};
 pub use terminal::{TerminalConfig, TerminalConfigPartial};
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct ClientConfig {
     pub permissions: Permissions,
     pub terminal: TerminalConfig,
     pub buffer: BufferConfig,
     pub log: LogConfig,
+    pub root_markers: Vec<String>,
 }
 
 /// Partial client configuration for setup function
@@ -28,6 +29,19 @@ pub struct ClientConfigPartial {
     pub terminal: Option<TerminalConfigPartial>,
     pub buffer: Option<BufferConfigPartial>,
     pub log: Option<LogConfigPartial>,
+    pub root_markers: Option<Vec<String>>,
+}
+
+impl Default for ClientConfig {
+    fn default() -> Self {
+        Self {
+            permissions: Default::default(),
+            terminal: Default::default(),
+            buffer: Default::default(),
+            log: Default::default(),
+            root_markers: vec![".git".to_string()],
+        }
+    }
 }
 
 impl ClientConfigPartial {
@@ -72,8 +86,14 @@ impl FromObject for ClientConfigPartial {
             .map(|o| LogConfigPartial::from_object(o.clone()))
             .transpose()?;
 
+        let root_markers = dict
+            .get("root_markers")
+            .map(|o| Vec::<String>::from_object(o.clone()))
+            .transpose()?;
+
         Ok(Self {
             permissions,
+            root_markers,
             terminal,
             buffer,
             log,
@@ -96,11 +116,11 @@ impl nvim_oxi::lua::Pushable for ClientConfigPartial {
             if let Some(val) = permissions.terminal_access {
                 perms_dict.insert("terminal_access", val);
             }
-            if let Some(val) = permissions.can_request_permissions {
-                perms_dict.insert("can_request_permissions", val);
+            if let Some(val) = permissions.request_permissions {
+                perms_dict.insert("request_permissions", val);
             }
-            if let Some(val) = permissions.allow_notifications {
-                perms_dict.insert("allow_notifications", val);
+            if let Some(val) = permissions.send_notifications {
+                perms_dict.insert("send_notifications", val);
             }
             dict.insert("permissions", perms_dict);
         }
@@ -169,7 +189,7 @@ impl nvim_oxi::lua::Pushable for ClientConfigPartial {
             dict.insert("log", log_dict);
         }
 
-        dict.push(lua_state)
+       unsafe { dict.push(lua_state) }
     }
 }
 
@@ -208,7 +228,7 @@ impl Poppable for SetupArgs {
 impl nvim_oxi::lua::Pushable for SetupArgs {
     unsafe fn push(self, lua_state: *mut lua::ffi::State) -> Result<i32, lua::Error> {
         if let Some(config) = self.0 {
-            config.push(lua_state)
+            unsafe { config.push(lua_state) }
         } else {
             // Push nil for None
             Ok(0) // Pushing nil typically returns 0 values pushed
@@ -224,6 +244,7 @@ mod tests {
     fn test_client_config_partial_apply_to_updates_nested() {
         let mut config = ClientConfig::default();
         let partial = ClientConfigPartial {
+            root_markers: Default::default(),
             permissions: Some(PermissionsPartial {
                 fs_write_access: Some(false),
                 ..Default::default()
@@ -256,12 +277,13 @@ mod tests {
     #[test]
     fn test_client_config_partial_apply_to_preserves_all_when_none() {
         let mut config = ClientConfig {
+            root_markers: vec![".git".to_string()],
             permissions: Permissions {
                 fs_write_access: false,
                 fs_read_access: false,
                 terminal_access: false,
-                can_request_permissions: false,
-                allow_notifications: false,
+                request_permissions: false,
+                send_notifications: false,
             },
             terminal: TerminalConfig {
                 delete: true,

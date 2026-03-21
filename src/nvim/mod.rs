@@ -18,7 +18,7 @@ pub const GROUP: &str = "hermes";
 pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     let _logger = Logger::inititalize();
     let plugin_state = Arc::new(Mutex::new(state::PluginState::new()));
-    let request_handler = Rc::new(requests::Requests::new()?);
+    let request_handler = Rc::new(requests::Requests::new(plugin_state.clone())?);
     let event_handler = Arc::new(Handler::new(plugin_state.clone(), request_handler.clone())?);
     let connection_manager = Rc::new(RefCell::new(ConnectionManager::new(plugin_state.clone())));
 
@@ -45,9 +45,12 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
         ("disconnect", api::disconnect(connection_manager.clone())),
         (
             "createSession",
-            api::create_session(connection_manager.clone()),
+            api::create_session(connection_manager.clone(), plugin_state.clone()),
         ),
-        ("loadSession", api::load_session(connection_manager.clone())),
+        (
+            "loadSession",
+            api::load_session(connection_manager.clone(), plugin_state.clone()),
+        ),
         ("prompt", api::prompt(connection_manager.clone())),
         ("setMode", api::set_mode(connection_manager.clone())),
         ("respond", api::respond(request_handler)),
