@@ -11,6 +11,9 @@ Hermes focuses on:
 - Hooks into requests from AI assistants that require responses (permission requests, access requests, etc)
 - Autocommands for updates on communication between the user (client) and assistant (agent) 
 
+> [!WARNING]
+> Hermes is a feature complete client implementation of the ACP protocol. However, the state of the is such that most agents do not fully support or utilize the protocol. Most notably agents will use their own tools to write to files or perform terminal commands. In my testing I have not found any agent implementations that make calls to the [optional](https://agentclientprotocol.com/protocol/overview#optional-methods-2) methods defined in the protocol. Hopefully as time goes on better integrations will be implemented, but until then not all of the functionality promised by ACP will be utilized. This is a limitation of the Agents themselves, not the Hermes plugin.
+
 ## Features
 
 - [x] Full implementation of ACP Client
@@ -25,6 +28,68 @@ Hermes focuses on:
 Hermes exposes the following functions for sending requests to AI assistants. However, not all assistants support every method, and the level of support may vary by agent.
 
 Methods marked “Optional” are implemented by Hermes but are not mandatory for agent implementations.
+
+### Setup
+
+Configure Hermes plugin settings. All configuration options are optional - only specified values are updated, preserving existing values for unspecified options.
+
+```lua
+local hermes = require("hermes")
+
+-- Basic usage with no arguments (uses all defaults)
+hermes.setup()
+
+-- Configure specific permissions
+hermes.setup({
+    permissions = {
+        fs_write_access = false,
+        terminal_access = true,
+    }
+})
+
+-- Full configuration with both string and integer log levels
+hermes.setup({
+    root_markers = { ".git" }, -- project root markers, used to detect the project root by the files contained there
+    permissions = {
+        fs_write_access = true,      -- Allow file writes to the agent (default: true)
+        fs_read_access = true,       -- Allow file reads to the agent (default: true)
+        terminal_access = true,      -- Allow terminal access to the agent (default: true)
+        request_permissions = true,  -- Allow agent to send permission requests (default: true)
+        send_notifications = true,  -- Allow the agent to send notifications (default: true)
+    },
+    terminal = {
+        delete = false,    -- Auto-delete terminals on exit (default: false)
+        hidden = true,     -- Create terminals hidden (default: true)
+        enabled = true,    -- Enable terminal functionality (default: true)
+        buffered = true,   -- Buffer terminal output (default: true)
+    },
+    buffer = {
+        mark_as_modified = true, -- mark open buffers as modified after writing to them
+        auto_save = false,  -- Auto-save modified files (default: false)
+    },
+    log = {
+        file = {
+            enabled = false,       -- Enable file logging (default: false)
+            path = vim.fn.stdpath('state') .. "/nvim/hermes.log",
+            level = vim.log.levels.WARN or "warn",      -- File log level (default: "warn")
+            -- Or use: level = vim.log.levels.WARN
+            max_size = nil,        -- Max bytes before rotation (optional)
+            max_files = nil,       -- Max rotated files (optional)
+        },
+        level = vim.log.levels.INFO or "info", -- Global log level (default: "info")
+        local_list = vim.log.levels.OFF or "off",  -- send logs to local list
+        message = vim.log.levels.OFF or "off",  -- send logs to messages
+        notification = vim.log.levels.OFF or "off", -- send logs to notify
+        quick_fix_list = vim.log.levels.OFF or "off", -- send logs to quick fix list
+    },
+})
+```
+
+> **Notes:**
+> - `setup()` does not have to be called, hermes will operate off of defaults without it
+> - Configuration changes are applied immediately
+> - Multiple `setup()` calls merge configurations - only specified fields are updated
+> - All unspecified fields preserve their existing values
 
 ### Connect
 
@@ -585,7 +650,6 @@ vim.api.nvim_create_autocmd("User", {
 > - Stop any process running in the terminal
 > - Remove the terminal
 > - Delete the attached buffer (can be configured to omit this step)
-
 
 ## Autocommands
 
