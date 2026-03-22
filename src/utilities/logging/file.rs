@@ -57,8 +57,11 @@ impl SizeBasedFileAppender {
     /// Check if we need to rotate before writing `bytes_to_write`
     fn rotate_if_needed(&mut self, bytes_to_write: usize) -> io::Result<()> {
         let new_size = self.current_size + bytes_to_write as u64;
+        eprintln!("[FILEAPPENDER] rotate_if_needed: current_size={}, bytes_to_write={}, new_size={}, max_size={}", 
+            self.current_size, bytes_to_write, new_size, self.max_size);
 
         if new_size > self.max_size {
+            eprintln!("[FILEAPPENDER] Rotation triggered!");
             self.perform_rotation()?;
         }
 
@@ -78,14 +81,14 @@ impl SizeBasedFileAppender {
 
         // Delete oldest file if it exists (file.N where N = max_files)
         if self.max_files > 0 {
-            let oldest = self.path.with_extension(format!("{}", self.max_files));
+            let oldest = self.rotated_path(self.max_files);
             let _ = fs::remove_file(&oldest); // Ignore if doesn't exist
         }
 
         // Shift backup files down: .(N-1) -> .N, ..., .1 -> .2
         for i in (1..self.max_files).rev() {
-            let from = self.path.with_extension(format!("{}", i));
-            let to = self.path.with_extension(format!("{}", i + 1));
+            let from = self.rotated_path(i);
+            let to = self.rotated_path(i + 1);
 
             // Try to rename, ignore errors (file might not exist)
             let _ = fs::rename(&from, &to);
@@ -93,7 +96,7 @@ impl SizeBasedFileAppender {
 
         // Rename current file to .1 (if max_files > 0)
         if self.max_files > 0 && self.path.exists() {
-            let backup = self.path.with_extension("1");
+            let backup = self.rotated_path(1);
             fs::rename(&self.path, &backup)?;
         } else if self.max_files == 0 {
             // No backups, just truncate current file
@@ -112,14 +115,21 @@ impl SizeBasedFileAppender {
         Ok(())
     }
 
-    /// Get the current file path
-    pub fn path(&self) -> &Path {
-        &self.path
+    /// Get the rotated file path for a given rotation number
+    fn rotated_path(&self, rotation: usize) -> PathBuf {
+        let mut path_str = self.path.to_string_lossy().to_string();
+        path_str.push_str(&format!(".{}", rotation));
+        PathBuf::from(path_str)
     }
 
     /// Get the current file size
     pub fn current_size(&self) -> u64 {
         self.current_size
+    }
+
+    /// Get the max file size
+    pub fn max_size(&self) -> u64 {
+        self.max_size
     }
 }
 
@@ -131,11 +141,7 @@ impl Write for SizeBasedFileAppender {
         // Write to file
         let written = match self.writer {
             Some(ref mut file) => file.write(buf)?,
-            None => {
-                return Err(io::Error::other(
-                    "File writer not available",
-                ))
-            }
+            None => return Err(io::Error::other("File writer not available")),
         };
 
         // Update current size
@@ -206,8 +212,8 @@ mod tests {
         assert_eq!(appender.current_size(), 10);
 
         // Check that backup file was created
-        let backup_path = log_path.with_extension("1");
-        assert!(backup_path.exists());
+        let backup_path = log_path.as_os_str().to_string_lossy().to_string() + ".1";
+        assert!(std::path::Path::new(&backup_path).exists());
 
         // Verify backup contains 100 bytes
         let backup_content = fs::read_to_string(&backup_path).unwrap();
@@ -232,8 +238,14 @@ mod tests {
         }
 
         // Should only have 1 backup file (.1)
-        assert!(log_path.with_extension("1").exists());
-        assert!(!log_path.with_extension("2").exists()); // Should be deleted
+        assert!(
+            std::path::Path::new(&(log_path.as_os_str().to_string_lossy().to_string() + ".1"))
+                .exists()
+        );
+        assert!(!std::path::Path::new(
+            &(log_path.as_os_str().to_string_lossy().to_string() + ".2")
+        )
+        .exists()); // Should be deleted
     }
 
     #[test]
@@ -253,7 +265,10 @@ mod tests {
             .unwrap();
 
         // Should NOT have backup file
-        assert!(!log_path.with_extension("1").exists());
+        assert!(!std::path::Path::new(
+            &(log_path.as_os_str().to_string_lossy().to_string() + ".1")
+        )
+        .exists());
 
         // Current file should only have the second write
         let content = fs::read_to_string(&log_path).unwrap();

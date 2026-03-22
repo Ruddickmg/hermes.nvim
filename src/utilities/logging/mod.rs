@@ -283,6 +283,7 @@ where
     }
 
     fn on_event(&self, event: &tracing::Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
+        eprintln!("[FILELAYER] on_event called for {:?}", event.metadata().level());
         // Check level again (enabled() is just a hint)
         let level = self.level.lock().unwrap();
         let event_level = event.metadata().level();
@@ -470,51 +471,7 @@ impl Logger {
         }
     }
 
-    /// Create file filter layer (starts OFF, reloadable)
-    fn create_file_filter() -> (reload::Layer<EnvFilter, Registry>, Handle<EnvFilter, Registry>) {
-        let file_off_filter: EnvFilter = LogLevel::Off.into();
-        reload::Layer::new(file_off_filter)
-    }
 
-    /// Create file layer with channel writer
-    fn create_file_layer(
-        file_writer: Arc<StdMutex<Option<FileChannel>>>,
-    ) -> Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync> {
-        Box::new(
-            fmt::layer()
-                .with_writer(move || -> ChannelWriterGuard<FileSink> {
-                    ChannelWriterGuard::new(file_writer.clone())
-                })
-                .with_ansi(false)
-                .with_file(true)
-                .with_line_number(true)
-                .with_thread_ids(true)
-                .with_thread_names(true),
-        )
-    }
-
-    /// Create file layer with channel writer and format selection
-    fn create_file_layer_with_format(
-        file_writer: Arc<StdMutex<Option<FileChannel>>>,
-        format: LogFormat,
-    ) -> Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync> {
-        let base_layer = fmt::layer()
-            .with_writer(move || -> ChannelWriterGuard<FileSink> {
-                ChannelWriterGuard::new(file_writer.clone())
-            })
-            .with_ansi(false)
-            .with_file(true)
-            .with_line_number(true)
-            .with_thread_ids(true)
-            .with_thread_names(true);
-
-        match format {
-            LogFormat::Full => Box::new(base_layer),
-            LogFormat::Compact => Box::new(base_layer.compact()),
-            LogFormat::Json => Box::new(base_layer.json()),
-            LogFormat::Pretty => Box::new(base_layer.pretty()),
-        }
-    }
 
     /// Create quickfix layer with format selection
     fn create_quickfix_layer(

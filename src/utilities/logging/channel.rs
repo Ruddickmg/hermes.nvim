@@ -149,16 +149,18 @@ impl<S: LogSink> Worker<S> {
                     // Normal operation - blocking receive with timeout
                     match receiver.recv_timeout(timeout) {
                         Ok(msg) => msg,
-                        Err(RecvTimeoutError::Timeout) => {
-                            // Timeout occurred - check if we need to flush
-                            if !message_buffer.is_empty() {
-                                if let Err(e) = sink.write_batch(&message_buffer) {
-                                    eprintln!("Failed to write batch on timeout: {}", e);
-                                }
-                                message_buffer.clear();
+                    Err(RecvTimeoutError::Timeout) => {
+                        // Timeout occurred - check if we need to flush
+                        eprintln!("[CHANNEL] Timeout, buffer has {} messages", message_buffer.len());
+                        if !message_buffer.is_empty() {
+                            eprintln!("[CHANNEL] Flushing {} messages on timeout", message_buffer.len());
+                            if let Err(e) = sink.write_batch(&message_buffer) {
+                                eprintln!("Failed to write batch on timeout: {}", e);
                             }
-                            continue;
+                            message_buffer.clear();
                         }
+                        continue;
+                    }
                         Err(RecvTimeoutError::Disconnected) => {
                             // Sender dropped, flush and exit
                             if !message_buffer.is_empty() {
@@ -176,10 +178,12 @@ impl<S: LogSink> Worker<S> {
                 // Process the received message
                 match msg {
                     LogMessage::Data(data) => {
+                        eprintln!("[CHANNEL] Received message: {}", data.len());
                         message_buffer.push(data);
 
                         // Check if we should flush (buffer full)
                         if message_buffer.len() >= flush_interval {
+                            eprintln!("[CHANNEL] Buffer full ({}), flushing", message_buffer.len());
                             if let Err(e) = sink.write_batch(&message_buffer) {
                                 eprintln!("Failed to write batch: {}", e);
                             }

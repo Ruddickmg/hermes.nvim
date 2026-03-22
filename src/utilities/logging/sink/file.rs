@@ -34,8 +34,23 @@ impl FileSink {
 
 impl LogSink for FileSink {
     fn write_batch(&mut self, messages: &[String]) -> io::Result<()> {
-        for message in messages {
+        eprintln!(
+            "[FILESINK] write_batch called with {} messages",
+            messages.len()
+        );
+        eprintln!(
+            "[FILESINK] current_size: {}, max_size: {}",
+            self.appender.current_size(),
+            self.appender.max_size()
+        );
+        for (i, message) in messages.iter().enumerate() {
+            let msg_len = message.len();
+            eprintln!("[FILESINK] Writing message {} ({} bytes)", i, msg_len);
             self.appender.write_all(message.as_bytes())?;
+            eprintln!(
+                "[FILESINK] After write: current_size = {}",
+                self.appender.current_size()
+            );
         }
         Ok(())
     }

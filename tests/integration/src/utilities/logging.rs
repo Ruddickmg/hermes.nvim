@@ -364,6 +364,22 @@ fn test_log_rotation() -> nvim_oxi::Result<()> {
 
     std::thread::sleep(std::time::Duration::from_millis(200));
 
+    // Debug: List all files in the temp directory
+    eprintln!("Files in temp directory:");
+    for entry in std::fs::read_dir(&temp_dir).unwrap() {
+        let entry = entry.unwrap();
+        eprintln!("  {:?}", entry.path());
+    }
+
+    // Debug: Check if main log file exists and has content
+    if log_path.exists() {
+        let content = std::fs::read_to_string(&log_path).unwrap();
+        eprintln!("Main log file content ({} bytes):", content.len());
+        eprintln!("{}", &content[..content.len().min(500)]);
+    } else {
+        eprintln!("Main log file does not exist!");
+    }
+
     // Verify current log has recent messages
     let current_content = std::fs::read_to_string(&log_path).unwrap();
     assert_eq!(
