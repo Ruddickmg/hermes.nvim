@@ -1,3 +1,4 @@
+use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -6,6 +7,7 @@ use tracing_subscriber::fmt::MakeWriter;
 
 use crate::utilities::logging::channel::ChannelWriter;
 use crate::utilities::logging::sink::FileSink;
+use crate::utilities::writer::Filtered;
 
 /// A lazy file writer that only spawns the worker thread on first use
 ///
@@ -20,18 +22,27 @@ pub struct LazyFileWriter {
     inner: std::sync::Arc<OnceLock<FileWriter>>,
 }
 
+impl Filtered for LazyFileWriter {}
+
 impl LazyFileWriter {
     /// Create a new lazy file writer with the given configuration
     ///
-    /// Note: This does NOT spawn a worker thread yet. The thread is only
-    /// created when the writer is first used (when make_writer() is called).
-    pub fn new(path: impl AsRef<str>, max_size: u64, max_files: usize) -> Self {
-        Self {
-            path: path.as_ref().to_string(),
+    /// Note: The file is created immediately, but the worker thread is only
+    /// spawned when the writer is first used (when make_writer() is called).
+    pub fn new(path: impl AsRef<str>, max_size: u64, max_files: usize) -> io::Result<Self> {
+        let path_str = path.as_ref().to_string();
+
+        // Create the file immediately so it exists even if no messages pass the filter
+        if !path_str.is_empty() {
+            let _ = OpenOptions::new().create(true).append(true).open(&path_str);
+        }
+
+        Ok(Self {
+            path: path_str,
             max_size,
             max_files,
             inner: std::sync::Arc::new(OnceLock::new()),
-        }
+        })
     }
 
     fn get_or_init(&self) -> &FileWriter {
@@ -79,6 +90,8 @@ pub struct FileWriter {
     inner: ChannelWriter<FileSink>,
     dropped_count: std::sync::Arc<AtomicUsize>,
 }
+
+impl Filtered for FileWriter {}
 
 impl FileWriter {
     pub fn new(path: impl AsRef<Path>, max_size: u64, max_files: usize) -> io::Result<Self> {

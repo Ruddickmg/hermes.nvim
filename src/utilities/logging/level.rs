@@ -16,9 +16,9 @@ pub enum LogLevel {
 impl From<LogLevel> for EnvFilter {
     fn from(level: LogLevel) -> Self {
         let filter: LevelFilter = level.into();
-        EnvFilter::builder()
-            .with_default_directive(filter.into())
-            .from_env_lossy()
+        // Use only the default directive, don't read from environment
+        // to ensure tests work consistently
+        EnvFilter::new(filter.to_string())
     }
 }
 

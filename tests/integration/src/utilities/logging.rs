@@ -4,10 +4,11 @@
 //! system and can be configured at runtime via the setup API.
 
 use hermes::nvim::configuration::{LogConfig, LogFileConfig, LogTargetConfig};
-use hermes::utilities::LogFormat;
 use hermes::utilities::logging::{LogLevel, Logger};
+use hermes::utilities::LogFormat;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
+use tracing::warn;
 
 /// Helper function to create a LogConfig with file logging enabled
 fn create_log_config_with_file(level: LogLevel, file_config: LogFileConfig) -> LogConfig {
@@ -282,6 +283,7 @@ fn test_log_level_reconfiguration_filtered_before() -> nvim_oxi::Result<()> {
 
     // Verify
     let content = std::fs::read_to_string(&log_path).unwrap();
+    warn!("Log file content: {}", content);
     assert!(
         !content.contains("Should be filtered"),
         "INFO should be filtered at initial WARN level"
