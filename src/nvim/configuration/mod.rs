@@ -201,16 +201,6 @@ impl nvim_oxi::lua::Pushable for ClientConfigPartial {
                 }
                 log_dict.insert("message", target_dict);
             }
-            if let Some(ref val) = log.quickfix {
-                let mut target_dict = Dictionary::new();
-                if let Some(level) = val.level {
-                    target_dict.insert("level", level.to_string());
-                }
-                if let Some(format) = val.format {
-                    target_dict.insert("format", format.to_string());
-                }
-                log_dict.insert("quickfix", target_dict);
-            }
             dict.insert("log", log_dict);
         }
 
@@ -287,7 +277,7 @@ mod tests {
             },
             buffer: BufferConfig { auto_save: true },
             log: LogConfig {
-                file: None,
+                file: Default::default(),
                 stdio: LogTargetConfig {
                     level: crate::utilities::LogLevel::Warn,
                     format: LogFormat::default(),
@@ -297,10 +287,6 @@ mod tests {
                     format: LogFormat::default(),
                 },
                 message: LogTargetConfig {
-                    level: crate::utilities::LogLevel::Warn,
-                    format: LogFormat::default(),
-                },
-                quickfix: LogTargetConfig {
                     level: crate::utilities::LogLevel::Warn,
                     format: LogFormat::default(),
                 },

@@ -135,7 +135,7 @@ impl FromObject for LogFileConfigPartial {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LogConfig {
-    pub file: Option<LogFileConfig>,
+    pub file: LogFileConfig,
     pub stdio: LogTargetConfig, // Stdout/stderr logging configuration
     pub notification: LogTargetConfig,
     pub message: LogTargetConfig,
@@ -144,7 +144,7 @@ pub struct LogConfig {
 impl Default for LogConfig {
     fn default() -> Self {
         Self {
-            file: None,
+            file: LogFileConfig::default(),
             stdio: LogTargetConfig::default(),
             message: LogTargetConfig::default(),
             notification: LogTargetConfig {
@@ -162,24 +162,13 @@ pub struct LogConfigPartial {
     pub stdio: Option<LogTargetConfigPartial>,
     pub notification: Option<LogTargetConfigPartial>,
     pub message: Option<LogTargetConfigPartial>,
-    pub quickfix: Option<LogTargetConfigPartial>,
 }
 
 impl LogConfigPartial {
     /// Apply only Some() values to existing config
     pub fn apply_to(self, config: &mut LogConfig) {
-        if let Some(file_partial) = self.file {
-            if let Some(ref mut file_config) = config.file {
-                file_partial.apply_to(file_config);
-            } else {
-                config.file = Some(LogFileConfig {
-                    path: file_partial.path.unwrap_or_default(),
-                    level: file_partial.level.unwrap_or(LogLevel::Warn),
-                    format: file_partial.format.unwrap_or_default(),
-                    max_size: file_partial.max_size.unwrap_or(10_485_760),
-                    max_files: file_partial.max_files.unwrap_or(5),
-                });
-            }
+        if let Some(val) = self.file {
+            val.apply_to(&mut config.file);
         }
         if let Some(val) = self.stdio {
             val.apply_to(&mut config.stdio);
@@ -213,17 +202,12 @@ impl FromObject for LogConfigPartial {
             .get("message")
             .map(|o| LogTargetConfigPartial::from_object(o.clone()))
             .transpose()?;
-        let quickfix = dict
-            .get("quickfix")
-            .map(|o| LogTargetConfigPartial::from_object(o.clone()))
-            .transpose()?;
 
         Ok(Self {
             file,
             stdio,
             notification,
             message,
-            quickfix,
         })
     }
 }
@@ -363,7 +347,6 @@ mod tests {
             }),
             notification: None,
             message: None,
-            quickfix: None,
             file: None,
         };
         partial.apply_to(&mut config);
@@ -380,7 +363,6 @@ mod tests {
             }),
             notification: None,
             message: None,
-            quickfix: None,
             file: None,
         };
         partial.apply_to(&mut config);
@@ -397,7 +379,6 @@ mod tests {
             }),
             notification: None,
             message: None,
-            quickfix: None,
             file: None,
         };
         partial.apply_to(&mut config);

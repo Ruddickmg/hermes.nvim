@@ -1,4 +1,4 @@
-use nvim_oxi::{api, Dictionary};
+use nvim_oxi::{Dictionary, api};
 use std::io::{self, Write};
 
 use crate::utilities::LogLevel;
@@ -29,11 +29,9 @@ impl Write for NotifyWriter {
         // Convert bytes to string (ignore invalid UTF-8)
         let s = String::from_utf8_lossy(buf);
 
-        // Split into lines (tracing fmt layer may send partial lines)
-        for line in s.lines() {
-            // Send each line to nvim notify
-            let _ = api::notify(line, self.level.into(), &self.config);
-        }
+        let escaped = s.replace('"', "\\\"");
+        let _ = api::notify(&escaped, self.level.into(), &self.config)
+            .inspect_err(|e| eprint!("Error trying to route logs to \"vim.notify\": {:?}", e));
 
         Ok(buf.len())
     }

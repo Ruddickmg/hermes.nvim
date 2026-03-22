@@ -9,6 +9,7 @@ use tracing_subscriber::{
 
 use crate::nvim::configuration::{LogFileConfig, LogTargetConfig};
 use crate::utilities::logging::writer::NotifyWriter;
+use crate::utilities::writer::MessageWriter;
 use crate::{
     acp::{Result, error::Error},
     nvim::configuration::LogConfig,
@@ -72,11 +73,11 @@ impl Logger {
         Self::extend_layer(fmt::Layer::new(), format)
     }
 
-    fn combine_layers(config: LogTargetConfig) -> BoxedLayers {
+    fn stdio_layer(config: LogTargetConfig) -> BoxedLayers {
         Self::format_layer(config.format).with_filter(Self::filter_layer(config.level))
     }
 
-    pub fn notification_layer(config: LogTargetConfig) -> BoxedLayers {
+    fn notification_layer(config: LogTargetConfig) -> BoxedLayers {
         let writer = NotifyWriter::new(config.level);
         Self::extend_layer(
             fmt::layer().with_writer(move || writer.clone()),
@@ -85,16 +86,15 @@ impl Logger {
         .with_filter(Self::filter_layer(config.level))
     }
 
-    pub fn message_layer(config: LogTargetConfig) -> BoxedLayers {
-        let writer = NotifyWriter::new(config.level);
+    fn message_layer(config: LogTargetConfig) -> BoxedLayers {
         Self::extend_layer(
-            fmt::layer().with_writer(move || writer.clone()),
+            fmt::layer().with_writer(MessageWriter::default),
             config.format,
         )
         .with_filter(Self::filter_layer(config.level))
     }
 
-    pub fn file_layer(config: LogFileConfig) -> BoxedLayers {
+    fn file_layer(config: LogFileConfig) -> BoxedLayers {
         let writer = NotifyWriter::new(config.level);
         Self::extend_layer(
             fmt::layer().with_writer(move || writer.clone()),
@@ -111,15 +111,12 @@ impl Logger {
             file,
         }: LogConfig,
     ) -> Vec<BoxedLayers> {
-        let mut layers = vec![
-            Self::combine_layers(stdio),
+        vec![
+            Self::stdio_layer(stdio),
             Self::message_layer(message),
             Self::notification_layer(notification),
-        ];
-        if let Some(file_config) = file {
-            layers.push(Self::file_layer(file_config));
-        }
-        layers
+            Self::file_layer(file),
+        ]
     }
 
     pub fn inititalize() -> &'static Self {
