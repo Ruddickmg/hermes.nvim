@@ -8,7 +8,7 @@ use nvim_oxi::{
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct LogTargetConfig {
     pub level: LogLevel,
-    pub format: LogFormat, // None = use global format
+    pub format: LogFormat,
 }
 
 /// Partial configuration for a log target
@@ -327,7 +327,7 @@ mod tests {
             max_files: None,
         };
         partial.apply_to(&mut config);
-        assert_eq!(config.format, Some(LogFormat::Json));
+        assert_eq!(config.format, LogFormat::Json);
     }
 
     #[test]
@@ -341,7 +341,7 @@ mod tests {
             max_files: None,
         };
         partial.apply_to(&mut config);
-        assert_eq!(config.max_size, Some(2048));
+        assert_eq!(config.max_size, 2048);
     }
 
     #[test]
@@ -355,7 +355,7 @@ mod tests {
             max_files: Some(10),
         };
         partial.apply_to(&mut config);
-        assert_eq!(config.max_files, Some(10));
+        assert_eq!(config.max_files, 10);
     }
 
     #[test]

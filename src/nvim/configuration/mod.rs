@@ -227,6 +227,8 @@ impl Poppable for ClientConfigPartial {
 
 #[cfg(test)]
 mod tests {
+    use crate::utilities::LogFormat;
+
     use super::*;
 
     #[test]
@@ -288,19 +290,19 @@ mod tests {
                 file: None,
                 stdio: LogTargetConfig {
                     level: crate::utilities::LogLevel::Warn,
-                    format: None,
+                    format: LogFormat::default(),
                 },
                 notification: LogTargetConfig {
                     level: crate::utilities::LogLevel::Warn,
-                    format: None,
+                    format: LogFormat::default(),
                 },
                 message: LogTargetConfig {
                     level: crate::utilities::LogLevel::Warn,
-                    format: None,
+                    format: LogFormat::default(),
                 },
                 quickfix: LogTargetConfig {
                     level: crate::utilities::LogLevel::Warn,
-                    format: None,
+                    format: LogFormat::default(),
                 },
             },
         };

@@ -462,7 +462,7 @@ fn setup_updates_stdio_log_format() -> nvim_oxi::Result<()> {
     let state = plugin_state.blocking_lock();
     assert_eq!(
         state.config.log.stdio.format,
-        Some(hermes::utilities::logging::LogFormat::Json)
+        hermes::utilities::logging::LogFormat::Json
     );
     Ok(())
 }
@@ -500,7 +500,7 @@ fn setup_updates_notification_log_format() -> nvim_oxi::Result<()> {
     let state = plugin_state.blocking_lock();
     assert_eq!(
         state.config.log.notification.format,
-        Some(hermes::utilities::logging::LogFormat::Pretty)
+        hermes::utilities::logging::LogFormat::Pretty
     );
     Ok(())
 }

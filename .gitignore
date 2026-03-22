@@ -25,3 +25,6 @@ target
 
 /target
 /node_modules
+
+# file to keep errors that need investigation
+errors.txt

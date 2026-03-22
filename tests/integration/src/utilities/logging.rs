@@ -4,6 +4,7 @@
 //! system and can be configured at runtime via the setup API.
 
 use hermes::nvim::configuration::{LogConfig, LogFileConfig, LogTargetConfig};
+use hermes::utilities::LogFormat;
 use hermes::utilities::logging::{LogLevel, Logger};
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
@@ -13,7 +14,7 @@ fn create_log_config_with_file(level: LogLevel, file_config: LogFileConfig) -> L
     LogConfig {
         stdio: LogTargetConfig {
             level,
-            format: None,
+            format: LogFormat::default(),
         },
         file: Some(file_config),
         message: LogTargetConfig::default(),
@@ -35,9 +36,9 @@ fn test_file_logging_can_be_enabled() -> nvim_oxi::Result<()> {
     let file_config = LogFileConfig {
         path: log_path.to_string_lossy().to_string(),
         level: LogLevel::Info,
-        format: None,
-        max_size: Some(1024 * 1024),
-        max_files: Some(5),
+        format: LogFormat::default(),
+        max_size: 1024 * 1024,
+        max_files: 5,
     };
     let config = create_log_config_with_file(LogLevel::Info, file_config);
 
@@ -74,9 +75,9 @@ fn test_file_logging_first_message_written() -> nvim_oxi::Result<()> {
     let file_config = LogFileConfig {
         path: log_path.to_string_lossy().to_string(),
         level: LogLevel::Info,
-        format: None,
-        max_size: Some(1024 * 1024),
-        max_files: Some(5),
+        format: LogFormat::default(),
+        max_size: 1024 * 1024,
+        max_files: 5,
     };
     let config = create_log_config_with_file(LogLevel::Info, file_config);
     logger
@@ -119,9 +120,9 @@ fn test_file_logging_disabled_stops_writing() -> nvim_oxi::Result<()> {
         LogFileConfig {
             path: log_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
-            format: None,
-            max_size: Some(1024 * 1024),
-            max_files: Some(5),
+            format: LogFormat::default(),
+            max_size: 1024 * 1024,
+            max_files: 5,
         },
     );
     logger.configure(enable_config).unwrap();
@@ -134,9 +135,9 @@ fn test_file_logging_disabled_stops_writing() -> nvim_oxi::Result<()> {
         LogFileConfig {
             path: log_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
-            format: None,
-            max_size: Some(1024 * 1024),
-            max_files: Some(5),
+            format: LogFormat::default(),
+            max_size: 1024 * 1024,
+            max_files: 5,
         },
     );
     logger.configure(disable_config).unwrap();
@@ -168,9 +169,9 @@ fn test_debug_filtered_at_warn_level_debug() -> nvim_oxi::Result<()> {
     let file_config = LogFileConfig {
         path: log_path.to_string_lossy().to_string(),
         level: LogLevel::Warn,
-        format: None,
-        max_size: Some(1024 * 1024),
-        max_files: Some(5),
+        format: LogFormat::default(),
+        max_size: 1024 * 1024,
+        max_files: 5,
     };
     let config = create_log_config_with_file(LogLevel::Warn, file_config);
     logger.configure(config).unwrap();
@@ -201,9 +202,9 @@ fn test_debug_filtered_at_warn_level_info() -> nvim_oxi::Result<()> {
     let file_config = LogFileConfig {
         path: log_path.to_string_lossy().to_string(),
         level: LogLevel::Warn,
-        format: None,
-        max_size: Some(1024 * 1024),
-        max_files: Some(5),
+        format: LogFormat::default(),
+        max_size: 1024 * 1024,
+        max_files: 5,
     };
     let config = create_log_config_with_file(LogLevel::Warn, file_config);
     logger.configure(config).unwrap();
@@ -234,9 +235,9 @@ fn test_debug_filtered_at_warn_level_warn() -> nvim_oxi::Result<()> {
     let file_config = LogFileConfig {
         path: log_path.to_string_lossy().to_string(),
         level: LogLevel::Warn,
-        format: None,
-        max_size: Some(1024 * 1024),
-        max_files: Some(5),
+        format: LogFormat::default(),
+        max_size: 1024 * 1024,
+        max_files: 5,
     };
     let config = create_log_config_with_file(LogLevel::Warn, file_config);
     logger.configure(config).unwrap();
@@ -269,9 +270,9 @@ fn test_log_level_reconfiguration_filtered_before() -> nvim_oxi::Result<()> {
         LogFileConfig {
             path: log_path.to_string_lossy().to_string(),
             level: LogLevel::Warn,
-            format: None,
-            max_size: Some(1024 * 1024),
-            max_files: Some(5),
+            format: LogFormat::default(),
+            max_size: 1024 * 1024,
+            max_files: 5,
         },
     );
     logger.configure(warn_config).unwrap();
@@ -304,9 +305,9 @@ fn test_log_level_reconfiguration_written_after() -> nvim_oxi::Result<()> {
         LogFileConfig {
             path: log_path.to_string_lossy().to_string(),
             level: LogLevel::Warn,
-            format: None,
-            max_size: Some(1024 * 1024),
-            max_files: Some(5),
+            format: LogFormat::default(),
+            max_size: 1024 * 1024,
+            max_files: 5,
         },
     );
     logger.configure(warn_config).unwrap();
@@ -317,9 +318,9 @@ fn test_log_level_reconfiguration_written_after() -> nvim_oxi::Result<()> {
         LogFileConfig {
             path: log_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
-            format: None,
-            max_size: Some(1024 * 1024),
-            max_files: Some(5),
+            format: LogFormat::default(),
+            max_size: 1024 * 1024,
+            max_files: 5,
         },
     );
     logger.configure(info_config).unwrap();
@@ -350,9 +351,9 @@ fn test_log_rotation() -> nvim_oxi::Result<()> {
     let file_config = LogFileConfig {
         path: log_path.to_string_lossy().to_string(),
         level: LogLevel::Info,
-        format: None,
-        max_size: Some(100),
-        max_files: Some(3),
+        format: LogFormat::default(),
+        max_size: 100,
+        max_files: 3,
     };
     let config = create_log_config_with_file(LogLevel::Info, file_config);
     logger.configure(config).unwrap();
@@ -419,9 +420,9 @@ fn test_reconfigure_to_second_path() -> nvim_oxi::Result<()> {
         LogFileConfig {
             path: first_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
-            format: None,
-            max_size: Some(1024 * 1024),
-            max_files: Some(5),
+            format: LogFormat::default(),
+            max_size: 1024 * 1024,
+            max_files: 5,
         },
     );
     logger.configure(first_config).unwrap();
@@ -434,9 +435,9 @@ fn test_reconfigure_to_second_path() -> nvim_oxi::Result<()> {
         LogFileConfig {
             path: second_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
-            format: None,
-            max_size: Some(1024 * 1024),
-            max_files: Some(5),
+            format: LogFormat::default(),
+            max_size: 1024 * 1024,
+            max_files: 5,
         },
     );
     logger.configure(second_config).unwrap();
@@ -467,7 +468,7 @@ fn test_log_target_config_custom_level() -> nvim_oxi::Result<()> {
 
     let custom_config = LogTargetConfig {
         level: LogLevel::Debug,
-        format: None,
+        format: LogFormat::default(),
     };
     assert_eq!(custom_config.level, LogLevel::Debug);
 
@@ -482,7 +483,7 @@ fn test_log_target_config_with_format_level() -> nvim_oxi::Result<()> {
 
     let config = LogTargetConfig {
         level: LogLevel::Info,
-        format: Some(LogFormat::Json),
+        format: LogFormat::Json,
     };
     assert_eq!(config.level, LogLevel::Info);
 
@@ -497,9 +498,9 @@ fn test_log_target_config_with_format_format() -> nvim_oxi::Result<()> {
 
     let config = LogTargetConfig {
         level: LogLevel::Info,
-        format: Some(LogFormat::Json),
+        format: LogFormat::Json,
     };
-    assert_eq!(config.format, Some(LogFormat::Json));
+    assert_eq!(config.format, LogFormat::Json);
 
     Ok(())
 }
@@ -519,14 +520,14 @@ fn test_log_format_can_be_changed_via_configure() -> nvim_oxi::Result<()> {
     let compact_config = LogConfig {
         stdio: LogTargetConfig {
             level: LogLevel::Info,
-            format: Some(LogFormat::Compact),
+            format: LogFormat::Compact,
         },
         file: Some(LogFileConfig {
             path: log_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
-            format: Some(LogFormat::Compact),
-            max_size: Some(1024 * 1024),
-            max_files: Some(5),
+            format: LogFormat::Compact,
+            max_size: 1024 * 1024,
+            max_files: 5,
         }),
         message: LogTargetConfig::default(),
         notification: LogTargetConfig::default(),
@@ -544,14 +545,14 @@ fn test_log_format_can_be_changed_via_configure() -> nvim_oxi::Result<()> {
     let json_config = LogConfig {
         stdio: LogTargetConfig {
             level: LogLevel::Info,
-            format: Some(LogFormat::Json),
+            format: LogFormat::Json,
         },
         file: Some(LogFileConfig {
             path: log_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
-            format: Some(LogFormat::Json),
-            max_size: Some(1024 * 1024),
-            max_files: Some(5),
+            format: LogFormat::Json,
+            max_size: 1024 * 1024,
+            max_files: 5,
         }),
         message: LogTargetConfig::default(),
         notification: LogTargetConfig::default(),
