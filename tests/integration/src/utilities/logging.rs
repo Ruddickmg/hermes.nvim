@@ -19,7 +19,6 @@ fn create_log_config_with_file(level: LogLevel, file_config: LogFileConfig) -> L
         file: Some(file_config),
         message: LogTargetConfig::default(),
         notification: LogTargetConfig::default(),
-        quickfix: LogTargetConfig::default(),
     }
 }
 
@@ -531,7 +530,6 @@ fn test_log_format_can_be_changed_via_configure() -> nvim_oxi::Result<()> {
         }),
         message: LogTargetConfig::default(),
         notification: LogTargetConfig::default(),
-        quickfix: LogTargetConfig::default(),
     };
     logger
         .configure(compact_config)
@@ -556,7 +554,6 @@ fn test_log_format_can_be_changed_via_configure() -> nvim_oxi::Result<()> {
         }),
         message: LogTargetConfig::default(),
         notification: LogTargetConfig::default(),
-        quickfix: LogTargetConfig::default(),
     };
     logger
         .configure(json_config)

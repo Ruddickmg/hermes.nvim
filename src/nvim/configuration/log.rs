@@ -139,7 +139,6 @@ pub struct LogConfig {
     pub stdio: LogTargetConfig, // Stdout/stderr logging configuration
     pub notification: LogTargetConfig,
     pub message: LogTargetConfig,
-    pub quickfix: LogTargetConfig,
 }
 
 impl Default for LogConfig {
@@ -148,7 +147,6 @@ impl Default for LogConfig {
             file: None,
             stdio: LogTargetConfig::default(),
             message: LogTargetConfig::default(),
-            quickfix: LogTargetConfig::default(),
             notification: LogTargetConfig {
                 level: LogLevel::Error,
                 format: LogFormat::default(),
@@ -191,9 +189,6 @@ impl LogConfigPartial {
         }
         if let Some(val) = self.message {
             val.apply_to(&mut config.message);
-        }
-        if let Some(val) = self.quickfix {
-            val.apply_to(&mut config.quickfix);
         }
     }
 }

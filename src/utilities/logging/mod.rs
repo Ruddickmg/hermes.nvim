@@ -103,19 +103,9 @@ impl Logger {
         .with_filter(Self::filter_layer(config.level))
     }
 
-    pub fn quickfix_layer(config: LogTargetConfig) -> BoxedLayers {
-        let writer = NotifyWriter::new(config.level);
-        Self::extend_layer(
-            fmt::layer().with_writer(move || writer.clone()),
-            config.format,
-        )
-        .with_filter(Self::filter_layer(config.level))
-    }
-
     pub fn all_layers(
         LogConfig {
             stdio,
-            quickfix,
             message,
             notification,
             file,
@@ -125,7 +115,6 @@ impl Logger {
             Self::combine_layers(stdio),
             Self::message_layer(message),
             Self::notification_layer(notification),
-            Self::quickfix_layer(quickfix),
         ];
         if let Some(file_config) = file {
             layers.push(Self::file_layer(file_config));

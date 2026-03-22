@@ -1475,6 +1475,9 @@ Available formats:
     - [ ] Finished/Responded
     - [ ] etc?
   - [ ] Update on events (no polling required)
+- [ ] quickfix list integration
+  - [ ] add files updated by agent to quickfix list 
+  - [ ] add references made by agent to quickfix list
 - [ ] Integrate with signs
   - [ ] Configurable
   - [ ] Show lines edited by agent
