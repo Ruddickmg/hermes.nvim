@@ -6,15 +6,12 @@ pub struct MessageWriter {}
 
 impl Write for MessageWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        // Convert bytes to string (ignore invalid UTF-8)
         let s = String::from_utf8_lossy(buf);
-
-        // Send the entire content as a single :messages entry
-        // echomsg can handle newlines, so we preserve them
         let escaped = s.replace('"', "\\\"");
         let cmd = format!("echomsg \"{}\"", escaped);
-        let _ = api::command(&cmd)
-            .inspect_err(|e| eprint!("Error trying to route logs to \":messages\": {:?}", e));
+        api::command(&cmd).map_err(|e| {
+            std::io::Error::other(format!("Error sending log to \":messages\": {:?}", e))
+        })?;
 
         Ok(buf.len())
     }

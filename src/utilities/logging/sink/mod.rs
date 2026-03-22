@@ -6,9 +6,6 @@
 use std::io;
 
 pub mod file;
-pub mod message;
-pub mod notification;
-pub mod quickfix;
 
 /// Trait for log output destinations
 ///
@@ -41,9 +38,6 @@ impl LogSink for NullSink {
 }
 
 pub use file::FileSink;
-pub use message::MessageSink;
-pub use notification::NotificationSink;
-pub use quickfix::QuickfixSink;
 
 #[cfg(test)]
 mod tests {

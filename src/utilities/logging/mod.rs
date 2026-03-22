@@ -1,5 +1,4 @@
-use std::sync::Mutex as StdMutex;
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 use tracing_subscriber::filter::Filtered;
 use tracing_subscriber::{
     EnvFilter, Registry, fmt,
@@ -15,9 +14,9 @@ use crate::{
     nvim::configuration::LogConfig,
 };
 
-pub mod writer;
-pub mod level;
 pub mod format;
+pub mod level;
+pub mod writer;
 pub use format::*;
 pub use level::*;
 pub mod channel;
@@ -25,15 +24,11 @@ pub mod channel;
 pub mod file;
 pub mod sink;
 
-use sink::{FileSink, LogSink, QuickfixSink};
+use sink::FileSink;
 
 static LOGGER: OnceLock<Logger> = OnceLock::new();
 
-/// Type aliases for different channel writers (only for blocking operations)
 pub type FileChannel = channel::ChannelWriter<FileSink>;
-pub type QuickfixChannel = channel::ChannelWriter<QuickfixSink>;
-
-/// Type alias for boxed layer
 type BoxedLayer = Box<dyn tracing_subscriber::layer::Layer<Registry> + Send + Sync + 'static>;
 type BoxedLayers = Filtered<BoxedLayer, EnvFilter, Registry>;
 
@@ -136,72 +131,6 @@ impl Logger {
         self.handle
             .reload(layers)
             .map_err(|e| Error::Internal(e.to_string()))
-    }
-}
-
-/// Guard struct for channel writer access
-pub struct ChannelWriterGuard<S: LogSink> {
-    inner: Arc<StdMutex<Option<channel::ChannelWriter<S>>>>,
-}
-
-impl<S: LogSink> ChannelWriterGuard<S> {
-    pub fn new(inner: Arc<StdMutex<Option<channel::ChannelWriter<S>>>>) -> Self {
-        Self { inner }
-    }
-}
-
-impl<S: LogSink> std::io::Write for ChannelWriterGuard<S> {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|e| std::io::Error::other(format!("Lock poisoned: {}", e)))?;
-
-        match guard.as_mut() {
-            Some(writer) => writer.write(buf),
-            None => Ok(buf.len()),
-        }
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|e| std::io::Error::other(format!("Lock poisoned: {}", e)))?;
-
-        match guard.as_mut() {
-            Some(writer) => writer.flush(),
-            None => Ok(()),
-        }
-    }
-}
-
-/// Guard struct for direct writer access (non-blocking sinks)
-pub struct DirectWriterGuard<S> {
-    inner: Arc<StdMutex<S>>,
-}
-
-impl<S> DirectWriterGuard<S> {
-    pub fn new(inner: Arc<StdMutex<S>>) -> Self {
-        Self { inner }
-    }
-}
-
-impl<S: std::io::Write> std::io::Write for DirectWriterGuard<S> {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|e| std::io::Error::other(format!("Lock poisoned: {}", e)))?;
-        guard.write(buf)
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|e| std::io::Error::other(format!("Lock poisoned: {}", e)))?;
-        guard.flush()
     }
 }
 

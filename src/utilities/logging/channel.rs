@@ -225,6 +225,72 @@ impl<S: LogSink> Worker<S> {
     }
 }
 
+/// Guard struct for channel writer access
+pub struct ChannelWriterGuard<S: LogSink> {
+    inner: Arc<Mutex<Option<ChannelWriter<S>>>>,
+}
+
+impl<S: LogSink> ChannelWriterGuard<S> {
+    pub fn new(inner: Arc<Mutex<Option<ChannelWriter<S>>>>) -> Self {
+        Self { inner }
+    }
+}
+
+impl<S: LogSink> std::io::Write for ChannelWriterGuard<S> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| std::io::Error::other(format!("Lock poisoned: {}", e)))?;
+
+        match guard.as_mut() {
+            Some(writer) => writer.write(buf),
+            None => Ok(buf.len()),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| std::io::Error::other(format!("Lock poisoned: {}", e)))?;
+
+        match guard.as_mut() {
+            Some(writer) => writer.flush(),
+            None => Ok(()),
+        }
+    }
+}
+
+/// Guard struct for direct writer access (non-blocking sinks)
+pub struct DirectWriterGuard<S> {
+    inner: Arc<Mutex<S>>,
+}
+
+impl<S> DirectWriterGuard<S> {
+    pub fn new(inner: Arc<Mutex<S>>) -> Self {
+        Self { inner }
+    }
+}
+
+impl<S: std::io::Write> std::io::Write for DirectWriterGuard<S> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| std::io::Error::other(format!("Lock poisoned: {}", e)))?;
+        guard.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| std::io::Error::other(format!("Lock poisoned: {}", e)))?;
+        guard.flush()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

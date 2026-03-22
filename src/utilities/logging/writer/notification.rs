@@ -30,8 +30,8 @@ impl Write for NotifyWriter {
         let s = String::from_utf8_lossy(buf);
 
         let escaped = s.replace('"', "\\\"");
-        let _ = api::notify(&escaped, self.level.into(), &self.config)
-            .inspect_err(|e| eprint!("Error trying to route logs to \"vim.notify\": {:?}", e));
+        api::notify(&escaped, self.level.into(), &self.config)
+            .map_err(|e| std::io::Error::other(format!("Failed to send notification: {e}")))?;
 
         Ok(buf.len())
     }
