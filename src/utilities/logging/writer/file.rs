@@ -7,7 +7,6 @@ use tracing_subscriber::fmt::MakeWriter;
 
 use crate::utilities::logging::channel::ChannelWriter;
 use crate::utilities::logging::sink::FileSink;
-use crate::utilities::writer::Filtered;
 
 /// A lazy file writer that only spawns the worker thread on first use
 ///
@@ -21,8 +20,6 @@ pub struct LazyFileWriter {
     max_files: usize,
     inner: std::sync::Arc<OnceLock<FileWriter>>,
 }
-
-impl Filtered for LazyFileWriter {}
 
 impl LazyFileWriter {
     /// Create a new lazy file writer with the given configuration
@@ -90,8 +87,6 @@ pub struct FileWriter {
     inner: ChannelWriter<FileSink>,
     dropped_count: std::sync::Arc<AtomicUsize>,
 }
-
-impl Filtered for FileWriter {}
 
 impl FileWriter {
     pub fn new(path: impl AsRef<Path>, max_size: u64, max_files: usize) -> io::Result<Self> {

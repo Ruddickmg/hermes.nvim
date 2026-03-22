@@ -37,11 +37,6 @@ pub struct Logger {
 }
 
 impl Logger {
-    fn filter_layer(level: LogLevel) -> EnvFilter {
-        let log_level: EnvFilter = level.into();
-        log_level
-    }
-
     fn base_layer<W>(
         layer: fmt::Layer<Registry, fmt::format::DefaultFields, fmt::format::Format, W>,
         format: LogFormat,
@@ -63,16 +58,12 @@ impl Logger {
         }
     }
 
-    fn format_layer(format: LogFormat) -> BoxedLayer {
-        Self::base_layer(fmt::Layer::new(), format)
-    }
-
     fn stdio_layer(config: LogTargetConfig) -> BoxedLayer {
-        Self::format_layer(config.format)
+        Self::base_layer(fmt::Layer::new(), config.format)
     }
 
     fn notification_layer(config: LogTargetConfig) -> BoxedLayer {
-        let writer = NotifyWriter::new(config.level).filtered(config.level).clone();
+        let writer = NotifyWriter::new(config.level).filtered(config.level);
         Self::base_layer(
             fmt::layer().with_writer(writer),
             config.format,

@@ -1,11 +1,9 @@
-use std::io::{self, Write};
 use nvim_oxi::api;
-use crate::utilities::{writer::{Filtered}};
+use std::io::{self, Write};
+use tracing_subscriber::fmt::writer::MakeWriter;
 
 #[derive(Debug, Clone, Default)]
 pub struct MessageWriter;
-
-impl Filtered for MessageWriter {}
 
 impl Write for MessageWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
@@ -21,5 +19,13 @@ impl Write for MessageWriter {
 
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
+    }
+}
+
+impl<'a> MakeWriter<'a> for MessageWriter {
+    type Writer = Self;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        self.clone()
     }
 }

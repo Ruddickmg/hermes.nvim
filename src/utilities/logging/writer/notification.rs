@@ -1,7 +1,8 @@
 use nvim_oxi::{api, Dictionary};
 use std::io::{self, Write};
+use tracing_subscriber::fmt::writer::MakeWriter;
 
-use crate::utilities::{LogLevel, writer::Filtered};
+use crate::utilities::LogLevel;
 
 /// A writer that sends lines to Neovim notifications
 #[derive(Debug, Clone)]
@@ -9,8 +10,6 @@ pub struct NotifyWriter {
     level: LogLevel,
     config: Dictionary,
 }
-
-impl Filtered for NotifyWriter {}
 
 // SAFETY: NotifyWriter contains Dictionary which has raw pointers, but we
 // only access it through the Mutex, ensuring thread safety
@@ -40,5 +39,13 @@ impl Write for NotifyWriter {
 
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
+    }
+}
+
+impl<'a> MakeWriter<'a> for NotifyWriter {
+    type Writer = Self;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        self.clone()
     }
 }
