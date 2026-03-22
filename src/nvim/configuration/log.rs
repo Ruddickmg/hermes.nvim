@@ -1,23 +1,14 @@
-use crate::utilities::{LogFormat, LogLevel};
+use crate::utilities::logging::{LogFormat, LogLevel};
 use nvim_oxi::{
-    conversion::{Error, FromObject},
     Dictionary, Object,
+    conversion::{Error, FromObject},
 };
 
 /// Configuration for a single log target (notification, message, quickfix, etc.)
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct LogTargetConfig {
     pub level: LogLevel,
     pub format: LogFormat, // None = use global format
-}
-
-impl Default for LogTargetConfig {
-    fn default() -> Self {
-        Self {
-            level: LogLevel::default(),
-            format: LogFormat::default(),
-        }
-    }
 }
 
 /// Partial configuration for a log target
@@ -59,9 +50,9 @@ impl FromObject for LogTargetConfigPartial {
 pub struct LogFileConfig {
     pub path: String,
     pub level: LogLevel,
-    pub format: Option<LogFormat>, // None = use global format
-    pub max_size: Option<u64>,
-    pub max_files: Option<u32>,
+    pub format: LogFormat, // None = use global format
+    pub max_size: u64,
+    pub max_files: u32,
 }
 
 impl Default for LogFileConfig {
@@ -69,9 +60,9 @@ impl Default for LogFileConfig {
         Self {
             path: "".to_string(),
             level: LogLevel::Warn,
-            format: None,
-            max_size: Some(10_485_760), // 10MB default
-            max_files: Some(5),         // Keep 5 backup files
+            format: LogFormat::default(),
+            max_size: 10_485_760, // 10MB default
+            max_files: 5,         // Keep 5 backup files
         }
     }
 }
@@ -96,13 +87,13 @@ impl LogFileConfigPartial {
             config.level = val;
         }
         if let Some(val) = self.format {
-            config.format = Some(val);
+            config.format = val;
         }
         if let Some(val) = self.max_size {
-            config.max_size = Some(val);
+            config.max_size = val;
         }
         if let Some(val) = self.max_files {
-            config.max_files = Some(val);
+            config.max_files = val;
         }
     }
 }
@@ -186,9 +177,9 @@ impl LogConfigPartial {
                 config.file = Some(LogFileConfig {
                     path: file_partial.path.unwrap_or_default(),
                     level: file_partial.level.unwrap_or(LogLevel::Warn),
-                    format: file_partial.format,
-                    max_size: file_partial.max_size,
-                    max_files: file_partial.max_files,
+                    format: file_partial.format.unwrap_or_default(),
+                    max_size: file_partial.max_size.unwrap_or(10_485_760),
+                    max_files: file_partial.max_files.unwrap_or(5),
                 });
             }
         }

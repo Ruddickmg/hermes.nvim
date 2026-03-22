@@ -1,5 +1,5 @@
+use nvim_oxi::{api, Dictionary};
 use std::io::{self, Write};
-use nvim_oxi::{Dictionary, api};
 
 use crate::utilities::LogLevel;
 
@@ -9,6 +9,11 @@ pub struct NotifyWriter {
     level: LogLevel,
     config: Dictionary,
 }
+
+// SAFETY: NotifyWriter contains Dictionary which has raw pointers, but we
+// only access it through the Mutex, ensuring thread safety
+unsafe impl Send for NotifyWriter {}
+unsafe impl Sync for NotifyWriter {}
 
 impl NotifyWriter {
     pub fn new(level: LogLevel) -> Self {
