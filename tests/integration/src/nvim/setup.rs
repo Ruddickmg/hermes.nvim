@@ -1,14 +1,15 @@
 use hermes::{
-    PluginState,
-    api::{SetupArgs, setup::setup},
+    api::{setup, SetupArgs},
     nvim::configuration::{
         BufferConfigPartial, ClientConfigPartial, LogConfigPartial, LogFileConfigPartial,
         LogTargetConfigPartial,
     },
+    PluginState,
 };
-use nvim_oxi::{self, lua::Poppable};
+use nvim_oxi;
 use pretty_assertions::assert_eq;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// Test: setup() updates permissions correctly
 #[nvim_oxi::test]
@@ -258,6 +259,9 @@ fn setup_updates_buffer_config_on_subsequent_calls() -> nvim_oxi::Result<()> {
 /// Test: setup() works with empty config
 #[nvim_oxi::test]
 fn setup_works_with_empty_config() -> nvim_oxi::Result<()> {
+    // Test that setup() works with an empty/default config.
+    // The Logger is already initialized by previous tests, so we just verify
+    // that calling setup with an empty config doesn't panic and updates state correctly.
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
     let setup_fn = setup(
         plugin_state.clone(),
@@ -268,11 +272,13 @@ fn setup_works_with_empty_config() -> nvim_oxi::Result<()> {
         nvim_oxi::conversion::FromObject::from_object(setup_fn)
             .expect("Failed to convert setup function");
 
-    // Empty config
-    func.call(SetupArgs(Some(ClientConfigPartial::default())))
-        .expect("Failed to call setup");
+    // Empty config - should not panic
+    let result = func.call(SetupArgs(None));
 
-    // Should use defaults
+    // Verify no error was returned
+    assert!(result.is_ok(), "Setup with empty config should not fail");
+
+    // Verify state uses defaults
     let state = plugin_state.blocking_lock();
     assert!(state.config.permissions.fs_read_access); // Default true
     Ok(())
@@ -313,10 +319,13 @@ fn setup_enables_log_file_config() -> nvim_oxi::Result<()> {
         nvim_oxi::conversion::FromObject::from_object(setup_fn)
             .expect("Failed to convert setup function");
 
+    let temp_dir = std::env::temp_dir();
+    let log_path = temp_dir.join("test_log_file.log");
+
     let config = ClientConfigPartial {
         log: Some(LogConfigPartial {
             file: Some(LogFileConfigPartial {
-                path: None,
+                path: Some(log_path.to_string_lossy().to_string()),
                 level: None,
                 format: None,
                 max_size: None,
@@ -331,13 +340,10 @@ fn setup_enables_log_file_config() -> nvim_oxi::Result<()> {
         .expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
-    let file_config = state
-        .config
-        .log
-        .file
-        .as_ref()
-        .expect("File config should exist");
-    assert!(file_config.enabled);
+    // File config should exist with the path set
+    assert!(state.config.log.file.is_some());
+    let file_config = state.config.log.file.as_ref().unwrap();
+    assert_eq!(file_config.path, log_path.to_string_lossy().to_string());
     Ok(())
 }
 

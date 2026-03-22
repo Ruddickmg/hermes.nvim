@@ -57,6 +57,19 @@ impl From<LogLevel> for LevelFilter {
     }
 }
 
+impl From<LogLevel> for tracing::Level {
+    fn from(level: LogLevel) -> Self {
+        match level {
+            LogLevel::Trace => tracing::Level::TRACE,
+            LogLevel::Debug => tracing::Level::DEBUG,
+            LogLevel::Info => tracing::Level::INFO,
+            LogLevel::Warn => tracing::Level::WARN,
+            LogLevel::Error => tracing::Level::ERROR,
+            LogLevel::Off => tracing::Level::ERROR, // Off maps to most restrictive
+        }
+    }
+}
+
 impl From<i64> for LogLevel {
     fn from(value: i64) -> Self {
         match value {
@@ -176,6 +189,7 @@ type LoggerHolders = (
 
 /// Type aliases for layer reload handles
 type FormatLayerHandle = Handle<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>, Registry>;
+type FileLayerHandle = Handle<FileLayer, Registry>;
 
 /// Log target identifier for format updates
 #[derive(Clone, Copy, Debug)]
@@ -187,17 +201,162 @@ pub enum LogTarget {
     Quickfix,
 }
 
+/// Custom file layer that implements its own filtering
+/// This bypasses the Filtered layer bug in tracing-subscriber issue #1629
+#[derive(Debug)]
+pub struct FileLayer {
+    writer: Arc<StdMutex<Option<FileChannel>>>,
+    level: Arc<StdMutex<LogLevel>>,
+    format: Arc<StdMutex<LogFormat>>,
+}
+
+impl FileLayer {
+    pub fn new(writer: Arc<StdMutex<Option<FileChannel>>>, level: LogLevel, format: LogFormat) -> Self {
+        Self {
+            writer,
+            level: Arc::new(StdMutex::new(level)),
+            format: Arc::new(StdMutex::new(format)),
+        }
+    }
+
+    pub fn update_level(&self, level: LogLevel) {
+        if let Ok(mut guard) = self.level.lock() {
+            *guard = level;
+        }
+    }
+
+    pub fn update_format(&self, format: LogFormat) {
+        if let Ok(mut guard) = self.format.lock() {
+            *guard = format;
+        }
+    }
+}
+
+/// Visitor to extract the message from a tracing event
+struct MessageVisitor {
+    message: String,
+}
+
+impl MessageVisitor {
+    fn new() -> Self {
+        Self {
+            message: String::new(),
+        }
+    }
+}
+
+impl tracing::field::Visit for MessageVisitor {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        // Capture the "message" field specifically
+        if field.name() == "message" {
+            self.message = format!("{:?}", value);
+        }
+    }
+    
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        if field.name() == "message" {
+            self.message = value.to_string();
+        }
+    }
+}
+
+impl<S> tracing_subscriber::Layer<S> for FileLayer
+where
+    S: tracing::Subscriber,
+{
+    fn enabled(&self, metadata: &tracing::Metadata<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) -> bool {
+        let level = self.level.lock().unwrap();
+        let event_level = metadata.level();
+        
+        use tracing::Level;
+        let event_num = match *event_level {
+            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
+            Level::WARN => 3, Level::ERROR => 4,
+        };
+        let min_num = match (*level).into() {
+            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
+            Level::WARN => 3, Level::ERROR => 4,
+        };
+        
+        // Only enable if event is at or above min_level (less verbose or equal)
+        event_num >= min_num
+    }
+
+    fn on_event(&self, event: &tracing::Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
+        // Check level again (enabled() is just a hint)
+        let level = self.level.lock().unwrap();
+        let event_level = event.metadata().level();
+        use tracing::Level;
+        let event_num = match *event_level {
+            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
+            Level::WARN => 3, Level::ERROR => 4,
+        };
+        let min_num = match (*level).into() {
+            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
+            Level::WARN => 3, Level::ERROR => 4,
+        };
+        if event_num < min_num {
+            return; // Filter it out
+        }
+        
+        // Check if we have a writer
+        let mut writer_guard = self.writer.lock().unwrap();
+        if writer_guard.is_none() {
+            return;
+        }
+        
+        // Get current format setting
+        let format = self.format.lock().unwrap();
+        
+        // Extract the message from the event
+        let mut visitor = MessageVisitor::new();
+        event.record(&mut visitor);
+        
+        let level_str = event.metadata().level();
+        let target = event.metadata().target();
+        let message_text = if visitor.message.is_empty() {
+            String::new()
+        } else {
+            visitor.message
+        };
+        
+        // Format based on LogFormat setting
+        let formatted = match *format {
+            LogFormat::Json => {
+                format!(
+                    r#"{{"timestamp":"","level":"{:?}","target":"{}","fields":{{"message":"{}"}}}}"#,
+                    level_str, target, message_text
+                )
+            }
+            LogFormat::Full => {
+                format!("{} {}: {}\n", level_str, target, message_text)
+            }
+            LogFormat::Compact => {
+                format!("[{}] {}\n", level_str, message_text)
+            }
+            LogFormat::Pretty => {
+                format!("{}\n  level: {}\n  target: {}\n  message: {}\n", 
+                    "Event:", level_str, target, message_text)
+            }
+        };
+        
+        // Write to the file channel
+        if let Some(ref mut writer) = *writer_guard {
+            let _ = std::io::Write::write_all(writer, formatted.as_bytes());
+        }
+    }
+}
+
 /// Logger that supports multiple output targets
 pub struct Logger {
     filter: Handle<EnvFilter, Registry>,
-    file_handle: Handle<EnvFilter, Registry>,
     file_writer: Arc<StdMutex<Option<FileChannel>>>,
     quickfix_writer: Arc<StdMutex<Option<QuickfixChannel>>>,
     notification_sink: Arc<StdMutex<NotificationSink>>,
     message_sink: Arc<StdMutex<MessageSink>>,
     // Reload handles for format-dependent layers
     stdio_handle: FormatLayerHandle,
-    file_format_handle: FormatLayerHandle,
+    file_layer_handle: FileLayerHandle,
     quickfix_handle: FormatLayerHandle,
     notification_handle: FormatLayerHandle,
     message_handle: FormatLayerHandle,
@@ -228,15 +387,10 @@ impl Logger {
         let (filter_layer, filter) = Self::create_stdio_filter(log_level);
         layers.push(Box::new(filter_layer));
 
-        // File layer with format reload capability
-        let (file_reload_layer, file_format_handle) = reload::Layer::new(
-            Self::create_file_layer_with_format(file_writer.clone(), format)
-        );
+        // File layer with custom filtering (bypasses Filtered layer bug)
+        let file_layer = FileLayer::new(file_writer.clone(), LogLevel::Off, format);
+        let (file_reload_layer, file_layer_handle) = reload::Layer::new(file_layer);
         layers.push(Box::new(file_reload_layer));
-        
-        // File level filter (controls file output level, starts disabled)
-        let (file_filter_layer, file_handle) = Self::create_file_filter();
-        layers.push(Box::new(file_filter_layer));
 
         // Quickfix layer with reload capability
         let (quickfix_reload_layer, quickfix_handle) = reload::Layer::new(
@@ -263,13 +417,12 @@ impl Logger {
             subscriber.init();
             Self {
                 filter,
-                file_handle,
                 file_writer,
                 quickfix_writer,
                 notification_sink,
                 message_sink,
                 stdio_handle,
-                file_format_handle,
+                file_layer_handle,
                 quickfix_handle,
                 notification_handle,
                 message_handle,
@@ -430,6 +583,9 @@ impl Logger {
     }
 
     pub fn set_file_logger(&self, config: LogFileConfig) -> Result<(), Error> {
+        // Get the format from config or use default
+        let format = config.format.unwrap_or(LogFormat::Compact);
+        
         // Stop current writer if exists
         {
             let mut writer_guard = self
@@ -459,10 +615,11 @@ impl Logger {
             *writer_guard = Some(channel_writer);
         }
 
-        let file_filter: EnvFilter = config.level.into();
-        self.file_handle
-            .reload(file_filter)
-            .map_err(|e| Error::Internal(format!("Failed to enable file logger: {}", e)))?;
+        // Create new FileLayer with updated writer, level, and format
+        let new_file_layer = FileLayer::new(self.file_writer.clone(), config.level, format);
+        self.file_layer_handle
+            .reload(new_file_layer)
+            .map_err(|e| Error::Internal(format!("Failed to reload file layer: {}", e)))?;
 
         Ok(())
     }
@@ -534,9 +691,10 @@ impl Logger {
                     .map_err(|e| Error::Internal(format!("Failed to reload message format: {}", e)))?;
             }
             LogTarget::File => {
-                // Reload file layer with new format
-                let new_layer = Self::create_file_layer_with_format(self.file_writer.clone(), format);
-                self.file_format_handle
+                // Create new FileLayer with updated format (keeps same writer and level)
+                let current_level = LogLevel::Info; // Default, will be updated via update_level if needed
+                let new_layer = FileLayer::new(self.file_writer.clone(), current_level, format);
+                self.file_layer_handle
                     .reload(new_layer)
                     .map_err(|e| Error::Internal(format!("Failed to reload file format: {}", e)))?;
             }
@@ -552,16 +710,20 @@ impl Logger {
     }
 
     pub fn configure(&self, config: LogConfig) -> Result<(), Error> {
-        // Configure file logging
+        // Configure file logging (handles path, level, format, max_size, max_files all together)
         if let Some(file_config) = config.file {
-            self.set_file_logger(file_config.clone())?;
-            // Update file format if specified
-            if let Some(format) = file_config.format {
-                self.set_format(LogTarget::File, format)?;
-            }
+            self.set_file_logger(file_config)?;
+        } else {
+            // No file config provided - disable file logging by setting level to OFF
+            // This ensures file logging doesn't leak from previous configurations
+            let disabled_layer = FileLayer::new(self.file_writer.clone(), LogLevel::Off, LogFormat::Compact);
+            self.file_layer_handle
+                .reload(disabled_layer)
+                .map_err(|e| Error::Internal(format!("Failed to disable file logger: {}", e)))?;
         }
 
         // Update formats for each target if specified
+        // Note: File format is handled in set_file_logger() above
         if let Some(format) = config.stdio.format {
             self.set_format(LogTarget::Stdio, format)?;
         }
@@ -576,6 +738,7 @@ impl Logger {
         }
 
         // Configure levels for each target
+        // Note: File level is handled in set_file_logger() above
         self.set_notification_logger(config.notification.level)?;
         self.set_message_logger(config.message.level)?;
         self.set_quickfix_logger(config.quickfix.level)?;

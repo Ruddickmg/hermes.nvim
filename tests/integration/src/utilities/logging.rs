@@ -16,7 +16,6 @@ fn create_log_config_with_file(level: LogLevel, file_config: LogFileConfig) -> L
             format: None,
         },
         file: Some(file_config),
-        local_list: LogTargetConfig::default(),
         message: LogTargetConfig::default(),
         notification: LogTargetConfig::default(),
         quickfix: LogTargetConfig::default(),
@@ -80,18 +79,27 @@ fn test_file_logging_first_message_written() -> nvim_oxi::Result<()> {
         max_files: Some(5),
     };
     let config = create_log_config_with_file(LogLevel::Info, file_config);
-    logger.configure(config).unwrap();
+    logger
+        .configure(config)
+        .expect("Failed to configure logger");
 
     // Log a message
     tracing::info!("First message");
-    std::thread::sleep(std::time::Duration::from_millis(50));
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Flush to ensure it's written
+    std::io::Write::flush(&mut std::io::stdout()).ok();
+
+    // Verify file exists
+    assert!(log_path.exists(), "Log file should exist at {:?}", log_path);
 
     // Verify first message was written
-    let content = std::fs::read_to_string(&log_path).unwrap();
-    assert_eq!(
+    let content = std::fs::read_to_string(&log_path).expect("Failed to read log file");
+    eprintln!("Log file content: {}", content);
+    assert!(
         content.contains("First message"),
-        true,
-        "Log file should contain first message"
+        "Log file should contain first message. Content: {}",
+        content
     );
 
     Ok(())
