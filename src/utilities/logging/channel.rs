@@ -151,9 +151,7 @@ impl<S: LogSink> Worker<S> {
                         Ok(msg) => msg,
                     Err(RecvTimeoutError::Timeout) => {
                         // Timeout occurred - check if we need to flush
-                        eprintln!("[CHANNEL] Timeout, buffer has {} messages", message_buffer.len());
                         if !message_buffer.is_empty() {
-                            eprintln!("[CHANNEL] Flushing {} messages on timeout", message_buffer.len());
                             if let Err(e) = sink.write_batch(&message_buffer) {
                                 eprintln!("Failed to write batch on timeout: {}", e);
                             }
@@ -178,12 +176,10 @@ impl<S: LogSink> Worker<S> {
                 // Process the received message
                 match msg {
                     LogMessage::Data(data) => {
-                        eprintln!("[CHANNEL] Received message: {}", data.len());
                         message_buffer.push(data);
 
                         // Check if we should flush (buffer full)
                         if message_buffer.len() >= flush_interval {
-                            eprintln!("[CHANNEL] Buffer full ({}), flushing", message_buffer.len());
                             if let Err(e) = sink.write_batch(&message_buffer) {
                                 eprintln!("Failed to write batch: {}", e);
                             }

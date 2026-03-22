@@ -57,11 +57,8 @@ impl SizeBasedFileAppender {
     /// Check if we need to rotate before writing `bytes_to_write`
     fn rotate_if_needed(&mut self, bytes_to_write: usize) -> io::Result<()> {
         let new_size = self.current_size + bytes_to_write as u64;
-        eprintln!("[FILEAPPENDER] rotate_if_needed: current_size={}, bytes_to_write={}, new_size={}, max_size={}", 
-            self.current_size, bytes_to_write, new_size, self.max_size);
 
         if new_size > self.max_size {
-            eprintln!("[FILEAPPENDER] Rotation triggered!");
             self.perform_rotation()?;
         }
 
