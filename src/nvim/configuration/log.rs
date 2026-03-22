@@ -8,14 +8,14 @@ use nvim_oxi::{
 #[derive(Clone, Debug, PartialEq)]
 pub struct LogTargetConfig {
     pub level: LogLevel,
-    pub format: Option<LogFormat>, // None = use global format
+    pub format: LogFormat, // None = use global format
 }
 
 impl Default for LogTargetConfig {
     fn default() -> Self {
         Self {
-            level: LogLevel::Off,
-            format: None,
+            level: LogLevel::default(),
+            format: LogFormat::default(),
         }
     }
 }
@@ -33,7 +33,7 @@ impl LogTargetConfigPartial {
             config.level = val;
         }
         if let Some(val) = self.format {
-            config.format = Some(val);
+            config.format = val;
         }
     }
 }
@@ -160,7 +160,7 @@ impl Default for LogConfig {
             quickfix: LogTargetConfig::default(),
             notification: LogTargetConfig {
                 level: LogLevel::Error,
-                format: None,
+                format: LogFormat::default(),
             },
         }
     }
@@ -266,28 +266,28 @@ mod tests {
             format: Some(LogFormat::Pretty),
         };
         partial.apply_to(&mut config);
-        assert_eq!(config.format, Some(LogFormat::Pretty));
+        assert_eq!(config.format, LogFormat::Pretty);
     }
 
     #[test]
     fn test_log_target_config_partial_apply_partial_preserves_untouched() {
         let mut config = LogTargetConfig {
             level: LogLevel::Error,
-            format: Some(LogFormat::Compact),
+            format: LogFormat::Compact,
         };
         let partial = LogTargetConfigPartial {
             level: Some(LogLevel::Warn),
             format: None,
         };
         partial.apply_to(&mut config);
-        assert_eq!(config.format, Some(LogFormat::Compact));
+        assert_eq!(config.format, LogFormat::Compact);
     }
 
     #[test]
     fn test_log_target_config_partial_apply_partial_updates_provided() {
         let mut config = LogTargetConfig {
             level: LogLevel::Error,
-            format: Some(LogFormat::Compact),
+            format: LogFormat::Compact,
         };
         let partial = LogTargetConfigPartial {
             level: Some(LogLevel::Warn),
@@ -398,7 +398,7 @@ mod tests {
             file: None,
         };
         partial.apply_to(&mut config);
-        assert_eq!(config.stdio.format, Some(LogFormat::Full));
+        assert_eq!(config.stdio.format, LogFormat::Full);
     }
 
     #[test]

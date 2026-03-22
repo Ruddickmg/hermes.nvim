@@ -1,14 +1,20 @@
+use nvim_oxi::api;
+use nvim_oxi::api::opts::OptionOpts;
 use std::sync::Mutex as StdMutex;
 use std::sync::{Arc, OnceLock};
 use tracing::level_filters::LevelFilter;
+use tracing_subscriber::filter::{self, Filtered};
+use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::reload::Layer;
 use tracing_subscriber::{
     EnvFilter, Registry, fmt,
     prelude::*,
     reload::{self, Handle},
 };
 
+use crate::nvim::configuration::LogTargetConfig;
 use crate::{
-    acp::error::Error,
+    acp::{Result, error::Error},
     nvim::configuration::{LogConfig, LogFileConfig},
 };
 
@@ -103,7 +109,9 @@ impl From<String> for LogLevel {
 }
 
 impl nvim_oxi::conversion::FromObject for LogLevel {
-    fn from_object(obj: nvim_oxi::Object) -> Result<Self, nvim_oxi::conversion::Error> {
+    fn from_object(
+        obj: nvim_oxi::Object,
+    ) -> std::result::Result<Self, nvim_oxi::conversion::Error> {
         if let Ok(s) = String::from_object(obj.clone()) {
             Ok(LogLevel::from(s))
         } else if let Ok(n) = i64::from_object(obj) {
@@ -155,7 +163,9 @@ impl From<String> for LogFormat {
 }
 
 impl nvim_oxi::conversion::FromObject for LogFormat {
-    fn from_object(obj: nvim_oxi::Object) -> Result<Self, nvim_oxi::conversion::Error> {
+    fn from_object(
+        obj: nvim_oxi::Object,
+    ) -> std::result::Result<Self, nvim_oxi::conversion::Error> {
         if let Ok(s) = String::from_object(obj.clone()) {
             Ok(LogFormat::from(s))
         } else {
@@ -188,7 +198,8 @@ type LoggerHolders = (
 );
 
 /// Type aliases for layer reload handles
-type FormatLayerHandle = Handle<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>, Registry>;
+type FormatLayerHandle =
+    Handle<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>, Registry>;
 type FileLayerHandle = Handle<FileLayer, Registry>;
 type StdioLayerHandle = Handle<StdioLayer, Registry>;
 type QuickfixLayerHandle = Handle<QuickfixLayer, Registry>;
@@ -228,48 +239,68 @@ impl<S> tracing_subscriber::Layer<S> for StdioLayer
 where
     S: tracing::Subscriber,
 {
-    fn enabled(&self, metadata: &tracing::Metadata<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) -> bool {
+    fn enabled(
+        &self,
+        metadata: &tracing::Metadata<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) -> bool {
         let level = self.level.lock().unwrap();
         let event_level = metadata.level();
-        
+
         use tracing::Level;
         let event_num = match *event_level {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
         let min_num = match (*level).into() {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
-        
+
         // Only enable if event is at or above min_level (less verbose or equal)
         event_num >= min_num
     }
 
-    fn on_event(&self, event: &tracing::Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
         // Check level again (enabled() is just a hint)
         let level = self.level.lock().unwrap();
         let event_level = event.metadata().level();
         use tracing::Level;
         let event_num = match *event_level {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
         let min_num = match (*level).into() {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
         if event_num < min_num {
             return; // Filter it out
         }
-        
+
         // Get current format setting
         let format = self.format.lock().unwrap();
-        
+
         // Extract the message from the event
         let mut visitor = MessageVisitor::new();
         event.record(&mut visitor);
-        
+
         let level_str = event.metadata().level();
         let target = event.metadata().target();
         let message_text = if visitor.message.is_empty() {
@@ -277,7 +308,7 @@ where
         } else {
             visitor.message
         };
-        
+
         // Format based on LogFormat setting
         let formatted = match *format {
             LogFormat::Json => {
@@ -293,11 +324,13 @@ where
                 format!("[{}] {}\n", level_str, message_text)
             }
             LogFormat::Pretty => {
-                format!("{}\n  level: {}\n  target: {}\n  message: {}\n", 
-                    "Event:", level_str, target, message_text)
+                format!(
+                    "{}\n  level: {}\n  target: {}\n  message: {}\n",
+                    "Event:", level_str, target, message_text
+                )
             }
         };
-        
+
         // Write to stdout
         print!("{}", formatted);
     }
@@ -313,7 +346,11 @@ pub struct QuickfixLayer {
 }
 
 impl QuickfixLayer {
-    pub fn new(writer: Arc<StdMutex<Option<QuickfixChannel>>>, level: LogLevel, format: LogFormat) -> Self {
+    pub fn new(
+        writer: Arc<StdMutex<Option<QuickfixChannel>>>,
+        level: LogLevel,
+        format: LogFormat,
+    ) -> Self {
         Self {
             writer,
             level: Arc::new(StdMutex::new(level)),
@@ -338,54 +375,74 @@ impl<S> tracing_subscriber::Layer<S> for QuickfixLayer
 where
     S: tracing::Subscriber,
 {
-    fn enabled(&self, metadata: &tracing::Metadata<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) -> bool {
+    fn enabled(
+        &self,
+        metadata: &tracing::Metadata<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) -> bool {
         let level = self.level.lock().unwrap();
         let event_level = metadata.level();
-        
+
         use tracing::Level;
         let event_num = match *event_level {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
         let min_num = match (*level).into() {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
-        
+
         // Only enable if event is at or above min_level (less verbose or equal)
         event_num >= min_num
     }
 
-    fn on_event(&self, event: &tracing::Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
         // Check level again (enabled() is just a hint)
         let level = self.level.lock().unwrap();
         let event_level = event.metadata().level();
         use tracing::Level;
         let event_num = match *event_level {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
         let min_num = match (*level).into() {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
         if event_num < min_num {
             return; // Filter it out
         }
-        
+
         // Check if we have a writer
         let mut writer_guard = self.writer.lock().unwrap();
         if writer_guard.is_none() {
             return;
         }
-        
+
         // Get current format setting
         let format = self.format.lock().unwrap();
-        
+
         // Extract the message from the event
         let mut visitor = MessageVisitor::new();
         event.record(&mut visitor);
-        
+
         let level_str = event.metadata().level();
         let target = event.metadata().target();
         let message_text = if visitor.message.is_empty() {
@@ -393,7 +450,7 @@ where
         } else {
             visitor.message
         };
-        
+
         // Format based on LogFormat setting
         let formatted = match *format {
             LogFormat::Json => {
@@ -409,11 +466,13 @@ where
                 format!("[{}] {}\n", level_str, message_text)
             }
             LogFormat::Pretty => {
-                format!("{}\n  level: {}\n  target: {}\n  message: {}\n", 
-                    "Event:", level_str, target, message_text)
+                format!(
+                    "{}\n  level: {}\n  target: {}\n  message: {}\n",
+                    "Event:", level_str, target, message_text
+                )
             }
         };
-        
+
         // Write to the quickfix channel
         if let Some(ref mut writer) = *writer_guard {
             let _ = std::io::Write::write_all(writer, formatted.as_bytes());
@@ -454,48 +513,68 @@ impl<S> tracing_subscriber::Layer<S> for NotificationLayer
 where
     S: tracing::Subscriber,
 {
-    fn enabled(&self, metadata: &tracing::Metadata<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) -> bool {
+    fn enabled(
+        &self,
+        metadata: &tracing::Metadata<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) -> bool {
         let level = self.level.lock().unwrap();
         let event_level = metadata.level();
-        
+
         use tracing::Level;
         let event_num = match *event_level {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
         let min_num = match (*level).into() {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
-        
+
         // Only enable if event is at or above min_level (less verbose or equal)
         event_num >= min_num
     }
 
-    fn on_event(&self, event: &tracing::Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
         // Check level again (enabled() is just a hint)
         let level = self.level.lock().unwrap();
         let event_level = event.metadata().level();
         use tracing::Level;
         let event_num = match *event_level {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
         let min_num = match (*level).into() {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
         if event_num < min_num {
             return; // Filter it out
         }
-        
+
         // Get current format setting
         let format = self.format.lock().unwrap();
-        
+
         // Extract the message from the event
         let mut visitor = MessageVisitor::new();
         event.record(&mut visitor);
-        
+
         let level_str = event.metadata().level();
         let target = event.metadata().target();
         let message_text = if visitor.message.is_empty() {
@@ -503,7 +582,7 @@ where
         } else {
             visitor.message
         };
-        
+
         // Format based on LogFormat setting
         let formatted = match *format {
             LogFormat::Json => {
@@ -519,11 +598,13 @@ where
                 format!("[{}] {}", level_str, message_text)
             }
             LogFormat::Pretty => {
-                format!("{}\n  level: {}\n  target: {}\n  message: {}", 
-                    "Event:", level_str, target, message_text)
+                format!(
+                    "{}\n  level: {}\n  target: {}\n  message: {}",
+                    "Event:", level_str, target, message_text
+                )
             }
         };
-        
+
         // Convert to nvim log level
         let nvim_level = match *level_str {
             tracing::Level::ERROR => nvim_oxi::api::types::LogLevel::Error,
@@ -531,13 +612,12 @@ where
             tracing::Level::INFO => nvim_oxi::api::types::LogLevel::Info,
             tracing::Level::DEBUG => nvim_oxi::api::types::LogLevel::Debug,
             tracing::Level::TRACE => nvim_oxi::api::types::LogLevel::Trace,
-            _ => nvim_oxi::api::types::LogLevel::Info,
         };
-        
+
         // Create opts with title
         let mut opts = nvim_oxi::Dictionary::new();
         opts.insert("title".to_string(), nvim_oxi::Object::from("Hermes"));
-        
+
         // Send notification - ignore errors to avoid crashing
         let _ = nvim_oxi::api::notify(&formatted, nvim_level, &opts);
     }
@@ -576,48 +656,68 @@ impl<S> tracing_subscriber::Layer<S> for MessageLayer
 where
     S: tracing::Subscriber,
 {
-    fn enabled(&self, metadata: &tracing::Metadata<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) -> bool {
+    fn enabled(
+        &self,
+        metadata: &tracing::Metadata<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) -> bool {
         let level = self.level.lock().unwrap();
         let event_level = metadata.level();
-        
+
         use tracing::Level;
         let event_num = match *event_level {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
         let min_num = match (*level).into() {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
-        
+
         // Only enable if event is at or above min_level (less verbose or equal)
         event_num >= min_num
     }
 
-    fn on_event(&self, event: &tracing::Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
         // Check level again (enabled() is just a hint)
         let level = self.level.lock().unwrap();
         let event_level = event.metadata().level();
         use tracing::Level;
         let event_num = match *event_level {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
         let min_num = match (*level).into() {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
         if event_num < min_num {
             return; // Filter it out
         }
-        
+
         // Get current format setting
         let format = self.format.lock().unwrap();
-        
+
         // Extract the message from the event
         let mut visitor = MessageVisitor::new();
         event.record(&mut visitor);
-        
+
         let level_str = event.metadata().level();
         let target = event.metadata().target();
         let message_text = if visitor.message.is_empty() {
@@ -625,7 +725,7 @@ where
         } else {
             visitor.message
         };
-        
+
         // Format based on LogFormat setting
         let formatted = match *format {
             LogFormat::Json => {
@@ -641,11 +741,13 @@ where
                 format!("[{}] {}", level_str, message_text)
             }
             LogFormat::Pretty => {
-                format!("{}\n  level: {}\n  target: {}\n  message: {}", 
-                    "Event:", level_str, target, message_text)
+                format!(
+                    "{}\n  level: {}\n  target: {}\n  message: {}",
+                    "Event:", level_str, target, message_text
+                )
             }
         };
-        
+
         // Send to message history using out_write
         // Add newline for proper message formatting
         let msg = format!("{}\n", formatted);
@@ -673,7 +775,11 @@ pub struct FileLayer {
 }
 
 impl FileLayer {
-    pub fn new(writer: Arc<StdMutex<Option<FileChannel>>>, level: LogLevel, format: LogFormat) -> Self {
+    pub fn new(
+        writer: Arc<StdMutex<Option<FileChannel>>>,
+        level: LogLevel,
+        format: LogFormat,
+    ) -> Self {
         Self {
             writer,
             level: Arc::new(StdMutex::new(level)),
@@ -714,7 +820,7 @@ impl tracing::field::Visit for MessageVisitor {
             self.message = format!("{:?}", value);
         }
     }
-    
+
     fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
         if field.name() == "message" {
             self.message = value.to_string();
@@ -726,54 +832,74 @@ impl<S> tracing_subscriber::Layer<S> for FileLayer
 where
     S: tracing::Subscriber,
 {
-    fn enabled(&self, metadata: &tracing::Metadata<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) -> bool {
+    fn enabled(
+        &self,
+        metadata: &tracing::Metadata<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) -> bool {
         let level = self.level.lock().unwrap();
         let event_level = metadata.level();
-        
+
         use tracing::Level;
         let event_num = match *event_level {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
         let min_num = match (*level).into() {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
-        
+
         // Only enable if event is at or above min_level (less verbose or equal)
         event_num >= min_num
     }
 
-    fn on_event(&self, event: &tracing::Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
         // Check level again (enabled() is just a hint)
         let level = self.level.lock().unwrap();
         let event_level = event.metadata().level();
         use tracing::Level;
         let event_num = match *event_level {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
         let min_num = match (*level).into() {
-            Level::TRACE => 0, Level::DEBUG => 1, Level::INFO => 2, 
-            Level::WARN => 3, Level::ERROR => 4,
+            Level::TRACE => 0,
+            Level::DEBUG => 1,
+            Level::INFO => 2,
+            Level::WARN => 3,
+            Level::ERROR => 4,
         };
         if event_num < min_num {
             return; // Filter it out
         }
-        
+
         // Check if we have a writer
         let mut writer_guard = self.writer.lock().unwrap();
         if writer_guard.is_none() {
             return;
         }
-        
+
         // Get current format setting
         let format = self.format.lock().unwrap();
-        
+
         // Extract the message from the event
         let mut visitor = MessageVisitor::new();
         event.record(&mut visitor);
-        
+
         let level_str = event.metadata().level();
         let target = event.metadata().target();
         let message_text = if visitor.message.is_empty() {
@@ -781,7 +907,7 @@ where
         } else {
             visitor.message
         };
-        
+
         // Format based on LogFormat setting
         let formatted = match *format {
             LogFormat::Json => {
@@ -797,11 +923,13 @@ where
                 format!("[{}] {}\n", level_str, message_text)
             }
             LogFormat::Pretty => {
-                format!("{}\n  level: {}\n  target: {}\n  message: {}\n", 
-                    "Event:", level_str, target, message_text)
+                format!(
+                    "{}\n  level: {}\n  target: {}\n  message: {}\n",
+                    "Event:", level_str, target, message_text
+                )
             }
         };
-        
+
         // Write to the file channel
         if let Some(ref mut writer) = *writer_guard {
             let _ = std::io::Write::write_all(writer, formatted.as_bytes());
@@ -809,377 +937,62 @@ where
     }
 }
 
+type BoxedLayer = Box<dyn tracing_subscriber::layer::Layer<Registry> + Send + Sync + 'static>;
+type CombinedLayer = Filtered<BoxedLayer, EnvFilter, Registry>;
+type CombinedHandle = Handle<Filtered<BoxedLayer, EnvFilter, Registry>, Registry>;
+
 /// Logger that supports multiple output targets
 pub struct Logger {
-    // Store current stdio level so we can use it when reloading format
-    stdio_level: Arc<StdMutex<LogLevel>>,
-    file_writer: Arc<StdMutex<Option<FileChannel>>>,
-    quickfix_writer: Arc<StdMutex<Option<QuickfixChannel>>>,
-    notification_sink: Arc<StdMutex<NotificationSink>>,
-    message_sink: Arc<StdMutex<MessageSink>>,
-    // Reload handles for format-dependent layers
-    stdio_handle: StdioLayerHandle,
-    file_layer_handle: FileLayerHandle,
-    quickfix_handle: QuickfixLayerHandle,
-    notification_handle: NotificationLayerHandle,
-    message_handle: MessageLayerHandle,
+    stdio_handle: Handle<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>, Registry>,
 }
 
 impl Logger {
-    /// Initialize the logger with all output targets
+    pub fn filter_layer(level: LogLevel) -> EnvFilter {
+        let log_level: EnvFilter = level.into();
+        log_level
+    }
+
+    pub fn format_layer(format: LogFormat) -> BoxedLayer {
+        let base = fmt::layer()
+            .with_ansi(true)
+            .with_file(true)
+            .with_line_number(true)
+            .with_thread_ids(true)
+            .with_thread_names(true);
+        match format {
+            LogFormat::Full => base.boxed(),
+            LogFormat::Compact => base.compact().boxed(),
+            LogFormat::Json => base.json().boxed(),
+            _ => base.pretty().boxed(),
+        }
+    }
+
+    pub fn combine_layers(config: LogTargetConfig) -> BoxedLayer {
+        let filter = Self::filter_layer(config.level);
+        let format = Self::format_layer(config.format);
+        format.with_filter(filter).boxed()
+    }
+
     pub fn inititalize() -> &'static Self {
-        // Use default format (Compact) until configure() is called
-        let format = LogFormat::Compact;
+        let configuration = LogConfig::default();
+        let stdio_combined = Self::combine_layers(configuration.stdio);
+        // let notification_combined = Self::combine_layers(configuration.notification);
+        let (stdio_layer, stdio_handle) = reload::Layer::new(stdio_combined);
+        // let (notification_layer, _notification_handle) = reload::Layer::new(notification_combined);
 
-        // Create shared resources
-        let (file_writer, quickfix_writer, notification_sink, message_sink) = Self::create_holders();
-
-        // Build all layers
-        let mut layers: Vec<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>> =
-            Vec::new();
-
-        // Stdio layer with custom filtering (bypasses Filtered layer bug #1629)
-        // Start with level OFF by default to avoid interfering with tests
-        let stdio_layer = StdioLayer::new(LogLevel::Off, format);
-        let (stdio_reload_layer, stdio_handle) = reload::Layer::new(stdio_layer);
-        layers.push(Box::new(stdio_reload_layer));
-
-        // File layer with custom filtering (bypasses Filtered layer bug)
-        let file_layer = FileLayer::new(file_writer.clone(), LogLevel::Off, format);
-        let (file_reload_layer, file_layer_handle) = reload::Layer::new(file_layer);
-        layers.push(Box::new(file_reload_layer));
-
-        // Quickfix layer with custom filtering (bypasses Filtered layer bug)
-        let quickfix_layer = QuickfixLayer::new(quickfix_writer.clone(), LogLevel::Off, format);
-        let (quickfix_reload_layer, quickfix_handle) = reload::Layer::new(quickfix_layer);
-        layers.push(Box::new(quickfix_reload_layer));
-
-        // Notification layer with custom filtering (bypasses Filtered layer bug)
-        let notification_layer = NotificationLayer::new(LogLevel::Off, format);
-        let (notification_reload_layer, notification_handle) = reload::Layer::new(notification_layer);
-        layers.push(Box::new(notification_reload_layer));
-
-        // Message layer with custom filtering (bypasses Filtered layer bug)
-        let message_layer = MessageLayer::new(LogLevel::Off, format);
-        let (message_reload_layer, message_handle) = reload::Layer::new(message_layer);
-        layers.push(Box::new(message_reload_layer));
-
-        // Build and init subscriber
-        let subscriber = tracing_subscriber::registry().with(layers);
+        let registry = tracing_subscriber::registry().with(stdio_layer);
+        // .with(notification_layer);
 
         LOGGER.get_or_init(|| {
-            subscriber.init();
-            Self {
-                stdio_level: Arc::new(StdMutex::new(LogLevel::Off)),
-                file_writer,
-                quickfix_writer,
-                notification_sink,
-                message_sink,
-                stdio_handle,
-                file_layer_handle,
-                quickfix_handle,
-                notification_handle,
-                message_handle,
-            }
+            registry.init();
+            Self { stdio_handle }
         })
     }
 
-    /// Create shared resource holders for all targets
-    fn create_holders() -> LoggerHolders {
-        let file_writer: Arc<StdMutex<Option<FileChannel>>> = Arc::new(StdMutex::new(None));
-        let quickfix_writer: Arc<StdMutex<Option<QuickfixChannel>>> = Arc::new(StdMutex::new(None));
-        let notification_sink = Arc::new(StdMutex::new(NotificationSink::new()));
-        let message_sink = Arc::new(StdMutex::new(MessageSink::new()));
-
-        (
-            file_writer,
-            quickfix_writer,
-            notification_sink,
-            message_sink,
-        )
-    }
-
-    /// Create stdio layer with format selection
-    fn create_stdio_layer(
-        format: LogFormat,
-    ) -> Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync> {
-        let base_layer = fmt::layer()
-            .with_ansi(true);
-
-        match format {
-            LogFormat::Full => Box::new(base_layer),
-            LogFormat::Compact => Box::new(base_layer.compact()),
-            LogFormat::Json => Box::new(base_layer.json()),
-            LogFormat::Pretty => Box::new(base_layer.pretty()),
-        }
-    }
-
-
-
-    /// Create quickfix layer with format selection
-    fn create_quickfix_layer(
-        quickfix_writer: Arc<StdMutex<Option<QuickfixChannel>>>,
-        format: LogFormat,
-    ) -> Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync> {
-        let base_layer = fmt::layer()
-            .with_writer(move || -> ChannelWriterGuard<QuickfixSink> {
-                ChannelWriterGuard::new(quickfix_writer.clone())
-            })
-            .with_ansi(false)
-            .with_file(true)
-            .with_line_number(true);
-
-        match format {
-            LogFormat::Full => Box::new(base_layer),
-            LogFormat::Compact => Box::new(base_layer.compact()),
-            LogFormat::Json => Box::new(base_layer.json()),
-            LogFormat::Pretty => Box::new(base_layer.pretty()),
-        }
-    }
-
-    /// Create notification layer with format selection
-    fn create_notification_layer(
-        notification_sink: Arc<StdMutex<NotificationSink>>,
-        format: LogFormat,
-    ) -> Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync> {
-        let base_layer = fmt::layer()
-            .with_writer(move || -> DirectWriterGuard<NotificationSink> {
-                DirectWriterGuard::new(notification_sink.clone())
-            })
-            .with_ansi(false);
-
-        match format {
-            LogFormat::Full => Box::new(base_layer),
-            LogFormat::Compact => Box::new(base_layer.compact()),
-            LogFormat::Json => Box::new(base_layer.json()),
-            LogFormat::Pretty => Box::new(base_layer.pretty()),
-        }
-    }
-
-    /// Create message layer with format selection
-    fn create_message_layer(
-        message_sink: Arc<StdMutex<MessageSink>>,
-        format: LogFormat,
-    ) -> Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync> {
-        let base_layer = fmt::layer()
-            .with_writer(move || -> DirectWriterGuard<MessageSink> {
-                DirectWriterGuard::new(message_sink.clone())
-            })
-            .with_ansi(true);
-
-        match format {
-            LogFormat::Full => Box::new(base_layer),
-            LogFormat::Compact => Box::new(base_layer.compact()),
-            LogFormat::Json => Box::new(base_layer.json()),
-            LogFormat::Pretty => Box::new(base_layer.pretty()),
-        }
-    }
-
-    pub fn set_log_level(&self, level: LogLevel) -> Result<(), Error> {
-        // Store the new level
-        {
-            let mut guard = self.stdio_level
-                .lock()
-                .map_err(|e| Error::Internal(format!("Failed to lock stdio level: {}", e)))?;
-            *guard = level;
-        }
-        
-        // Reload stdio layer with new level
-        let current_format = LogFormat::Compact; // Default, will be updated by set_format if needed
-        let new_layer = StdioLayer::new(level, current_format);
-        
+    pub fn configure(&self, config: LogConfig) -> Result<()> {
         self.stdio_handle
-            .reload(new_layer)
+            .reload(Self::combine_layers(config.stdio))
             .map_err(|e| Error::Internal(e.to_string()))
-    }
-
-    pub fn set_file_logger(&self, config: LogFileConfig) -> Result<(), Error> {
-        // Get the format from config or use default
-        let format = config.format.unwrap_or(LogFormat::Compact);
-        
-        // Stop current writer if exists
-        {
-            let mut writer_guard = self
-                .file_writer
-                .lock()
-                .map_err(|e| Error::Internal(format!("Failed to lock file writer: {}", e)))?;
-
-            if let Some(old_writer) = writer_guard.take() {
-                old_writer.shutdown();
-            }
-        }
-
-        let max_size = config.max_size.unwrap_or_default();
-        let max_files = config.max_files.unwrap_or_default() as usize;
-
-        let file_sink = FileSink::new(&config.path, max_size, max_files)
-            .map_err(|e| Error::Internal(format!("Failed to create file sink: {}", e)))?;
-
-        let channel_writer = channel::ChannelWriter::new_file(file_sink)
-            .map_err(|e| Error::Internal(format!("Failed to create file channel writer: {}", e)))?;
-
-        {
-            let mut writer_guard = self
-                .file_writer
-                .lock()
-                .map_err(|e| Error::Internal(format!("Failed to lock file writer: {}", e)))?;
-            *writer_guard = Some(channel_writer);
-        }
-
-        // Create new FileLayer with updated writer, level, and format
-        let new_file_layer = FileLayer::new(self.file_writer.clone(), config.level, format);
-        self.file_layer_handle
-            .reload(new_file_layer)
-            .map_err(|e| Error::Internal(format!("Failed to reload file layer: {}", e)))?;
-
-        Ok(())
-    }
-
-    pub fn set_notification_logger(&self, level: LogLevel) -> Result<(), Error> {
-        // Reload notification layer with new level
-        let new_layer = NotificationLayer::new(level, LogFormat::Compact);
-        self.notification_handle
-            .reload(new_layer)
-            .map_err(|e| Error::Internal(format!("Failed to reload notification layer: {}", e)))?;
-        Ok(())
-    }
-
-    pub fn set_message_logger(&self, level: LogLevel) -> Result<(), Error> {
-        // Reload message layer with new level
-        let new_layer = MessageLayer::new(level, LogFormat::Compact);
-        self.message_handle
-            .reload(new_layer)
-            .map_err(|e| Error::Internal(format!("Failed to reload message layer: {}", e)))?;
-        Ok(())
-    }
-
-    pub fn set_quickfix_logger(&self, level: LogLevel) -> Result<(), Error> {
-        // Stop current writer if exists
-        {
-            let mut writer_guard = self
-                .quickfix_writer
-                .lock()
-                .map_err(|e| Error::Internal(format!("Failed to lock quickfix writer: {}", e)))?;
-
-            if let Some(old_writer) = writer_guard.take() {
-                old_writer.shutdown();
-            }
-        }
-
-        if level == LogLevel::Off {
-            // Just reload the layer with OFF level (no writer needed)
-            let new_layer = QuickfixLayer::new(self.quickfix_writer.clone(), LogLevel::Off, LogFormat::Compact);
-            self.quickfix_handle
-                .reload(new_layer)
-                .map_err(|e| Error::Internal(format!("Failed to reload quickfix layer: {}", e)))?;
-            return Ok(());
-        }
-
-        let quickfix_sink = QuickfixSink::new();
-
-        let channel_writer = channel::ChannelWriter::new_ui(quickfix_sink).map_err(|e| {
-            Error::Internal(format!("Failed to create quickfix channel writer: {}", e))
-        })?;
-
-        {
-            let mut writer_guard = self
-                .quickfix_writer
-                .lock()
-                .map_err(|e| Error::Internal(format!("Failed to lock quickfix writer: {}", e)))?;
-            *writer_guard = Some(channel_writer);
-        }
-
-        // Reload the quickfix layer with new level
-        let new_layer = QuickfixLayer::new(self.quickfix_writer.clone(), level, LogFormat::Compact);
-        self.quickfix_handle
-            .reload(new_layer)
-            .map_err(|e| Error::Internal(format!("Failed to reload quickfix layer: {}", e)))?;
-
-        Ok(())
-    }
-
-    /// Target identifier for format updates
-    pub fn set_format(&self, target: LogTarget, format: LogFormat) -> Result<(), Error> {
-        match target {
-            LogTarget::Quickfix => {
-                // Reload quickfix layer with new format
-                let new_layer = QuickfixLayer::new(self.quickfix_writer.clone(), LogLevel::Off, format);
-                self.quickfix_handle
-                    .reload(new_layer)
-                    .map_err(|e| Error::Internal(format!("Failed to reload quickfix format: {}", e)))?;
-            }
-            LogTarget::Notification => {
-                // Reload notification layer with new format
-                let new_layer = NotificationLayer::new(LogLevel::Off, format);
-                self.notification_handle
-                    .reload(new_layer)
-                    .map_err(|e| Error::Internal(format!("Failed to reload notification format: {}", e)))?;
-            }
-            LogTarget::Message => {
-                // Reload message layer with new format
-                let new_layer = MessageLayer::new(LogLevel::Off, format);
-                self.message_handle
-                    .reload(new_layer)
-                    .map_err(|e| Error::Internal(format!("Failed to reload message format: {}", e)))?;
-            }
-            LogTarget::File => {
-                // Create new FileLayer with updated format (keeps same writer and level)
-                let current_level = LogLevel::Info; // Default, will be updated via update_level if needed
-                let new_layer = FileLayer::new(self.file_writer.clone(), current_level, format);
-                self.file_layer_handle
-                    .reload(new_layer)
-                    .map_err(|e| Error::Internal(format!("Failed to reload file format: {}", e)))?;
-            }
-            LogTarget::Stdio => {
-                // Reload stdio layer with new format, preserving current level
-                let level_guard = self.stdio_level
-                    .lock()
-                    .map_err(|e| Error::Internal(format!("Failed to lock stdio level: {}", e)))?;
-                let new_layer = StdioLayer::new(*level_guard, format);
-                self.stdio_handle
-                    .reload(new_layer)
-                    .map_err(|e| Error::Internal(format!("Failed to reload stdio format: {}", e)))?;
-            }
-        }
-        Ok(())
-    }
-
-    pub fn configure(&self, config: LogConfig) -> Result<(), Error> {
-        // Configure file logging (handles path, level, format, max_size, max_files all together)
-        if let Some(file_config) = config.file {
-            self.set_file_logger(file_config)?;
-        } else {
-            // No file config provided - disable file logging by setting level to OFF
-            // This ensures file logging doesn't leak from previous configurations
-            let disabled_layer = FileLayer::new(self.file_writer.clone(), LogLevel::Off, LogFormat::Compact);
-            self.file_layer_handle
-                .reload(disabled_layer)
-                .map_err(|e| Error::Internal(format!("Failed to disable file logger: {}", e)))?;
-        }
-
-        // Update formats for each target if specified
-        // Note: File format is handled in set_file_logger() above
-        if let Some(format) = config.stdio.format {
-            self.set_format(LogTarget::Stdio, format)?;
-        }
-        if let Some(format) = config.notification.format {
-            self.set_format(LogTarget::Notification, format)?;
-        }
-        if let Some(format) = config.message.format {
-            self.set_format(LogTarget::Message, format)?;
-        }
-        if let Some(format) = config.quickfix.format {
-            self.set_format(LogTarget::Quickfix, format)?;
-        }
-
-        // Configure levels for each target
-        // Note: File level is handled in set_file_logger() above
-        self.set_notification_logger(config.notification.level)?;
-        self.set_message_logger(config.message.level)?;
-        self.set_quickfix_logger(config.quickfix.level)?;
-        self.set_log_level(config.stdio.level)?;
-
-        Ok(())
     }
 }
 
@@ -1378,4 +1191,3 @@ mod tests {
         let _quickfix = LogTarget::Quickfix;
     }
 }
-
