@@ -1,14 +1,13 @@
-use std::io;
 use std::sync::OnceLock;
-use tracing_subscriber::filter::Filtered;
+use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::{
-    EnvFilter, Registry, fmt,
+    Registry, fmt,
     prelude::*,
     reload::{self},
 };
 
 use crate::nvim::configuration::{LogFileConfig, LogTargetConfig};
-use crate::utilities::logging::writer::{FileWriter, NotifyWriter};
+use crate::utilities::logging::writer::{LazyFileWriter, NotifyWriter};
 use crate::utilities::writer::MessageWriter;
 use crate::{
     acp::{Result, error::Error},
@@ -31,7 +30,7 @@ static LOGGER: OnceLock<Logger> = OnceLock::new();
 
 pub type FileChannel = channel::ChannelWriter<FileSink>;
 type BoxedLayer = Box<dyn tracing_subscriber::layer::Layer<Registry> + Send + Sync + 'static>;
-type BoxedLayers = Filtered<BoxedLayer, EnvFilter, Registry>;
+type BoxedLayers = Box<dyn tracing_subscriber::layer::Layer<Registry> + Send + Sync + 'static>;
 
 /// Logger that supports multiple output targets
 pub struct Logger {
@@ -70,34 +69,50 @@ impl Logger {
     }
 
     fn stdio_layer(config: LogTargetConfig) -> BoxedLayers {
-        Self::format_layer(config.format).with_filter(Self::filter_layer(config.level))
+        Self::filter_layer(config.level).and_then(Self::format_layer(config.format)).boxed()
     }
 
     fn notification_layer(config: LogTargetConfig) -> BoxedLayers {
         let writer = NotifyWriter::new(config.level);
-        Self::base_layer(
-            fmt::layer().with_writer(move || writer.clone()),
-            config.format,
-        )
-        .with_filter(Self::filter_layer(config.level))
+        Self::filter_layer(config.level).and_then(
+            Self::base_layer(
+                fmt::layer().with_writer(move || writer.clone()),
+                config.format,
+            )
+        ).boxed()
     }
 
     fn message_layer(config: LogTargetConfig) -> BoxedLayers {
-        Self::base_layer(
-            fmt::layer().with_writer(MessageWriter::default),
-            config.format,
-        )
-        .with_filter(Self::filter_layer(config.level))
+        Self::filter_layer(config.level).and_then(
+            Self::base_layer(
+                fmt::layer().with_writer(MessageWriter::default),
+                config.format,
+            )
+        ).boxed()
     }
 
-    fn file_layer(config: LogFileConfig) -> io::Result<BoxedLayers> {
-        let writer = FileWriter::new(&config.path, config.max_size, config.max_files as usize)?;
-
-        Ok(Self::base_layer(
-            fmt::layer().with_writer(move || writer.clone()),
-            config.format,
+    fn file_layer(config: LogFileConfig) -> Option<BoxedLayers> {
+        // Handle empty path - file logging is disabled
+        if config.path.is_empty() {
+            return None;
+        }
+        
+        // Use lazy file writer to avoid spawning worker thread during layer construction
+        // This prevents issues with tracing-subscriber reload
+        let writer = LazyFileWriter::new(
+            &config.path,
+            config.max_size,
+            config.max_files as usize,
+        );
+        
+        Some(
+            Self::filter_layer(config.level).and_then(
+                Self::base_layer(
+                    fmt::layer().with_writer(writer),
+                    config.format,
+                )
+            ).boxed()
         )
-        .with_filter(Self::filter_layer(config.level)))
     }
 
     fn all_layers(
@@ -113,11 +128,12 @@ impl Logger {
             Self::message_layer(message),
             Self::notification_layer(notification),
         ];
-        if let Ok(layer) = Self::file_layer(file)
-            .inspect_err(|e| eprintln!("Error initializing log file writer: {:?}", e))
-        {
-            layers.push(layer);
+        
+        // Add file layer only if enabled
+        if let Some(file_layer) = Self::file_layer(file) {
+            layers.push(file_layer);
         }
+        
         layers
     }
 
