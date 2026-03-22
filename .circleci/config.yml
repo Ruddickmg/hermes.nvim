@@ -211,10 +211,12 @@ jobs:
             sudo mv nvim-linux-x86_64.appimage /usr/local/bin/nvim
       - run:
           name: Install coverage tool
-          command: cargo install cargo-llvm-cov@0.6.13
+          command: |
+            cargo install cargo-llvm-cov@0.6.13
+            cargo install cargo-nextest --locked
       - run:
           name: Run integration tests
-          command: cargo llvm-cov --manifest-path tests/integration/Cargo.toml --all-features --workspace --lcov --output-path integration.coverage.info --ignore-filename-regex 'tests/.*'
+          command: cargo llvm-cov nextest --manifest-path tests/integration/Cargo.toml --all-features --workspace --lcov --output-path integration.coverage.info --ignore-filename-regex 'tests/.*'
       - codecov/upload:
           fail_on_error: true
           files: integration.coverage.info

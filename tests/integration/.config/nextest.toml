@@ -1,0 +1,33 @@
+# Nextest configuration for integration tests
+# This ensures tests that share global state (like the Logger) run sequentially
+# while all other tests can run in parallel.
+
+[test-groups]
+# Sequential group for tests that share global Logger state
+# These tests must not run in parallel to avoid conflicts with global log configuration
+logger-tests = { max-threads = 1 }
+
+# Default profile configuration
+[profile.default]
+# Most tests run in parallel on all available CPUs
+test-threads = "num-cpus"
+slow-timeout = { period = "60s", terminate-after = 3 }
+
+# Assign logging tests to the sequential group
+# These tests configure and reconfigure the global Logger, so they need isolation
+[[profile.default.overrides]]
+filter = "test(test_file_) or test(test_log_) or test(test_debug_)"
+test-group = "logger-tests"
+
+# Assign setup tests to the sequential group as well
+# Setup tests also initialize the Logger, so they need isolation
+[[profile.default.overrides]]
+filter = "test(setup_)"
+test-group = "logger-tests"
+
+# Ensure proper failure handling for CI
+[profile.ci]
+fail-fast = false
+
+[profile.ci.junit]
+path = "junit.xml"
