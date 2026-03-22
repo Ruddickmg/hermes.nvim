@@ -6,12 +6,15 @@ use tracing_subscriber::{
     reload::{self},
 };
 
-use crate::{nvim::configuration::{LogFileConfig, LogTargetConfig}, utilities::writer::NotifyWriter};
 use crate::utilities::logging::writer::{FileWriter, Filtered};
 use crate::utilities::writer::MessageWriter;
 use crate::{
     acp::{Result, error::Error},
     nvim::configuration::LogConfig,
+};
+use crate::{
+    nvim::configuration::{LogFileConfig, LogTargetConfig},
+    utilities::writer::NotifyWriter,
 };
 
 pub mod format;
@@ -64,10 +67,7 @@ impl Logger {
 
     fn notification_layer(config: LogTargetConfig) -> BoxedLayer {
         let writer = NotifyWriter::new(config.level).filtered(config.level);
-        Self::base_layer(
-            fmt::layer().with_writer(writer),
-            config.format,
-        )
+        Self::base_layer(fmt::layer().with_writer(writer), config.format)
     }
 
     fn message_layer(config: LogTargetConfig) -> BoxedLayer {
@@ -76,11 +76,8 @@ impl Logger {
     }
 
     fn file_layer(config: LogFileConfig) -> io::Result<BoxedLayer> {
-        let writer = FileWriter::new(
-            &config.path,
-            config.max_size,
-            config.max_files as usize,
-        )?.filtered(config.level);
+        let writer = FileWriter::new(&config.path, config.max_size, config.max_files as usize)?
+            .filtered(config.level);
 
         Ok(Self::base_layer(
             fmt::layer().with_writer(writer),
@@ -95,34 +92,30 @@ impl Logger {
             notification,
             file,
         }: LogConfig,
-    ) -> Vec<BoxedLayer> {
-        let mut layers = vec![
+    ) -> Result<Vec<BoxedLayer>> {
+        Ok(vec![
             Self::stdio_layer(stdio),
             Self::message_layer(message),
             Self::notification_layer(notification),
-        ];
-        if let Ok(layer) = Self::file_layer(file)
-            .inspect_err(|e| eprintln!("Error initializing log file writer: {:?}", e))
-        {
-            layers.push(layer);
-        }
-        layers
+            Self::file_layer(file).map_err(|e| Error::Internal(e.to_string()))?,
+        ])
     }
 
-    pub fn inititalize() -> &'static Self {
-        let layers: Vec<BoxedLayer> = Self::all_layers(Default::default());
+    pub fn inititalize() -> Result<&'static Self> {
+        let layers: Vec<BoxedLayer> =
+            Self::all_layers(Default::default())?;
         let (reload_layer, handle) = reload::Layer::new(layers);
 
         let subscriber = tracing_subscriber::registry().with(reload_layer);
 
-        LOGGER.get_or_init(|| {
+        Ok(LOGGER.get_or_init(|| {
             subscriber.init();
             Self { handle }
-        })
+        }))
     }
 
     pub fn configure(&self, config: LogConfig) -> Result<()> {
-        let layers = Self::all_layers(config);
+        let layers = Self::all_layers(config)?;
         self.handle
             .reload(layers)
             .map_err(|e| Error::Internal(e.to_string()))
