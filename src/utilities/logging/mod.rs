@@ -1,3 +1,4 @@
+use std::io;
 use std::sync::OnceLock;
 use tracing_subscriber::filter::Filtered;
 use tracing_subscriber::{
@@ -7,7 +8,7 @@ use tracing_subscriber::{
 };
 
 use crate::nvim::configuration::{LogFileConfig, LogTargetConfig};
-use crate::utilities::logging::writer::NotifyWriter;
+use crate::utilities::logging::writer::{FileWriter, NotifyWriter};
 use crate::utilities::writer::MessageWriter;
 use crate::{
     acp::{Result, error::Error},
@@ -43,7 +44,7 @@ impl Logger {
         log_level
     }
 
-    fn extend_layer<W>(
+    fn base_layer<W>(
         layer: fmt::Layer<Registry, fmt::format::DefaultFields, fmt::format::Format, W>,
         format: LogFormat,
     ) -> BoxedLayer
@@ -65,7 +66,7 @@ impl Logger {
     }
 
     fn format_layer(format: LogFormat) -> BoxedLayer {
-        Self::extend_layer(fmt::Layer::new(), format)
+        Self::base_layer(fmt::Layer::new(), format)
     }
 
     fn stdio_layer(config: LogTargetConfig) -> BoxedLayers {
@@ -74,7 +75,7 @@ impl Logger {
 
     fn notification_layer(config: LogTargetConfig) -> BoxedLayers {
         let writer = NotifyWriter::new(config.level);
-        Self::extend_layer(
+        Self::base_layer(
             fmt::layer().with_writer(move || writer.clone()),
             config.format,
         )
@@ -82,23 +83,24 @@ impl Logger {
     }
 
     fn message_layer(config: LogTargetConfig) -> BoxedLayers {
-        Self::extend_layer(
+        Self::base_layer(
             fmt::layer().with_writer(MessageWriter::default),
             config.format,
         )
         .with_filter(Self::filter_layer(config.level))
     }
 
-    fn file_layer(config: LogFileConfig) -> BoxedLayers {
-        let writer = NotifyWriter::new(config.level);
-        Self::extend_layer(
+    fn file_layer(config: LogFileConfig) -> io::Result<BoxedLayers> {
+        let writer = FileWriter::new(&config.path, config.max_size, config.max_files as usize)?;
+
+        Ok(Self::base_layer(
             fmt::layer().with_writer(move || writer.clone()),
             config.format,
         )
-        .with_filter(Self::filter_layer(config.level))
+        .with_filter(Self::filter_layer(config.level)))
     }
 
-    pub fn all_layers(
+    fn all_layers(
         LogConfig {
             stdio,
             message,
@@ -106,12 +108,17 @@ impl Logger {
             file,
         }: LogConfig,
     ) -> Vec<BoxedLayers> {
-        vec![
+        let mut layers = vec![
             Self::stdio_layer(stdio),
             Self::message_layer(message),
             Self::notification_layer(notification),
-            Self::file_layer(file),
-        ]
+        ];
+        if let Ok(layer) = Self::file_layer(file)
+            .inspect_err(|e| eprintln!("Error initializing log file writer: {:?}", e))
+        {
+            layers.push(layer);
+        }
+        layers
     }
 
     pub fn inititalize() -> &'static Self {

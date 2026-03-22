@@ -16,7 +16,7 @@ fn create_log_config_with_file(level: LogLevel, file_config: LogFileConfig) -> L
             level,
             format: LogFormat::default(),
         },
-        file: Some(file_config),
+        file: file_config,
         message: LogTargetConfig::default(),
         notification: LogTargetConfig::default(),
     }
@@ -521,13 +521,13 @@ fn test_log_format_can_be_changed_via_configure() -> nvim_oxi::Result<()> {
             level: LogLevel::Info,
             format: LogFormat::Compact,
         },
-        file: Some(LogFileConfig {
+        file: LogFileConfig {
             path: log_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
             format: LogFormat::Compact,
             max_size: 1024 * 1024,
             max_files: 5,
-        }),
+        },
         message: LogTargetConfig::default(),
         notification: LogTargetConfig::default(),
     };
@@ -545,13 +545,13 @@ fn test_log_format_can_be_changed_via_configure() -> nvim_oxi::Result<()> {
             level: LogLevel::Info,
             format: LogFormat::Json,
         },
-        file: Some(LogFileConfig {
+        file: LogFileConfig {
             path: log_path.to_string_lossy().to_string(),
             level: LogLevel::Info,
             format: LogFormat::Json,
             max_size: 1024 * 1024,
             max_files: 5,
-        }),
+        },
         message: LogTargetConfig::default(),
         notification: LogTargetConfig::default(),
     };

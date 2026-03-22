@@ -1,4 +1,4 @@
-use nvim_oxi::{Dictionary, api};
+use nvim_oxi::{api, Dictionary};
 use std::io::{self, Write};
 
 use crate::utilities::LogLevel;

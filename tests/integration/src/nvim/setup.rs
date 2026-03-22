@@ -1,10 +1,10 @@
 use hermes::{
-    api::{setup, SetupArgs},
+    PluginState,
+    api::{SetupArgs, setup},
     nvim::configuration::{
         BufferConfigPartial, ClientConfigPartial, LogConfigPartial, LogFileConfigPartial,
         LogTargetConfigPartial,
     },
-    PluginState,
 };
 use nvim_oxi;
 use pretty_assertions::assert_eq;
@@ -90,7 +90,6 @@ fn setup_updates_stdio_log_level() -> nvim_oxi::Result<()> {
             }),
             notification: None,
             message: None,
-            quickfix: None,
         }),
         ..Default::default()
     };
@@ -128,7 +127,6 @@ fn setup_updates_notification_log_level() -> nvim_oxi::Result<()> {
                 format: None,
             }),
             message: None,
-            quickfix: None,
         }),
         ..Default::default()
     };
@@ -166,7 +164,6 @@ fn setup_updates_message_log_level() -> nvim_oxi::Result<()> {
                 level: Some(hermes::utilities::LogLevel::Warn),
                 format: None,
             }),
-            quickfix: None,
         }),
         ..Default::default()
     };
@@ -340,9 +337,7 @@ fn setup_enables_log_file_config() -> nvim_oxi::Result<()> {
         .expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
-    // File config should exist with the path set
-    assert!(state.config.log.file.is_some());
-    let file_config = state.config.log.file.as_ref().unwrap();
+    let file_config = state.config.log.file.clone();
     assert_eq!(file_config.path, log_path.to_string_lossy().to_string());
     Ok(())
 }
@@ -378,12 +373,7 @@ fn setup_sets_log_file_path() -> nvim_oxi::Result<()> {
         .expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
-    let file_config = state
-        .config
-        .log
-        .file
-        .as_ref()
-        .expect("File config should exist");
+    let file_config = state.config.log.file.clone();
     assert_eq!(file_config.path, "/tmp/test.log");
     Ok(())
 }
@@ -419,12 +409,7 @@ fn setup_sets_log_file_level() -> nvim_oxi::Result<()> {
         .expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
-    let file_config = state
-        .config
-        .log
-        .file
-        .as_ref()
-        .expect("File config should exist");
+    let file_config = state.config.log.file.clone();
     assert_eq!(file_config.level, hermes::utilities::LogLevel::Warn);
     Ok(())
 }
@@ -451,7 +436,6 @@ fn setup_updates_stdio_log_format() -> nvim_oxi::Result<()> {
             }),
             notification: None,
             message: None,
-            quickfix: None,
         }),
         ..Default::default()
     };
@@ -489,7 +473,6 @@ fn setup_updates_notification_log_format() -> nvim_oxi::Result<()> {
                 format: Some(hermes::utilities::logging::LogFormat::Pretty),
             }),
             message: None,
-            quickfix: None,
         }),
         ..Default::default()
     };

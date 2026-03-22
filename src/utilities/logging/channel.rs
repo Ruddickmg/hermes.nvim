@@ -29,6 +29,15 @@ pub struct ChannelWriter<S: LogSink> {
     _worker: Arc<Mutex<Option<Worker<S>>>>,
 }
 
+impl<S: LogSink> Clone for ChannelWriter<S> {
+    fn clone(&self) -> Self {
+        Self {
+            sender: self.sender.clone(),
+            _worker: self._worker.clone(),
+        }
+    }
+}
+
 impl<S: LogSink> std::fmt::Debug for ChannelWriter<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ChannelWriter")
