@@ -58,6 +58,7 @@ impl Client for Handler {
             SessionUpdate::AvailableCommandsUpdate(_) => Ok(Commands::AvailableCommands),
             SessionUpdate::CurrentModeUpdate(_) => Ok(Commands::ModeCurrent),
             SessionUpdate::ConfigOptionUpdate(_) => Ok(Commands::ConfigurationOption),
+            SessionUpdate::UsageUpdate(_) => Ok(Commands::UsageUpdate),
             _ => return Err(Error::method_not_found()),
         }?;
 
