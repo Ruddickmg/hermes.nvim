@@ -50,6 +50,7 @@ local default_config = {
     },
   },
   version = "latest",
+  auto_download_binary = true,
 }
 
 ---Setup hermes configuration
@@ -94,6 +95,11 @@ function M.validate(opts)
   -- Check version
   if opts.version and type(opts.version) ~= "string" then
     return false, "version must be a string"
+  end
+  
+  -- Check auto_download_binary
+  if opts.auto_download_binary ~= nil and type(opts.auto_download_binary) ~= "boolean" then
+    return false, "auto_download_binary must be a boolean"
   end
   
   -- Check log configuration

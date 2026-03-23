@@ -62,16 +62,17 @@ Binaries are available for:
 > This happens automatically on first API call.
 >
 > ```lua
-> -- sets up pre-built binary for your sysem
-> requre("hermes").setup({ 
+> -- sets up pre-built binary for your system
+> require("hermes").setup({ 
 >     version = "latest",
 > })
+> ```
 >
 > You can also disable this if you would prefer to build from source
 > ```lua
 > -- Will have to set up manually with `:Hermes build` or build manually from source
-> requre("hermes").setup({ 
->     binary = false,
+> require("hermes").setup({ 
+>     auto_download_binary = false,
 > })
 > ```
 
@@ -150,6 +151,7 @@ hermes.setup({
 -- Full configuration defaults
 hermes.setup({
     version = "latest", -- specify which hermes release to use
+    auto_download_binary = true, -- automatically download pre-built binary (set to false to build manually)
     root_markers = { ".git" }, -- used to detect the project root by matching file names in the root directory
     permissions = {
         fs_write_access = true,      -- Allow file writes to the agent 

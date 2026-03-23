@@ -59,6 +59,14 @@ The binary is automatically downloaded on first use for supported platforms
 If your platform is not supported, you'll see an error message with
 instructions. Install Rust and run `:Hermes build` to build from source.
 
+To disable automatic binary download and manage the binary manually: >
+    require("hermes").setup({
+        auto_download_binary = false,
+    })
+<
+With this setting, Hermes will not download or build automatically.
+You must run `:Hermes build` or build manually before using Hermes.
+
 ================================================================================
 3. SETUP                                               *hermes-setup*
 
@@ -70,12 +78,13 @@ Parameters: ~
     {opts}  (table, optional) Configuration options
 
 Configuration options: ~
-    • root_markers:    List of root directory markers (default: {".git"})
-    • permissions:     Permission settings
-    • terminal:        Terminal configuration
-    • buffer:          Buffer settings
-    • log:             Logging configuration
-    • version:         Binary version to use (default: "latest")
+    • root_markers:         List of root directory markers (default: {".git"})
+    • permissions:          Permission settings
+    • terminal:             Terminal configuration
+    • buffer:               Buffer settings
+    • log:                  Logging configuration
+    • version:              Binary version to use (default: "latest")
+    • auto_download_binary: Auto-download binary on first use (default: true)
 
 Example: >
     require("hermes").setup({

@@ -18,7 +18,28 @@ local _native = nil
 local function get_native()
   if not _native then
     local binary = require("hermes.binary")
-    local ok, result = pcall(binary.load_or_build)
+    local config = require("hermes.config").get()
+    
+    local ok, result
+    if config.auto_download_binary == false then
+      -- User disabled auto-download, only load existing binary
+      ok, result = pcall(function()
+        local bin_path = binary.load_existing_binary()
+        local lib, err = package.loadlib(bin_path, "luaopen_hermes")
+        if not lib then
+          error(string.format(
+            "Failed to load native module from: %s\nError: %s",
+            bin_path,
+            tostring(err)
+          ))
+        end
+        return lib()
+      end)
+    else
+      -- Default: auto-download if needed
+      ok, result = pcall(binary.load_or_build)
+    end
+    
     if not ok then
       -- Format detailed error message
       local error_msg = string.format(
@@ -50,6 +71,7 @@ end
 ---@field buffer? hermes.BufferConfig Buffer settings
 ---@field log? hermes.LogConfig Logging configuration
 ---@field version? string Binary version to use (default: "latest")
+---@field auto_download_binary? boolean Auto-download binary on first use (default: true)
 
 ---@class hermes.Permissions
 ---@field fs_write_access? boolean Allow file writes (default: true)

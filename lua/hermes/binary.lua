@@ -256,6 +256,38 @@ function M.ensure_binary()
   return bin_path
 end
 
+---Load existing binary without downloading
+---Checks if binary exists at expected path, errors if not found
+---@return string path Path to existing binary
+function M.load_existing_binary()
+  local bin_path = M.get_binary_path()
+  
+  -- Check if binary already exists
+  if vim.fn.filereadable(bin_path) == 0 then
+    local platform = require("hermes.platform")
+    error(
+      string.format(
+        "Binary not found and auto_download_binary is disabled.\n\n" ..
+        "Current platform: %s\n\n" ..
+        "To resolve this, choose one option:\n\n" ..
+        "Option 1 - Enable auto-download in your config:\n" ..
+        "  require(\"hermes\").setup({\n" ..
+        "    auto_download_binary = true,\n" ..
+        "  })\n\n" ..
+        "Option 2 - Build manually:\n" ..
+        "  1. Install Rust: https://rustup.rs/\n" ..
+        "  2. Run :Hermes build inside Neovim\n\n" ..
+        "For detailed instructions, see:\n" ..
+        "https://github.com/Ruddickmg/hermes.nvim#installation",
+        platform.get_display_string()
+      )
+    )
+  end
+  
+  vim.notify("Using existing Hermes binary: " .. bin_path, vim.log.levels.INFO)
+  return bin_path
+end
+
 ---Load native module
 ---Ensures binary is available and loads it
 ---@return table native_module The loaded native module
