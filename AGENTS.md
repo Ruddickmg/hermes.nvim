@@ -1054,3 +1054,25 @@ assert!("something" == "something");
 // Good
 assert_eq!("something", "something");
 ```
+
+## Agent Behavior
+
+### Don't do things you are not asked to Do
+
+**When asked to debug or investigate a problem:**
+- **DO:** Run the code, reproduce the issue, analyze the logs/errors, and **report back what you found**
+- **DO NOT:** Jump straight into fixing the code before reporting your findings
+- **DO NOT:** Make changes unless explicitly asked to implement a solution
+
+**Example:**
+- **User:** "Debug the tests and figure out why they're failing"
+- **WRONG:** Immediately modifying code to fix the issue
+- **RIGHT:** Run the tests, identify the root cause, and report: "The tests are failing because X. The issue is at line Y. Do you want me to fix it?"
+
+**Why this matters:**
+- The user may want to understand the problem before deciding on a fix
+- There may be multiple solutions and the user wants to choose
+- Premature fixes may not align with the user's architectural vision
+- Wastes time if the user rejects your unapproved solution
+
+**Rule of thumb:** When the user says "debug", "investigate", "find out", or "look into" - they want INFORMATION, not CHANGES. Only implement when explicitly asked or given permission.

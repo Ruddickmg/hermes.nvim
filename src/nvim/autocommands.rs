@@ -31,6 +31,7 @@ pub enum Commands {
     SessionForked,
     SessionResumed,
     SessionModelUpdated,
+    UsageUpdate,
 
     // User message commands (format: User{ContentType}Message)
     UserResourceMessage,
@@ -83,6 +84,7 @@ impl From<&str> for Commands {
             "SessionForked" => Commands::SessionForked,
             "SessionResumed" => Commands::SessionResumed,
             "SessionModelUpdated" => Commands::SessionModelUpdated,
+            "UsageUpdate" => Commands::UsageUpdate,
 
             // User message commands
             "UserResourceMessage" => Commands::UserResourceMessage,
@@ -141,6 +143,8 @@ mod tests {
             Commands::from("AgentImageMessage"),
             Commands::AgentImageMessage
         );
+        // Test UsageUpdate
+        assert_eq!(Commands::from("UsageUpdate"), Commands::UsageUpdate);
     }
 
     #[test]

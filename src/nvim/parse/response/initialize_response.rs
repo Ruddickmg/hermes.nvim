@@ -64,9 +64,9 @@ pub fn initialize_response(response: InitializeResponse) -> Dictionary {
     let auth_methods_arr =
         nvim_oxi::Array::from_iter(response.auth_methods.into_iter().map(|method| {
             let mut method_dict = nvim_oxi::Dictionary::new();
-            method_dict.insert("id", method.id.0.as_ref().to_string());
-            method_dict.insert("name", method.name.as_str());
-            if let Some(description) = method.description {
+            method_dict.insert("id", method.id().0.as_ref().to_string());
+            method_dict.insert("name", method.name());
+            if let Some(description) = method.description() {
                 method_dict.insert("description", description);
             }
             method_dict

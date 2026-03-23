@@ -1,9 +1,12 @@
 use crate::{
     acp::{Result, error::Error},
-    nvim::terminal::parse_exit_code,
+    nvim::{configuration::TerminalConfig, terminal::parse_exit_code},
 };
 use agent_client_protocol::EnvVariable;
-use nvim_oxi::{Array, Dictionary, Function, Object};
+use nvim_oxi::{
+    Array, Dictionary, Function, Object,
+    api::opts::{BufDeleteOpts, OptionOpts},
+};
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 use strip_ansi_escapes;
 use tokio::sync::oneshot;
@@ -92,17 +95,19 @@ impl TerminalInfo {
         let update_content =
             Self::create_input_callback(output.clone(), truncated.clone(), byte_limit);
         let on_exit = Self::create_exit_callback(exit_status.clone(), exit_response.clone());
-        let configuration = Self::configuration(update_content, on_exit);
-        Self {
+        let mut terminal = Self {
             buffer: None,
             truncated,
-            configuration,
+            configuration: Dictionary::new(),
             id: Uuid::new_v4(),
             job_id: None,
             output,
             exit_status,
             exit_response,
-        }
+        };
+        terminal.set_on_output_callback(update_content);
+        terminal.set_on_exit_callback(on_exit);
+        terminal
     }
 
     fn create_input_callback(
@@ -142,15 +147,13 @@ impl TerminalInfo {
         })
     }
 
-    pub fn configuration(handle_input: InputCallback, handle_exit: ExitCallback) -> Dictionary {
-        let mut opts = Dictionary::new();
-        opts.insert("term", true);
-        opts.insert("stdout_buffered", true);
-        opts.insert("stderr_buffered", true);
-        opts.insert("on_stdout", handle_input.clone());
-        opts.insert("on_stderr", handle_input);
-        opts.insert("on_exit", handle_exit);
-        opts
+    pub fn set_on_output_callback(&mut self, handle_input: InputCallback) {
+        self.configuration.insert("on_stdout", handle_input.clone());
+        self.configuration.insert("on_stderr", handle_input);
+    }
+
+    pub fn set_on_exit_callback(&mut self, handle_exit: ExitCallback) {
+        self.configuration.insert("on_exit", handle_exit);
     }
 
     pub fn working_directory(mut self, cwd: PathBuf) -> Self {
@@ -170,17 +173,42 @@ impl TerminalInfo {
         args: Vec<String>,
         configuration: Dictionary,
     ) -> Result<i64> {
+        tracing::debug!(
+            "Starting terminal with command: {}, args: {:?}",
+            command,
+            args
+        );
+        tracing::debug!(
+            "Configuration keys: {:?}",
+            configuration.keys().collect::<Vec<_>>()
+        );
+
         let commands: Array =
             Array::from_iter(vec![command].into_iter().chain(args).map(Object::from));
+
+        tracing::debug!("Calling jobstart with {} commands", commands.len());
+
         nvim_oxi::api::call_function::<(Array, Dictionary), i64>(
             "jobstart",
             (commands, configuration),
         )
-        .map_err(|e| Error::Internal(e.to_string()))
+        .map_err(|e| {
+            tracing::error!("jobstart failed: {:?}", e);
+            Error::Internal(e.to_string())
+        })
+    }
+
+    fn set_option<T>(option: &str, value: T, opts: &OptionOpts) -> Result<()>
+    where
+        T: nvim_oxi::conversion::ToObject,
+    {
+        nvim_oxi::api::set_option_value(option, value, opts)
+            .map_err(|e| Error::Internal(e.to_string()))
     }
 }
 
 pub trait Terminal {
+    fn configure(self, config: TerminalConfig) -> Self;
     fn run(&mut self, command: String, args: Vec<String>) -> Result<i64>;
     fn content(&self) -> String;
     fn truncated(&self) -> bool;
@@ -188,6 +216,23 @@ pub trait Terminal {
     fn report_exit_to(&self, sender: oneshot::Sender<Result<ExitStatus>>) -> Result<()>;
     fn id(&self) -> Uuid;
     fn from_request(data: agent_client_protocol::CreateTerminalRequest) -> Self;
+    fn delete(&mut self) -> Result<()>;
+    fn buffer(&self) -> Option<nvim_oxi::api::Buffer>;
+
+    // TODO: Implement toggle_visibility() method to handle window-local terminal options
+    // When a terminal buffer becomes visible (e.g., via split or switch), these window-local
+    // options need to be set:
+    //   - number = false
+    //   - relativenumber = false
+    //   - signcolumn = "no"
+    //   - wrap = false
+    //   - foldcolumn = "0"
+    //
+    // Implementation approach (Option C):
+    //   Add fn toggle_visibility(&self) -> Result<bool> to Terminal trait
+    //   When showing: open buffer in window + set window-local options above
+    //   When hiding: close window (bufhidden=hide keeps buffer alive)
+    //   Return true if buffer is now visible, false if hidden
 }
 
 impl Terminal for TerminalInfo {
@@ -201,6 +246,15 @@ impl Terminal for TerminalInfo {
 
     fn truncated(&self) -> bool {
         self.truncated.borrow().is_some()
+    }
+
+    fn configure(mut self, config: TerminalConfig) -> Self {
+        self.configuration.insert("term", config.enabled);
+        self.configuration
+            .insert("stdout_buffered", config.buffered);
+        self.configuration
+            .insert("stderr_buffered", config.buffered);
+        self
     }
 
     fn report_exit_to(&self, sender: oneshot::Sender<Result<ExitStatus>>) -> Result<()> {
@@ -233,6 +287,14 @@ impl Terminal for TerminalInfo {
         let job_id = buffer
             .call(|_| Self::start_terminal(command, args, configuration))
             .map_err(|e| Error::Internal(e.to_string()))?;
+
+        let opts = OptionOpts::builder().buffer(buffer.clone()).build();
+        Self::set_option("buftype", "terminal", &opts)?;
+        Self::set_option("swapfile", false, &opts)?;
+        Self::set_option("bufhidden", "hide", &opts)?;
+        Self::set_option("scrollback", 10000, &opts)?;
+        Self::set_option("modified", false, &opts)?;
+
         self.job_id = Some(job_id as i64);
         self.buffer = Some(buffer);
         Ok(job_id)
@@ -251,6 +313,21 @@ impl Terminal for TerminalInfo {
                 "Cannot stop terminal: job ID not found".to_string(),
             ))
         }
+    }
+
+    fn delete(&mut self) -> Result<()> {
+        if let Some(buffer) = self.buffer.take() {
+            let opts = BufDeleteOpts::builder().force(true).build();
+            buffer
+                .delete(&opts)
+                .map_err(|e| Error::Internal(format!("Failed to delete terminal buffer: {}", e)))
+        } else {
+            Err(Error::Internal("No buffer found for deletion".to_string()))
+        }
+    }
+
+    fn buffer(&self) -> Option<nvim_oxi::api::Buffer> {
+        self.buffer.clone()
     }
 }
 

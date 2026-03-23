@@ -2,6 +2,7 @@
 use crate::helpers::MockRequestHandler;
 use agent_client_protocol::{
     Client, ContentBlock, ContentChunk, Error, SessionNotification, SessionUpdate, TextContent,
+    UsageUpdate,
 };
 use hermes::acp::handler::Handler;
 use hermes::nvim::state::PluginState;
@@ -17,7 +18,7 @@ fn create_test_notification() -> SessionNotification {
 #[nvim_oxi::test]
 fn test_session_notification_permissions_denied() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    state.blocking_lock().config.permissions.allow_notifications = false;
+    state.blocking_lock().config.permissions.send_notifications = false;
 
     let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
         .expect("Handler creation should succeed");
@@ -93,11 +94,7 @@ fn test_can_access_terminal_returns_false_when_disabled() -> nvim_oxi::Result<()
 #[nvim_oxi::test]
 fn test_can_request_permissions_returns_false_when_disabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    state
-        .blocking_lock()
-        .config
-        .permissions
-        .can_request_permissions = false;
+    state.blocking_lock().config.permissions.request_permissions = false;
 
     let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
         .expect("Handler creation should succeed");
@@ -124,6 +121,25 @@ fn test_set_agent_info_updates_agent_information() -> nvim_oxi::Result<()> {
     // Verify agent info was set
     let stored_info = state.blocking_lock().agent_info.get(&agent).cloned();
     assert!(stored_info.is_some(), "Agent info should be stored");
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_session_notification_usage_update_succeeds() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
+        .expect("Handler creation should succeed");
+
+    let usage = UsageUpdate::new(1000, 200000);
+    let notification = SessionNotification::new("session_id", SessionUpdate::UsageUpdate(usage));
+    let res: agent_client_protocol::Result<()> =
+        tokio_test::block_on(handler.session_notification(notification));
+    assert!(
+        res.is_ok(),
+        "UsageUpdate should succeed and fire autocommand"
+    );
 
     Ok(())
 }
