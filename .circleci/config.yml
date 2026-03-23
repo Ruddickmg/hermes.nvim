@@ -201,10 +201,24 @@ jobs:
     environment:
       CARGO_TARGET_DIR: target
       NEOVIM_VERSION: 0.11.6
+      TERM: xterm-256color
+      LANG: en_US.UTF-8
     executor: ubuntu
     steps:
       - checkout
       - rust/install
+      - run:
+          name: Install terminal dependencies for PTY support
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y \
+              ncurses-bin \
+              ncurses-base \
+              ncurses-term \
+              libncurses5-dev \
+              libncursesw5-dev \
+              locales
+            sudo locale-gen en_US.UTF-8
       - run:
           name: Install Neovim
           command: |
@@ -229,10 +243,24 @@ jobs:
     environment:
       CARGO_TARGET_DIR: target
       NEOVIM_VERSION: 0.11.6
+      TERM: xterm-256color
+      LANG: en_US.UTF-8
     executor: ubuntu
     steps:
       - checkout
       - rust/install
+      - run:
+          name: Install terminal dependencies for PTY support
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y \
+              ncurses-bin \
+              ncurses-base \
+              ncurses-term \
+              libncurses5-dev \
+              libncursesw5-dev \
+              locales
+            sudo locale-gen en_US.UTF-8
       - run:
           name: Install Neovim
           command: |
