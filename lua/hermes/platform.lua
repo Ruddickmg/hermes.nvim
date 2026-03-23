@@ -92,4 +92,16 @@ function M.get_display_string()
   end
 end
 
+---Get platform key for checking against supported platforms
+---@return string|nil key Platform key (e.g., "linux-x86_64") or nil if not determinable
+function M.get_platform_key()
+  local ok, os, arch = pcall(function()
+    return M.get_os(), M.get_arch()
+  end)
+  if ok then
+    return string.format("%s-%s", os, arch)
+  end
+  return nil
+end
+
 return M

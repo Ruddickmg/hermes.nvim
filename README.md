@@ -14,6 +14,106 @@ Hermes focuses on:
 > [!CAUTION]
 > While Hermes is a complete ACP client, most agents available today don't fully utilize the protocol. Key [optional features](https://agentclientprotocol.com/protocol/overview#optional-methods-2) (file operations, terminal commands, etc) are often handled through agent-specific tools rather than ACP methods. This means some Hermes capabilities may not be exercised depending on which agent you use.
 
+## Installation
+
+**lazy.nvim**
+```lua
+{
+    "Ruddickmg/hermes.nvim",
+    config = function()
+        require("hermes").setup()
+    end
+}
+```
+
+**paq.nvim**
+```lua
+
+require("paq") {
+    "Ruddickmg/hermes.nvim"
+}
+require("hermes").setup()
+```
+
+
+### Requirements
+
+- **Neovim 0.11 or later**
+
+### Pre-built Binary
+
+Hermes is built in Rust and so must be integrated with lua during installation, pre built binaries are provided for convenience
+
+#### Supported Platforms
+
+Binaries are available for:
+
+- **Linux:** x86_64, aarch64 (arm64)
+- **macOS:** x86_64, arm64
+- **Windows:** x86_64
+
+> [!NOTE] Hermes will automatically detect and download a pre-built binary for supported platforms.
+>
+> It will:
+> 1. Check if your platform is supported
+> 2. Download the appropriate pre-built binary from GitHub releases
+> 3. Load the native module
+>
+> This happens automatically on first API call.
+>
+> ```lua
+> -- sets up pre-built binary for your sysem
+> requre("hermes").setup({ 
+>     version = "latest",
+> })
+>
+> You can also disable this if you would prefer to build from source
+> ```lua
+> -- Will have to set up manually with `:Hermes build` or build manually from source
+> requre("hermes").setup({ 
+>     binary = false,
+> })
+> ```
+
+### Building from Source (Unsupported Platforms)
+
+If your platform is not in the supported list above, you can build from source:
+
+**Requirements:**
+- [Rust toolchain](https://rustup.rs/) (1.70 or later)
+
+**Scripted**
+
+Run the build command in Neovim:
+   ```
+   :Hermes build
+   ```
+
+   This will:
+   - Compile the Rust code with `cargo build --release`
+   - Install the resulting binary in the correct location
+
+**Manual** 
+
+```bash
+git clone https://github.com/Ruddickmg/hermes.nvim.git
+cd hermes.nvim
+cargo build --release
+
+# Copy target/release/libhermes.* to your Neovim data directory
+```
+
+### Platform Not Supported?
+
+If your platform isn't supported and building from source fails:
+
+1. Create an issue on GitHub: https://github.com/Ruddickmg/hermes.nvim/issues
+2. Include:
+   - Your operating system and version
+   - Output of `:Hermes version` (if available)
+   - Full error messages from `:Hermes build`
+   - Architecture info from `uname -m` (or `uname -a` on macOS)
+
 ## Features
 
 - [x] Full implementation of ACP Client (Built on the official [Rust ACP Sdk](https://github.com/agentclientprotocol/rust-sdk))
@@ -49,6 +149,7 @@ hermes.setup({
 
 -- Full configuration defaults
 hermes.setup({
+    version = "latest", -- specify which hermes release to use
     root_markers = { ".git" }, -- used to detect the project root by matching file names in the root directory
     permissions = {
         fs_write_access = true,      -- Allow file writes to the agent 

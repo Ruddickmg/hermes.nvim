@@ -9,6 +9,16 @@ local BASE_URL = "https://github.com/Ruddickmg/hermes.nvim/releases/download"
 ---@type string Repository URL for building from source
 local REPO_URL = "https://github.com/Ruddickmg/hermes.nvim.git"
 
+---List of officially supported platforms for pre-built binaries
+---@type table<string, boolean>
+local SUPPORTED_PLATFORMS = {
+  ["linux-x86_64"] = true,
+  ["linux-aarch64"] = true,
+  ["macos-x86_64"] = true,
+  ["macos-aarch64"] = true,
+  ["windows-x86_64"] = true,
+}
+
 ---Get path to binary storage directory
 ---@return string path Path to data directory
 function M.get_data_dir()
@@ -143,23 +153,57 @@ function M.build_from_source(dest_dir)
 end
 
 ---Ensure binary is available
----Downloads or builds as needed
+---Downloads pre-built binary if platform is supported
+---Returns error with helpful message if platform not supported
 ---@return string path Path to binary
 function M.ensure_binary()
   local platform = require("hermes.platform")
   local version = require("hermes.version")
   
-  -- Check if platform is supported
-  local supported, err = platform.is_supported()
-  if not supported then
-    error("Platform not supported: " .. err)
+  -- Check if platform is supported for pre-built binaries
+  local platform_key = platform.get_platform_key()
+  if not platform_key then
+    error(
+      "Unable to determine platform.\n\n" ..
+      "Please check the installation instructions:\n" ..
+      "https://github.com/Ruddickmg/hermes.nvim#installation"
+    )
+  end
+  
+  if not SUPPORTED_PLATFORMS[platform_key] then
+    local supported_list = {}
+    for plat, _ in pairs(SUPPORTED_PLATFORMS) do
+      table.insert(supported_list, "  - " .. plat:gsub("-", " "):gsub("^%l", string.upper))
+    end
+    table.sort(supported_list)
+    
+    error(
+      string.format(
+        "Platform not supported for automatic binary download: %s\n\n" ..
+        "Pre-built binaries are available for these platforms:\n%s\n\n" ..
+        "To use Hermes on your platform, you have two options:\n\n" ..
+        "Option 1 - Build manually (Recommended):\n" ..
+        "  1. Install Rust: https://rustup.rs/\n" ..
+        "  2. Run :Hermes build inside Neovim\n\n" ..
+        "Option 2 - Build outside Neovim:\n" ..
+        "  1. Clone: git clone %s\n" ..
+        "  2. Build: cargo build --release\n" ..
+        "  3. Copy target/release/libhermes.* to %s\n\n" ..
+        "For detailed instructions, see:\n" ..
+        "https://github.com/Ruddickmg/hermes.nvim#installation",
+        platform.get_display_string(),
+        table.concat(supported_list, "\n"),
+        REPO_URL,
+        M.get_data_dir()
+      )
+    )
   end
   
   local bin_path = M.get_binary_path()
   local ver_file = M.get_version_file()
   local wanted_ver = version.get_wanted()
   
-  -- Check if we need to download/build
+  -- Check if we need to download
   local needs_download = false
   
   if vim.fn.filereadable(bin_path) == 0 then
@@ -181,42 +225,28 @@ function M.ensure_binary()
   end
   
   if needs_download then
-    -- Try download first
+    -- Download binary for supported platform
     local download_ok = M.download(bin_path, wanted_ver)
     
     if not download_ok then
-      -- Fallback: build from source
-      vim.notify("Download failed, attempting to build from source...", vim.log.levels.WARN)
-      local build_ok = M.build_from_source(M.get_data_dir())
-      
-      if not build_ok then
-        -- Both failed - provide helpful error
-        local error_msg = string.format(
-          "Failed to obtain Hermes binary.\n\n" ..
-          "Both download and build failed.\n\n" ..
-          "Platform: %s\n" ..
-          "Version: %s\n\n" ..
-          "This is likely because:\n" ..
-          "1. No pre-built binary exists for your platform\n" ..
-          "2. Rust/Cargo is not installed for building from source\n\n" ..
+      -- Download failed on a supposedly supported platform
+      error(
+        string.format(
+          "Failed to download Hermes binary for %s.\n\n" ..
+          "This is unexpected for a supported platform.\n\n" ..
+          "Troubleshooting steps:\n" ..
+          "  1. Check your internet connection\n" ..
+          "  2. Check if GitHub is accessible\n" ..
+          "  3. The release may not exist yet for version %s\n\n" ..
           "To build manually:\n" ..
           "  1. Install Rust: https://rustup.rs/\n" ..
-          "  2. Clone: git clone %s\n" ..
-          "  3. Build: cargo build --release\n" ..
-          "  4. Copy target/release/libhermes.* to %s\n\n" ..
-          "If you believe this is a bug, please create an issue:\n" ..
-          "https://github.com/Ruddickmg/hermes.nvim/issues\n\n" ..
-          "Include the error messages above and your platform info.",
+          "  2. Run :Hermes build inside Neovim\n\n" ..
+          "For detailed instructions, see:\n" ..
+          "https://github.com/Ruddickmg/hermes.nvim#installation",
           platform.get_display_string(),
-          wanted_ver,
-          REPO_URL,
-          M.get_data_dir()
+          wanted_ver
         )
-        error(error_msg)
-      end
-      
-      -- Use built binary path
-      bin_path = M.get_data_dir() .. "/libhermes." .. platform.get_ext()
+      )
     end
     
     -- Save version

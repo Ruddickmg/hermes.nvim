@@ -53,8 +53,11 @@ Using paq.nvim: >
     require("hermes").setup()
 <
 
-The binary is automatically downloaded on first use. If your platform is not
-supported, it will build from source (requires Rust/Cargo).
+The binary is automatically downloaded on first use for supported platforms
+(Linux x86_64/aarch64, macOS x86_64/aarch64, Windows x86_64).
+
+If your platform is not supported, you'll see an error message with
+instructions. Install Rust and run `:Hermes build` to build from source.
 
 ================================================================================
 3. SETUP                                               *hermes-setup*
@@ -273,22 +276,32 @@ Example: >
 ================================================================================
 7. TROUBLESHOOTING                                    *hermes-troubleshooting*
 
+Platform not supported: ~
+If you see a "Platform not supported" error when starting Hermes:
+1. Your platform may not have a pre-built binary available
+2. Install Rust from https://rustup.rs/
+3. Run `:Hermes build` to build from source
+4. For detailed instructions, see the Installation section in the README:
+   https://github.com/Ruddickmg/hermes.nvim#installation
+
 Binary download fails: ~
-1. Check platform support: `:Hermes version`
-2. Try building from source: `:Hermes build`
-3. Check for Rust/Cargo installation
-4. Report issue with platform info
+1. Check your internet connection
+2. Check if GitHub releases are accessible
+3. The release may not exist for your version
+4. Run `:Hermes build` to build from source
 
 Build from source fails: ~
-1. Install Rust: https://rustup.rs/
-2. Check build dependencies (gcc, make)
-3. Run: `:Hermes build`
+1. Ensure Rust is installed: `cargo --version`
+2. Check build dependencies (gcc, make, etc.)
+3. Run `:Hermes build`
+4. Check for specific error messages in the output
 
 If issues persist, create an issue at:
 https://github.com/Ruddickmg/hermes.nvim/issues
 
 Include:
 - Operating system and version
+- Architecture (x86_64, aarch64, etc.)
 - Output of `:Hermes version`
 - Full error messages
 
