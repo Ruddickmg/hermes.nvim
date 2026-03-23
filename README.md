@@ -1323,6 +1323,20 @@ Below is a list of all autocommands and their associated data (passed to the cal
 }</code></pre></td>
     </tr>
     <tr>
+      <td><code>UsageUpdate</code></td>
+      <td>Session usage metrics update (tokens, cost)</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "used": "number (tokens used)",
+  "size": "number (max context size)",
+  "cost": {
+    "amount": "number",
+    "currency": "string (e.g., 'USD')"
+  }
+}</code></pre></td>
+    </tr>
+    <tr>
       <td><code>UserImageMessage</code></td>
       <td>An image sent from the client</td>
       <td>🤖 Agent</td>

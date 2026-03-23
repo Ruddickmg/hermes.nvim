@@ -143,6 +143,8 @@ mod tests {
             Commands::from("AgentImageMessage"),
             Commands::AgentImageMessage
         );
+        // Test UsageUpdate
+        assert_eq!(Commands::from("UsageUpdate"), Commands::UsageUpdate);
     }
 
     #[test]
