@@ -1,11 +1,16 @@
 # Nextest configuration for integration tests
-# This ensures tests that share global state (like the Logger) run sequentially
+# This ensures tests that share global state (like the Logger or Terminal resources) run sequentially
 # while all other tests can run in parallel.
 
 [test-groups]
 # Sequential group for tests that share global Logger state
 # These tests must not run in parallel to avoid conflicts with global log configuration
 logger-tests = { max-threads = 1 }
+
+# Sequential group for terminal tests
+# Terminal tests interact with Neovim's job control and buffer system, which can conflict
+# when multiple terminal jobs are started simultaneously in a headless environment
+terminal-tests = { max-threads = 1 }
 
 # Default profile configuration
 [profile.default]
@@ -24,6 +29,12 @@ test-group = "logger-tests"
 [[profile.default.overrides]]
 filter = "test(setup_)"
 test-group = "logger-tests"
+
+# Assign terminal tests to the sequential group
+# Terminal tests create Neovim buffers and jobs which can conflict in headless CI
+[[profile.default.overrides]]
+filter = "test(terminal_info_)"
+test-group = "terminal-tests"
 
 # Ensure proper failure handling for CI
 [profile.ci]
