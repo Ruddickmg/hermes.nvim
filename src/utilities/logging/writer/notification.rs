@@ -1,4 +1,4 @@
-use nvim_oxi::{api, Dictionary};
+use nvim_oxi::{Dictionary, api};
 use std::io::{self, Write};
 use tracing_subscriber::fmt::writer::MakeWriter;
 

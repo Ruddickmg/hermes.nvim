@@ -8,13 +8,13 @@ use nvim_oxi::api;
 
 use crate::acp::{Result, error::Error};
 
-// TODO: move these helper functions into a "utilities" directory
+pub fn detect_project_storage_path() -> Result<String> {
+    let state_dir = api::call_function::<(String,), String>("stdpath", ("state".to_string(),))
+        .map_err(|e| Error::Internal(format!("Error intiializing plugin state: {:?}", e)))?;
+    let path = format!("{}/hermes", state_dir);
+    Ok(path)
+}
 
-/// Escape a filename so it is safe to use as an argument in an Ex command.
-///
-/// This function backslash-escapes characters that are significant to Ex
-/// command parsing (such as spaces and `|`) so that they are treated as
-/// literal filename characters.
 fn escape_for_ex(filename: &str) -> String {
     let mut escaped = String::with_capacity(filename.len());
     for ch in filename.chars() {
@@ -335,13 +335,3 @@ mod tests {
         assert_eq!(lines[2], "line3");
     }
 }
-
-pub fn initialize_project_storage() -> Result<String> {
-    let state_dir = api::call_function::<(String,), String>("stdpath", ("state".to_string(),))
-        .map_err(|e| Error::Internal(format!("Error intiializing plugin state: {:?}", e)))?;
-    let path = format!("{}/hermes", state_dir);
-    std::fs::create_dir_all(&path)
-        .map_err(|e| Error::Internal(format!("Could not find path: {}, {:?}", path, e)))?;
-    Ok(path)
-}
-

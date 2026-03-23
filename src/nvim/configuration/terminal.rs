@@ -1,6 +1,6 @@
 use nvim_oxi::{
-    conversion::{Error, FromObject},
     Dictionary, Object,
+    conversion::{Error, FromObject},
 };
 
 #[derive(Clone, Debug, PartialEq)]

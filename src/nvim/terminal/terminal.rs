@@ -1,11 +1,11 @@
 use crate::{
-    acp::{error::Error, Result},
+    acp::{Result, error::Error},
     nvim::{configuration::TerminalConfig, terminal::parse_exit_code},
 };
 use agent_client_protocol::EnvVariable;
 use nvim_oxi::{
-    api::opts::{BufDeleteOpts, OptionOpts},
     Array, Dictionary, Function, Object,
+    api::opts::{BufDeleteOpts, OptionOpts},
 };
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 use strip_ansi_escapes;

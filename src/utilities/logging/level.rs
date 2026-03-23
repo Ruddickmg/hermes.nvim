@@ -2,7 +2,7 @@ use nvim_oxi::api::types::LogLevel as NvimLogLevel;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Default)]
 pub enum LogLevel {
     Trace = 0,
     Debug = 1,

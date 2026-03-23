@@ -1,5 +1,7 @@
-use crate::utilities::logging::{LogFormat, LogLevel};
-use nvim_oxi::api;
+use crate::utilities::{
+    detect_project_storage_path,
+    logging::{LogFormat, LogLevel},
+};
 use nvim_oxi::{
     Dictionary, Object,
     conversion::{Error, FromObject},
@@ -59,7 +61,10 @@ pub struct LogFileConfig {
 impl Default for LogFileConfig {
     fn default() -> Self {
         Self {
-            path: "".to_string(),
+            path: detect_project_storage_path()
+                // TODO: Think more about how to handle the case where a storage path can't be found
+                .inspect_err(|e| eprintln!("Could not find default storage path: {:?}", e))
+                .unwrap_or_default(),
             level: LogLevel::Warn,
             format: LogFormat::default(),
             max_size: 10_485_760, // 10MB default

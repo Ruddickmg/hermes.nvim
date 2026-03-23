@@ -49,6 +49,3 @@ impl nvim_oxi::conversion::FromObject for LogFormat {
         }
     }
 }
-
-
-

@@ -12,8 +12,8 @@ pub struct PluginState {
 
 impl PluginState {
     #[instrument(level = "trace")]
-    pub fn new(storage: String) -> Self {
-        Self::with_config(ClientConfig::with_path(&storage))
+    pub fn new() -> Self {
+        Self::with_config(ClientConfig::default())
     }
 
     #[instrument(level = "trace")]
@@ -42,6 +42,6 @@ impl PluginState {
 
 impl Default for PluginState {
     fn default() -> Self {
-        Self::new(Default::default())
+        Self::new()
     }
 }

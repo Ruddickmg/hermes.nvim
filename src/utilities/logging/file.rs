@@ -239,10 +239,10 @@ mod tests {
             std::path::Path::new(&(log_path.as_os_str().to_string_lossy().to_string() + ".1"))
                 .exists()
         );
-        assert!(!std::path::Path::new(
-            &(log_path.as_os_str().to_string_lossy().to_string() + ".2")
-        )
-        .exists()); // Should be deleted
+        assert!(
+            !std::path::Path::new(&(log_path.as_os_str().to_string_lossy().to_string() + ".2"))
+                .exists()
+        ); // Should be deleted
     }
 
     #[test]
@@ -262,10 +262,10 @@ mod tests {
             .unwrap();
 
         // Should NOT have backup file
-        assert!(!std::path::Path::new(
-            &(log_path.as_os_str().to_string_lossy().to_string() + ".1")
-        )
-        .exists());
+        assert!(
+            !std::path::Path::new(&(log_path.as_os_str().to_string_lossy().to_string() + ".1"))
+                .exists()
+        );
 
         // Current file should only have the second write
         let content = fs::read_to_string(&log_path).unwrap();

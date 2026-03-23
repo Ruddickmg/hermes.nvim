@@ -4,8 +4,8 @@ use nvim_oxi::{
     conversion::{Error, FromObject},
     lua::{Poppable, Pushable},
 };
-use tokio::sync::Mutex;
 use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
+use tokio::sync::Mutex;
 use tracing::{debug, instrument};
 
 use crate::{

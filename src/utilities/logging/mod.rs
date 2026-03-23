@@ -1,7 +1,7 @@
 use std::io;
 use std::sync::OnceLock;
 use tracing_subscriber::{
-    EnvFilter, Registry, fmt,
+    Registry, fmt,
     prelude::*,
     reload::{self},
 };
@@ -76,13 +76,19 @@ impl Logger {
     }
 
     fn file_layer(config: LogFileConfig) -> io::Result<BoxedLayer> {
-        let writer = FileWriter::new(&config.path, config.max_size, config.max_files as usize)?
-            .filtered(config.level);
+        if config.path.is_empty() && config.level < LogLevel::Off {
+            Err(std::io::Error::other(
+                "File logging was configured with an empty file path. A file path must be set in order to generate log files",
+            ))
+        } else {
+            let writer = FileWriter::new(&config.path, config.max_size, config.max_files as usize)?
+                .filtered(config.level);
 
-        Ok(Self::base_layer(
-            fmt::layer().with_writer(writer),
-            config.format,
-        ))
+            Ok(Self::base_layer(
+                fmt::layer().with_writer(writer),
+                config.format,
+            ))
+        }
     }
 
     fn all_layers(
@@ -102,8 +108,7 @@ impl Logger {
     }
 
     pub fn inititalize() -> Result<&'static Self> {
-        let layers: Vec<BoxedLayer> =
-            Self::all_layers(Default::default())?;
+        let layers: Vec<BoxedLayer> = Self::all_layers(Default::default())?;
         let (reload_layer, handle) = reload::Layer::new(layers);
 
         let subscriber = tracing_subscriber::registry().with(reload_layer);

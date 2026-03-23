@@ -1,4 +1,4 @@
-use crossbeam_channel::{bounded, Receiver, RecvTimeoutError, Sender};
+use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, bounded};
 use std::{
     io::{self, Write},
     sync::{Arc, Mutex},
@@ -9,9 +9,9 @@ use std::{
 use super::sink::LogSink;
 
 const CHANNEL_CAPACITY: usize = 10_000;
-const FLUSH_INTERVAL_FILE: usize = 100;      // Flush file every 100 messages
-const FLUSH_INTERVAL_UI: usize = 10;       // Flush UI every 10 messages
-const FLUSH_TIMEOUT_MS: u64 = 100;         // Flush after 100ms regardless
+const FLUSH_INTERVAL_FILE: usize = 100; // Flush file every 100 messages
+const FLUSH_INTERVAL_UI: usize = 10; // Flush UI every 10 messages
+const FLUSH_TIMEOUT_MS: u64 = 100; // Flush after 100ms regardless
 
 #[derive(Debug)]
 enum LogMessage {
@@ -88,9 +88,10 @@ impl<S: LogSink> ChannelWriter<S> {
 
         // Take ownership of worker and wait for it to finish
         if let Ok(mut worker_guard) = self._worker.lock()
-            && let Some(worker) = worker_guard.take() {
-                let _ = worker.join();
-            }
+            && let Some(worker) = worker_guard.take()
+        {
+            let _ = worker.join();
+        }
     }
 }
 
@@ -99,7 +100,7 @@ impl<S: LogSink> Write for ChannelWriter<S> {
         // Convert bytes to string for easier processing
         // If invalid UTF-8, use lossy conversion
         let message = String::from_utf8_lossy(buf).to_string();
-        
+
         // Send to channel - non-blocking, ~50ns
         // If channel is full, this will block until space available
         match self.sender.send(LogMessage::Data(message)) {
@@ -158,16 +159,16 @@ impl<S: LogSink> Worker<S> {
                     // Normal operation - blocking receive with timeout
                     match receiver.recv_timeout(timeout) {
                         Ok(msg) => msg,
-                    Err(RecvTimeoutError::Timeout) => {
-                        // Timeout occurred - check if we need to flush
-                        if !message_buffer.is_empty() {
-                            if let Err(e) = sink.write_batch(&message_buffer) {
-                                eprintln!("Failed to write batch on timeout: {}", e);
+                        Err(RecvTimeoutError::Timeout) => {
+                            // Timeout occurred - check if we need to flush
+                            if !message_buffer.is_empty() {
+                                if let Err(e) = sink.write_batch(&message_buffer) {
+                                    eprintln!("Failed to write batch on timeout: {}", e);
+                                }
+                                message_buffer.clear();
                             }
-                            message_buffer.clear();
+                            continue;
                         }
-                        continue;
-                    }
                         Err(RecvTimeoutError::Disconnected) => {
                             // Sender dropped, flush and exit
                             if !message_buffer.is_empty() {
@@ -215,15 +216,16 @@ impl<S: LogSink> Worker<S> {
 
             // Final flush before exit
             if !message_buffer.is_empty()
-                && let Err(e) = sink.write_batch(&message_buffer) {
-                    eprintln!("Failed to write final batch: {}", e);
-                }
+                && let Err(e) = sink.write_batch(&message_buffer)
+            {
+                eprintln!("Failed to write final batch: {}", e);
+            }
             if let Err(e) = sink.flush() {
                 eprintln!("Failed final flush: {}", e);
             }
         });
 
-        Self { 
+        Self {
             handle,
             _phantom: std::marker::PhantomData,
         }
@@ -437,7 +439,7 @@ mod tests {
         let mut writer = ChannelWriter::new(sink, 5).unwrap();
 
         writer.write_all(b"Before death\n").unwrap();
-        
+
         // Clone the writer to keep one alive after shutdown
         let mut writer2 = writer.clone();
         writer.shutdown();
@@ -446,7 +448,7 @@ mod tests {
         // because they share the same channel
         let result = writer2.write_all(b"After shutdown of clone\n");
         assert!(result.is_ok());
-        
+
         writer2.shutdown();
     }
 
@@ -478,7 +480,10 @@ mod tests {
         // Shutdown triggers at least one flush, but the exact count may vary
         // depending on timing (shutdown flush + disconnect flush)
         let flush_count = sink_clone.get_flush_count();
-        assert!(flush_count >= 1, "Should have at least one flush during shutdown");
+        assert!(
+            flush_count >= 1,
+            "Should have at least one flush during shutdown"
+        );
     }
 
     #[test]
