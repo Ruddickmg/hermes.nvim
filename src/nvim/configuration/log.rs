@@ -62,7 +62,7 @@ impl Default for LogFileConfig {
     fn default() -> Self {
         Self {
             path: "".to_string(),
-            level: LogLevel::Warn,
+            level: LogLevel::Off,
             format: LogFormat::default(),
             max_size: 10_485_760, // 10MB default
             max_files: 5,         // Keep 5 backup files
