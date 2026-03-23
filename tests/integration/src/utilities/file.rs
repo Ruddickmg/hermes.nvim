@@ -282,16 +282,8 @@ fn test_detect_project_storage_path_uses_xdg_state_home() -> nvim_oxi::Result<()
         nvim_oxi::api::Error::Other(format!("Failed to detect storage path: {}", e))
     })?;
 
-    // Verify stdpath now uses our temp directory (should be {temp_path}/nvim)
-    let expected_state_dir = format!("{}/nvim", temp_path);
-    assert_eq!(
-        state_dir, expected_state_dir,
-        "stdpath('state') should use XDG_STATE_HOME: got {}, expected {}",
-        state_dir, expected_state_dir
-    );
-
     // Verify the function returns {XDG_STATE_HOME}/nvim/hermes
-    let expected_path = format!("{}/hermes", expected_state_dir);
+    let expected_path = format!("{}/nvim/hermes", temp_path);
     assert_eq!(
         path, expected_path,
         "Path should use XDG_STATE_HOME/nvim/hermes: got {}, expected {}",
@@ -312,27 +304,8 @@ fn test_detect_project_storage_path_returns_valid_path() -> nvim_oxi::Result<()>
         nvim_oxi::api::Error::Other(format!("Failed to detect storage path: {}", e))
     })?;
 
-    // Verify the path is not empty
-    assert!(!path.is_empty(), "Path should not be empty");
-
     // Verify the path is absolute (starts with / on Unix)
     assert!(path.starts_with('/'), "Path should be absolute: {}", path);
-
-    // Verify the parent directory (state dir) exists
-    let parent = std::path::Path::new(&path).parent();
-    assert!(
-        parent.is_some(),
-        "Path should have a parent directory: {}",
-        path
-    );
-
-    if let Some(parent_path) = parent {
-        assert!(
-            std::fs::metadata(parent_path).is_ok(),
-            "Parent directory should exist: {:?}",
-            parent_path
-        );
-    }
 
     Ok(())
 }

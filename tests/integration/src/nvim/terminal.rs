@@ -347,9 +347,9 @@ fn terminal_info_configure_enabled_false_sets_term_to_false() -> nvim_oxi::Resul
     Ok(())
 }
 
-/// Integration test: Verifies configure() with buffered=true sets stdout/stderr_buffered to true
+/// Integration test: Verifies configure() with buffered=true sets stdout_buffered to true
 #[nvim_oxi::test]
-fn terminal_info_configure_buffered_true_sets_stdout_stderr_buffered() -> nvim_oxi::Result<()> {
+fn terminal_info_configure_buffered_true_sets_stdout_buffered() -> nvim_oxi::Result<()> {
     let config = TerminalConfig {
         enabled: true,
         delete: false,
@@ -365,22 +365,37 @@ fn terminal_info_configure_buffered_true_sets_stdout_stderr_buffered() -> nvim_o
         .expect("stdout_buffered should be set");
     let stdout_val = unsafe { stdout_buffered.as_boolean_unchecked() };
 
+    assert!(stdout_val, "stdout_buffered should be true");
+
+    Ok(())
+}
+
+/// Integration test: Verifies configure() with buffered=true sets stderr_buffered to true
+#[nvim_oxi::test]
+fn terminal_info_configure_buffered_true_sets_stderr_buffered() -> nvim_oxi::Result<()> {
+    let config = TerminalConfig {
+        enabled: true,
+        delete: false,
+        hidden: true,
+        buffered: true,
+    };
+
+    let terminal = TerminalInfo::new(None).configure(config);
+
     let stderr_buffered = terminal
         .configuration
         .get("stderr_buffered")
         .expect("stderr_buffered should be set");
     let stderr_val = unsafe { stderr_buffered.as_boolean_unchecked() };
 
-    assert!(stdout_val, "stdout_buffered should be true");
     assert!(stderr_val, "stderr_buffered should be true");
 
     Ok(())
 }
 
-/// Integration test: Verifies configure() with buffered=false sets stdout/stderr_buffered to false
+/// Integration test: Verifies configure() with buffered=false sets stdout_buffered to false
 #[nvim_oxi::test]
-fn terminal_info_configure_buffered_false_sets_stdout_stderr_buffered_to_false(
-) -> nvim_oxi::Result<()> {
+fn terminal_info_configure_buffered_false_sets_stdout_buffered_to_false() -> nvim_oxi::Result<()> {
     let config = TerminalConfig {
         enabled: true,
         delete: false,
@@ -396,13 +411,29 @@ fn terminal_info_configure_buffered_false_sets_stdout_stderr_buffered_to_false(
         .expect("stdout_buffered should be set");
     let stdout_val = unsafe { stdout_buffered.as_boolean_unchecked() };
 
+    assert!(!stdout_val, "stdout_buffered should be false");
+
+    Ok(())
+}
+
+/// Integration test: Verifies configure() with buffered=false sets stderr_buffered to false
+#[nvim_oxi::test]
+fn terminal_info_configure_buffered_false_sets_stderr_buffered_to_false() -> nvim_oxi::Result<()> {
+    let config = TerminalConfig {
+        enabled: true,
+        delete: false,
+        hidden: true,
+        buffered: false,
+    };
+
+    let terminal = TerminalInfo::new(None).configure(config);
+
     let stderr_buffered = terminal
         .configuration
         .get("stderr_buffered")
         .expect("stderr_buffered should be set");
     let stderr_val = unsafe { stderr_buffered.as_boolean_unchecked() };
 
-    assert!(!stdout_val, "stdout_buffered should be false");
     assert!(!stderr_val, "stderr_buffered should be false");
 
     Ok(())

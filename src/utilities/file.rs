@@ -215,10 +215,7 @@ mod tests {
         let content = read_file_content(&temp_file.path().to_path_buf(), Some(1), Some(4)).unwrap();
 
         let actual_lines: Vec<&str> = content.trim_end().split('\n').collect();
-        assert_eq!(actual_lines.len(), 3); // lines 1, 2, 3
-        assert_eq!(actual_lines[0], "line1");
-        assert_eq!(actual_lines[1], "line2");
-        assert_eq!(actual_lines[2], "line3");
+        assert_eq!(actual_lines, vec!["line1", "line2", "line3"]);
     }
 
     #[test]

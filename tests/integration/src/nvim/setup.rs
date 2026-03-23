@@ -1,10 +1,11 @@
 use hermes::{
-    PluginState,
-    api::{SetupArgs, setup},
+    api::{setup, SetupArgs},
     nvim::configuration::{
         BufferConfigPartial, ClientConfigPartial, LogConfigPartial, LogFileConfigPartial,
         LogTargetConfigPartial,
     },
+    utilities::detect_project_storage_path,
+    PluginState,
 };
 use nvim_oxi;
 use pretty_assertions::assert_eq;
@@ -17,7 +18,7 @@ fn setup_updates_permissions_correctly() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
     let setup_fn = setup(
         plugin_state.clone(),
-        hermes::utilities::logging::Logger::inititalize().unwrap(),
+        hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap(),
     );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
@@ -46,7 +47,7 @@ fn setup_updates_buffer_config_correctly() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
     let setup_fn = setup(
         plugin_state.clone(),
-        hermes::utilities::logging::Logger::inititalize().unwrap(),
+        hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap(),
     );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
@@ -74,7 +75,7 @@ fn setup_updates_stdio_log_level() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
     let setup_fn = setup(
         plugin_state.clone(),
-        hermes::utilities::logging::Logger::inititalize().unwrap(),
+        hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap(),
     );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
@@ -111,7 +112,7 @@ fn setup_updates_notification_log_level() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
     let setup_fn = setup(
         plugin_state.clone(),
-        hermes::utilities::logging::Logger::inititalize().unwrap(),
+        hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap(),
     );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
@@ -148,7 +149,7 @@ fn setup_updates_message_log_level() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
     let setup_fn = setup(
         plugin_state.clone(),
-        hermes::utilities::logging::Logger::inititalize().unwrap(),
+        hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap(),
     );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
@@ -185,7 +186,7 @@ fn setup_preserves_permissions_on_subsequent_calls() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
     let setup_fn = setup(
         plugin_state.clone(),
-        hermes::utilities::logging::Logger::inititalize().unwrap(),
+        hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap(),
     );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
@@ -222,7 +223,7 @@ fn setup_updates_buffer_config_on_subsequent_calls() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
     let setup_fn = setup(
         plugin_state.clone(),
-        hermes::utilities::logging::Logger::inititalize().unwrap(),
+        hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap(),
     );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
@@ -255,14 +256,14 @@ fn setup_updates_buffer_config_on_subsequent_calls() -> nvim_oxi::Result<()> {
 
 /// Test: setup() works with empty config
 #[nvim_oxi::test]
-fn setup_works_with_empty_config() -> nvim_oxi::Result<()> {
+fn setup_with_empty_config_does_not_fail() -> nvim_oxi::Result<()> {
     // Test that setup() works with an empty/default config.
     // The Logger is already initialized by previous tests, so we just verify
-    // that calling setup with an empty config doesn't panic and updates state correctly.
+    // that calling setup with an empty config doesn't panic.
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
     let setup_fn = setup(
         plugin_state.clone(),
-        hermes::utilities::logging::Logger::inititalize().unwrap(),
+        hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap(),
     );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
@@ -275,9 +276,31 @@ fn setup_works_with_empty_config() -> nvim_oxi::Result<()> {
     // Verify no error was returned
     assert!(result.is_ok(), "Setup with empty config should not fail");
 
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn setup_with_empty_config_uses_default_permissions() -> nvim_oxi::Result<()> {
+    // Test that setup() uses default permissions when given empty config.
+    let plugin_state = Arc::new(Mutex::new(PluginState::new()));
+    let setup_fn = setup(
+        plugin_state.clone(),
+        hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap(),
+    );
+
+    let func: nvim_oxi::Function<SetupArgs, ()> =
+        nvim_oxi::conversion::FromObject::from_object(setup_fn)
+            .expect("Failed to convert setup function");
+
+    // Empty config - should not panic
+    func.call(SetupArgs(None)).expect("Setup should not fail");
+
     // Verify state uses defaults
     let state = plugin_state.blocking_lock();
-    assert!(state.config.permissions.fs_read_access); // Default true
+    assert!(
+        state.config.permissions.fs_read_access,
+        "Default fs_read_access should be true"
+    );
     Ok(())
 }
 
@@ -287,7 +310,7 @@ fn setup_works_with_none() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
     let setup_fn = setup(
         plugin_state.clone(),
-        hermes::utilities::logging::Logger::inititalize().unwrap(),
+        hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap(),
     );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
@@ -309,7 +332,7 @@ fn setup_enables_log_file_config() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
     let setup_fn = setup(
         plugin_state.clone(),
-        hermes::utilities::logging::Logger::inititalize().unwrap(),
+        hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap(),
     );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
@@ -348,7 +371,7 @@ fn setup_sets_log_file_path() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
     let setup_fn = setup(
         plugin_state.clone(),
-        hermes::utilities::logging::Logger::inititalize().unwrap(),
+        hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap(),
     );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
@@ -384,7 +407,7 @@ fn setup_sets_log_file_level() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
     let setup_fn = setup(
         plugin_state.clone(),
-        hermes::utilities::logging::Logger::inititalize().unwrap(),
+        hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap(),
     );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
@@ -420,7 +443,7 @@ fn setup_updates_stdio_log_format() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
     let setup_fn = setup(
         plugin_state.clone(),
-        hermes::utilities::logging::Logger::inititalize().unwrap(),
+        hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap(),
     );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =
@@ -457,7 +480,7 @@ fn setup_updates_notification_log_format() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
     let setup_fn = setup(
         plugin_state.clone(),
-        hermes::utilities::logging::Logger::inititalize().unwrap(),
+        hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap(),
     );
 
     let func: nvim_oxi::Function<SetupArgs, ()> =

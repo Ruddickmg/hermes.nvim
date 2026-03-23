@@ -5,7 +5,7 @@
 
 use hermes::nvim::configuration::{LogConfig, LogFileConfig, LogTargetConfig};
 use hermes::utilities::logging::{LogLevel, Logger};
-use hermes::utilities::LogFormat;
+use hermes::utilities::{detect_project_storage_path, LogFormat};
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 use tracing::warn;
@@ -30,7 +30,7 @@ fn test_file_logging_can_be_enabled() -> nvim_oxi::Result<()> {
     let log_path = temp_dir.path().join("test.log");
 
     // Initialize logger (file logging is OFF by default)
-    let logger = Logger::inititalize().unwrap();
+    let logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
 
     // Configure file logging
     let file_config = LogFileConfig {
@@ -69,7 +69,7 @@ fn test_file_logging_first_message_written() -> nvim_oxi::Result<()> {
     let temp_dir = TempDir::new().unwrap();
     let log_path = temp_dir.path().join("test.log");
 
-    let logger = Logger::inititalize().unwrap();
+    let logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
 
     // Enable file logging
     let file_config = LogFileConfig {
@@ -112,7 +112,7 @@ fn test_file_logging_disabled_stops_writing() -> nvim_oxi::Result<()> {
     let temp_dir = TempDir::new().unwrap();
     let log_path = temp_dir.path().join("test.log");
 
-    let logger = Logger::inititalize().unwrap();
+    let logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
 
     // Enable file logging and write a message
     let enable_config = create_log_config_with_file(
@@ -163,7 +163,7 @@ fn test_debug_filtered_at_warn_level_debug() -> nvim_oxi::Result<()> {
     let temp_dir = TempDir::new().unwrap();
     let log_path = temp_dir.path().join("test.log");
 
-    let logger = Logger::inititalize().unwrap();
+    let logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
 
     // Configure with WARN level
     let file_config = LogFileConfig {
@@ -196,7 +196,7 @@ fn test_debug_filtered_at_warn_level_info() -> nvim_oxi::Result<()> {
     let temp_dir = TempDir::new().unwrap();
     let log_path = temp_dir.path().join("test.log");
 
-    let logger = Logger::inititalize().unwrap();
+    let logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
 
     // Configure with WARN level
     let file_config = LogFileConfig {
@@ -229,7 +229,7 @@ fn test_debug_filtered_at_warn_level_warn() -> nvim_oxi::Result<()> {
     let temp_dir = TempDir::new().unwrap();
     let log_path = temp_dir.path().join("test.log");
 
-    let logger = Logger::inititalize().unwrap();
+    let logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
 
     // Configure with WARN level
     let file_config = LogFileConfig {
@@ -262,7 +262,7 @@ fn test_log_level_reconfiguration_filtered_before() -> nvim_oxi::Result<()> {
     let temp_dir = TempDir::new().unwrap();
     let log_path = temp_dir.path().join("test.log");
 
-    let logger = Logger::inititalize().unwrap();
+    let logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
 
     // Start with WARN level
     let warn_config = create_log_config_with_file(
@@ -298,7 +298,7 @@ fn test_log_level_reconfiguration_written_after() -> nvim_oxi::Result<()> {
     let temp_dir = TempDir::new().unwrap();
     let log_path = temp_dir.path().join("test.log");
 
-    let logger = Logger::inititalize().unwrap();
+    let logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
 
     // Start with WARN level
     let warn_config = create_log_config_with_file(
@@ -346,7 +346,7 @@ fn test_log_rotation() -> nvim_oxi::Result<()> {
     let temp_dir = TempDir::new().unwrap();
     let log_path = temp_dir.path().join("test.log");
 
-    let logger = Logger::inititalize().unwrap();
+    let logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
 
     // Configure with small max_size
     let file_config = LogFileConfig {
@@ -413,7 +413,7 @@ fn test_reconfigure_to_second_path() -> nvim_oxi::Result<()> {
     let first_path = temp_dir.path().join("first.log");
     let second_path = temp_dir.path().join("second.log");
 
-    let logger = Logger::inititalize().unwrap();
+    let logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
 
     // Configure first path
     let first_config = create_log_config_with_file(
@@ -515,7 +515,7 @@ fn test_log_format_can_be_changed_via_configure() -> nvim_oxi::Result<()> {
     let temp_dir = TempDir::new().unwrap();
     let log_path = temp_dir.path().join("test.log");
 
-    let logger = Logger::inititalize().unwrap();
+    let logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
 
     // First, configure with Compact format
     let compact_config = LogConfig {

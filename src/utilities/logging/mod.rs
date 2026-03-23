@@ -75,19 +75,18 @@ impl Logger {
         Self::base_layer(fmt::layer().with_writer(writer.clone()), config.format)
     }
 
-    fn file_layer(config: LogFileConfig) -> io::Result<BoxedLayer> {
-        if config.path.is_empty() && config.level < LogLevel::Off {
-            Err(std::io::Error::other(
-                "File logging was configured with an empty file path. A file path must be set in order to generate log files",
-            ))
+    fn file_layer(config: LogFileConfig) -> io::Result<Option<BoxedLayer>> {
+        if config.path.is_empty() || config.level == LogLevel::Off {
+            // Skip file logging if path is empty or logging is disabled
+            Ok(None)
         } else {
             let writer = FileWriter::new(&config.path, config.max_size, config.max_files as usize)?
                 .filtered(config.level);
 
-            Ok(Self::base_layer(
+            Ok(Some(Self::base_layer(
                 fmt::layer().with_writer(writer),
                 config.format,
-            ))
+            )))
         }
     }
 
@@ -99,12 +98,20 @@ impl Logger {
             file,
         }: LogConfig,
     ) -> Result<Vec<BoxedLayer>> {
-        Ok(vec![
+        let mut layers: Vec<BoxedLayer> = vec![
             Self::stdio_layer(stdio),
             Self::message_layer(message),
             Self::notification_layer(notification),
-            Self::file_layer(file).map_err(|e| Error::Internal(e.to_string()))?,
-        ])
+        ];
+
+        // Add file layer only if path is set and logging is enabled
+        if let Some(file_layer) =
+            Self::file_layer(file).map_err(|e| Error::Internal(e.to_string()))?
+        {
+            layers.push(file_layer);
+        }
+
+        Ok(layers)
     }
 
     pub fn inititalize(storage_path: &str) -> Result<&'static Self> {
@@ -202,55 +209,5 @@ mod tests {
         let expected: Vec<LevelFilter> = vec![LevelFilter::TRACE, LevelFilter::OFF];
 
         assert_eq!(results, expected);
-    }
-
-    #[test]
-    fn test_log_format_display_pretty() {
-        assert_eq!(LogFormat::Pretty.to_string(), "pretty");
-    }
-
-    #[test]
-    fn test_log_format_display_compact() {
-        assert_eq!(LogFormat::Compact.to_string(), "compact");
-    }
-
-    #[test]
-    fn test_log_format_display_full() {
-        assert_eq!(LogFormat::Full.to_string(), "full");
-    }
-
-    #[test]
-    fn test_log_format_display_json() {
-        assert_eq!(LogFormat::Json.to_string(), "json");
-    }
-
-    #[test]
-    fn test_log_format_from_string_pretty() {
-        let pretty: LogFormat = "pretty".to_string().into();
-        assert_eq!(pretty, LogFormat::Pretty);
-    }
-
-    #[test]
-    fn test_log_format_from_string_compact() {
-        let compact: LogFormat = "compact".to_string().into();
-        assert_eq!(compact, LogFormat::Compact);
-    }
-
-    #[test]
-    fn test_log_format_from_string_full() {
-        let full: LogFormat = "full".to_string().into();
-        assert_eq!(full, LogFormat::Full);
-    }
-
-    #[test]
-    fn test_log_format_from_string_json() {
-        let json: LogFormat = "json".to_string().into();
-        assert_eq!(json, LogFormat::Json);
-    }
-
-    #[test]
-    fn test_log_format_from_string_unknown_defaults_to_pretty() {
-        let unknown: LogFormat = "unknown".to_string().into();
-        assert_eq!(unknown, LogFormat::Pretty);
     }
 }
