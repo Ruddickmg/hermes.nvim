@@ -208,20 +208,21 @@ jobs:
       - checkout
       - rust/install
       - run:
-          name: Install Neovim
+          name: Install Neovim from tarball
           command: |
-            curl -LO https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux-x86_64.appimage
-            chmod u+x nvim-linux-x86_64.appimage
-            sudo mv nvim-linux-x86_64.appimage /usr/local/bin/nvim
+            curl -LO https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux64.tar.gz
+            tar xzf nvim-linux64.tar.gz
+            sudo mv nvim-linux64 /opt/nvim
+            sudo ln -sf /opt/nvim/bin/nvim /usr/local/bin/nvim
+            nvim --version
       - run:
           name: Install coverage tools
           command: |
             cargo install cargo-llvm-cov@0.6.13
             cargo install cargo-nextest --locked
-            cargo install faketty
       - run:
-          name: Run integration tests with PTY
-          command: faketty cargo llvm-cov nextest --manifest-path tests/integration/Cargo.toml --all-features --workspace --lcov --output-path integration.coverage.info --ignore-filename-regex 'tests/.*'
+          name: Run integration tests
+          command: cargo llvm-cov nextest --manifest-path tests/integration/Cargo.toml --all-features --workspace --lcov --output-path integration.coverage.info --ignore-filename-regex 'tests/.*'
       - codecov/upload:
           fail_on_error: true
           files: integration.coverage.info
@@ -239,16 +240,17 @@ jobs:
       - checkout
       - rust/install
       - run:
-          name: Install Neovim
+          name: Install Neovim from tarball
           command: |
-            curl -LO https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux-x86_64.appimage
-            chmod u+x nvim-linux-x86_64.appimage
-            sudo mv nvim-linux-x86_64.appimage /usr/local/bin/nvim
+            curl -LO https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux64.tar.gz
+            tar xzf nvim-linux64.tar.gz
+            sudo mv nvim-linux64 /opt/nvim
+            sudo ln -sf /opt/nvim/bin/nvim /usr/local/bin/nvim
+            nvim --version
       - run:
           name: Install coverage tools
           command: |
             cargo install cargo-llvm-cov@0.6.13
-            cargo install faketty
       - run:
           name: Install Opencode
           command: curl -fsSL https://opencode.ai/install | bash
@@ -256,10 +258,10 @@ jobs:
           name: Install GitHub Copilot
           command: curl -fsSL https://gh.io/copilot-install | bash
       - run:
-          name: Run e2e tests with PTY
+          name: Run e2e tests
           command: |
             export PATH="/home/circleci/.local/bin:$PATH"
-            faketty cargo llvm-cov --manifest-path tests/e2e/Cargo.toml --all-features --workspace --lcov --output-path e2e.coverage.info --ignore-filename-regex 'tests/.*'
+            cargo llvm-cov --manifest-path tests/e2e/Cargo.toml --all-features --workspace --lcov --output-path e2e.coverage.info --ignore-filename-regex 'tests/.*'
       - codecov/upload:
           fail_on_error: true
           files: e2e.coverage.info
