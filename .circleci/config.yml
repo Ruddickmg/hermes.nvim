@@ -210,9 +210,9 @@ jobs:
       - run:
           name: Install Neovim from tarball
           command: |
-            curl -LO https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux64.tar.gz
-            tar xzf nvim-linux64.tar.gz
-            sudo mv nvim-linux64 /opt/nvim
+            curl -LO https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux-x86_64.tar.gz
+            tar xzf nvim-linux-x86_64.tar.gz
+            sudo mv nvim-linux-x86_64 /opt/nvim
             sudo ln -sf /opt/nvim/bin/nvim /usr/local/bin/nvim
             nvim --version
       - run:
@@ -242,9 +242,9 @@ jobs:
       - run:
           name: Install Neovim from tarball
           command: |
-            curl -LO https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux64.tar.gz
-            tar xzf nvim-linux64.tar.gz
-            sudo mv nvim-linux64 /opt/nvim
+            curl -LO https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux-x86_64.tar.gz
+            tar xzf nvim-linux-x86_64.tar.gz
+            sudo mv nvim-linux-x86_64 /opt/nvim
             sudo ln -sf /opt/nvim/bin/nvim /usr/local/bin/nvim
             nvim --version
       - run:
