@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **BREAKING**: Removed `HERMES_LOG_FORMAT` global variable - logging format now configured via `setup()`
+- **BREAKING**: Unified log target configuration - each target (notification, message, quickfix, local_list) now uses `{ level, format }` structure
+- Removed dependency on global Neovim log level - Hermes now uses defaults until configured
+
+### Added
+- Per-target format configuration (each target has its own format, defaults to "compact")
+- `LogTargetConfig` and `LogTargetConfigPartial` structs for unified target configuration
+- Each log target can have its own format (no global format, each target is independent)
+
+### Migration Guide
+Before:
+```lua
+vim.g.HERMES_LOG_FORMAT = "json"
+require("hermes").setup({
+    log = {
+        level = vim.log.levels.INFO,
+        notification = vim.log.levels.ERROR,
+        message = vim.log.levels.DEBUG,
+    }
+})
+```
+
+After:
+```lua
+require("hermes").setup({
+    log = {
+        level = vim.log.levels.INFO,
+        notification = { 
+            level = vim.log.levels.ERROR,
+            format = "json"  -- Each target has its own format
+        },
+        message = { 
+            level = vim.log.levels.DEBUG,
+            format = "pretty"  -- Different format for messages
+        },
+    }
+})
+```
+
 ## [0.1.0] - 2026-02-17
 
 ### Added

@@ -99,44 +99,43 @@ mod tests {
 
     #[test]
     fn map_codes_handles_all_standard_signals() {
-        // Test all standard Unix signals 1-31
-        let expected = vec![
-            (1, "SIGHUP"),
-            (2, "SIGINT"),
-            (3, "SIGQUIT"),
-            (4, "SIGILL"),
-            (5, "SIGTRAP"),
-            (6, "SIGABRT"),
-            (7, "SIGBUS"),
-            (8, "SIGFPE"),
-            (9, "SIGKILL"),
-            (10, "SIGUSR1"),
-            (11, "SIGSEGV"),
-            (12, "SIGUSR2"),
-            (13, "SIGPIPE"),
-            (14, "SIGALRM"),
-            (15, "SIGTERM"),
-            (16, "SIGSTKFLT"),
-            (17, "SIGCHLD"),
-            (18, "SIGCONT"),
-            (19, "SIGSTOP"),
-            (20, "SIGTSTP"),
-            (21, "SIGTTIN"),
-            (22, "SIGTTOU"),
-            (23, "SIGURG"),
-            (24, "SIGXCPU"),
-            (25, "SIGXFSZ"),
-            (26, "SIGVTALRM"),
-            (27, "SIGPROF"),
-            (28, "SIGWINCH"),
-            (29, "SIGIO"),
-            (30, "SIGPWR"),
-            (31, "SIGSYS"),
+        // Test all standard Unix signals 1-31 using slice comparison
+        let expected: Vec<Option<String>> = vec![
+            Some("SIGHUP".to_string()),
+            Some("SIGINT".to_string()),
+            Some("SIGQUIT".to_string()),
+            Some("SIGILL".to_string()),
+            Some("SIGTRAP".to_string()),
+            Some("SIGABRT".to_string()),
+            Some("SIGBUS".to_string()),
+            Some("SIGFPE".to_string()),
+            Some("SIGKILL".to_string()),
+            Some("SIGUSR1".to_string()),
+            Some("SIGSEGV".to_string()),
+            Some("SIGUSR2".to_string()),
+            Some("SIGPIPE".to_string()),
+            Some("SIGALRM".to_string()),
+            Some("SIGTERM".to_string()),
+            Some("SIGSTKFLT".to_string()),
+            Some("SIGCHLD".to_string()),
+            Some("SIGCONT".to_string()),
+            Some("SIGSTOP".to_string()),
+            Some("SIGTSTP".to_string()),
+            Some("SIGTTIN".to_string()),
+            Some("SIGTTOU".to_string()),
+            Some("SIGURG".to_string()),
+            Some("SIGXCPU".to_string()),
+            Some("SIGXFSZ".to_string()),
+            Some("SIGVTALRM".to_string()),
+            Some("SIGPROF".to_string()),
+            Some("SIGWINCH".to_string()),
+            Some("SIGIO".to_string()),
+            Some("SIGPWR".to_string()),
+            Some("SIGSYS".to_string()),
         ];
 
-        for (code, name) in expected {
-            assert_eq!(map_codes(code), Some(name.to_string()));
-        }
+        let actual: Vec<Option<String>> = (1..=31).map(|code| map_codes(code)).collect();
+        assert_eq!(actual, expected);
     }
 
     // Tests for parse_exit_code function

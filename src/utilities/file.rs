@@ -4,15 +4,17 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use nvim_oxi::api;
+
 use crate::acp::{Result, error::Error};
 
-// TODO: move these helper functions into a "utilities" directory
+pub fn detect_project_storage_path() -> Result<String> {
+    let state_dir = api::call_function::<(String,), String>("stdpath", ("state".to_string(),))
+        .map_err(|e| Error::Internal(format!("Error intiializing plugin state: {:?}", e)))?;
+    let path = format!("{}/hermes", state_dir);
+    Ok(path)
+}
 
-/// Escape a filename so it is safe to use as an argument in an Ex command.
-///
-/// This function backslash-escapes characters that are significant to Ex
-/// command parsing (such as spaces and `|`) so that they are treated as
-/// literal filename characters.
 fn escape_for_ex(filename: &str) -> String {
     let mut escaped = String::with_capacity(filename.len());
     for ch in filename.chars() {
@@ -213,10 +215,7 @@ mod tests {
         let content = read_file_content(&temp_file.path().to_path_buf(), Some(1), Some(4)).unwrap();
 
         let actual_lines: Vec<&str> = content.trim_end().split('\n').collect();
-        assert_eq!(actual_lines.len(), 3); // lines 1, 2, 3
-        assert_eq!(actual_lines[0], "line1");
-        assert_eq!(actual_lines[1], "line2");
-        assert_eq!(actual_lines[2], "line3");
+        assert_eq!(actual_lines, vec!["line1", "line2", "line3"]);
     }
 
     #[test]

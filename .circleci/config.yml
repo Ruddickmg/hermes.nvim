@@ -185,10 +185,12 @@ jobs:
       - rust/install
       - run:
           name: Install coverage tool
-          command: cargo install cargo-llvm-cov@0.6.13
+          command: |
+            cargo install cargo-llvm-cov@0.6.13
+            cargo install cargo-nextest --locked
       - run:
           name: Run unit tests
-          command: cargo llvm-cov --bins --lib --all-features --workspace --lcov --output-path unit.coverage.info --ignore-filename-regex 'tests/.*'
+          command: cargo llvm-cov nextest --bins --lib --all-features --workspace --lcov --output-path unit.coverage.info --ignore-filename-regex 'tests/.*'
       - codecov/upload:
           fail_on_error: true
           files: unit.coverage.info
@@ -199,22 +201,28 @@ jobs:
     environment:
       CARGO_TARGET_DIR: target
       NEOVIM_VERSION: 0.11.6
+      TERM: xterm-256color
+      LANG: en_US.UTF-8
     executor: ubuntu
     steps:
       - checkout
       - rust/install
       - run:
-          name: Install Neovim
+          name: Install Neovim from tarball
           command: |
-            curl -LO https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux-x86_64.appimage
-            chmod u+x nvim-linux-x86_64.appimage
-            sudo mv nvim-linux-x86_64.appimage /usr/local/bin/nvim
+            curl -LO https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux-x86_64.tar.gz
+            tar xzf nvim-linux-x86_64.tar.gz
+            sudo mv nvim-linux-x86_64 /opt/nvim
+            sudo ln -sf /opt/nvim/bin/nvim /usr/local/bin/nvim
+            nvim --version
       - run:
-          name: Install coverage tool
-          command: cargo install cargo-llvm-cov@0.6.13
+          name: Install coverage tools
+          command: |
+            cargo install cargo-llvm-cov@0.6.13
+            cargo install cargo-nextest --locked
       - run:
           name: Run integration tests
-          command: cargo llvm-cov --manifest-path tests/integration/Cargo.toml --all-features --workspace --lcov --output-path integration.coverage.info --ignore-filename-regex 'tests/.*'
+          command: cargo llvm-cov nextest --manifest-path tests/integration/Cargo.toml --all-features --workspace --lcov --output-path integration.coverage.info --ignore-filename-regex 'tests/.*'
       - codecov/upload:
           fail_on_error: true
           files: integration.coverage.info
@@ -225,19 +233,24 @@ jobs:
     environment:
       CARGO_TARGET_DIR: target
       NEOVIM_VERSION: 0.11.6
+      TERM: xterm-256color
+      LANG: en_US.UTF-8
     executor: ubuntu
     steps:
       - checkout
       - rust/install
       - run:
-          name: Install Neovim
+          name: Install Neovim from tarball
           command: |
-            curl -LO https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux-x86_64.appimage
-            chmod u+x nvim-linux-x86_64.appimage
-            sudo mv nvim-linux-x86_64.appimage /usr/local/bin/nvim
+            curl -LO https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux-x86_64.tar.gz
+            tar xzf nvim-linux-x86_64.tar.gz
+            sudo mv nvim-linux-x86_64 /opt/nvim
+            sudo ln -sf /opt/nvim/bin/nvim /usr/local/bin/nvim
+            nvim --version
       - run:
-          name: Install coverage tool
-          command: cargo install cargo-llvm-cov@0.6.13
+          name: Install coverage tools
+          command: |
+            cargo install cargo-llvm-cov@0.6.13
       - run:
           name: Install Opencode
           command: curl -fsSL https://opencode.ai/install | bash

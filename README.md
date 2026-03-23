@@ -1,6 +1,6 @@
 # Hermes
 
-An ACP (Agent Client Protocol) Client implementation designed for integration with Neovim
+An [ACP (Agent Client Protocol)](https://agentclientprotocol.com) client designed for integration with Neovim. 
 
 ## Overview
 
@@ -11,9 +11,12 @@ Hermes focuses on:
 - Hooks into requests from AI assistants that require responses (permission requests, access requests, etc)
 - Autocommands for updates on communication between the user (client) and assistant (agent) 
 
+> [!CAUTION]
+> While Hermes is a complete ACP client, most agents available today don't fully utilize the protocol. Key [optional features](https://agentclientprotocol.com/protocol/overview#optional-methods-2) (file operations, terminal commands, etc) are often handled through agent-specific tools rather than ACP methods. This means some Hermes capabilities may not be exercised depending on which agent you use.
+
 ## Features
 
-- [x] Full implementation of ACP Client
+- [x] Full implementation of ACP Client (Built on the official [Rust ACP Sdk](https://github.com/agentclientprotocol/rust-sdk))
 - [x] Configurable capabilities (filesystem, terminal, etc)
 - [x] Trigger Autocommands for messages/notifications
 - [ ] Lsp integration
@@ -22,9 +25,86 @@ Hermes focuses on:
 
 ## API
 
-Hermes exposes the following functions for sending requests to AI assistants. However, not all assistants support every method, and the level of support may vary by agent.
+Hermes exposes the following functions for sending requests to AI assistants.
 
 Methods marked “Optional” are implemented by Hermes but are not mandatory for agent implementations.
+
+### Setup
+
+Configure Hermes plugin settings.
+
+```lua
+local hermes = require("hermes")
+
+-- Basic usage with no arguments (uses all defaults)
+hermes.setup()
+
+-- Configure specific permissions
+hermes.setup({
+    permissions = {
+        fs_write_access = true,
+        terminal_access = true,
+    }
+})
+
+-- Full configuration defaults
+hermes.setup({
+    root_markers = { ".git" }, -- used to detect the project root by matching file names in the root directory
+    permissions = {
+        fs_write_access = true,      -- Allow file writes to the agent 
+        fs_read_access = true,       -- Allow file reads to the agent 
+        terminal_access = true,      -- Allow terminal access to the agent 
+        request_permissions = true,  -- Allow agent to send permission requests 
+        send_notifications = true,  -- Allow the agent to send notifications 
+    },
+    terminal = {
+        delete = true,    -- Auto-delete terminals on exit
+        enabled = true,    -- Enable terminal functionality
+        buffered = true,   -- Buffer terminal output 
+    },
+    buffer = {
+        auto_save = false,  -- Auto-save modified files after writing to them 
+    },
+    log = {
+        -- send logs to stdio, You likely don't want this, used for development
+        stdio = {
+            -- only logs of the set value and above will be sent
+            level = vim.log.levels.OFF or "off",
+            -- logs  stdio logs will be formatted with the selected format 
+            format = "compact",
+        },
+        -- send logs to Neovim "notify"
+        notification = {
+            level = vim.log.levels.ERROR or "error",
+            format = "compact",
+        },
+        -- send logs to Neovim ":messages"
+        message = {
+            level = vim.log.levels.OFF or "off",
+            format = "compact",
+        },
+        -- send logs to Neovim "quickfix" list
+        quickfix = {
+            level = vim.log.levels.OFF or "off",
+            format = "compact",
+        },
+        -- send logs to log files
+        file = {
+            level = vim.log.levels.OFF or "off",
+            format = "json",
+            path = vim.fn.stdpath('state') .. "/nvim/hermes.log", -- path to log file(s)
+            max_size = 10485760, -- 10mb in bytes
+            max_files = 5, -- Max log files to generate
+        },
+    },
+})
+```
+
+> [!NOTE]
+> - `setup()` does not have to be called, hermes will operate off of defaults without it
+> - Configuration changes are applied immediately
+> - Multiple `setup()` calls merge configurations - only specified fields are updated
+> - All unspecified fields preserve their existing values
 
 ### Connect
 
@@ -585,7 +665,6 @@ vim.api.nvim_create_autocmd("User", {
 > - Stop any process running in the terminal
 > - Remove the terminal
 > - Delete the attached buffer (can be configured to omit this step)
-
 
 ## Autocommands
 
@@ -1244,6 +1323,20 @@ Below is a list of all autocommands and their associated data (passed to the cal
 }</code></pre></td>
     </tr>
     <tr>
+      <td><code>UsageUpdate</code></td>
+      <td>Session usage metrics update (tokens, cost)</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "used": "number (tokens used)",
+  "size": "number (max context size)",
+  "cost": {
+    "amount": "number",
+    "currency": "string (e.g., 'USD')"
+  }
+}</code></pre></td>
+    </tr>
+    <tr>
       <td><code>UserImageMessage</code></td>
       <td>An image sent from the client</td>
       <td>🤖 Agent</td>
@@ -1317,40 +1410,47 @@ Below is a list of all autocommands and their associated data (passed to the cal
 ## Logging
 
 ### Level
-Hermes defaults to the global neovim log level, or to `INFO` if there is no global log level set.
+Hermes defaults to `INFO` log level until configured via `setup()`.
 
-Global log level example:
-```lua
-vim.opt.verbose = vim.log.levels.DEBUG;
-```
-
- You can also use the neovim log levels to configure Hermes logging which will override the default behavior.
-
-Example: 
+Configure log levels and formats via the `setup()` function:
 ```lua
 require("hermes").setup({
-    logLevel: vim.log.levels.DEBUG,
+    log = {
+        level = vim.log.levels.DEBUG,                    -- Global log level
+        notification = { level = vim.log.levels.ERROR }, -- Per-target config
+        message = { 
+            level = vim.log.levels.INFO,
+            format = "pretty"  -- Each target has its own format
+        },
+    }
 })
 ```
 
 ### Format
 
-Logging defaults to pretty formatting, but you can change that format by setting a global variable in vim
+Log formats can be configured per-target via `setup()`. Each target has its own format setting that defaults to "compact" if not specified:
 
 ```lua
-vim.g.HERMES_LOG_FORMAT = "json"
+require("hermes").setup({
+    log = {
+        -- Each target has its own format (defaults to "compact" if not set):
+        notification = { format = "pretty" },
+        message = { format = "json" },
+        quickfix = { format = nil },  -- nil = use default ("compact")
+    }
+})
 ```
 
-Your options for log formats are:
-- json
-- pretty
-- compact
-- full
+Available formats:
+- **pretty** - Human-readable with colors and formatting
+- **compact** - Condensed single-line format (default)
+- **full** - Complete information including timestamps and metadata
+- **json** - Machine-readable JSON format
 
 ## TODO:
 
 -- before v1
-- [ ] Add setup function for user configuration
+- [x] Add setup function for user configuration
 - [ ] Add logic for loading plugin into neovim
   - [ ] Figure out how to use pre-built binaries
   - [ ] Enable local build if pre-built binary doesn't exist for system
@@ -1361,6 +1461,7 @@ Your options for log formats are:
   - [x] Via stdio
   - [ ] Via http
   - [ ] Via linux socket
+- [ ] Add autocommand that triggers on all events
 - [ ] Support "unstable" ACP methods
   - [ ] session methods
     - [ ] List sessions
@@ -1378,6 +1479,22 @@ Your options for log formats are:
 - [ ] use async for all the things
 
 -- nice to haves
+- [ ] Status bar integration
+  - [ ] Configurable
+  - [ ] Report mode
+  - [ ] Report model
+  - [ ] Report status
+    - [ ] waiting on user response
+    - [ ] thinking
+    - [ ] Finished/Responded
+    - [ ] etc?
+  - [ ] Update on events (no polling required)
+- [ ] quickfix list integration
+  - [ ] add files updated by agent to quickfix list 
+  - [ ] add references made by agent to quickfix list
+- [ ] Integrate with signs
+  - [ ] Configurable
+  - [ ] Show lines edited by agent
 - [ ] look into ways of improving ai integration
   - [ ] research RLM ([example](https://github.com/JaredStewart/coderlm))
   - [ ] connect agent to lsp (try to set it up as a tool call/connect to neovim lsp)

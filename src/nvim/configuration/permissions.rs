@@ -4,13 +4,13 @@ use nvim_oxi::{
     lua::{self, Poppable, Pushable},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Permissions {
     pub fs_write_access: bool,
     pub fs_read_access: bool,
     pub terminal_access: bool,
-    pub can_request_permissions: bool,
-    pub allow_notifications: bool,
+    pub request_permissions: bool,
+    pub send_notifications: bool,
 }
 
 impl Default for Permissions {
@@ -19,8 +19,8 @@ impl Default for Permissions {
             fs_write_access: true,
             fs_read_access: true,
             terminal_access: true,
-            can_request_permissions: true,
-            allow_notifications: true,
+            request_permissions: true,
+            send_notifications: true,
         }
     }
 }
@@ -33,8 +33,8 @@ impl Pushable for Permissions {
             table.insert("fs_write_access", self.fs_write_access);
             table.insert("fs_read_access", self.fs_read_access);
             table.insert("terminal_access", self.terminal_access);
-            table.insert("can_request_permissions", self.can_request_permissions);
-            table.insert("allow_notifications", self.allow_notifications);
+            table.insert("request_permissions", self.request_permissions);
+            table.insert("send_notifications", self.send_notifications);
 
             table.push(state)
         }
@@ -74,14 +74,14 @@ impl FromObject for Permissions {
             .transpose()?
             .unwrap_or(true);
 
-        let can_request_permissions = dict
-            .get("can_request_permissions")
+        let request_permissions = dict
+            .get("request_permissions")
             .map(|o| bool::from_object(o.clone()))
             .transpose()?
             .unwrap_or(true);
 
-        let allow_notifications = dict
-            .get("allow_notifications")
+        let send_notifications = dict
+            .get("send_notifications")
             .map(|o| bool::from_object(o.clone()))
             .transpose()?
             .unwrap_or(true);
@@ -90,8 +90,8 @@ impl FromObject for Permissions {
             fs_write_access,
             fs_read_access,
             terminal_access,
-            can_request_permissions,
-            allow_notifications,
+            request_permissions,
+            send_notifications,
         })
     }
 }
@@ -115,8 +115,8 @@ mod tests {
                     fs_write_access: fs_write,
                     fs_read_access: fs_read,
                     terminal_access: terminal,
-                    can_request_permissions: can_request,
-                    allow_notifications: allow_notif,
+                    request_permissions: can_request,
+                    send_notifications: allow_notif,
                 }
             })
     }
@@ -130,8 +130,8 @@ mod tests {
             dict.insert("fs_write_access", permissions.fs_write_access);
             dict.insert("fs_read_access", permissions.fs_read_access);
             dict.insert("terminal_access", permissions.terminal_access);
-            dict.insert("can_request_permissions", permissions.can_request_permissions);
-            dict.insert("allow_notifications", permissions.allow_notifications);
+            dict.insert("request_permissions", permissions.request_permissions);
+            dict.insert("send_notifications", permissions.send_notifications);
 
             let obj = Object::from(dict);
             let parsed = Permissions::from_object(obj).expect("Permissions::from_object failed");
@@ -139,8 +139,8 @@ mod tests {
             prop_assert_eq!(parsed.fs_write_access, permissions.fs_write_access);
             prop_assert_eq!(parsed.fs_read_access, permissions.fs_read_access);
             prop_assert_eq!(parsed.terminal_access, permissions.terminal_access);
-            prop_assert_eq!(parsed.can_request_permissions, permissions.can_request_permissions);
-            prop_assert_eq!(parsed.allow_notifications, permissions.allow_notifications);
+            prop_assert_eq!(parsed.request_permissions, permissions.request_permissions);
+            prop_assert_eq!(parsed.send_notifications, permissions.send_notifications);
         }
     }
 
@@ -150,8 +150,8 @@ mod tests {
         assert!(perms.fs_write_access);
         assert!(perms.fs_read_access);
         assert!(perms.terminal_access);
-        assert!(perms.can_request_permissions);
-        assert!(perms.allow_notifications);
+        assert!(perms.request_permissions);
+        assert!(perms.send_notifications);
     }
 
     #[test]
@@ -160,13 +160,79 @@ mod tests {
             fs_write_access: false,
             fs_read_access: true,
             terminal_access: false,
-            can_request_permissions: true,
-            allow_notifications: false,
+            request_permissions: true,
+            send_notifications: false,
         };
         assert!(!perms.fs_write_access);
         assert!(perms.fs_read_access);
         assert!(!perms.terminal_access);
-        assert!(perms.can_request_permissions);
-        assert!(!perms.allow_notifications);
+        assert!(perms.request_permissions);
+        assert!(!perms.send_notifications);
+    }
+}
+
+/// Partial permissions configuration where each field is optional
+#[derive(Clone, Debug, Default)]
+pub struct PermissionsPartial {
+    pub fs_write_access: Option<bool>,
+    pub fs_read_access: Option<bool>,
+    pub terminal_access: Option<bool>,
+    pub request_permissions: Option<bool>,
+    pub send_notifications: Option<bool>,
+}
+
+impl PermissionsPartial {
+    /// Apply only Some() values to existing permissions
+    pub fn apply_to(self, permissions: &mut Permissions) {
+        if let Some(val) = self.fs_write_access {
+            permissions.fs_write_access = val;
+        }
+        if let Some(val) = self.fs_read_access {
+            permissions.fs_read_access = val;
+        }
+        if let Some(val) = self.terminal_access {
+            permissions.terminal_access = val;
+        }
+        if let Some(val) = self.request_permissions {
+            permissions.request_permissions = val;
+        }
+        if let Some(val) = self.send_notifications {
+            permissions.send_notifications = val;
+        }
+    }
+}
+
+impl FromObject for PermissionsPartial {
+    fn from_object(obj: Object) -> Result<Self, Error> {
+        let dict = Dictionary::from_object(obj)?;
+
+        let fs_write_access = dict
+            .get("fs_write_access")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?;
+        let fs_read_access = dict
+            .get("fs_read_access")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?;
+        let terminal_access = dict
+            .get("terminal_access")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?;
+        let request_permissions = dict
+            .get("request_permissions")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?;
+        let send_notifications = dict
+            .get("send_notifications")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?;
+
+        Ok(Self {
+            fs_write_access,
+            fs_read_access,
+            terminal_access,
+            request_permissions,
+            send_notifications,
+        })
     }
 }

@@ -1,9 +1,9 @@
 use agent_client_protocol::{
-    CreateTerminalRequest, CreateTerminalResponse, KillTerminalCommandRequest,
-    KillTerminalCommandResponse, ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest,
-    ReleaseTerminalResponse, RequestPermissionOutcome, RequestPermissionRequest,
-    SelectedPermissionOutcome, TerminalOutputRequest, TerminalOutputResponse,
-    WaitForTerminalExitRequest, WriteTextFileRequest, WriteTextFileResponse,
+    CreateTerminalRequest, CreateTerminalResponse, KillTerminalRequest, KillTerminalResponse,
+    ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
+    RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
+    TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
+    WriteTextFileRequest, WriteTextFileResponse,
 };
 use nvim_oxi::Dictionary;
 use nvim_oxi::conversion::FromObject;
@@ -12,6 +12,7 @@ use tokio::sync::{Mutex, oneshot};
 use tracing::error;
 use uuid::Uuid;
 
+use crate::PluginState;
 use crate::acp::Result;
 use crate::acp::error::Error;
 use crate::nvim::autocommands::Commands;
@@ -47,8 +48,8 @@ pub enum Responder {
         ReleaseTerminalRequest,
     ),
     TerminalKill(
-        oneshot::Sender<Result<KillTerminalCommandResponse>>,
-        KillTerminalCommandRequest,
+        oneshot::Sender<Result<KillTerminalResponse>>,
+        KillTerminalRequest,
     ),
 }
 
@@ -73,14 +74,21 @@ pub struct Request {
     session_id: String,
     responder: Arc<Mutex<Option<Responder>>>,
     remove: NvimMessenger<Uuid>,
+    state: Arc<Mutex<PluginState>>,
 }
 
 impl Request {
     pub fn id(&self) -> Uuid {
         self.id
     }
-    pub fn new(session_id: String, remove: NvimMessenger<Uuid>, responder: Responder) -> Self {
+    pub fn new(
+        session_id: String,
+        remove: NvimMessenger<Uuid>,
+        responder: Responder,
+        state: Arc<Mutex<PluginState>>,
+    ) -> Self {
         Self {
+            state,
             id: Uuid::new_v4(),
             session_id,
             responder: Arc::new(Mutex::new(Some(responder))),
@@ -322,14 +330,12 @@ impl Request {
                     })?;
             }
             Responder::TerminalKill(sender, _) => {
-                sender
-                    .send(Ok(KillTerminalCommandResponse::new()))
-                    .map_err(|e| {
-                        Error::Internal(format!(
-                            "Failed to send terminal kill response for request '{}': {:?}",
-                            self.id, e
-                        ))
-                    })?;
+                sender.send(Ok(KillTerminalResponse::new())).map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send terminal kill response for request '{}': {:?}",
+                        self.id, e
+                    ))
+                })?;
             }
         };
         self.finish()
@@ -423,14 +429,17 @@ impl Request {
                 Responder::WriteFileResponse(responder, data) => {
                     let path = data.path.clone();
                     let (mut buffer, was_already_open) = acquire_or_create_buffer(&path)?;
+                    let state = self.state.blocking_lock();
+                    let auto_save = state.config.buffer.auto_save;
+                    drop(state);
 
                     update_buffer_content(&mut buffer, &data.content)?;
 
                     if was_already_open {
                         mark_buffer_modified(&buffer)?;
-                        // TODO: Make auto-save configurable
-                        // if auto_save_enabled {
-                        //     save_buffer_to_disk(&buf)?;
+                        if auto_save {
+                            save_buffer_to_disk(&buffer)?;
+                        }
                         refresh_view()?;
                     } else {
                         save_buffer_to_disk(&buffer)?;
@@ -443,8 +452,10 @@ impl Request {
                     })?;
                 }
                 Responder::TerminalCreate(sender, data) => {
-                    // Create terminal using the TerminalManager
-                    let mut terminal = T::from_request(data.clone());
+                    let state = self.state.blocking_lock();
+                    let config = state.config.terminal.clone();
+                    drop(state);
+                    let mut terminal = T::from_request(data.clone()).configure(config);
                     let terminal_id = terminal.id().to_string();
                     let response = terminal.run(data.command.clone(), data.args);
                     terminal_manager.initialize_terminal(terminal_id.clone(), terminal);
@@ -474,9 +485,19 @@ impl Request {
                     terminal_manager.notify_when_finished(&data.terminal_id.to_string(), sender)?;
                 }
                 Responder::TerminalRelease(sender, data) => {
+                    let state = self.state.blocking_lock();
+                    let delete_on_release = state.config.terminal.delete;
+                    drop(state);
                     let response = terminal_manager
                         .release(&data.terminal_id.to_string())
-                        .map(|_| ReleaseTerminalResponse::new());
+                        .and_then(|mut terminal| {
+                            if delete_on_release {
+                                terminal.delete().map(|_| ReleaseTerminalResponse::new())
+                            } else {
+                                Ok(ReleaseTerminalResponse::new())
+                            }
+                        });
+
                     sender.send(response).map_err(|e| {
                         Error::Internal(format!(
                             "Failed to send terminal release response for request '{}': {:?}",
@@ -487,7 +508,7 @@ impl Request {
                 Responder::TerminalKill(sender, data) => {
                     let response = terminal_manager
                         .kill(&data.terminal_id.to_string())
-                        .map(|_| KillTerminalCommandResponse::new());
+                        .map(|_| KillTerminalResponse::new());
                     sender.send(response).map_err(|e| {
                         Error::Internal(format!(
                             "Failed to send terminal kill response for request '{}': {:?}",
@@ -708,10 +729,10 @@ mod tests {
 
     #[test]
     fn responder_terminal_kill_maps_to_terminal_kill_command() {
-        let (sender, _) = oneshot::channel::<Result<KillTerminalCommandResponse>>();
+        let (sender, _) = oneshot::channel::<Result<KillTerminalResponse>>();
         let responder = Responder::TerminalKill(
             sender,
-            KillTerminalCommandRequest::new(
+            KillTerminalRequest::new(
                 agent_client_protocol::SessionId::from("test"),
                 agent_client_protocol::TerminalId::from("term-1"),
             ),

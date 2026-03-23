@@ -10,11 +10,11 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-agent-client-protocol = { version = "0.9.4", features = [
+agent-client-protocol = { version = "0.10.2", features = [
   "unstable_session_fork",
-  "unstable_session_list",
   "unstable_session_model",
-  "unstable_session_resume"
+  "unstable_session_resume",
+  "unstable_session_usage"
 ] }
 hermes = { path = "../.." }
 nvim-oxi = { version = "0.6.0", features = ["neovim-0-10", "test"] }
