@@ -61,10 +61,7 @@ pub struct LogFileConfig {
 impl Default for LogFileConfig {
     fn default() -> Self {
         Self {
-            path: detect_project_storage_path()
-                // TODO: Think more about how to handle the case where a storage path can't be found
-                .inspect_err(|e| eprintln!("Could not find default storage path: {:?}", e))
-                .unwrap_or_default(),
+            path: "".to_string(),
             level: LogLevel::Warn,
             format: LogFormat::default(),
             max_size: 10_485_760, // 10MB default
