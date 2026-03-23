@@ -17,15 +17,14 @@ use crate::{
     utilities::writer::NotifyWriter,
 };
 
+pub mod channel;
+pub mod file;
+pub mod sink;
 pub mod format;
 pub mod level;
 pub mod writer;
 pub use format::*;
 pub use level::*;
-pub mod channel;
-
-pub mod file;
-pub mod sink;
 
 use sink::FileSink;
 
@@ -37,6 +36,7 @@ type BoxedLayer = Box<dyn tracing_subscriber::layer::Layer<Registry> + Send + Sy
 /// Logger that supports multiple output targets
 pub struct Logger {
     handle: reload::Handle<Vec<BoxedLayer>, Registry>,
+    storage_path: String,
 }
 
 impl Logger {
@@ -107,7 +107,7 @@ impl Logger {
         ])
     }
 
-    pub fn inititalize() -> Result<&'static Self> {
+    pub fn inititalize(storage_path: &str) -> Result<&'static Self> {
         let layers: Vec<BoxedLayer> = Self::all_layers(Default::default())?;
         let (reload_layer, handle) = reload::Layer::new(layers);
 
@@ -115,11 +115,16 @@ impl Logger {
 
         Ok(LOGGER.get_or_init(|| {
             subscriber.init();
-            Self { handle }
+            Self { handle, storage_path: storage_path.to_string() }
         }))
     }
 
-    pub fn configure(&self, config: LogConfig) -> Result<()> {
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn configure(&self, configuration: LogConfig) -> Result<()> {
+        let mut config = configuration.clone();
+        if config.file.path.is_empty() && config.file.level < LogLevel::Off {
+            config.file.path = self.storage_path.to_string();
+        }
         let layers = Self::all_layers(config)?;
         self.handle
             .reload(layers)

@@ -6,7 +6,7 @@ pub mod requests;
 pub mod state;
 pub mod terminal;
 
-use crate::{Handler, acp::connection::ConnectionManager, utilities::Logger};
+use crate::{Handler, acp::connection::ConnectionManager, utilities::{Logger, detect_project_storage_path}};
 use nvim_oxi::{Dictionary, api::opts::CreateAugroupOpts};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
@@ -15,8 +15,9 @@ pub const GROUP: &str = "hermes";
 
 #[nvim_oxi::plugin]
 pub fn hermes() -> nvim_oxi::Result<Dictionary> {
+    let storage_path = detect_project_storage_path()?;
     let plugin_state = Arc::new(Mutex::new(state::PluginState::new()));
-    let logger = Logger::inititalize()?;
+    let logger = Logger::inititalize(&storage_path)?;
     let request_handler = Rc::new(requests::Requests::new(plugin_state.clone())?);
     let event_handler = Arc::new(Handler::new(plugin_state.clone(), request_handler.clone())?);
     let connection_manager = Rc::new(RefCell::new(ConnectionManager::new(plugin_state.clone())));
