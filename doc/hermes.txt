@@ -1,0 +1,296 @@
+*hermes.txt*        ACP (Agent Client Protocol) client for Neovim
+
+Author:         Ruddickmg
+Repository:     https://github.com/Ruddickmg/hermes.nvim
+License:        MIT
+
+================================================================================
+CONTENTS                                              *hermes-contents*
+
+  1. Introduction .............................. |hermes-introduction|
+  2. Installation .............................. |hermes-installation|
+  3. Setup ..................................... |hermes-setup|
+  4. API ....................................... |hermes-api|
+    4.1 Connect ................................ |hermes-connect|
+    4.2 Disconnect ............................. |hermes-disconnect|
+    4.3 Authenticate ........................... |hermes-authenticate|
+    4.4 Sessions ................................ |hermes-sessions|
+    4.5 Prompt .................................. |hermes-prompt|
+    4.6 Configuration .......................... |hermes-configuration|
+  5. Autocommands .............................. |hermes-autocommands|
+  6. Commands .................................. |hermes-commands|
+  7. Troubleshooting ........................... |hermes-troubleshooting|
+
+================================================================================
+1. INTRODUCTION                                       *hermes-introduction*
+
+Hermes is an ACP (Agent Client Protocol) client for Neovim that provides
+APIs for communicating with AI assistants like opencode, copilot, and gemini.
+
+Features:
+- Connect to multiple AI agents simultaneously
+- Create and manage sessions
+- Send prompts with various content types (text, images, links, etc.)
+- Handle agent requests (permissions, file operations, terminal commands)
+- Full type annotations for IDE support
+
+================================================================================
+2. INSTALLATION                                       *hermes-installation*
+
+Using lazy.nvim: >
+    {
+        "Ruddickmg/hermes.nvim",
+        config = function()
+            require("hermes").setup()
+        end
+    }
+<
+
+Using paq.nvim: >
+    require("paq") {
+        "Ruddickmg/hermes.nvim"
+    }
+    require("hermes").setup()
+<
+
+The binary is automatically downloaded on first use. If your platform is not
+supported, it will build from source (requires Rust/Cargo).
+
+================================================================================
+3. SETUP                                               *hermes-setup*
+
+*hermes.setup()*                                        Setup the plugin
+
+Configure Hermes with custom options. Multiple calls merge configurations.
+
+Parameters: ~
+    {opts}  (table, optional) Configuration options
+
+Configuration options: ~
+    • root_markers:    List of root directory markers (default: {".git"})
+    • permissions:     Permission settings
+    • terminal:        Terminal configuration
+    • buffer:          Buffer settings
+    • log:             Logging configuration
+    • version:         Binary version to use (default: "latest")
+
+Example: >
+    require("hermes").setup({
+        permissions = {
+            fs_write_access = true,
+            terminal_access = true,
+        }
+    })
+<
+
+Note: setup() is optional - Hermes works with defaults without it.
+
+================================================================================
+4. API                                                 *hermes-api*
+
+------------------------------------------------------------------------------
+4.1 CONNECT                                           *hermes-connect*
+
+*hermes.connect()*                                     Connect to agent
+
+Parameters: ~
+    {agent}  (string) Agent name ("opencode", "copilot", "gemini", or custom)
+    {opts}   (table, optional) Connection options
+
+Options: ~
+    • protocol: Connection protocol ("stdio", "http", "socket")
+    • command:  Custom agent command (for custom agents)
+    • args:     Command arguments
+
+Example: >
+    require("hermes").connect("opencode")
+    
+    -- With custom configuration
+    require("hermes").connect("my-agent", {
+        protocol = "socket",
+        command = "custom-acp",
+        args = {"--port", "8080"}
+    })
+<
+
+Autocommand triggered: ~
+    ConnectionInitialized - On successful connection
+
+------------------------------------------------------------------------------
+4.2 DISCONNECT                                        *hermes-disconnect*
+
+
+*hermes.disconnect()*                                    Disconnect from agent
+
+Parameters: ~
+    {agents} (string|string[]|nil) Agent(s) to disconnect, nil for all
+
+Example: >
+    -- Disconnect single agent
+    require("hermes").disconnect("opencode")
+    
+    -- Disconnect multiple
+    require("hermes").disconnect({"opencode", "copilot"})
+    
+    -- Disconnect all
+    require("hermes").disconnect()
+<
+
+------------------------------------------------------------------------------
+4.3 AUTHENTICATE                                      *hermes-authenticate*
+
+*hermes.authenticate()*                                  Authenticate with agent
+
+Parameters: ~
+    {auth_method_id} (string) Authentication method ID from ConnectionInitialized
+
+Example: >
+    vim.api.nvim_create_autocmd("User", {
+        pattern = "ConnectionInitialized",
+        callback = function(args)
+            local auth_method_id = args.data.authMethods[1].id
+            require("hermes").authenticate(auth_method_id)
+        end
+    })
+<
+
+Autocommand triggered: ~
+    Authenticated - On successful authentication
+
+------------------------------------------------------------------------------
+4.4 SESSIONS                                          *hermes-sessions*
+
+*hermes.create_session()*                                Create new session
+*hermes.load_session()*                                   Load existing session
+*hermes.list_sessions()*                                   List all sessions
+*hermes.fork_session()*                                     Fork a session
+*hermes.resume_session()*                                   Resume a session
+*hermes.set_session_model()*                                Set session model
+*hermes.set_session_config()*                                Set config option
+
+Example: >
+    -- Create session
+    local session = require("hermes").create_session({
+        cwd = "."
+    })
+    
+    -- Load session
+    require("hermes").load_session(session.sessionId)
+<
+
+Autocommands triggered: ~
+    SessionCreated, SessionLoaded, SessionsListed, SessionForked,
+    SessionResumed, SessionModelUpdated, ConfigurationOption
+
+------------------------------------------------------------------------------
+4.5 PROMPT                                            *hermes-prompt*
+
+*hermes.prompt()*                                        Send prompt to agent
+
+Parameters: ~
+    {session_id} (string) Session ID
+    {content}    (string|table) Content to send
+
+Content types: ~
+    • String: Plain text
+    • Table: Structured content with type field
+
+Example: >
+    -- Text prompt
+    require("hermes").prompt(session_id, "What time is it?")
+    
+    -- Structured content
+    require("hermes").prompt(session_id, {
+        type = "link",
+        name = "Example file",
+        uri = "/path/to/file.txt"
+    })
+<
+
+Autocommands triggered: ~
+    Prompted, AgentTextMessage, AgentImageMessage, UserTextMessage,
+    UserImageMessage, UserResourceMessage, AgentResourceMessage,
+    UserResourceLinkMessage, AgentResourceLinkMessage,
+    AgentTextThought, AgentImageThought, AgentResourceThought,
+    AgentResourceLinkThought, ToolCall, ToolCallUpdate, Plan,
+    AvailableCommands, ModeCurrent
+
+------------------------------------------------------------------------------
+4.6 CONFIGURATION                                     *hermes-configuration*
+
+*hermes.cancel()*                                        Cancel operation
+*hermes.set_mode()*                                       Set session mode
+*hermes.respond()*                                        Respond to request
+
+Example: >
+    -- Cancel current operation
+    require("hermes").cancel(session_id)
+    
+    -- Set mode
+    require("hermes").set_mode(session_id, "plan")
+    
+    -- Respond to permission request
+    require("hermes").respond(request_id, "allow")
+<
+
+Autocommands triggered: ~
+    ModeUpdated, Prompted
+
+================================================================================
+5. AUTOCOMMANDS                                       *hermes-autocommands*
+
+Hermes generates autocommands for agent communication. Listen to them with: >
+    vim.api.nvim_create_autocmd("User", {
+        pattern = "ConnectionInitialized",
+        callback = function(args)
+            print("Connected!", vim.inspect(args.data))
+        end
+    })
+<
+
+See |hermes-api| sections above for autocommands triggered by each method.
+Full autocommand list: |hermes-autocommands-list|
+
+================================================================================
+6. COMMANDS                                           *hermes-commands*
+
+*:Hermes*                                                 Hermes management
+
+Subcommands: ~
+    install    Download and install binary
+    build      Build binary from source
+    version    Show version information
+    clean      Remove binary and cache
+    setup      Show current configuration
+
+Example: >
+    :Hermes install    " Force download latest binary
+    :Hermes build      " Build from source
+    :Hermes version    " Show version info
+    :Hermes clean      " Remove all binaries
+<
+
+================================================================================
+7. TROUBLESHOOTING                                    *hermes-troubleshooting*
+
+Binary download fails: ~
+1. Check platform support: `:Hermes version`
+2. Try building from source: `:Hermes build`
+3. Check for Rust/Cargo installation
+4. Report issue with platform info
+
+Build from source fails: ~
+1. Install Rust: https://rustup.rs/
+2. Check build dependencies (gcc, make)
+3. Run: `:Hermes build`
+
+If issues persist, create an issue at:
+https://github.com/Ruddickmg/hermes.nvim/issues
+
+Include:
+- Operating system and version
+- Output of `:Hermes version`
+- Full error messages
+
+================================================================================
+vim:tw=78:ts=8:ft=help:norl:
