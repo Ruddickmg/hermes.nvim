@@ -208,31 +208,20 @@ jobs:
       - checkout
       - rust/install
       - run:
-          name: Install terminal dependencies for PTY support
-          command: |
-            sudo apt-get update
-            sudo apt-get install -y \
-              ncurses-bin \
-              ncurses-base \
-              ncurses-term \
-              libncurses5-dev \
-              libncursesw5-dev \
-              locales
-            sudo locale-gen en_US.UTF-8
-      - run:
           name: Install Neovim
           command: |
             curl -LO https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux-x86_64.appimage
             chmod u+x nvim-linux-x86_64.appimage
             sudo mv nvim-linux-x86_64.appimage /usr/local/bin/nvim
       - run:
-          name: Install coverage tool
+          name: Install coverage tools
           command: |
             cargo install cargo-llvm-cov@0.6.13
             cargo install cargo-nextest --locked
+            cargo install faketty
       - run:
-          name: Run integration tests
-          command: cargo llvm-cov nextest --manifest-path tests/integration/Cargo.toml --all-features --workspace --lcov --output-path integration.coverage.info --ignore-filename-regex 'tests/.*'
+          name: Run integration tests with PTY
+          command: faketty cargo llvm-cov nextest --manifest-path tests/integration/Cargo.toml --all-features --workspace --lcov --output-path integration.coverage.info --ignore-filename-regex 'tests/.*'
       - codecov/upload:
           fail_on_error: true
           files: integration.coverage.info
@@ -250,26 +239,16 @@ jobs:
       - checkout
       - rust/install
       - run:
-          name: Install terminal dependencies for PTY support
-          command: |
-            sudo apt-get update
-            sudo apt-get install -y \
-              ncurses-bin \
-              ncurses-base \
-              ncurses-term \
-              libncurses5-dev \
-              libncursesw5-dev \
-              locales
-            sudo locale-gen en_US.UTF-8
-      - run:
           name: Install Neovim
           command: |
             curl -LO https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux-x86_64.appimage
             chmod u+x nvim-linux-x86_64.appimage
             sudo mv nvim-linux-x86_64.appimage /usr/local/bin/nvim
       - run:
-          name: Install coverage tool
-          command: cargo install cargo-llvm-cov@0.6.13
+          name: Install coverage tools
+          command: |
+            cargo install cargo-llvm-cov@0.6.13
+            cargo install faketty
       - run:
           name: Install Opencode
           command: curl -fsSL https://opencode.ai/install | bash
@@ -277,10 +256,10 @@ jobs:
           name: Install GitHub Copilot
           command: curl -fsSL https://gh.io/copilot-install | bash
       - run:
-          name: Run e2e tests
+          name: Run e2e tests with PTY
           command: |
             export PATH="/home/circleci/.local/bin:$PATH"
-            cargo llvm-cov --manifest-path tests/e2e/Cargo.toml --all-features --workspace --lcov --output-path e2e.coverage.info --ignore-filename-regex 'tests/.*'
+            faketty cargo llvm-cov --manifest-path tests/e2e/Cargo.toml --all-features --workspace --lcov --output-path e2e.coverage.info --ignore-filename-regex 'tests/.*'
       - codecov/upload:
           fail_on_error: true
           files: e2e.coverage.info
