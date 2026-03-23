@@ -25,6 +25,14 @@ pub struct ClientConfig {
     pub root_markers: Vec<String>,
 }
 
+impl ClientConfig {
+    pub fn with_path(path: &str) -> Self {
+        let mut config = Self::default();
+        config.log.file.path = path.to_string();
+        config
+    }
+}
+
 /// Partial client configuration for setup function
 #[derive(Clone, Debug, Default)]
 pub struct ClientConfigPartial {

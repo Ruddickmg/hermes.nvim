@@ -4,6 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use nvim_oxi::api;
+
 use crate::acp::{Result, error::Error};
 
 // TODO: move these helper functions into a "utilities" directory
@@ -333,3 +335,13 @@ mod tests {
         assert_eq!(lines[2], "line3");
     }
 }
+
+pub fn initialize_project_storage() -> Result<String> {
+    let state_dir = api::call_function::<(String,), String>("stdpath", ("state".to_string(),))
+        .map_err(|e| Error::Internal(format!("Error intiializing plugin state: {:?}", e)))?;
+    let path = format!("{}/hermes", state_dir);
+    std::fs::create_dir_all(&path)
+        .map_err(|e| Error::Internal(format!("Could not find path: {}, {:?}", path, e)))?;
+    Ok(path)
+}
+

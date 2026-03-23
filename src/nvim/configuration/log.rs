@@ -1,4 +1,5 @@
 use crate::utilities::logging::{LogFormat, LogLevel};
+use nvim_oxi::api;
 use nvim_oxi::{
     Dictionary, Object,
     conversion::{Error, FromObject},
