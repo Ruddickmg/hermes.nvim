@@ -1,9 +1,9 @@
-use crate::PluginState;
-use crate::acp::connection::{Connection, stdio};
+use crate::acp::connection::{stdio, Connection};
 use crate::nvim::configuration::Permissions;
-use crate::{Handler, acp::error::Error};
+use crate::PluginState;
+use crate::{acp::error::Error, Handler};
 use agent_client_protocol::{
-    ClientCapabilities, FileSystemCapability, Implementation, InitializeRequest, ProtocolVersion,
+    ClientCapabilities, FileSystemCapabilities, Implementation, InitializeRequest, ProtocolVersion,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -182,7 +182,7 @@ impl ConnectionManager {
                     .client_capabilities(
                         ClientCapabilities::new()
                             .terminal(permissions.terminal_access)
-                            .fs(FileSystemCapability::new()
+                            .fs(FileSystemCapabilities::new()
                                 .read_text_file(permissions.fs_read_access)
                                 .write_text_file(permissions.fs_write_access)),
                     );

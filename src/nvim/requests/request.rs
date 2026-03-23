@@ -1,27 +1,27 @@
 use agent_client_protocol::{
-    CreateTerminalRequest, CreateTerminalResponse, KillTerminalCommandRequest,
-    KillTerminalCommandResponse, ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest,
-    ReleaseTerminalResponse, RequestPermissionOutcome, RequestPermissionRequest,
-    SelectedPermissionOutcome, TerminalOutputRequest, TerminalOutputResponse,
-    WaitForTerminalExitRequest, WriteTextFileRequest, WriteTextFileResponse,
+    CreateTerminalRequest, CreateTerminalResponse, KillTerminalRequest, KillTerminalResponse,
+    ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
+    RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
+    TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
+    WriteTextFileRequest, WriteTextFileResponse,
 };
-use nvim_oxi::Dictionary;
 use nvim_oxi::conversion::FromObject;
+use nvim_oxi::Dictionary;
 use std::sync::Arc;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::PluginState;
-use crate::acp::Result;
 use crate::acp::error::Error;
+use crate::acp::Result;
 use crate::nvim::autocommands::Commands;
-use crate::nvim::terminal::{Terminal, TerminalManager, parse_exit_code};
+use crate::nvim::terminal::{parse_exit_code, Terminal, TerminalManager};
 use crate::utilities::{
-    NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
-    save_buffer_to_disk, show_permission_ui, update_buffer_content,
+    acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
+    show_permission_ui, update_buffer_content, NvimMessenger, TransmitToNvim,
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
+use crate::PluginState;
 
 #[derive(Debug)]
 pub enum Responder {
@@ -48,8 +48,8 @@ pub enum Responder {
         ReleaseTerminalRequest,
     ),
     TerminalKill(
-        oneshot::Sender<Result<KillTerminalCommandResponse>>,
-        KillTerminalCommandRequest,
+        oneshot::Sender<Result<KillTerminalResponse>>,
+        KillTerminalRequest,
     ),
 }
 
@@ -227,7 +227,11 @@ impl Request {
                             Some(s) => {
                                 let sig: String = String::from_object(s)
                                     .map_err(|e| Error::InvalidInput(e.to_string()))?;
-                                if sig.is_empty() { None } else { Some(sig) }
+                                if sig.is_empty() {
+                                    None
+                                } else {
+                                    Some(sig)
+                                }
                             }
                             None => None,
                         };
@@ -330,14 +334,12 @@ impl Request {
                     })?;
             }
             Responder::TerminalKill(sender, _) => {
-                sender
-                    .send(Ok(KillTerminalCommandResponse::new()))
-                    .map_err(|e| {
-                        Error::Internal(format!(
-                            "Failed to send terminal kill response for request '{}': {:?}",
-                            self.id, e
-                        ))
-                    })?;
+                sender.send(Ok(KillTerminalResponse::new())).map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send terminal kill response for request '{}': {:?}",
+                        self.id, e
+                    ))
+                })?;
             }
         };
         self.finish()
@@ -510,7 +512,7 @@ impl Request {
                 Responder::TerminalKill(sender, data) => {
                     let response = terminal_manager
                         .kill(&data.terminal_id.to_string())
-                        .map(|_| KillTerminalCommandResponse::new());
+                        .map(|_| KillTerminalResponse::new());
                     sender.send(response).map_err(|e| {
                         Error::Internal(format!(
                             "Failed to send terminal kill response for request '{}': {:?}",
@@ -731,10 +733,10 @@ mod tests {
 
     #[test]
     fn responder_terminal_kill_maps_to_terminal_kill_command() {
-        let (sender, _) = oneshot::channel::<Result<KillTerminalCommandResponse>>();
+        let (sender, _) = oneshot::channel::<Result<KillTerminalResponse>>();
         let responder = Responder::TerminalKill(
             sender,
-            KillTerminalCommandRequest::new(
+            KillTerminalRequest::new(
                 agent_client_protocol::SessionId::from("test"),
                 agent_client_protocol::TerminalId::from("term-1"),
             ),

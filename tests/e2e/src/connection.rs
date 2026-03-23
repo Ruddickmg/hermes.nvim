@@ -81,7 +81,7 @@ fn test_authenticate_flow() -> Result<(), nvim_oxi::Error> {
     let mut init_response = wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
     if let Some(auth_method) = init_response.auth_methods.pop() {
-        authenticate.call(auth_method.id.to_string())?;
+        authenticate.call(auth_method.id().to_string())?;
         let auth_response = wait_for_authentication(Duration::from_secs(TIMEOUT_IN_SECONDS));
         println!(
             "Authentication successful, received response: {:?}",

@@ -1,10 +1,7 @@
-use crate::utilities::{
-    detect_project_storage_path,
-    logging::{LogFormat, LogLevel},
-};
+use crate::utilities::logging::{LogFormat, LogLevel};
 use nvim_oxi::{
-    Dictionary, Object,
     conversion::{Error, FromObject},
+    Dictionary, Object,
 };
 
 /// Configuration for a single log target (notification, message, quickfix, etc.)

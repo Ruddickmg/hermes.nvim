@@ -28,3 +28,6 @@ target
 
 # file to keep errors that need investigation
 errors.txt
+integration.coverage.info
+e2e.coverage.info
+unit.coverage.info

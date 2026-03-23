@@ -185,10 +185,12 @@ jobs:
       - rust/install
       - run:
           name: Install coverage tool
-          command: cargo install cargo-llvm-cov@0.6.13
+          command: |
+            cargo install cargo-llvm-cov@0.6.13
+            cargo install cargo-nextest --locked
       - run:
           name: Run unit tests
-          command: cargo llvm-cov --bins --lib --all-features --workspace --lcov --output-path unit.coverage.info --ignore-filename-regex 'tests/.*'
+          command: cargo llvm-cov nextest --bins --lib --all-features --workspace --lcov --output-path unit.coverage.info --ignore-filename-regex 'tests/.*'
       - codecov/upload:
           fail_on_error: true
           files: unit.coverage.info

@@ -3,8 +3,7 @@ use crate::{
     nvim::{autocommands::Commands, parse, requests::Responder},
 };
 use agent_client_protocol::{
-    Client, CreateTerminalRequest, CreateTerminalResponse, Error, KillTerminalCommandRequest,
-    KillTerminalCommandResponse, ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest,
+    Client, CreateTerminalRequest, CreateTerminalResponse, Error, ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest,
     ReleaseTerminalResponse, RequestPermissionRequest, RequestPermissionResponse, Result,
     SessionNotification, SessionUpdate, TerminalExitStatus, TerminalOutputRequest,
     TerminalOutputResponse, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
@@ -177,27 +176,6 @@ impl Client for Handler {
                     Ok(WaitForTerminalExitResponse::new(status))
                 }
             })?)
-    }
-
-    async fn kill_terminal_command(
-        &self,
-        args: KillTerminalCommandRequest,
-    ) -> Result<KillTerminalCommandResponse> {
-        if !self.can_access_terminal().await {
-            return Err(Error::method_not_found());
-        }
-        let (sender, receiver) = oneshot::channel::<acp::Result<KillTerminalCommandResponse>>();
-        self.execute_autocommand_request(
-            args.session_id.to_string(),
-            Commands::TerminalKill,
-            args.clone(),
-            Responder::TerminalKill(sender, args),
-        )
-        .await?;
-        Ok(receiver.await.map_err(|e| {
-            error!("{:?}", e);
-            Error::internal_error()
-        })??)
     }
 
     /// Releases a terminal resource

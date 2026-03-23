@@ -41,9 +41,9 @@ impl Handler {
                 },
             },
             "authMethods": info.auth_methods.iter().map(|m| serde_json::json!({
-                "id": m.id.0,
-                "name": m.name,
-                "description": m.description,
+                "id": m.id().0,
+                "name": m.name(),
+                "description": m.description(),
             })).collect::<Vec<_>>(),
             "agentInfo": info.agent_info.map(|i| serde_json::json!({
                 "name": i.name,
