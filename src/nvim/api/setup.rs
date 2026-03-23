@@ -54,10 +54,10 @@ pub fn setup(plugin_state: Arc<Mutex<PluginState>>, logger: &'static Logger) -> 
 
             let config_update = args.into_inner();
             let mut state = plugin_state.blocking_lock();
-            let config = state.config.clone();
             config_update.apply_to(&mut state.config);
+            let log_config = state.config.log.clone();
             drop(state);
-            logger.configure(config.log.clone())?;
+            logger.configure(log_config)?;
 
             Ok(())
         });
