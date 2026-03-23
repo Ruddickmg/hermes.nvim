@@ -6,7 +6,11 @@ pub mod requests;
 pub mod state;
 pub mod terminal;
 
-use crate::{Handler, acp::connection::ConnectionManager, utilities::{Logger, detect_project_storage_path}};
+use crate::{
+    Handler,
+    acp::connection::ConnectionManager,
+    utilities::{Logger, detect_project_storage_path},
+};
 use nvim_oxi::{Dictionary, api::opts::CreateAugroupOpts};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use tokio::sync::Mutex;

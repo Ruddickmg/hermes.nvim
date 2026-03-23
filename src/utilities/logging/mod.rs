@@ -19,9 +19,9 @@ use crate::{
 
 pub mod channel;
 pub mod file;
-pub mod sink;
 pub mod format;
 pub mod level;
+pub mod sink;
 pub mod writer;
 pub use format::*;
 pub use level::*;
@@ -115,7 +115,10 @@ impl Logger {
 
         Ok(LOGGER.get_or_init(|| {
             subscriber.init();
-            Self { handle, storage_path: storage_path.to_string() }
+            Self {
+                handle,
+                storage_path: storage_path.to_string(),
+            }
         }))
     }
 
