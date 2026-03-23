@@ -3,11 +3,12 @@ use crate::{
     nvim::{autocommands::Commands, parse, requests::Responder},
 };
 use agent_client_protocol::{
-    Client, CreateTerminalRequest, CreateTerminalResponse, Error, ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest,
-    ReleaseTerminalResponse, RequestPermissionRequest, RequestPermissionResponse, Result,
-    SessionNotification, SessionUpdate, TerminalExitStatus, TerminalOutputRequest,
-    TerminalOutputResponse, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
-    WriteTextFileRequest, WriteTextFileResponse,
+    Client, CreateTerminalRequest, CreateTerminalResponse, Error, ReadTextFileRequest,
+    ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
+    RequestPermissionRequest, RequestPermissionResponse, Result, SessionNotification,
+    SessionUpdate, TerminalExitStatus, TerminalOutputRequest, TerminalOutputResponse,
+    WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
+    WriteTextFileResponse,
 };
 use tokio::sync::oneshot;
 use tracing::{error, info};

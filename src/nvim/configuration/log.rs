@@ -1,7 +1,7 @@
 use crate::utilities::logging::{LogFormat, LogLevel};
 use nvim_oxi::{
-    conversion::{Error, FromObject},
     Dictionary, Object,
+    conversion::{Error, FromObject},
 };
 
 /// Configuration for a single log target (notification, message, quickfix, etc.)
