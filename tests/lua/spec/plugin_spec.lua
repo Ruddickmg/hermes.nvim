@@ -83,12 +83,18 @@ describe("plugin.hermes", function()
   end)
   
   describe("tab completion", function()
-    it("provides completion for subcommands", function()
+    it("provides completion function", function()
       local commands = vim.api.nvim_get_commands({})
       local hermes_cmd = commands["Hermes"]
       
       -- complete field should be set (it will be a string representation when retrieved)
       assert.is_not_nil(hermes_cmd.complete)
+    end)
+    
+    it("completion is implemented as Lua function", function()
+      local commands = vim.api.nvim_get_commands({})
+      local hermes_cmd = commands["Hermes"]
+      
       -- The complete field should indicate it's a Lua function
       assert.matches("Lua function", hermes_cmd.complete)
     end)

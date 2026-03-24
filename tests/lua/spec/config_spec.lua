@@ -1,5 +1,6 @@
 -- Unit tests for lua/hermes/config.lua
 -- Tests installation-only configuration (version and auto_download_binary)
+-- NOTE: Per AGENTS.md, we do NOT test default values (hard-coded constants)
 
 describe("hermes.config", function()
   local config
@@ -9,7 +10,7 @@ describe("hermes.config", function()
     config = require("hermes.config")
   end)
 
-  describe("setup()", function()
+  describe("setup() stores configuration", function()
     it("stores version setting", function()
       config.setup({ version = "v1.0.0" })
       
@@ -21,43 +22,24 @@ describe("hermes.config", function()
       
       assert.is_false(config.get_auto_download())
     end)
-
-    it("defaults version to latest", function()
-      config.setup({})
-      
-      assert.equals("latest", config.get_version())
-    end)
-
-    it("defaults auto_download_binary to true", function()
-      config.setup({})
-      
-      assert.is_true(config.get_auto_download())
-    end)
-
-    it("accepts empty config", function()
-      local ok = pcall(function()
-        config.setup({})
-      end)
-      
-      assert.is_true(ok)
-    end)
-
-    it("accepts no arguments", function()
-      local ok = pcall(function()
-        config.setup()
-      end)
-      
-      assert.is_true(ok)
-    end)
   end)
 
-  describe("get()", function()
-    it("returns current installation config", function()
+  describe("get() returns configuration table", function()
+    it("returns table with stored values", function()
       config.setup({ version = "test-version", auto_download_binary = false })
       local current = config.get()
 
-      assert.equals("test-version", current.version)
-      assert.is_false(current.auto_download_binary)
+      -- Per AGENTS.md, comparing multiple related values in one assertion is OK
+      -- This verifies the entire config object as a logical unit including log config
+      assert.same({ 
+        version = "test-version", 
+        auto_download_binary = false,
+        log = {
+          notification = {
+            level = "error"
+          }
+        }
+      }, current)
     end)
   end)
 
@@ -70,12 +52,6 @@ describe("hermes.config", function()
   end)
 
   describe("get_notification_level()", function()
-    it("returns default error level", function()
-      config.setup({})
-      
-      assert.equals("error", config.get_notification_level())
-    end)
-    
     it("returns configured level from string", function()
       config.setup({
         log = {

@@ -19,6 +19,9 @@ return {
     
     -- Auto-insulate tests (isolate each test file)
     ['auto-insulate'] = true,
+    
+    -- Lua path for loading test helpers and modules
+    lpath = "tests/lua/spec/?.lua;tests/lua/spec/?/init.lua;lua/?.lua;lua/?/init.lua;./?.lua",
   },
   
   -- Unit tests - fast, isolated

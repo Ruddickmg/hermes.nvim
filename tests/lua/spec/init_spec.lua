@@ -99,6 +99,55 @@ describe("hermes.init (main API)", function()
       
       assert.is_true(ok)
     end)
+    
+    it("handles missing binary with appropriate error", function()
+      -- Clear all module caches to ensure fresh state
+      package.loaded["hermes.init"] = nil
+      package.loaded["hermes.binary"] = nil
+      package.loaded["hermes.config"] = nil
+      package.loaded["hermes.platform"] = nil
+      package.loaded["hermes.version"] = nil
+      package.loaded["hermes.download"] = nil
+      package.loaded["hermes.logging"] = nil
+      
+      -- Get fresh hermes module
+      local hermes_fresh = require("hermes")
+      
+      -- Configure to NOT auto-download (we expect binary to be missing)
+      hermes_fresh.setup({
+        auto_download_binary = false,
+        version = "latest",
+      })
+      
+      -- Try to trigger binary loading
+      local ok, err = pcall(function()
+        hermes_fresh.connect("test-agent", {})
+      end)
+      
+      -- Should fail with binary-related error
+      local err_str = tostring(err)
+      assert(
+        not ok and (err_str:match("Binary not found") or err_str:match("Failed to load") or err_str:match("binary")),
+        "Expected error about binary loading, got: " .. err_str
+      )
+    end)
+    
+    it("calls setup on loaded binary without crashing", function()
+      -- This test assumes binary is already available from previous operations
+      -- or from the test environment having the binary pre-installed
+      
+      -- Try to call setup again - if binary was previously loaded in this process,
+      -- this will call setup on the native module
+      local ok = pcall(function()
+        hermes.setup({
+          auto_download_binary = false,
+        })
+      end)
+      
+      -- setup() should never crash - it either updates the native module
+      -- or just updates the Lua config if binary not yet loaded
+      assert.is_true(ok, "setup() should not crash")
+    end)
   end)
   
   describe("API function signatures", function()

@@ -184,11 +184,23 @@ describe("hermes.binary", function()
       stub(download, "is_wget_available").returns(false)
       stub(download, "get_available_tool").returns(nil)
       
-      local ok, err = pcall(function()
+      local ok, _ = pcall(function()
         binary.ensure_binary()
       end)
       
       assert.is_false(ok)
+    end)
+    
+    it("error message mentions download tools when none available", function()
+      -- Mock no download tools available
+      stub(download, "is_curl_available").returns(false)
+      stub(download, "is_wget_available").returns(false)
+      stub(download, "get_available_tool").returns(nil)
+      
+      local _, err = pcall(function()
+        binary.ensure_binary()
+      end)
+      
       assert.is_truthy(err:match("curl") or err:match("wget"))
     end)
   end)

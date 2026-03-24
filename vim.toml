@@ -62,6 +62,9 @@ any = true
 [assert.is_truthy]
 any = true
 
+[assert.same]
+any = true
+
 [assert.stub]
 any = true
 
