@@ -9,4 +9,3 @@ pub mod session;
 pub mod setup;
 pub mod terminal;
 pub mod utilities;
-pub mod binary_loading;
