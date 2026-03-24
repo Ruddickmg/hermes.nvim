@@ -41,16 +41,14 @@ hermes.nvim/
 
 ### 3. Configuration (lua/hermes/config.lua)
 - ✅ Full configuration with sensible defaults
-- ✅ Multiple setup() calls merge configurations
+- ✅ setup() applies user configuration on top of defaults
 - ✅ Validation function
-- ✅ Mirrors all options from README documentation
+- ✅ Mirrors all documented options in this implementation
 
 ### 4. Flat API Structure (lua/hermes/init.lua)
-- ✅ Mirrors Rust API exactly as requested
-- ✅ All methods: connect(), disconnect(), authenticate(), create_session(),
-  load_session(), prompt(), cancel(), set_mode(), respond(), list_sessions(),
-  fork_session(), resume_session(), set_session_model(), set_session_config()
-- ✅ Comprehensive LuaCATS type annotations
+- ✅ Provides a flat Lua API surface for the Hermes functionality
+- ✅ Exposes the public Hermes methods implemented in lua/hermes/init.lua
+- ✅ LuaCATS type annotations for the public API where applicable
 - ✅ Lazy-loading of native module
 
 ### 5. User Commands (plugin/hermes.lua)

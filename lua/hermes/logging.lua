@@ -46,7 +46,11 @@ function M.notify(message, level, opts)
   -- Only show if message level is >= configured minimum level
   -- Higher numbers = more severe (ERROR=4, WARN=3, INFO=2, DEBUG=1, TRACE=0)
   if message_level >= min_level then
-    vim.notify(message, level, opts)
+    local notify_level = level
+    if type(notify_level) == "string" then
+      notify_level = normalize_level(notify_level)
+    end
+    vim.notify(message, notify_level, opts)
   end
 end
 

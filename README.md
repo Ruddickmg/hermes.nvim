@@ -954,7 +954,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="configurationupdated">
       <td><code>ConfigurationUpdated</code></td>
       <td>Session configuration updated</td>
-      <td>⚡ <a href="#load-session-optional">set_session_configOption()</a></td>
+      <td>⚡ <a href="#load-session-optional">set_session_config_option()</a></td>
       <td><pre><code class="language-json">{
   "configOptions": [
     {

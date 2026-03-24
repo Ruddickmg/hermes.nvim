@@ -20,8 +20,19 @@ local function get_native()
     local binary = require("hermes.binary")
     local config = require("hermes.config")
     
+    -- Determine whether auto-download is enabled from config module API
+    local auto_download = true
+    if type(config.get_auto_download) == "function" then
+      auto_download = config.get_auto_download()
+    elseif type(config.get) == "function" then
+      local cfg = config.get()
+      if cfg and cfg.auto_download_binary ~= nil then
+        auto_download = cfg.auto_download_binary
+      end
+    end
+
     local ok, result
-    if config.auto_download_binary == false then
+    if auto_download == false then
       -- User disabled auto-download, only load existing binary
       ok, result = pcall(function()
         local bin_path = binary.load_existing_binary()
@@ -74,6 +85,7 @@ function M.setup(opts)
   require("hermes.config").setup({
     version = opts.version,
     auto_download_binary = opts.auto_download_binary,
+    log = opts.log,
   })
   
   -- Pass all config to Rust binary if it's already loaded
