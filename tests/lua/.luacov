@@ -1,0 +1,13 @@
+# Lua Test Configuration
+
+## Coverage
+return {
+  include = {
+    "lua/hermes",
+  },
+  exclude = {
+    "tests",
+  },
+  runreport = true,
+  deletestats = false,
+}

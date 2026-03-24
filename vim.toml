@@ -1,0 +1,69 @@
+[selene]
+base = "lua51"
+
+[vim]
+any = true
+
+[describe]
+any = true
+
+[it]
+any = true
+
+[before_each]
+any = true
+
+[after_each]
+any = true
+
+[setup]
+any = true
+
+[teardown]
+any = true
+
+# Luassert methods
+[assert.is_true]
+any = true
+
+[assert.is_false]
+any = true
+
+[assert.is_nil]
+any = true
+
+[assert.is_not_nil]
+any = true
+
+[assert.is_function]
+any = true
+
+[assert.is_string]
+any = true
+
+[assert.is_table]
+any = true
+
+[assert.is_boolean]
+any = true
+
+[assert.equals]
+any = true
+
+[assert.are_not.same]
+any = true
+
+[assert.matches]
+any = true
+
+[assert.truthy]
+any = true
+
+[assert.stub]
+any = true
+
+[assert.has_no.errors]
+any = true
+
+[stub]
+any = true

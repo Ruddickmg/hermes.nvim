@@ -1,0 +1,14 @@
+# Selene configuration for Hermes Neovim plugin
+# https://github.com/Kampfkarren/selene
+
+std = "vim"
+
+[lints]
+# Allow multiple statements per line in tests (common for pcall patterns)
+multiple_statements = "allow"
+
+[config]
+# Exclude test directories from some lints
+exclude = ["tests/lua/xdg/**"]
+
+

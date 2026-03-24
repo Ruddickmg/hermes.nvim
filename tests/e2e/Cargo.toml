@@ -25,6 +25,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1.44"
 pretty_assertions = "1.4"
+tempfile = "3.14"
 
 [build-dependencies]
 nvim-oxi = { version = "0.6.0", features = ["neovim-0-10", "test"] }

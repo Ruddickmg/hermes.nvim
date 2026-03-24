@@ -1,3 +1,5 @@
+local download = require("hermes.download")
+
 ---Binary download and compilation management
 ---@module hermes.binary
 
@@ -11,7 +13,7 @@ local REPO_URL = "https://github.com/Ruddickmg/hermes.nvim.git"
 
 ---List of officially supported platforms for pre-built binaries
 ---@type table<string, boolean>
-local SUPPORTED_PLATFORMS = {
+M.SUPPORTED_PLATFORMS = {
   ["linux-x86_64"] = true,
   ["linux-aarch64"] = true,
   ["macos-x86_64"] = true,
@@ -65,25 +67,11 @@ function M.download(dest_path, version)
   
   ensure_dir(M.get_data_dir())
   
-  -- Download with curl
-  local cmd = { "curl", "-L", "-o", dest_path, url }
-  local result = vim.fn.system(cmd)
-  local exit_code = vim.v.shell_error
+  -- Download using the download module
+  local ok, err = download.download(url, dest_path)
   
-  if exit_code ~= 0 then
-    vim.notify("Download failed: " .. result, vim.log.levels.ERROR)
-    return false
-  end
-  
-  -- Check if file was actually downloaded (not empty or error page)
-  local stat = vim.loop.fs_stat(dest_path)
-  if not stat or stat.size < 1000 then
-    vim.notify(
-      "Downloaded file is too small or empty. Binary may not exist for this platform.",
-      vim.log.levels.ERROR
-    )
-    -- Clean up failed download
-    vim.fn.delete(dest_path)
+  if not ok then
+    vim.notify("Download failed: " .. (err or "Unknown error"), vim.log.levels.ERROR)
     return false
   end
   
@@ -170,9 +158,9 @@ function M.ensure_binary()
     )
   end
   
-  if not SUPPORTED_PLATFORMS[platform_key] then
+  if not M.SUPPORTED_PLATFORMS[platform_key] then
     local supported_list = {}
-    for plat, _ in pairs(SUPPORTED_PLATFORMS) do
+    for plat, _ in pairs(M.SUPPORTED_PLATFORMS) do
       table.insert(supported_list, "  - " .. plat:gsub("-", " "):gsub("^%l", string.upper))
     end
     table.sort(supported_list)
@@ -196,6 +184,22 @@ function M.ensure_binary()
         REPO_URL,
         M.get_data_dir()
       )
+    )
+  end
+  
+  -- Check if download tools are available
+  local download_tool = download.get_available_tool()
+  if not download_tool then
+    error(
+      "Unable to download Hermes binary.\n\n" ..
+      "No download tool found. Please install one of the following:\n" ..
+      "  - curl (preferred)\n" ..
+      "  - wget\n\n" ..
+      "Alternatively, you can build from source:\n" ..
+      "  1. Install Rust: https://rustup.rs/\n" ..
+      "  2. Run :Hermes build inside Neovim\n\n" ..
+      "For detailed instructions, see:\n" ..
+      "https://github.com/Ruddickmg/hermes.nvim#installation"
     )
   end
   

@@ -11,9 +11,6 @@ Hermes focuses on:
 - Hooks into requests from AI assistants that require responses (permission requests, access requests, etc)
 - Autocommands for updates on communication between the user (client) and assistant (agent) 
 
-> [!CAUTION]
-> While Hermes is a complete ACP client, most agents available today don't fully utilize the protocol. Key [optional features](https://agentclientprotocol.com/protocol/overview#optional-methods-2) (file operations, terminal commands, etc) are often handled through agent-specific tools rather than ACP methods. This means some Hermes capabilities may not be exercised depending on which agent you use.
-
 ## Installation
 
 **lazy.nvim**
@@ -38,7 +35,7 @@ require("hermes").setup()
 
 ### Requirements
 
-- **Neovim 0.11 or later**
+- Neovim 0.11 or later
 
 ### Pre-built Binary
 
@@ -52,7 +49,8 @@ Binaries are available for:
 - **macOS:** x86_64, arm64
 - **Windows:** x86_64
 
-> [!NOTE] Hermes will automatically detect and download a pre-built binary for supported platforms.
+> [!NOTE]
+> Hermes will automatically detect and download a pre-built binary for supported platforms.
 >
 > It will:
 > 1. Check if your platform is supported
@@ -112,7 +110,7 @@ If your platform isn't supported and building from source fails:
 2. Include:
    - Your operating system and version
    - Output of `:Hermes version` (if available)
-   - Full error messages from `:Hermes build`
+   - Full error messages from `:Hermes build` or `cargo build --release`
    - Architecture info from `uname -m` (or `uname -a` on macOS)
 
 ## Features
@@ -506,8 +504,10 @@ vim.api.nvim_create_autocmd("User", {
 
 When an agent makes a request that requires user input (such as a permission request), it triggers an autocommand and pauses until the user responds. Use the `respond` method with the request ID to resume the agent's operation. If no autocommand handler is defined, a default workflow will be triggered. Requests can be disabled via the setup configuration. 
 
-#### Permission request
+> [!WARNING]
+> While Hermes is a complete ACP client, most agents available today don't fully utilize the protocol. The following are autocommands are [optional features](https://agentclientprotocol.com/protocol/overview#optional-methods-2) and often handled through agent-specific tools rather than calling the ACP methods that trigger them. This means some Hermes capabilities may not be exercised depending on which agent you use.
 
+#### Permission request
 
 ```lua
 local hermes = require("hermes")
