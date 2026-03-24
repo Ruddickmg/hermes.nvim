@@ -1,5 +1,5 @@
 -- Unit tests for lua/hermes/config.lua
--- Tests configuration handling and validation
+-- Tests installation-only configuration (version and auto_download_binary)
 
 describe("hermes.config", function()
   local config
@@ -9,90 +9,71 @@ describe("hermes.config", function()
     config = require("hermes.config")
   end)
 
-  describe("validate()", function()
-    it("accepts valid config with all fields", function()
-      local valid = {
-        version = "latest",
-        auto_download_binary = true,
-        permissions = { fs_write_access = true }
-      }
-
-      local ok, err = config.validate(valid)
-      assert.is_true(ok, "Validation should pass: " .. tostring(err))
+  describe("setup()", function()
+    it("stores version setting", function()
+      config.setup({ version = "v1.0.0" })
+      
+      assert.equals("v1.0.0", config.get_version())
     end)
 
-    it("rejects non-string version", function()
-      local invalid = { version = 123 }
-
-      local ok, err = config.validate(invalid)
-      assert.is_false(ok)
-      assert.matches("version must be a string", err)
+    it("stores auto_download_binary setting", function()
+      config.setup({ auto_download_binary = false })
+      
+      assert.is_false(config.get_auto_download())
     end)
 
-    it("rejects non-boolean auto_download_binary", function()
-      local invalid = { auto_download_binary = "yes" }
+    it("defaults version to latest", function()
+      config.setup({})
+      
+      assert.equals("latest", config.get_version())
+    end)
 
-      local ok, err = config.validate(invalid)
-      assert.is_false(ok)
-      assert.matches("auto_download_binary must be a boolean", err)
+    it("defaults auto_download_binary to true", function()
+      config.setup({})
+      
+      assert.is_true(config.get_auto_download())
     end)
 
     it("accepts empty config", function()
-      local ok, err = config.validate({})
+      local ok = pcall(function()
+        config.setup({})
+      end)
+      
       assert.is_true(ok)
-      assert.is_nil(err)
-    end)
-  end)
-
-  describe("setup()", function()
-    it("merges user config with defaults", function()
-      config.setup({ auto_download_binary = false })
-      local current = config.get()
-
-      assert.is_false(current.auto_download_binary)
     end)
 
-    it("preserves defaults for unset fields", function()
-      config.setup({ auto_download_binary = false })
-      local current = config.get()
-
-      assert.equals("latest", current.version)
-    end)
-
-    it("allows partial nested config", function()
-      config.setup({
-        permissions = { fs_write_access = false }
-      })
-      local current = config.get()
-
-      assert.is_false(current.permissions.fs_write_access)
-      assert.is_true(current.permissions.fs_read_access)
-    end)
-
-    it("merges across multiple calls", function()
-      config.setup({ version = "v1.0.0" })
-      config.setup({ auto_download_binary = false })
-
-      local current = config.get()
-      assert.equals("v1.0.0", current.version)
+    it("accepts no arguments", function()
+      local ok = pcall(function()
+        config.setup()
+      end)
+      
+      assert.is_true(ok)
     end)
   end)
 
   describe("get()", function()
-    it("returns copy of current config", function()
-      config.setup({ version = "test-version" })
+    it("returns current installation config", function()
+      config.setup({ version = "test-version", auto_download_binary = false })
       local current = config.get()
 
       assert.equals("test-version", current.version)
+      assert.is_false(current.auto_download_binary)
     end)
+  end)
 
-    it("returns new instance after setup", function()
-      local before = config.get()
-      config.setup({ version = "changed" })
-      local after = config.get()
+  describe("get_version()", function()
+    it("returns version string", function()
+      config.setup({ version = "v2.0.0" })
+      
+      assert.equals("v2.0.0", config.get_version())
+    end)
+  end)
 
-			assert.are_not.same(before, after)
-			assert.equals("changed", after.version)
-		end)
-	end)
+  describe("get_auto_download()", function()
+    it("returns boolean value", function()
+      config.setup({ auto_download_binary = false })
+      
+      assert.is_false(config.get_auto_download())
+    end)
+  end)
 end)

@@ -12,8 +12,8 @@ fn test_setup_returns_set_mode_function() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;
 
     assert!(
-        dict.get("setMode").is_some(),
-        "setMode function should be registered"
+        dict.get("set_mode").is_some(),
+        "set_mode function should be registered"
     );
 
     Ok(())
@@ -27,9 +27,9 @@ fn test_set_mode_success() -> Result<(), nvim_oxi::Error> {
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
     let create_session: Function<CreateSessionArgs, ()> =
-        FromObject::from_object(dict.get("createSession").unwrap().clone())?;
+        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
     let set_mode: Function<SetModeArgs, ()> =
-        FromObject::from_object(dict.get("setMode").unwrap().clone())?;
+        FromObject::from_object(dict.get("set_mode").unwrap().clone())?;
 
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
@@ -67,7 +67,7 @@ fn test_set_mode_success() -> Result<(), nvim_oxi::Error> {
 
     assert!(
         mode_response.is_ok(),
-        "ModeUpdated autocommand should fire after setMode call"
+        "ModeUpdated autocommand should fire after set_mode call"
     );
 
     Ok(())

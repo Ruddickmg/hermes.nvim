@@ -1,5 +1,5 @@
 -- Integration tests for lua/hermes/init.lua
--- Tests that all API methods are available and have correct signatures
+-- Tests that documented API methods are available and have correct signatures
 
 local helpers = require("helpers")
 local stub = require("luassert.stub")
@@ -11,14 +11,10 @@ describe("hermes.init (main API)", function()
   local filereadable_stub
   
   before_each(function()
-    -- Create temp directory
     temp_dir = helpers.create_temp_dir()
-    
-    -- Create individual stubs
     stdpath_stub = stub(vim.fn, "stdpath").returns(temp_dir)
     filereadable_stub = stub(vim.fn, "filereadable").returns(1)
     
-    -- Reload modules
     package.loaded["hermes.init"] = nil
     package.loaded["hermes.binary"] = nil
     package.loaded["hermes.config"] = nil
@@ -30,13 +26,11 @@ describe("hermes.init (main API)", function()
   
   after_each(function()
     helpers.cleanup_temp_dir(temp_dir)
-    
-    -- Revert all individual stubs
     if stdpath_stub then stdpath_stub:revert() end
     if filereadable_stub then filereadable_stub:revert() end
   end)
   
-  describe("API surface", function()
+  describe("API surface (documented functions only)", function()
     it("exports setup function", function()
       assert.is_function(hermes.setup)
     end)
@@ -49,20 +43,20 @@ describe("hermes.init (main API)", function()
       assert.is_function(hermes.disconnect)
     end)
     
-    it("exports create_session function", function()
-      assert.is_function(hermes.create_session)
-    end)
-    
-    it("exports prompt function", function()
-      assert.is_function(hermes.prompt)
-    end)
-    
     it("exports authenticate function", function()
       assert.is_function(hermes.authenticate)
     end)
     
-    it("exports respond function", function()
-      assert.is_function(hermes.respond)
+    it("exports create_session function", function()
+      assert.is_function(hermes.create_session)
+    end)
+    
+    it("exports load_session function", function()
+      assert.is_function(hermes.load_session)
+    end)
+    
+    it("exports prompt function", function()
+      assert.is_function(hermes.prompt)
     end)
     
     it("exports cancel function", function()
@@ -73,12 +67,8 @@ describe("hermes.init (main API)", function()
       assert.is_function(hermes.set_mode)
     end)
     
-    it("exports load_session function", function()
-      assert.is_function(hermes.load_session)
-    end)
-    
-    it("exports list_sessions function", function()
-      assert.is_function(hermes.list_sessions)
+    it("exports respond function", function()
+      assert.is_function(hermes.respond)
     end)
   end)
   
@@ -109,19 +99,11 @@ describe("hermes.init (main API)", function()
       
       assert.is_true(ok)
     end)
-    
-    it("returns nil", function()
-      local result = hermes.setup({})
-      assert.is_nil(result)
-    end)
   end)
   
   describe("API function signatures", function()
     it("connect accepts agent name as first argument", function()
-      -- Just verify the function accepts the argument without crashing
-      -- We can't actually test the native call without the binary
       assert.has_no.errors(function()
-        -- This will fail to load binary, but verifies the function signature
         pcall(function() hermes.connect("test-agent") end)
       end)
     end)
@@ -149,6 +131,12 @@ describe("hermes.init (main API)", function()
       end)
     end)
     
+    it("load_session accepts session ID", function()
+      assert.has_no.errors(function()
+        pcall(function() hermes.load_session("session-id") end)
+      end)
+    end)
+    
     it("prompt accepts session ID and content", function()
       assert.has_no.errors(function()
         pcall(function() hermes.prompt("session-id", { type = "text", text = "Hello" }) end)
@@ -158,6 +146,18 @@ describe("hermes.init (main API)", function()
     it("authenticate accepts auth method ID", function()
       assert.has_no.errors(function()
         pcall(function() hermes.authenticate("auth-method-id") end)
+      end)
+    end)
+    
+    it("cancel accepts session ID", function()
+      assert.has_no.errors(function()
+        pcall(function() hermes.cancel("session-id") end)
+      end)
+    end)
+    
+    it("set_mode accepts session ID and mode ID", function()
+      assert.has_no.errors(function()
+        pcall(function() hermes.set_mode("session-id", "mode-id") end)
       end)
     end)
     

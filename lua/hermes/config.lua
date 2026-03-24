@@ -1,117 +1,47 @@
----Configuration management for Hermes
+---Configuration management for Hermes (Installation-only)
 ---@module hermes.config
+---Only stores installation-related configuration:
+---  - version: which binary version to download
+---  - auto_download_binary: whether to auto-download or require manual build
+---All other configuration is passed directly to the Rust binary
 
 local M = {}
 
----@type hermes.Config
+---@type table
 local _config = {}
 
----@type hermes.Config
+---Default configuration values
 local default_config = {
-  root_markers = { ".git" },
-  permissions = {
-    fs_write_access = true,
-    fs_read_access = true,
-    terminal_access = true,
-    request_permissions = true,
-    send_notifications = true,
-  },
-  terminal = {
-    delete = true,
-    enabled = true,
-    buffered = true,
-  },
-  buffer = {
-    auto_save = false,
-  },
-  log = {
-    stdio = {
-      level = "off",
-      format = "compact",
-    },
-    notification = {
-      level = "error",
-      format = "compact",
-    },
-    message = {
-      level = "off",
-      format = "compact",
-    },
-    quickfix = {
-      level = "off",
-      format = "compact",
-    },
-    file = {
-      level = "off",
-      format = "json",
-      path = vim.fn.stdpath("state") .. "/hermes.log",
-      max_size = 10485760,
-      max_files = 5,
-    },
-  },
   version = "latest",
   auto_download_binary = true,
 }
 
----Setup hermes configuration
----Multiple calls merge configurations - only specified fields are updated
----@param opts? hermes.Config User configuration options
+---Setup hermes installation configuration
+---Only stores version and auto_download_binary settings
+---All other configuration is passed directly to Rust binary
+---@param opts? table User configuration options { version?, auto_download_binary? }
 function M.setup(opts)
   opts = opts or {}
-  _config = vim.tbl_deep_extend("force", default_config, _config, opts)
+  _config.version = opts.version or default_config.version
+  _config.auto_download_binary = opts.auto_download_binary ~= false -- default true
 end
 
----Get current configuration
----@return hermes.Config Current configuration
+---Get current installation configuration
+---@return table Current configuration { version, auto_download_binary }
 function M.get()
   return _config
 end
 
----Get default configuration
----@return hermes.Config Default configuration
-function M.get_defaults()
-  return vim.deepcopy(default_config)
+---Get binary version setting
+---@return string Binary version to use
+function M.get_version()
+  return _config.version or default_config.version
 end
 
----Reset configuration to defaults
-function M.reset()
-  _config = vim.deepcopy(default_config)
-end
-
----Validate configuration
----@param opts hermes.Config Configuration to validate
----@return boolean valid Whether configuration is valid
----@return string|nil error Error message if invalid
-function M.validate(opts)
-  -- Check permissions
-  if opts.permissions then
-    for key, value in pairs(opts.permissions) do
-      if type(value) ~= "boolean" then
-        return false, string.format("permissions.%s must be a boolean", key)
-      end
-    end
-  end
-  
-  -- Check version
-  if opts.version and type(opts.version) ~= "string" then
-    return false, "version must be a string"
-  end
-  
-  -- Check auto_download_binary
-  if opts.auto_download_binary ~= nil and type(opts.auto_download_binary) ~= "boolean" then
-    return false, "auto_download_binary must be a boolean"
-  end
-  
-  -- Check log configuration
-  if opts.log then
-    for key, value in pairs(opts.log) do
-      if type(value) ~= "table" then
-        return false, string.format("log.%s must be a table", key)
-      end
-    end
-  end
-  
-  return true, nil
+---Get auto_download_binary setting
+---@return boolean Whether to auto-download binary
+function M.get_auto_download()
+  return _config.auto_download_binary ~= false
 end
 
 return M

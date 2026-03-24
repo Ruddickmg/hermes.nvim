@@ -289,10 +289,10 @@ Create a new session. If no arguments are provided, the session defaults to eith
 local hermes = require("hermes")
 
 -- use default session configuration
-hermes.createSession()
+hermes.create_session()
 
 -- customize connection configuration
-hermes.createSession({
+hermes.create_session({
   cwd = ".", -- path to create the session in (optional)
   mcpServers = {
     { -- Http or Sse MCP server definition
@@ -328,10 +328,10 @@ Load an existing session
 local hermes = require("hermes")
 
 -- call signature (uses defaults)
-hermes.loadSession(sessionId)
+hermes.load_session(sessionId)
 
 -- call signature (with further configuration)
-hermes.loadSession(sessionId, {
+hermes.load_session(sessionId, {
     cwd = ".", -- path to load the session from (optional, defaults to either project root or current directory)
     mcpServers = {
         { -- Http or Sse MCP server definition
@@ -363,7 +363,7 @@ vim.api.nvim_create_autocmd("User", {
     callback = function(args)
         local sessionId = args.data.sessionId
 
-        hermes.loadSession(sessionId)
+        hermes.load_session(sessionId)
     end,
 })
 ```
@@ -479,7 +479,7 @@ Set what mode the agent is in (the plan/build modes for opencode for example)
 local hermes = require("hermes")
 
 -- call signature
-hermes.setMode(sessionId, modeId)
+hermes.set_mode(sessionId, modeId)
 
 -- example
 vim.api.nvim_create_autocmd("User", {
@@ -492,7 +492,7 @@ vim.api.nvim_create_autocmd("User", {
             local selectedModeId = table.remove(modes.availableModes).id -- select mode id somehow
             local sessionId = args.data.sessionId
 
-            hermes.setMode(sessionId, selectedModeId)
+            hermes.set_mode(sessionId, selectedModeId)
         end
     end,
 })
@@ -954,7 +954,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="configurationupdated">
       <td><code>ConfigurationUpdated</code></td>
       <td>Session configuration updated</td>
-      <td>⚡ <a href="#load-session-optional">setSessionConfigOption()</a></td>
+      <td>⚡ <a href="#load-session-optional">set_session_configOption()</a></td>
       <td><pre><code class="language-json">{
   "configOptions": [
     {
@@ -987,7 +987,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
       <td><pre><code class="language-json">{
   "protocolVersion": "string",
   "agentCapabilities": {
-    "loadSession": "boolean",
+    "load_session": "boolean",
     "promptCapabilities": {
       "image": "boolean",
       "audio": "boolean",
@@ -1029,7 +1029,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="modeupdated">
       <td><code>ModeUpdated</code></td>
       <td>Session mode changed</td>
-      <td>⚡ <a href="#set-mode-optional">setMode()</a></td>
+      <td>⚡ <a href="#set-mode-optional">set_mode()</a></td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
@@ -1107,7 +1107,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessioncreated">
       <td><code>SessionCreated</code></td>
       <td>New session created</td>
-      <td>⚡ <a href="#create-session">createSession()</a></td>
+      <td>⚡ <a href="#create-session">create_session()</a></td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "modes": {
@@ -1147,7 +1147,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionforked">
       <td><code>SessionForked</code></td>
       <td>Session forked successfully</td>
-      <td>⚡ <a href="#load-session-optional">forkSession()</a></td>
+      <td>⚡ <a href="#load-session-optional">fork_session()</a></td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "modes": {
@@ -1187,7 +1187,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionloaded">
       <td><code>SessionLoaded</code></td>
       <td>Session loaded successfully</td>
-      <td>⚡ <a href="#load-session-optional">loadSession()</a></td>
+      <td>⚡ <a href="#load-session-optional">load_session()</a></td>
       <td><pre><code class="language-json">{
   "modes": {
     "currentModeId": "string",
@@ -1226,14 +1226,14 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionmodelupdated">
       <td><code>SessionModelUpdated</code></td>
       <td>Session model updated</td>
-      <td>⚡ <a href="#load-session-optional">setSessionModel()</a></td>
+      <td>⚡ <a href="#load-session-optional">set_session_model()</a></td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
     <tr id="sessionresumed">
       <td><code>SessionResumed</code></td>
       <td>Session resumed successfully</td>
-      <td>⚡ <a href="#load-session-optional">resumeSession()</a></td>
+      <td>⚡ <a href="#load-session-optional">resume_session()</a></td>
       <td><pre><code class="language-json">{
   "modes": {
     "currentModeId": "string",
@@ -1272,7 +1272,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionslisted">
       <td><code>SessionsListed</code></td>
       <td>Session list received</td>
-      <td>⚡ <a href="#load-session-optional">listSessions()</a></td>
+      <td>⚡ <a href="#load-session-optional">list_sessions()</a></td>
       <td><pre><code class="language-json">{
   "sessions": [
     {
