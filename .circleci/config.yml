@@ -443,11 +443,11 @@ jobs:
             cd luarocks-3.9.2
             ./configure && make && sudo make install
 
-            # Install vusted for testing
+            # Install vusted for testing and luacov-reporter-lcov for coverage
             eval $(luarocks path --lua-version 5.1 --bin)
             luarocks --lua-version=5.1 install vusted --local
             luarocks --lua-version=5.1 install luacov --local
-            luarocks --lua-version=5.1 install luacov-lcov --local
+            luarocks --lua-version=5.1 install luacov-reporter-lcov --local
       - run:
           name: Run Lua tests with coverage
           command: |
@@ -459,7 +459,8 @@ jobs:
           command: |
             eval $(luarocks path --lua-version 5.1 --bin)
             cd tests/lua
-            luacov -r lcov -o ../../lua.coverage.info
+            luacov -r lcov
+            mv luacov.report.out ../../lua.coverage.info
       - codecov/upload:
           fail_on_error: false
           files: lua.coverage.info
