@@ -59,6 +59,9 @@ any = true
 [assert.truthy]
 any = true
 
+[assert.is_truthy]
+any = true
+
 [assert.stub]
 any = true
 
