@@ -46,7 +46,7 @@ workflows:
     jobs:
       # ---- CI ----
       - check_formatting
-            - lua_tests
+      - lua_tests
       - check_license
       - integration_tests
       - unit_tests
