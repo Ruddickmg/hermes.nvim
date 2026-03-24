@@ -1,6 +1,6 @@
-# Lua Test Configuration
+-- Lua Test Configuration
 
-## Coverage
+-- Coverage configuration
 return {
   include = {
     "lua/hermes",
