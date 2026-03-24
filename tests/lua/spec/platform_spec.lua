@@ -90,13 +90,28 @@ describe("hermes.platform", function()
   end)
 
   describe("SUPPORTED_PLATFORMS", function()
-    it("contains expected platforms via binary module", function()
+    it("contains linux-x86_64 via binary module", function()
       local binary = require("hermes.binary")
-      -- Check each platform individually
       assert.is_true(binary.SUPPORTED_PLATFORMS["linux-x86_64"])
+    end)
+
+    it("contains linux-aarch64 via binary module", function()
+      local binary = require("hermes.binary")
       assert.is_true(binary.SUPPORTED_PLATFORMS["linux-aarch64"])
+    end)
+
+    it("contains macos-x86_64 via binary module", function()
+      local binary = require("hermes.binary")
       assert.is_true(binary.SUPPORTED_PLATFORMS["macos-x86_64"])
+    end)
+
+    it("contains macos-aarch64 via binary module", function()
+      local binary = require("hermes.binary")
       assert.is_true(binary.SUPPORTED_PLATFORMS["macos-aarch64"])
+    end)
+
+    it("contains windows-x86_64 via binary module", function()
+      local binary = require("hermes.binary")
       assert.is_true(binary.SUPPORTED_PLATFORMS["windows-x86_64"])
     end)
 

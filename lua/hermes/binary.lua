@@ -132,10 +132,10 @@ function M.build_from_source(dest_dir)
   
   -- Copy to destination
   local final_path = dest_dir .. "/libhermes." .. ext
-  vim.fn.system({ "cp", built_lib, final_path })
+  vim.fn.copy(built_lib, final_path)
   
   -- Clean up build directory
-  vim.fn.system({ "rm", "-rf", build_dir })
+  vim.fn.delete(build_dir, "rf")
   
     logging.notify("Build completed successfully!", vim.log.levels.INFO)
   return true
@@ -301,12 +301,12 @@ function M.load_or_build()
   
     logging.notify("Loading Hermes binary...", vim.log.levels.DEBUG)
   
-  local ok, lib = pcall(package.loadlib, bin_path, "luaopen_hermes")
-  if not ok or not lib then
+  local lib, err = package.loadlib(bin_path, "luaopen_hermes")
+  if not lib then
     error(string.format(
       "Failed to load native module from: %s\nError: %s",
       bin_path,
-      tostring(lib)
+      tostring(err)
     ))
   end
   

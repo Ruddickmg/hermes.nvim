@@ -27,7 +27,7 @@ hermes.nvim/
 
 ### 1. Automatic Binary Management (lua/hermes/binary.lua)
 - ✅ Downloads pre-built binaries from GitHub releases on first use
-- ✅ Automatic fallback to build from source if download fails
+- ✅ Supports building from source via user command when needed (no automatic fallback on download failure)
 - ✅ Platform detection (Linux, macOS, Windows) and architecture (x86_64, aarch64)
 - ✅ Progress notifications during download/build
 - ✅ Version tracking and caching

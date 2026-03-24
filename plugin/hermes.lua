@@ -17,10 +17,11 @@ vim.api.nvim_create_user_command("Hermes", function(args)
     local ok, err = pcall(function()
       local binary = require("hermes.binary")
       local version = require("hermes.version")
-      local ver = version.get_wanted()
       
       -- Clear cache to ensure fresh download
       version.clear_cache()
+      
+      local ver = version.get_wanted()
       
       local path = binary.get_binary_path()
       -- Remove existing binary if present
@@ -76,7 +77,7 @@ vim.api.nvim_create_user_command("Hermes", function(args)
     -- Show version info
     local platform = require("hermes.platform")
     local version = require("hermes.version")
-    local config = require("hermes.config")
+    require("hermes.config")
     
     local wanted = version.get_wanted()
     local cache_status = version.get_cache_status()
@@ -117,7 +118,7 @@ vim.api.nvim_create_user_command("Hermes", function(args)
     
     -- Remove data directory
     if vim.fn.isdirectory(data_dir) == 1 then
-      vim.fn.system({"rm", "-rf", data_dir})
+      vim.fn.delete(data_dir, "rf")
     end
     
     -- Clear version cache

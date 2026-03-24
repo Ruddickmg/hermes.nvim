@@ -48,7 +48,7 @@ local function get_native()
         "This is likely due to:\n" ..
         "1. Your platform is not supported (only Linux x86_64/aarch64, macOS x86_64/arm64, Windows x86_64)\n" ..
         "2. Network issues preventing download\n" ..
-        "3. Build toolchain not available for fallback compilation\n\n" ..
+        "3. Local environment issues (e.g. permissions or missing system dependencies)\n\n" ..
         "If you believe this is a bug, please create an issue at:\n" ..
         "https://github.com/Ruddickmg/hermes.nvim/issues\n\n" ..
         "When reporting, please include:\n" ..
