@@ -434,22 +434,22 @@ jobs:
       - run:
           name: Install Lua tools
           command: |
-            # Install luarocks with local user directory
+            # Install luarocks
             sudo apt-get update
             sudo apt-get install -y lua5.1 liblua5.1-dev
             curl -fsSL https://luarocks.org/releases/luarocks-3.9.2.tar.gz | tar xz
             cd luarocks-3.9.2
-            ./configure --with-lua-include=/usr/include/lua5.1 --local
+            ./configure --with-lua-include=/usr/include/lua5.1
             make
             sudo make install
             cd ..
             rm -rf luarocks-3.9.2
-            # Ensure luarocks local directories exist
-            mkdir -p ~/.luarocks/share/lua/5.1
-            mkdir -p ~/.luarocks/lib/lua/5.1
-            # Install vusted for testing (locally)
+            # Create system rocks directory (required for luarocks)
+            sudo mkdir -p /usr/local/lib/luarocks/rocks-5.1
+            sudo chmod 777 /usr/local/lib/luarocks/rocks-5.1
+            # Install vusted for testing
             eval $(luarocks path --lua-version 5.1 --bin)
-            luarocks --lua-version=5.1 install --local vusted
+            luarocks --lua-version=5.1 install vusted
       - run:
           name: Run Lua tests
           command: |
