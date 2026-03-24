@@ -130,9 +130,14 @@ function M.build_from_source(dest_dir)
     return false
   end
   
-  -- Copy to destination
+  -- Copy to destination using vim.uv.fs_copyfile (cross-platform via libuv)
   local final_path = dest_dir .. "/libhermes." .. ext
-  vim.fn.copy(built_lib, final_path)
+  local uv = vim.uv or vim.loop
+  local result, err = uv.fs_copyfile(built_lib, final_path)
+  if not result then
+    logging.notify("Failed to copy built library to: " .. final_path .. " - " .. (err or "unknown error"), vim.log.levels.ERROR)
+    return false
+  end
   
   -- Clean up build directory
   vim.fn.delete(build_dir, "rf")

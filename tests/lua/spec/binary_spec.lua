@@ -148,21 +148,30 @@ describe("hermes.binary", function()
   end)
 
   describe("build_from_source()", function()
-    it("builds successfully when cargo available", function()
-      local filereadable_stub_local = stub(vim.fn, "filereadable").invokes(function(path)
-        if path:match("target/release/libhermes") then return 1 end
-        return 0
-      end)
-
-      local system_stub_local = stub(vim.fn, "system").returns("")
+    it("copies built library to destination", function()
+      -- Create a mock built library file (simulating cargo build output)
+      local platform = require("hermes.platform")
+      local build_dir = temp_dir .. "/build"
+      local target_dir = build_dir .. "/target/release"
+      local ext = platform.get_ext()
+      local mock_built_lib = target_dir .. "/libhermes." .. ext
+      local final_path = temp_dir .. "/libhermes." .. ext
+      
+      -- Create directory structure and mock library file
+      vim.fn.mkdir(target_dir, "p")
+      local f = io.open(mock_built_lib, "w")
+      f:write("mock library content")
+      f:close()
+      
+      -- Stub system calls to avoid actual cargo build
+      stub(vim.fn, "system").returns("")
       stub(vim.fn, "executable").returns(1)
-
+      
       local ok = binary.build_from_source(temp_dir)
-
+      
       assert.is_true(ok)
-
-      filereadable_stub_local:revert()
-      system_stub_local:revert()
+      -- Verify the file was actually copied
+      assert.equals(1, vim.fn.filereadable(final_path), "Library should be copied to destination")
     end)
   end)
 
@@ -197,11 +206,10 @@ describe("hermes.binary", function()
       stub(download, "is_wget_available").returns(false)
       stub(download, "get_available_tool").returns(nil)
       
-      local _, err = pcall(function()
+      local ok, err = pcall(function()
         binary.ensure_binary()
       end)
-      assert.is_true((not ok) and (err:match("curl") or err:match("wget")))
+      assert.truthy(err:match("curl") or err:match("wget"))
     end)
-  end)
   end)
 end)

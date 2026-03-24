@@ -78,6 +78,7 @@ end
 ---Setup hermes plugin with configuration
 ---All configuration is passed to the Rust binary
 ---@param opts? table User configuration options
+--- TODO: ensure config is passed to the rust binary if it is loaded after setup is called.
 function M.setup(opts)
   opts = opts or {}
   

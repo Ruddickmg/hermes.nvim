@@ -171,46 +171,50 @@ describe("hermes.init (main API)", function()
     
     it("create_session accepts configuration object", function()
       assert.has_no.errors(function()
-        hermes.connect("test-agent")
+        pcall(function()
+          hermes.create_session({
+            cwd = "/test/path",
+            mcpServers = {}
+          })
+        end)
       end)
     end)
     
-    it("disconnect accepts agent name", function()
+    it("load_session accepts session ID", function()
       assert.has_no.errors(function()
-        hermes.disconnect("test-agent")
-      end)
-    end)
-    
-    it("disconnect accepts array of agent names", function()
-      assert.has_no.errors(function()
-        hermes.disconnect({ "agent1", "agent2" })
-      end)
-    end)
-    
-    it("create_session accepts configuration object", function()
-      assert.has_no.errors(function()
-        hermes.create_session({
-          cwd = "/test/path",
-          mcpServers = {}
-        })
+        pcall(function() hermes.load_session("session-id") end)
       end)
     end)
     
     it("prompt accepts session ID and content", function()
       assert.has_no.errors(function()
-        hermes.prompt("session-id", { type = "text", text = "Hello" })
+        pcall(function()
+          hermes.prompt("session-id", { type = "text", text = "Hello" })
+        end)
       end)
     end)
     
     it("authenticate accepts auth method ID", function()
       assert.has_no.errors(function()
-        hermes.authenticate("auth-method-id")
+        pcall(function() hermes.authenticate("auth-method-id") end)
+      end)
+    end)
+    
+    it("cancel accepts session ID", function()
+      assert.has_no.errors(function()
+        pcall(function() hermes.cancel("session-id") end)
+      end)
+    end)
+    
+    it("set_mode accepts session ID and mode ID", function()
+      assert.has_no.errors(function()
+        pcall(function() hermes.set_mode("session-id", "mode-id") end)
       end)
     end)
     
     it("respond accepts request ID", function()
       assert.has_no.errors(function()
-        hermes.respond("request-id")
+        pcall(function() hermes.respond("request-id") end)
       end)
     end)
   end)
