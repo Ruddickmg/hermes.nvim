@@ -458,9 +458,9 @@ jobs:
           name: Generate LCOV coverage report
           command: |
             eval $(luarocks path --lua-version 5.1 --bin)
-            cd tests/lua
-            luacov -r lcov
-            mv luacov.report.out ../../lua.coverage.info
+            # Run from project root where luacov.stats.out was generated
+            luacov -c tests/lua/.luacov -r lcov
+            mv luacov.report.out lua.coverage.info
       - codecov/upload:
           fail_on_error: false
           files: lua.coverage.info
