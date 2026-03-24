@@ -423,6 +423,7 @@ jobs:
     executor: ubuntu
     steps:
       - checkout
+      - rust/install
       - run:
           name: Install Neovim from tarball
           command: |
@@ -431,6 +432,9 @@ jobs:
             sudo mv nvim-linux-x86_64 /opt/nvim
             sudo ln -sf /opt/nvim/bin/nvim /usr/local/bin/nvim
             nvim --version
+      - run:
+          name: Build Hermes binary
+          command: cargo build --release
       - run:
           name: Install Lua tools
           command: |

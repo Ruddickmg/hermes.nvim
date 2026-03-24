@@ -34,6 +34,7 @@ function M.get_wanted()
 end
 
 ---Fetch latest release version from GitHub
+---Uses download module for cross-platform HTTP support
 ---Caches result for 1 hour to avoid rate limiting
 ---@return string version Latest version tag (e.g., "v0.1.0")
 function M.fetch_latest()
@@ -45,22 +46,32 @@ function M.fetch_latest()
 	-- Fetch from GitHub API
 	logging.notify("Fetching latest Hermes version...", vim.log.levels.INFO)
 
-	local cmd = {
-		"curl",
-		"-sL",
-		"-H",
-		"Accept: application/vnd.github.v3+json",
-		"https://api.github.com/repos/Ruddickmg/hermes.nvim/releases/latest",
-	}
-
-	local result = vim.fn.system(cmd)
-	local exit_code = vim.v.shell_error
-
-	if exit_code ~= 0 then
-		logging.notify("Failed to fetch latest version from GitHub. Using fallback.", vim.log.levels.WARN)
-		-- Return a reasonable fallback
+	-- Use download module for cross-platform HTTP support
+	local download = require("hermes.download")
+	local url = "https://api.github.com/repos/Ruddickmg/hermes.nvim/releases/latest"
+	
+	-- Create a temporary file for the response
+	local temp_file = os.tmpname()
+	
+	local success, err = download.download(url, temp_file)
+	
+	if not success then
+		logging.notify("Failed to fetch latest version from GitHub: " .. (err or "Unknown error") .. ". Using fallback.", vim.log.levels.WARN)
 		return "v0.1.0"
 	end
+
+	-- Read the response
+	local f = io.open(temp_file, "r")
+	if not f then
+		logging.notify("Could not read version response. Using fallback.", vim.log.levels.WARN)
+		return "v0.1.0"
+	end
+	
+	local result = f:read("*all")
+	f:close()
+	
+	-- Clean up temp file
+	os.remove(temp_file)
 
 	-- Parse JSON response (simple pattern matching)
 	local tag = result:match('"tag_name":%s*"([^"]+)"')
@@ -105,7 +116,7 @@ function M.validate(version)
 		return true
 	end
 	-- Must match vX.Y.Z pattern
-	return version:match("^v%d+%.%d+%.%d+$") ~= nil
+	return version:match("^v%d+%.%d+%.%d+%$") ~= nil
 end
 
 return M
