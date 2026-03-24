@@ -1,4 +1,5 @@
 local download = require("hermes.download")
+local logging = require("hermes.logging")
 
 ---Binary download and compilation management
 ---@module hermes.binary
@@ -60,7 +61,7 @@ function M.download(dest_path, version)
   local bin_name = platform.get_binary_name()
   local url = string.format("%s/%s/%s", BASE_URL, version, bin_name)
   
-  vim.notify(
+    logging.notify(
     string.format("Downloading Hermes binary for %s...", platform.get_display_string()),
     vim.log.levels.INFO
   )
@@ -71,7 +72,7 @@ function M.download(dest_path, version)
   local ok, err = download.download(url, dest_path)
   
   if not ok then
-    vim.notify("Download failed: " .. (err or "Unknown error"), vim.log.levels.ERROR)
+    logging.notify("Download failed: " .. (err or "Unknown error"), vim.log.levels.ERROR)
     return false
   end
   
@@ -80,7 +81,7 @@ function M.download(dest_path, version)
     vim.fn.system({ "chmod", "+x", dest_path })
   end
   
-  vim.notify("Binary downloaded successfully!", vim.log.levels.INFO)
+    logging.notify("Binary downloaded successfully!", vim.log.levels.INFO)
   return true
 end
 
@@ -89,7 +90,7 @@ end
 ---@param dest_dir string Destination directory
 ---@return boolean success Whether build succeeded
 function M.build_from_source(dest_dir)
-  vim.notify(
+    logging.notify(
     "Pre-built binary not available for your platform. Building from source...\n" ..
     "This may take a few minutes.",
     vim.log.levels.WARN
@@ -99,23 +100,23 @@ function M.build_from_source(dest_dir)
   local build_dir = dest_dir .. "/build"
   
   -- Clone repository
-  vim.notify("Cloning Hermes repository...", vim.log.levels.INFO)
+    logging.notify("Cloning Hermes repository...", vim.log.levels.INFO)
   local clone_cmd = {
     "git", "clone", "--depth", "1", "--branch", "main",
     REPO_URL, build_dir
   }
   local clone_result = vim.fn.system(clone_cmd)
   if vim.v.shell_error ~= 0 then
-    vim.notify("Failed to clone repository: " .. clone_result, vim.log.levels.ERROR)
+    logging.notify("Failed to clone repository: " .. clone_result, vim.log.levels.ERROR)
     return false
   end
   
   -- Build with cargo
-  vim.notify("Building Hermes from source (this may take a few minutes)...", vim.log.levels.INFO)
+    logging.notify("Building Hermes from source (this may take a few minutes)...", vim.log.levels.INFO)
   local build_cmd = { "cargo", "build", "--release", "--manifest-path", build_dir .. "/Cargo.toml" }
   local build_result = vim.fn.system(build_cmd)
   if vim.v.shell_error ~= 0 then
-    vim.notify("Build failed: " .. build_result, vim.log.levels.ERROR)
+    logging.notify("Build failed: " .. build_result, vim.log.levels.ERROR)
     return false
   end
   
@@ -125,7 +126,7 @@ function M.build_from_source(dest_dir)
   local built_lib = build_dir .. "/target/release/libhermes." .. ext
   
   if vim.fn.filereadable(built_lib) == 0 then
-    vim.notify("Could not find built library at: " .. built_lib, vim.log.levels.ERROR)
+    logging.notify("Could not find built library at: " .. built_lib, vim.log.levels.ERROR)
     return false
   end
   
@@ -136,7 +137,7 @@ function M.build_from_source(dest_dir)
   -- Clean up build directory
   vim.fn.system({ "rm", "-rf", build_dir })
   
-  vim.notify("Build completed successfully!", vim.log.levels.INFO)
+    logging.notify("Build completed successfully!", vim.log.levels.INFO)
   return true
 end
 
@@ -217,7 +218,7 @@ function M.ensure_binary()
     if vim.fn.filereadable(ver_file) == 1 then
       local current_ver = vim.fn.readfile(ver_file)[1]
       if current_ver ~= wanted_ver then
-        vim.notify(
+        logging.notify(
           string.format("Version mismatch: have %s, want %s", current_ver, wanted_ver),
           vim.log.levels.INFO
         )
@@ -288,7 +289,7 @@ function M.load_existing_binary()
     )
   end
   
-  vim.notify("Using existing Hermes binary: " .. bin_path, vim.log.levels.INFO)
+    logging.notify("Using existing Hermes binary: " .. bin_path, vim.log.levels.INFO)
   return bin_path
 end
 
@@ -298,7 +299,7 @@ end
 function M.load_or_build()
   local bin_path = M.ensure_binary()
   
-  vim.notify("Loading Hermes binary...", vim.log.levels.DEBUG)
+    logging.notify("Loading Hermes binary...", vim.log.levels.DEBUG)
   
   local ok, lib = pcall(package.loadlib, bin_path, "luaopen_hermes")
   if not ok or not lib then

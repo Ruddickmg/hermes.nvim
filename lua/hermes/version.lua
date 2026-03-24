@@ -1,6 +1,8 @@
 ---Version management for Hermes binaries
 ---@module hermes.version
 
+local logging = require("hermes.logging")
+
 local M = {}
 
 ---@type string|nil Cached latest version
@@ -41,7 +43,7 @@ function M.fetch_latest()
   end
   
   -- Fetch from GitHub API
-  vim.notify("Fetching latest Hermes version...", vim.log.levels.INFO)
+  logging.notify("Fetching latest Hermes version...", vim.log.levels.INFO)
   
   local cmd = {
     "curl", "-sL", "-H", "Accept: application/vnd.github.v3+json",
@@ -52,7 +54,7 @@ function M.fetch_latest()
   local exit_code = vim.v.shell_error
   
   if exit_code ~= 0 then
-    vim.notify(
+    logging.notify(
       "Failed to fetch latest version from GitHub. Using fallback.",
       vim.log.levels.WARN
     )
@@ -64,7 +66,7 @@ function M.fetch_latest()
   local tag = result:match('"tag_name":%s*"([^"]+)"')
   
   if not tag then
-    vim.notify(
+    logging.notify(
       "Could not parse version from GitHub response. Using fallback.",
       vim.log.levels.WARN
     )
@@ -75,7 +77,7 @@ function M.fetch_latest()
   _cached_latest = tag
   _cache_time = os.time()
   
-  vim.notify("Latest Hermes version: " .. tag, vim.log.levels.INFO)
+  logging.notify("Latest Hermes version: " .. tag, vim.log.levels.INFO)
   
   return tag
 end

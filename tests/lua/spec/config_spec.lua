@@ -69,11 +69,35 @@ describe("hermes.config", function()
     end)
   end)
 
-  describe("get_auto_download()", function()
-    it("returns boolean value", function()
-      config.setup({ auto_download_binary = false })
+  describe("get_notification_level()", function()
+    it("returns default error level", function()
+      config.setup({})
       
-      assert.is_false(config.get_auto_download())
+      assert.equals("error", config.get_notification_level())
+    end)
+    
+    it("returns configured level from string", function()
+      config.setup({
+        log = {
+          notification = {
+            level = "warn"
+          }
+        }
+      })
+      
+      assert.equals("warn", config.get_notification_level())
+    end)
+    
+    it("returns configured level from vim.log.levels", function()
+      config.setup({
+        log = {
+          notification = {
+            level = vim.log.levels.DEBUG
+          }
+        }
+      })
+      
+      assert.equals(vim.log.levels.DEBUG, config.get_notification_level())
     end)
   end)
 end)
