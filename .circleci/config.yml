@@ -452,8 +452,8 @@ jobs:
           name: Run Lua tests with coverage
           command: |
             eval $(luarocks path --lua-version 5.1 --bin)
-            cd tests/lua
-            vusted --coverage -e "package.path = package.path .. ';./?.lua'; package.path = package.path .. ';./spec/?.lua'; package.path = package.path .. ';../../lua/?.lua'; package.path = package.path .. ';../../lua/?/init.lua'" spec/
+            # Run from project root so that plugin/hermes.lua path resolves correctly
+            vusted --coverage -e "package.path = package.path .. ';./tests/lua/?.lua'; package.path = package.path .. ';./tests/lua/spec/?.lua'; package.path = package.path .. ';./lua/?.lua'; package.path = package.path .. ';./lua/?/init.lua'" tests/lua/spec/
       - run:
           name: Generate LCOV coverage report
           command: |
