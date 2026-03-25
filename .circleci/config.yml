@@ -190,25 +190,24 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install Rust
+          name: Install Rust via Chocolatey
           command: |
-            Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
-            ./rustup-init.exe -y --default-host x86_64-pc-windows-msvc
-            $env:Path += ";$env:USERPROFILE\.cargo\bin"
-            # Ensure MSVC toolchain is properly installed with all components
-            rustup toolchain install stable-x86_64-pc-windows-msvc
-            rustup default stable-x86_64-pc-windows-msvc
-            rustup target add x86_64-pc-windows-msvc
-            rustup show
+            # Install Rust using Chocolatey (handles MSVC toolchain properly)
+            choco install rust-ms -y
+            # Refresh environment
+            Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
+            refreshenv
             rustc --version
             cargo --version
+            rustup show
       - run:
           name: Install LLVM (for dlltool)
           command: |
-            # Install LLVM using Chocolatey (includes llvm-dlltool)
+            # Install LLVM using Chocolatey
             choco install llvm -y
             # LLVM is installed to C:\Program Files\LLVM by default
-            $env:Path += ";C:\Program Files\LLVM\bin"
+            Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
+            refreshenv
             # Verify dlltool is available
             if (Test-Path "C:\Program Files\LLVM\bin\llvm-dlltool.exe") {
                 Write-Host "llvm-dlltool found"
@@ -219,10 +218,8 @@ jobs:
       - run:
           name: Build for Windows x86_64
           command: |
-            $env:Path += ";$env:USERPROFILE\.cargo\bin"
-            $env:Path += ";C:\Program Files\LLVM\bin"
-            # Ensure target is installed (may not persist from previous step)
-            rustup target add x86_64-pc-windows-msvc
+            Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
+            refreshenv
             # Set dlltool for cargo
             $env:DLLTOOL = "C:\Program Files\LLVM\bin\llvm-dlltool.exe"
             cargo build --release --target x86_64-pc-windows-msvc
