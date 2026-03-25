@@ -200,6 +200,14 @@ jobs:
             rustc --version
             cargo --version
       - run:
+          name: Install Neovim from tarball
+          command: |
+            choco install neovim -y
+
+            # Ensure it's in PATH
+            refreshenv
+            nvim --version
+      - run:
           name: Install LLVM (for dlltool)
           command: |
             # Install LLVM using Chocolatey
@@ -221,6 +229,7 @@ jobs:
             refreshenv
             # Set dlltool for cargo
             $env:DLLTOOL = "C:\Program Files\LLVM\bin\llvm-dlltool.exe"
+            $env:NVIM_LIB_DIR = "C:\tools\neovim\Neovim\bin"
             cargo build --release --target x86_64-pc-windows-msvc
       - run:
           name: Rename binary for architecture
