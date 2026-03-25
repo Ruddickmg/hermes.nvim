@@ -204,6 +204,14 @@ jobs:
             choco install neovim -y
             refreshenv
       - run:
+          name: Setup MSVC environment
+          command: |
+            cmd /c "call \"C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat\" && set" | Out-String | ForEach-Object {
+              if ($_ -match "^(.*?)=(.*)$") {
+                Set-Item -Path "env:$($matches[1])" -Value $matches[2]
+              }
+            }
+      - run:
           name: Generate nvim.lib
           command: |
             $dll = "C:\ProgramData\chocolatey\lib\neovim\tools\nvim-win64\bin\nvim.dll"
