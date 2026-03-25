@@ -78,7 +78,6 @@ end
 ---Setup hermes plugin with configuration
 ---All configuration is passed to the Rust binary
 ---@param opts? table User configuration options
---- TODO: ensure config is passed to the rust binary if it is loaded after setup is called.
 function M.setup(opts)
   opts = opts or {}
   
@@ -89,10 +88,9 @@ function M.setup(opts)
     log = opts.log,
   })
   
-  -- Pass all config to Rust binary if it's already loaded
-  if _native then
-    _native.setup(opts)
-  end
+  -- Ensure native module is loaded and pass all config to Rust binary
+  -- This eager loading ensures configuration is always applied immediately
+  get_native().setup(opts)
 end
 
 -- ============================================================================
