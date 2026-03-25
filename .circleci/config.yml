@@ -198,9 +198,19 @@ jobs:
             rustc --version
             cargo --version
       - run:
+          name: Install MinGW (for dlltool)
+          command: |
+            # Install MinGW-w64 using Chocolatey (comes pre-installed on CircleCI Windows images)
+            choco install mingw -y
+            # Add MinGW to PATH
+            $env:Path += ";C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin"
+            # Verify dlltool is available
+            dlltool --version
+      - run:
           name: Build for Windows x86_64
           command: |
             $env:Path += ";$env:USERPROFILE\.cargo\bin"
+            $env:Path += ";C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin"
             cargo build --release
       - run:
           name: Rename binary for architecture
