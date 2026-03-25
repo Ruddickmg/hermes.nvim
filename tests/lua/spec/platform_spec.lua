@@ -1,12 +1,19 @@
 -- Unit tests for lua/hermes/platform.lua
 -- Tests platform detection and binary naming
 
+local stub = require("luassert.stub")
+
 describe("hermes.platform", function()
   local platform
+  local os_uname_stub
 
   before_each(function()
     package.loaded["hermes.platform"] = nil
     platform = require("hermes.platform")
+  end)
+
+  after_each(function()
+    if os_uname_stub then os_uname_stub:revert() end
   end)
 
   describe("get_os()", function()
@@ -23,6 +30,35 @@ describe("hermes.platform", function()
       local os = platform.get_os()
       assert.equals(os, os:lower())
     end)
+    
+    it("detects Windows via sysname pattern", function()
+      os_uname_stub = stub(vim.loop, "os_uname").returns({
+        sysname = "Windows_NT",
+        machine = "x86_64"
+      })
+      
+      local os = platform.get_os()
+      
+      assert.equals("windows", os)
+    end)
+    
+    it("falls back to vim.fn.has for unknown sysname", function()
+      os_uname_stub = stub(vim.loop, "os_uname").returns({
+        sysname = "UnknownOS",
+        machine = "x86_64"
+      })
+      local has_stub = stub(vim.fn, "has")
+      has_stub.on_call_with("win32").returns(0)
+      has_stub.on_call_with("win64").returns(0)
+      has_stub.on_call_with("mac").returns(1)
+      has_stub.on_call_with("osx").returns(0)
+      has_stub.on_call_with("linux").returns(0)
+      
+      local os = platform.get_os()
+      
+      assert.equals("macos", os)
+      has_stub:revert()
+    end)
   end)
 
   describe("get_arch()", function()
@@ -38,6 +74,58 @@ describe("hermes.platform", function()
       local arch1 = platform.get_arch()
       local arch2 = platform.get_arch()
       assert.equals(arch1, arch2)
+    end)
+    
+    it("normalizes arm64 to aarch64", function()
+      os_uname_stub = stub(vim.loop, "os_uname").returns({
+        sysname = "Linux",
+        machine = "arm64"
+      })
+      
+      package.loaded["hermes.platform"] = nil
+      platform = require("hermes.platform")
+      
+      assert.equals("aarch64", platform.get_arch())
+    end)
+    
+    it("normalizes amd64 to x86_64", function()
+      os_uname_stub = stub(vim.loop, "os_uname").returns({
+        sysname = "Linux",
+        machine = "amd64"
+      })
+      
+      package.loaded["hermes.platform"] = nil
+      platform = require("hermes.platform")
+      
+      assert.equals("x86_64", platform.get_arch())
+    end)
+    
+    it("errors on 32-bit x86 architecture", function()
+      os_uname_stub = stub(vim.loop, "os_uname").returns({
+        sysname = "Linux",
+        machine = "i386"
+      })
+      
+      package.loaded["hermes.platform"] = nil
+      platform = require("hermes.platform")
+      
+      local ok, err = pcall(function() return platform.get_arch() end)
+      assert.is_false(ok)
+      assert.truthy(err:match("32%-bit"))
+    end)
+    
+    it("errors on unsupported architecture", function()
+      os_uname_stub = stub(vim.loop, "os_uname").returns({
+        sysname = "Linux",
+        machine = "mips"
+      })
+      
+      package.loaded["hermes.platform"] = nil
+      platform = require("hermes.platform")
+      
+      local ok, err = pcall(function() return platform.get_arch() end)
+      assert.is_false(ok)
+      assert.truthy(err:match("Unsupported architecture"))
     end)
   end)
 
@@ -77,6 +165,19 @@ describe("hermes.platform", function()
       assert.matches(os:gsub("^%l", string.upper), display)
       assert.matches(arch, display)
     end)
+    
+    it("returns unknown platform when detection fails", function()
+      os_uname_stub = stub(vim.loop, "os_uname").returns({
+        sysname = "Unknown",
+        machine = "unknown"
+      })
+      
+      package.loaded["hermes.platform"] = nil
+      platform = require("hermes.platform")
+      
+      local display = platform.get_display_string()
+      assert.equals("Unknown Platform", display)
+    end)
   end)
 
   describe("get_platform_key()", function()
@@ -86,6 +187,41 @@ describe("hermes.platform", function()
       local arch = platform.get_arch()
 
       assert.equals(os .. "-" .. arch, key)
+    end)
+    
+    it("returns nil when platform detection fails", function()
+      os_uname_stub = stub(vim.loop, "os_uname").returns({
+        sysname = "Unknown",
+        machine = "unknown"
+      })
+      
+      package.loaded["hermes.platform"] = nil
+      platform = require("hermes.platform")
+      
+      local key = platform.get_platform_key()
+      assert.is_nil(key)
+    end)
+  end)
+
+  describe("is_supported()", function()
+    it("returns true for supported platforms", function()
+      local supported, err = platform.is_supported()
+      assert.is_true(supported)
+      assert.is_nil(err)
+    end)
+    
+    it("returns false and error for unsupported platforms", function()
+      os_uname_stub = stub(vim.loop, "os_uname").returns({
+        sysname = "Unknown",
+        machine = "unknown"
+      })
+      
+      package.loaded["hermes.platform"] = nil
+      platform = require("hermes.platform")
+      
+      local supported, err = platform.is_supported()
+      assert.is_false(supported)
+      assert.is_not_nil(err)
     end)
   end)
 
