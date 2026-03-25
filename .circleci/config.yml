@@ -201,14 +201,13 @@ jobs:
       - run:
           name: Install LLVM (for dlltool)
           command: |
-            # Download LLVM for Windows which includes dlltool
-            Invoke-WebRequest -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.8/LLVM-18.1.8-win64.exe" -OutFile "llvm-installer.exe"
-            # Silent install
-            Start-Process -FilePath ".\llvm-installer.exe" -ArgumentList "/S", "/D=C:\llvm" -Wait
-            $env:Path += ";C:\llvm\bin"
-            # Verify dlltool is available (LLVM includes llvm-dlltool which works as dlltool)
-            if (Test-Path "C:\llvm\bin\llvm-dlltool.exe") {
-                Write-Host "llvm-dlltool found at C:\llvm\bin\llvm-dlltool.exe"
+            # Install LLVM using Chocolatey (includes llvm-dlltool)
+            choco install llvm -y
+            # LLVM is installed to C:\Program Files\LLVM by default
+            $env:Path += ";C:\Program Files\LLVM\bin"
+            # Verify dlltool is available
+            if (Test-Path "C:\Program Files\LLVM\bin\llvm-dlltool.exe") {
+                Write-Host "llvm-dlltool found"
             } else {
                 Write-Error "llvm-dlltool not found"
                 exit 1
@@ -217,9 +216,9 @@ jobs:
           name: Build for Windows x86_64
           command: |
             $env:Path += ";$env:USERPROFILE\.cargo\bin"
-            $env:Path += ";C:\llvm\bin"
+            $env:Path += ";C:\Program Files\LLVM\bin"
             # Set dlltool for cargo
-            $env:DLLTOOL = "C:\llvm\bin\llvm-dlltool.exe"
+            $env:DLLTOOL = "C:\Program Files\LLVM\bin\llvm-dlltool.exe"
             cargo build --release --target x86_64-pc-windows-msvc
       - run:
           name: Rename binary for architecture
