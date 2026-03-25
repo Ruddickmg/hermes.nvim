@@ -198,19 +198,20 @@ jobs:
             rustc --version
             cargo --version
       - run:
-          name: Install MSYS2 (for dlltool)
+          name: Install MSYS2 (for dlltool and Lua)
           command: |
             # Install MSYS2 using Chocolatey
             choco install msys2 -y --params "/NoUpdate"
-            # Add MSYS2 to PATH for dlltool
-            $env:Path += ";C:\msys64\usr\bin;C:\msys64\mingw64\bin"
+            # Install Lua and binutils via MSYS2 pacman
+            C:\msys64\usr\bin\bash.exe -lc "pacman -S --noconfirm mingw-w64-x86_64-lua mingw-w64-x86_64-binutils"
             # Verify dlltool is available
-            dlltool --version
+            C:\msys64\usr\bin\dlltool.exe --version
       - run:
           name: Build for Windows x86_64
           command: |
             $env:Path += ";$env:USERPROFILE\.cargo\bin"
-            $env:Path += ";C:\msys64\usr\bin;C:\msys64\mingw64\bin"
+            # Set LIB environment variable to include MSYS2 Lua libraries
+            $env:LIB = "C:\msys64\mingw64\lib"
             cargo build --release
       - run:
           name: Rename binary for architecture
