@@ -9,9 +9,9 @@ pub use log::{
     LogTargetConfigPartial,
 };
 use nvim_oxi::{
+    Array, Dictionary, Object, ObjectKind,
     conversion::{Error, FromObject},
     lua::{self, Poppable},
-    Array, Dictionary, Object, ObjectKind,
 };
 pub use permissions::{Permissions, PermissionsPartial};
 pub use terminal::{TerminalConfig, TerminalConfigPartial};
