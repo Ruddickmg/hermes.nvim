@@ -119,7 +119,7 @@ function M.validate(version)
 		return true
 	end
 	-- Must match vX.Y.Z pattern
-	return version:match("^v%d+%.%d+%.%d+%$") ~= nil
+	return version:match("^v%d+%.%d+%.%d+$") ~= nil
 end
 
 return M
