@@ -65,10 +65,10 @@ workflows:
                 - main
           requires:
             - build-windows-x86_64
-            - build-linux-x86_64-release
-            - build-linux-aarch64-release
-            - build-mac-aarch64-release
-            - build-mac-x86_64-release
+            - build-linux-x86_64
+            - build-linux-aarch64
+            - build-mac-aarch64
+            - build-mac-x86_64
 
       - release:
           name: pre-release
@@ -78,10 +78,10 @@ workflows:
                 - development
           requires:
             - build-windows-x86_64
-            - build-linux-x86_64-prerelease
-            - build-linux-aarch64-prerelease
-            - build-mac-aarch64-prerelease
-            - build-mac-x86_64-prerelease
+            - build-linux-x86_64
+            - build-linux-aarch64
+            - build-mac-aarch64
+            - build-mac-x86_64
 
 #-----------------------------------------------------------------------------------------------------------------------------
 
