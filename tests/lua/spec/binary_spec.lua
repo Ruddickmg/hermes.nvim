@@ -183,13 +183,10 @@ describe("hermes.binary", function()
     it("uses correct filename format consistent with get_binary_path()", function()
       local platform = require("hermes.platform")
       local expected_name = platform.get_binary_name()
-      local expected_path_pattern = "libhermes%-%w+%-[%w_]+%."
       
-      -- Verify the binary name includes platform and arch
-      assert.truthy(expected_name:match("libhermes%-"), "Binary name should start with libhermes-")
-      assert.truthy(expected_name:match("%-" .. platform.get_os()), "Binary name should include OS")
-      assert.truthy(expected_name:match("%-" .. platform.get_arch()), "Binary name should include arch")
-      assert.truthy(expected_name:match("%." .. platform.get_ext() .. "$"), "Binary name should end with correct extension")
+      -- Build expected format and verify in single assertion
+      local expected_format = "libhermes-" .. platform.get_os() .. "-" .. platform.get_arch() .. "." .. platform.get_ext()
+      assert.equals(expected_format, expected_name)
     end)
     
     it("build_from_source uses platform.get_binary_name() for destination", function()
@@ -266,7 +263,7 @@ describe("hermes.binary", function()
       stub(download, "is_wget_available").returns(false)
       stub(download, "get_available_tool").returns(nil)
       
-      local ok, err = pcall(function()
+      local _, err = pcall(function()
         binary.ensure_binary()
       end)
       assert.truthy(err:match("curl") or err:match("wget"))
