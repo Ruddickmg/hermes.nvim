@@ -193,20 +193,24 @@ jobs:
           name: Install Rust
           command: |
             Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
-            ./rustup-init.exe -y --default-host x86_64-pc-windows-gnu
+            ./rustup-init.exe -y --default-host x86_64-pc-windows-msvc
             $env:Path += ";$env:USERPROFILE\.cargo\bin"
             rustc --version
             cargo --version
       - run:
-          name: Install MinGW (for dlltool)
+          name: Install MSYS2 (for dlltool)
           command: |
-            # Install MinGW-w64 using Chocolatey
-            choco install mingw -y
+            # Install MSYS2 using Chocolatey
+            choco install msys2 -y --params "/NoUpdate"
+            # Add MSYS2 to PATH for dlltool
+            $env:Path += ";C:\msys64\usr\bin;C:\msys64\mingw64\bin"
+            # Verify dlltool is available
+            dlltool --version
       - run:
           name: Build for Windows x86_64
           command: |
             $env:Path += ";$env:USERPROFILE\.cargo\bin"
-            $env:Path += ";C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin"
+            $env:Path += ";C:\msys64\usr\bin;C:\msys64\mingw64\bin"
             cargo build --release
       - run:
           name: Rename binary for architecture
