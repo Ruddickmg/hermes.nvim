@@ -207,7 +207,12 @@ jobs:
             Start-Process -FilePath ".\llvm-installer.exe" -ArgumentList "/S", "/D=C:\llvm" -Wait
             $env:Path += ";C:\llvm\bin"
             # Verify dlltool is available (LLVM includes llvm-dlltool which works as dlltool)
-            C:\llvm\bin\llvm-dlltool.exe --version
+            if (Test-Path "C:\llvm\bin\llvm-dlltool.exe") {
+                Write-Host "llvm-dlltool found at C:\llvm\bin\llvm-dlltool.exe"
+            } else {
+                Write-Error "llvm-dlltool not found"
+                exit 1
+            }
       - run:
           name: Build for Windows x86_64
           command: |
