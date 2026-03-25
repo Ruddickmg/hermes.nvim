@@ -199,6 +199,7 @@ jobs:
             rustup toolchain install stable-x86_64-pc-windows-msvc
             rustup default stable-x86_64-pc-windows-msvc
             rustup target add x86_64-pc-windows-msvc
+            rustup show
             rustc --version
             cargo --version
       - run:
@@ -220,6 +221,8 @@ jobs:
           command: |
             $env:Path += ";$env:USERPROFILE\.cargo\bin"
             $env:Path += ";C:\Program Files\LLVM\bin"
+            # Ensure target is installed (may not persist from previous step)
+            rustup target add x86_64-pc-windows-msvc
             # Set dlltool for cargo
             $env:DLLTOOL = "C:\Program Files\LLVM\bin\llvm-dlltool.exe"
             cargo build --release --target x86_64-pc-windows-msvc
