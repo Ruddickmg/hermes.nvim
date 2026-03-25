@@ -186,70 +186,60 @@ jobs:
             - libhermes-macos-x86_64.dylib
 
   build-windows-x86_64:
-    executor: windows/default
-    steps:
-      - checkout
-      - run:
-          name: Install Rust via Chocolatey
-          command: |
-            # Install Rust using Chocolatey (handles MSVC toolchain properly)
-            choco install rust-ms -y
-            # Refresh environment
-            Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
-            refreshenv
-            rustc --version
-            cargo --version
-      - run:
-          name: Install Neovim from tarball
-          command: |
-            choco install neovim -y
+  executor: windows/default
+  steps:
+    - checkout
 
-            # Ensure it's in PATH
-            refreshenv
-            nvim --version
-      - run:
-          name: Install LLVM (for dlltool)
-          command: |
-            # Install LLVM using Chocolatey
-            choco install llvm -y
-            # LLVM is installed to C:\Program Files\LLVM by default
-            Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
-            refreshenv
-            # Verify dlltool is available
-            if (Test-Path "C:\Program Files\LLVM\bin\llvm-dlltool.exe") {
-                Write-Host "llvm-dlltool found"
-            } else {
-                Write-Error "llvm-dlltool not found"
-                exit 1
-            }
-      - run:
-          name: Build for Windows x86_64
-          command: |
-            Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
-            refreshenv
-            # Set dlltool for cargo
-            $env:DLLTOOL = "C:\Program Files\LLVM\bin\llvm-dlltool.exe"
-            # Add Neovim's libuv to library search path
-            $env:LIB = "C:\tools\neovim\Neovim\lib;C:\tools\neovim\Neovim\bin;$env:LIB"
-            # Set PKG_CONFIG_PATH to help find libuv
-            $env:PKG_CONFIG_PATH = "C:\tools\neovim\Neovim\lib\pkgconfig;$env:PKG_CONFIG_PATH"
-            cargo build --release --target x86_64-pc-windows-msvc
-      - run:
-          name: Rename binary for architecture
-          command: |
-            Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
-            refreshenv
-            # On Windows with MSVC target, binary is in target/x86_64-pc-windows-msvc/release/
-            if (Test-Path target/x86_64-pc-windows-msvc/release/hermes.dll) {
-                Move-Item target/x86_64-pc-windows-msvc/release/hermes.dll target/x86_64-pc-windows-msvc/release/libhermes-windows-x86_64.dll
-            } elseif (Test-Path target/x86_64-pc-windows-msvc/release/libhermes.dll) {
-                Move-Item target/x86_64-pc-windows-msvc/release/libhermes.dll target/x86_64-pc-windows-msvc/release/libhermes-windows-x86_64.dll
-            }
-            Get-ChildItem target/x86_64-pc-windows-msvc/release/*.dll | Select-Object Name
-      - persist_to_workspace:
-          root: target/x86_64-pc-windows-msvc/release
-          paths:
-            - libhermes-windows-x86_64.dll
+    - run:
+        name: Install Rust (GNU target)
+        command: |
+          choco install rustup.install -y
+          refreshenv
+
+          rustup default stable
+          rustup target add x86_64-pc-windows-gnu
+
+          rustc --version
+          cargo --version
+
+    - run:
+        name: Install MinGW (GNU toolchain)
+        command: |
+          choco install mingw -y
+          refreshenv
+
+          # Add MinGW to PATH explicitly (important in CI)
+          $env:PATH = "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin;$env:PATH"
+
+          # Verify gcc exists
+          gcc --version
+
+    - run:
+        name: Build for Windows (GNU)
+        command: |
+          # Ensure MinGW is in PATH for this step too
+          $env:PATH = "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin;$env:PATH"
+
+          cargo build --release --target x86_64-pc-windows-gnu
+
+    - run:
+        name: Rename binary for architecture
+        command: |
+          $dllPath = "target/x86_64-pc-windows-gnu/release/hermes.dll"
+
+          if (Test-Path $dllPath) {
+              Move-Item $dllPath "target/x86_64-pc-windows-gnu/release/libhermes-windows-x86_64.dll"
+          } else {
+              Write-Error "DLL not found at expected path"
+              exit 1
+          }
+
+          Get-ChildItem target/x86_64-pc-windows-gnu/release/*.dll | Select-Object Name
+
+    - persist_to_workspace:
+        root: target/x86_64-pc-windows-gnu/release
+        paths:
+          - libhermes-windows-x86_64.dll
 
   check_formatting:
     executor: rust-linux-x86_64
