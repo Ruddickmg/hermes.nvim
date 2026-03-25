@@ -186,60 +186,60 @@ jobs:
             - libhermes-macos-x86_64.dylib
 
   build-windows-x86_64:
-  executor: windows/default
-  steps:
-    - checkout
+    executor: windows/default
+    steps:
+      - checkout
 
-    - run:
-        name: Install Rust (GNU target)
-        command: |
-          choco install rustup.install -y
-          refreshenv
+      - run:
+          name: Install Rust (GNU target)
+          command: |
+            choco install rustup.install -y
+            refreshenv
 
-          rustup default stable
-          rustup target add x86_64-pc-windows-gnu
+            rustup default stable
+            rustup target add x86_64-pc-windows-gnu
 
-          rustc --version
-          cargo --version
+            rustc --version
+            cargo --version
 
-    - run:
-        name: Install MinGW (GNU toolchain)
-        command: |
-          choco install mingw -y
-          refreshenv
+      - run:
+          name: Install MinGW (GNU toolchain)
+          command: |
+            choco install mingw -y
+            refreshenv
 
-          # Add MinGW to PATH explicitly (important in CI)
-          $env:PATH = "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin;$env:PATH"
+            # Add MinGW to PATH explicitly (important in CI)
+            $env:PATH = "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin;$env:PATH"
 
-          # Verify gcc exists
-          gcc --version
+            # Verify gcc exists
+            gcc --version
 
-    - run:
-        name: Build for Windows (GNU)
-        command: |
-          # Ensure MinGW is in PATH for this step too
-          $env:PATH = "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin;$env:PATH"
+      - run:
+          name: Build for Windows (GNU)
+          command: |
+            # Ensure MinGW is in PATH for this step too
+            $env:PATH = "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin;$env:PATH"
 
-          cargo build --release --target x86_64-pc-windows-gnu
+            cargo build --release --target x86_64-pc-windows-gnu
 
-    - run:
-        name: Rename binary for architecture
-        command: |
-          $dllPath = "target/x86_64-pc-windows-gnu/release/hermes.dll"
+      - run:
+          name: Rename binary for architecture
+          command: |
+            $dllPath = "target/x86_64-pc-windows-gnu/release/hermes.dll"
 
-          if (Test-Path $dllPath) {
-              Move-Item $dllPath "target/x86_64-pc-windows-gnu/release/libhermes-windows-x86_64.dll"
-          } else {
-              Write-Error "DLL not found at expected path"
-              exit 1
-          }
+            if (Test-Path $dllPath) {
+                Move-Item $dllPath "target/x86_64-pc-windows-gnu/release/libhermes-windows-x86_64.dll"
+            } else {
+                Write-Error "DLL not found at expected path"
+                exit 1
+            }
 
-          Get-ChildItem target/x86_64-pc-windows-gnu/release/*.dll | Select-Object Name
+            Get-ChildItem target/x86_64-pc-windows-gnu/release/*.dll | Select-Object Name
 
-    - persist_to_workspace:
-        root: target/x86_64-pc-windows-gnu/release
-        paths:
-          - libhermes-windows-x86_64.dll
+      - persist_to_workspace:
+          root: target/x86_64-pc-windows-gnu/release
+          paths:
+            - libhermes-windows-x86_64.dll
 
   check_formatting:
     executor: rust-linux-x86_64
