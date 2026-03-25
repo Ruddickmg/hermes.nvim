@@ -185,73 +185,73 @@ jobs:
           paths:
             - libhermes-macos-x86_64.dylib
 
-    build-windows-x86_64:
-      executor: windows/default
-      steps:
-        - checkout
+  build-windows-x86_64:
+    executor: windows/default
+    steps:
+      - checkout
 
-        # Install Rust with MSVC target
-        - run:
-            name: Install Rust (MSVC)
-            command: |
-              choco install rustup.install -y
-              refreshenv
-              rustup default stable
-              rustup target add x86_64-pc-windows-msvc
-              rustc --version
-              cargo --version
+      # Install Rust with MSVC target
+      - run:
+          name: Install Rust (MSVC)
+          command: |
+            choco install rustup.install -y
+            refreshenv
+            rustup default stable
+            rustup target add x86_64-pc-windows-msvc
+            rustc --version
+            cargo --version
 
-        # Install Neovim so we get nvim.dll
-        - run:
-            name: Install Neovim
-            command: |
-              choco install neovim -y
-              refreshenv
+      # Install Neovim so we get nvim.dll
+      - run:
+          name: Install Neovim
+          command: |
+            choco install neovim -y
+            refreshenv
 
-        # Install LLVM for dlltool
-        - run:
-            name: Install LLVM
-            command: |
-              choco install llvm -y
-              refreshenv
+      # Install LLVM for dlltool
+      - run:
+          name: Install LLVM
+          command: |
+            choco install llvm -y
+            refreshenv
 
-        # Generate an import library for nvim.dll
-        - run:
-            name: Generate nvim import lib
-            command: |
-              # locate nvim.dll
-              $dll = "C:\ProgramData\chocolatey\lib\neovim\tools\nvim-win64\bin\nvim.dll"
-              # run llvm-dlltool to make nvim.lib
-              llvm-dlltool -D $dll -l nvim.lib -d nvim.def
+      # Generate an import library for nvim.dll
+      - run:
+          name: Generate nvim import lib
+          command: |
+            # locate nvim.dll
+            $dll = "C:\ProgramData\chocolatey\lib\neovim\tools\nvim-win64\bin\nvim.dll"
+            # run llvm-dlltool to make nvim.lib
+            llvm-dlltool -D $dll -l nvim.lib -d nvim.def
 
-              # list generated files
-              dir .
+            # list generated files
+            dir .
 
-        # Build with MSVC
-        - run:
-            name: Build for Windows (MSVC)
-            command: |
-              # tell cargo where to find our generated import lib
-              set RUSTFLAGS=-L .
-              cargo build --release --target x86_64-pc-windows-msvc
+      # Build with MSVC
+      - run:
+          name: Build for Windows (MSVC)
+          command: |
+            # tell cargo where to find our generated import lib
+            set RUSTFLAGS=-L .
+            cargo build --release --target x86_64-pc-windows-msvc
 
-        # Rename output file
-        - run:
-            name: Rename binary for architecture
-            command: |
-              $dllPath = "target/x86_64-pc-windows-msvc/release/hermes.dll"
-              if (Test-Path $dllPath) {
-                Move-Item $dllPath "target/x86_64-pc-windows-msvc/release/libhermes-windows-x86_64.dll"
-              } else {
-                Write-Error "DLL not found at expected path"
-                exit 1
-              }
+      # Rename output file
+      - run:
+          name: Rename binary for architecture
+          command: |
+            $dllPath = "target/x86_64-pc-windows-msvc/release/hermes.dll"
+            if (Test-Path $dllPath) {
+              Move-Item $dllPath "target/x86_64-pc-windows-msvc/release/libhermes-windows-x86_64.dll"
+            } else {
+              Write-Error "DLL not found at expected path"
+              exit 1
+            }
 
-        # Persist to workspace
-        - persist_to_workspace:
-            root: target/x86_64-pc-windows-msvc/release
-            paths:
-              - libhermes-windows-x86_64.dll
+      # Persist to workspace
+      - persist_to_workspace:
+          root: target/x86_64-pc-windows-msvc/release
+          paths:
+            - libhermes-windows-x86_64.dll
 
   check_formatting:
     executor: rust-linux-x86_64
