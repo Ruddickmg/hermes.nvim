@@ -1,7 +1,9 @@
 use nvim_oxi::{
-    Dictionary, Object,
     conversion::{Error, FromObject},
+    Object,
 };
+
+use super::dict_from_object;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct BufferConfig {
@@ -25,7 +27,7 @@ impl BufferConfigPartial {
 
 impl FromObject for BufferConfigPartial {
     fn from_object(obj: Object) -> Result<Self, Error> {
-        let dict = Dictionary::from_object(obj)?;
+        let dict = dict_from_object(obj)?;
         let auto_save = dict
             .get("auto_save")
             .map(|o| bool::from_object(o.clone()))

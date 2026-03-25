@@ -1,7 +1,9 @@
 use nvim_oxi::{
-    Dictionary, Object,
     conversion::{Error, FromObject},
+    Object,
 };
+
+use super::dict_from_object;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TerminalConfig {
@@ -51,7 +53,7 @@ impl TerminalConfigPartial {
 
 impl FromObject for TerminalConfigPartial {
     fn from_object(obj: Object) -> Result<Self, Error> {
-        let dict = Dictionary::from_object(obj)?;
+        let dict = dict_from_object(obj)?;
 
         let delete = dict
             .get("delete")

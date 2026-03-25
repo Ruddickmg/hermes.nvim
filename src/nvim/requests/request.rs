@@ -5,23 +5,23 @@ use agent_client_protocol::{
     TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
     WriteTextFileRequest, WriteTextFileResponse,
 };
-use nvim_oxi::Dictionary;
 use nvim_oxi::conversion::FromObject;
 use std::sync::Arc;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::PluginState;
-use crate::acp::Result;
 use crate::acp::error::Error;
+use crate::acp::Result;
 use crate::nvim::autocommands::Commands;
-use crate::nvim::terminal::{Terminal, TerminalManager, parse_exit_code};
+use crate::nvim::configuration::dict_from_object;
+use crate::nvim::terminal::{parse_exit_code, Terminal, TerminalManager};
 use crate::utilities::{
-    NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
-    save_buffer_to_disk, show_permission_ui, update_buffer_content,
+    acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
+    show_permission_ui, update_buffer_content, NvimMessenger, TransmitToNvim,
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
+use crate::PluginState;
 
 #[derive(Debug)]
 pub enum Responder {
@@ -165,8 +165,8 @@ impl Request {
             Ok(output) => Ok((output, false)),
             Err(_) => {
                 // Not a string, try Dictionary
-                let dict = Dictionary::from_object(data)
-                    .map_err(|e| Error::InvalidInput(e.to_string()))?;
+                let dict =
+                    dict_from_object(data).map_err(|e| Error::InvalidInput(e.to_string()))?;
 
                 // "output" field is required and must be a String
                 let output = dict
@@ -209,7 +209,7 @@ impl Request {
                 match i64::from_object(data.clone()) {
                     Ok(exit_code) => Ok(parse_exit_code(exit_code)),
                     Err(_) => {
-                        let dict = Dictionary::from_object(data)
+                        let dict = dict_from_object(data)
                             .map_err(|e| Error::InvalidInput(e.to_string()))?;
 
                         // "exitCode" field is optional
@@ -227,7 +227,11 @@ impl Request {
                             Some(s) => {
                                 let sig: String = String::from_object(s)
                                     .map_err(|e| Error::InvalidInput(e.to_string()))?;
-                                if sig.is_empty() { None } else { Some(sig) }
+                                if sig.is_empty() {
+                                    None
+                                } else {
+                                    Some(sig)
+                                }
                             }
                             None => None,
                         };
