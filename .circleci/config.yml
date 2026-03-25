@@ -187,7 +187,6 @@ jobs:
 
   build-windows-x86_64:
     executor: windows/default
-    resource_class: windows.medium
     shell: powershell.exe -ExecutionPolicy Bypass
     steps:
       - checkout
