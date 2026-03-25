@@ -229,7 +229,10 @@ jobs:
             refreshenv
             # Set dlltool for cargo
             $env:DLLTOOL = "C:\Program Files\LLVM\bin\llvm-dlltool.exe"
-            $env:NVIM_LIB_DIR = "C:\tools\neovim\Neovim\bin"
+            # Add Neovim's libuv to library search path
+            $env:LIB = "C:\tools\neovim\Neovim\lib;C:\tools\neovim\Neovim\bin;$env:LIB"
+            # Set PKG_CONFIG_PATH to help find libuv
+            $env:PKG_CONFIG_PATH = "C:\tools\neovim\Neovim\lib\pkgconfig;$env:PKG_CONFIG_PATH"
             cargo build --release --target x86_64-pc-windows-msvc
       - run:
           name: Rename binary for architecture
