@@ -17,8 +17,7 @@ export default {
           { "path": "target/release/libhermes-linux-aarch64.so", "label": "Linux ARM64" },
           { "path": "target/release/libhermes-macos-aarch64.dylib", "label": "MacOS ARM64" },
           { "path": "target/release/libhermes-macos-x86_64.dylib", "label": "MacOS x86_64" },
-          // TODO: Figure out how
-          // { "path": "target/release/hermes.dll", "label": "Windows" },
+          { "path": "target/release/libhermes-windows-x86_64.dll", "label": "Windows x86_64" },
         ]
       }
     ]

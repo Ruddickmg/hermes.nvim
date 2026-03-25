@@ -51,9 +51,12 @@ workflows:
       - integration_tests
       - unit_tests
       - e2e_tests
-      # TODO: can't get this to work, not trying to spend time on it right now since I don't use windows, low priority, will get to it later
-      # - build-windows
       # ---- CI Builds (all branches) ----
+      - build-windows:
+          filters:
+            branches:
+              ignore:
+                - main
       - build-linux-x86_64:
           filters:
             branches:
@@ -305,6 +308,40 @@ jobs:
           root: target/release
           paths:
             - libhermes-macos-x86_64.dylib
+
+  build-windows:
+    executor: windows/default
+    resource_class: windows.medium
+    shell: powershell.exe -ExecutionPolicy Bypass
+    steps:
+      - checkout
+      - run:
+          name: Install Rust
+          command: |
+            Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
+            ./rustup-init.exe -y --default-host x86_64-pc-windows-msvc
+            $env:Path += ";$env:USERPROFILE\.cargo\bin"
+            rustc --version
+            cargo --version
+      - run:
+          name: Build for Windows x86_64
+          command: |
+            $env:Path += ";$env:USERPROFILE\.cargo\bin"
+            cargo build --release
+      - run:
+          name: Rename binary for architecture
+          command: |
+            $env:Path += ";$env:USERPROFILE\.cargo\bin"
+            if (Test-Path target/release/hermes.dll) {
+                Move-Item target/release/hermes.dll target/release/libhermes-windows-x86_64.dll
+            } elseif (Test-Path target/release/libhermes.dll) {
+                Move-Item target/release/libhermes.dll target/release/libhermes-windows-x86_64.dll
+            }
+            Get-ChildItem target/release/*.dll | Select-Object Name
+      - persist_to_workspace:
+          root: target/release
+          paths:
+            - libhermes-windows-x86_64.dll
 
   check_formatting:
     executor: rust-linux-x86_64
