@@ -1552,12 +1552,6 @@ Available formats:
 
 ## TODO:
 
--- before v1
-- [x] Add setup function for user configuration
-- [ ] Add logic for loading plugin into neovim
-  - [ ] Figure out how to use pre-built binaries
-  - [ ] Enable local build if pre-built binary doesn't exist for system
-
 -- functionality
 - [ ] Complete configuration object and integration with app
 - [x] Allow connecting to Agents
