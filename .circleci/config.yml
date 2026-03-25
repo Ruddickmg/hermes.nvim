@@ -200,18 +200,26 @@ jobs:
       - run:
           name: Install MSYS2 (for dlltool and Lua)
           command: |
-            # Install MSYS2 using Chocolatey
-            choco install msys2 -y --params "/NoUpdate"
+            # Download and extract MSYS2
+            Invoke-WebRequest -Uri "https://github.com/msys2/msys2-installer/releases/download/2024-12-08/msys2-base-x86_64-20241208.tar.xz" -OutFile "msys2.tar.xz"
+            # Extract using 7zip (available on CircleCI Windows images)
+            7z x msys2.tar.xz -y
+            7z x msys2.tar -y -oC:\
+            Remove-Item msys2.tar.xz, msys2.tar
+            # Initialize MSYS2
+            C:\msys64\usr\bin\bash.exe -lc ""
             # Install Lua and binutils via MSYS2 pacman
             C:\msys64\usr\bin\bash.exe -lc "pacman -S --noconfirm mingw-w64-x86_64-lua mingw-w64-x86_64-binutils"
             # Verify dlltool is available
-            C:\msys64\usr\bin\dlltool.exe --version
+            C:\msys64\mingw64\bin\dlltool.exe --version
       - run:
           name: Build for Windows x86_64
           command: |
             $env:Path += ";$env:USERPROFILE\.cargo\bin"
             # Set LIB environment variable to include MSYS2 Lua libraries
             $env:LIB = "C:\msys64\mingw64\lib"
+            # Add dlltool to PATH
+            $env:Path += ";C:\msys64\mingw64\bin"
             cargo build --release
       - run:
           name: Rename binary for architecture
