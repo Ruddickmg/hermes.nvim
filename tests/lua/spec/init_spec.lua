@@ -22,7 +22,7 @@ describe("hermes.init (main API)", function()
 		vim.fn.mkdir(bin_dir, "p")
 
 		-- Copy the real built binary from target/release using vim.uv.fs_copyfile
-		local source_bin = vim.fn.getcwd() .. "/target/release/libhermes.so"
+		local source_bin = vim.fn.getcwd() .. "/target/release/libhermes." .. platform.get_ext()
 		local dest_bin = bin_dir .. "/" .. bin_name
 		local uv = vim.uv or vim.loop
 		uv.fs_copyfile(source_bin, dest_bin)

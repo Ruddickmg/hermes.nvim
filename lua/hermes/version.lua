@@ -2,6 +2,7 @@
 ---@module hermes.version
 
 local logging = require("hermes.logging")
+local fallback_version = "v0.1.0"
 
 local M = {}
 
@@ -57,14 +58,16 @@ function M.fetch_latest()
 	
 	if not success then
 		logging.notify("Failed to fetch latest version from GitHub: " .. (err or "Unknown error") .. ". Using fallback.", vim.log.levels.WARN)
-		return "v0.1.0"
+	  os.remove(temp_file)
+		return fallback_version
 	end
 
 	-- Read the response
 	local f = io.open(temp_file, "r")
 	if not f then
 		logging.notify("Could not read version response. Using fallback.", vim.log.levels.WARN)
-		return "v0.1.0"
+	  os.remove(temp_file)
+		return fallback_version
 	end
 	
 	local result = f:read("*all")
@@ -78,7 +81,7 @@ function M.fetch_latest()
 
 	if not tag then
 		logging.notify("Could not parse version from GitHub response. Using fallback.", vim.log.levels.WARN)
-		return "v0.1.0"
+		return fallback_version
 	end
 
 	-- Cache the result

@@ -293,29 +293,7 @@ impl ConnectionManager {
 impl Drop for ConnectionManager {
     fn drop(&mut self) {
         debug!("ConnectionManager Drop called");
-        // Safely join all thread handles to prevent panics from propagating
-        match self.handles.try_borrow_mut() {
-            Ok(mut handles) => {
-                debug!("Joining {} thread handles", handles.len());
-                for (agent, handle) in handles.drain() {
-                    debug!("Joining thread for agent '{}' during drop", agent);
-                    match handle.join() {
-                        Ok(result) => {
-                            debug!(
-                                "Thread for agent '{}' joined successfully: {:?}",
-                                agent, result
-                            );
-                        }
-                        Err(_) => {
-                            error!("Thread for agent '{}' panicked during drop", agent);
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                error!("Failed to borrow handles during drop: {}", e);
-            }
-        }
+        self.close_all();
         debug!("ConnectionManager Drop completed");
     }
 }

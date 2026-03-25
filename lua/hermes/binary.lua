@@ -99,6 +99,7 @@ function M.build_from_source(dest_dir)
   ensure_dir(dest_dir)
   local build_dir = dest_dir .. "/build"
   
+  vim.fn.delete(build_dir, "rf") -- Clean up any existing build directory
   -- Clone repository
     logging.notify("Cloning Hermes repository...", vim.log.levels.INFO)
   local clone_cmd = {
@@ -123,6 +124,7 @@ function M.build_from_source(dest_dir)
   -- Find and copy the built library
   local platform = require("hermes.platform")
   local ext = platform.get_ext()
+  local bin_name = platform.get_binary_name()
   local built_lib = build_dir .. "/target/release/libhermes." .. ext
   
   if vim.fn.filereadable(built_lib) == 0 then
@@ -131,7 +133,8 @@ function M.build_from_source(dest_dir)
   end
   
   -- Copy to destination using vim.uv.fs_copyfile (cross-platform via libuv)
-  local final_path = dest_dir .. "/libhermes." .. ext
+  -- Use the platform-specific binary name (e.g., libhermes-linux-x86_64.so)
+  local final_path = dest_dir .. "/" .. bin_name
   local uv = vim.uv or vim.loop
   local result, err = uv.fs_copyfile(built_lib, final_path)
   if not result then
