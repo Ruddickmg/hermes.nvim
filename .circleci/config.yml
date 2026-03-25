@@ -191,37 +191,36 @@ jobs:
       - checkout
 
       - run:
-          name: Install Rust (GNU target)
+          name: Install Rust (MSVC)
           command: |
             choco install rustup.install -y
             refreshenv
 
             rustup default stable
-            rustup target add x86_64-pc-windows-gnu
-
-            rustc --version
-            cargo --version
-
+            rustup target add x86_64-pc-windows-msvc
       - run:
-          name: Install MinGW (GNU toolchain)
+          name: Install Neovim
           command: |
-            choco install mingw -y
+            choco install neovim -y
             refreshenv
-
-            # Add MinGW to PATH explicitly (important in CI)
-            $env:PATH = "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin;$env:PATH"
-
-            # Verify gcc exists
-            gcc --version
-
       - run:
-          name: Build for Windows (GNU)
+          name: Generate nvim.lib
           command: |
-            # Ensure MinGW is in PATH for this step too
-            $env:PATH = "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin;$env:PATH"
+            $dll = "C:\ProgramData\chocolatey\lib\neovim\tools\nvim-win64\bin\nvim.dll"
+            dumpbin /exports $dll > exports.txt
 
-            cargo build --release --target x86_64-pc-windows-gnu
+            echo "LIBRARY nvim" > nvim.def
+            echo "EXPORTS" >> nvim.def
 
+            Select-String "nvim_" exports.txt | ForEach-Object {
+              ($_ -split '\s+')[-1]
+            } >> nvim.def
+
+            lib /def:nvim.def /out:nvim.lib /machine:x64
+      - run:
+          name: Build
+          command: |
+            cargo build --release --target x86_64-pc-windows-msvc
       - run:
           name: Rename binary for architecture
           command: |
@@ -235,7 +234,6 @@ jobs:
             }
 
             Get-ChildItem target/x86_64-pc-windows-gnu/release/*.dll | Select-Object Name
-
       - persist_to_workspace:
           root: target/x86_64-pc-windows-gnu/release
           paths:
