@@ -100,52 +100,230 @@ pub fn list_sessions(connection: Rc<RefCell<ConnectionManager>>) -> Object {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
+    use proptest::prelude::*;
 
+    // Helper to create a Dictionary with cwd field
+    fn create_cwd_dict(path: &str) -> Dictionary {
+        let mut dict = Dictionary::new();
+        dict.insert("cwd", path);
+        dict
+    }
+
+    // Helper to create a Dictionary with cursor field
+    fn create_cursor_dict(cursor: &str) -> Dictionary {
+        let mut dict = Dictionary::new();
+        dict.insert("cursor", cursor);
+        dict
+    }
+
+    // Helper to create a Dictionary with both fields
+    fn create_full_dict(path: &str, cursor: &str) -> Dictionary {
+        let mut dict = Dictionary::new();
+        dict.insert("cwd", path);
+        dict.insert("cursor", cursor);
+        dict
+    }
+
+    // Strategy for generating valid path strings
+    fn arb_path() -> impl Strategy<Value = String> {
+        prop_oneof!(
+            Just("/home/user/project".to_string()),
+            Just("/var/www/hermes".to_string()),
+            Just("C:\\Users\\name\\project".to_string()),
+            Just(".".to_string()),
+            Just("./relative".to_string()),
+            Just("../parent".to_string()),
+            Just("/".to_string()),
+            Just("/path/with spaces".to_string()),
+            "[/a-zA-Z0-9._-]{1,100}".prop_map(|s| format!("/{}", s))
+        )
+    }
+
+    // Strategy for generating cursor strings (alphanumeric, often base64-like)
+    fn arb_cursor() -> impl Strategy<Value = String> {
+        prop_oneof!(
+            Just("abc123".to_string()),
+            Just("xyz789".to_string()),
+            Just("MTIzYWJj".to_string()),
+            Just("".to_string()),
+            "[a-zA-Z0-9_-]{0,50}".prop_map(|s| s.to_string())
+        )
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(1000))]
+
+        #[test]
+        fn test_from_object_with_various_cwd_paths(path in arb_path()) {
+            // Property: Any valid path string should be parsed without panicking
+            let dict = create_cwd_dict(&path);
+            let obj = Object::from(dict);
+            let result = ListSessionsConfig::from_object(obj);
+            prop_assert!(result.is_ok(), "Should successfully parse any path string");
+
+            let config = result.unwrap();
+            prop_assert_eq!(config.cwd, Some(PathBuf::from(&path)));
+        }
+
+        #[test]
+        fn test_from_object_with_various_cursors(cursor in arb_cursor()) {
+            // Property: Any cursor string (including empty) should be parsed
+            let dict = create_cursor_dict(&cursor);
+            let obj = Object::from(dict);
+            let result = ListSessionsConfig::from_object(obj);
+            prop_assert!(result.is_ok(), "Should successfully parse any cursor string");
+
+            let config = result.unwrap();
+            prop_assert_eq!(config.cursor, Some(cursor));
+        }
+
+        #[test]
+        fn test_from_object_with_both_fields(path in arb_path(), cursor in arb_cursor()) {
+            // Property: Combined cwd and cursor should both be parsed
+            let dict = create_full_dict(&path, &cursor);
+            let obj = Object::from(dict);
+            let result = ListSessionsConfig::from_object(obj);
+            prop_assert!(result.is_ok(), "Should successfully parse combined fields");
+
+            let config = result.unwrap();
+            prop_assert_eq!(config.cwd, Some(PathBuf::from(&path)));
+            prop_assert_eq!(config.cursor, Some(cursor));
+        }
+    }
+
+    // Test nil input - should create default config
     #[test]
-    fn test_from_object_nil() {
+    fn test_from_object_nil_creates_default_config() {
         let obj = Object::nil();
         let config = ListSessionsConfig::from_object(obj).unwrap();
-        assert!(config.cwd.is_none());
-        assert!(config.cursor.is_none());
+        assert_eq!(config.cwd, None);
     }
 
     #[test]
-    fn test_from_object_empty_dict() {
+    fn test_from_object_nil_has_no_cursor() {
+        let obj = Object::nil();
+        let config = ListSessionsConfig::from_object(obj).unwrap();
+        assert_eq!(config.cursor, None);
+    }
+
+    // Test empty dictionary - should create default config
+    #[test]
+    fn test_from_object_empty_dict_creates_default_config() {
         let dict = Dictionary::new();
         let obj = Object::from(dict);
         let config = ListSessionsConfig::from_object(obj).unwrap();
-        assert!(config.cwd.is_none());
-        assert!(config.cursor.is_none());
+        assert_eq!(config.cwd, None);
     }
 
     #[test]
-    fn test_from_object_with_cwd() {
-        let mut dict = Dictionary::new();
-        dict.insert("cwd", "/path/to/project");
+    fn test_from_object_empty_dict_has_no_cursor() {
+        let dict = Dictionary::new();
         let obj = Object::from(dict);
         let config = ListSessionsConfig::from_object(obj).unwrap();
-        assert_eq!(config.cwd, Some(PathBuf::from("/path/to/project")));
-        assert!(config.cursor.is_none());
+        assert_eq!(config.cursor, None);
+    }
+
+    // Test cwd field parsing
+    #[test]
+    fn test_from_object_with_absolute_cwd() {
+        let dict = create_cwd_dict("/home/user/project");
+        let obj = Object::from(dict);
+        let config = ListSessionsConfig::from_object(obj).unwrap();
+        assert_eq!(config.cwd, Some(PathBuf::from("/home/user/project")));
     }
 
     #[test]
-    fn test_from_object_with_cursor() {
-        let mut dict = Dictionary::new();
-        dict.insert("cursor", "abc123");
+    fn test_from_object_with_relative_cwd() {
+        let dict = create_cwd_dict("./relative/path");
         let obj = Object::from(dict);
         let config = ListSessionsConfig::from_object(obj).unwrap();
-        assert!(config.cwd.is_none());
+        assert_eq!(config.cwd, Some(PathBuf::from("./relative/path")));
+    }
+
+    #[test]
+    fn test_from_object_with_windows_cwd() {
+        let dict = create_cwd_dict("C:\\Users\\name\\project");
+        let obj = Object::from(dict);
+        let config = ListSessionsConfig::from_object(obj).unwrap();
+        assert_eq!(config.cwd, Some(PathBuf::from("C:\\Users\\name\\project")));
+    }
+
+    // Test cursor field parsing
+    #[test]
+    fn test_from_object_with_alphanumeric_cursor() {
+        let dict = create_cursor_dict("abc123");
+        let obj = Object::from(dict);
+        let config = ListSessionsConfig::from_object(obj).unwrap();
         assert_eq!(config.cursor, Some("abc123".to_string()));
     }
 
     #[test]
-    fn test_from_object_with_both() {
-        let mut dict = Dictionary::new();
-        dict.insert("cwd", "/path/to/project");
-        dict.insert("cursor", "xyz789");
+    fn test_from_object_with_base64_like_cursor() {
+        let dict = create_cursor_dict("MTIzYWJj");
+        let obj = Object::from(dict);
+        let config = ListSessionsConfig::from_object(obj).unwrap();
+        assert_eq!(config.cursor, Some("MTIzYWJj".to_string()));
+    }
+
+    #[test]
+    fn test_from_object_with_empty_cursor() {
+        let dict = create_cursor_dict("");
+        let obj = Object::from(dict);
+        let config = ListSessionsConfig::from_object(obj).unwrap();
+        assert_eq!(config.cursor, Some("".to_string()));
+    }
+
+    // Test combined fields - verifying each independently
+    #[test]
+    fn test_from_object_with_both_fields_parses_cwd_correctly() {
+        let dict = create_full_dict("/path/to/project", "xyz789");
         let obj = Object::from(dict);
         let config = ListSessionsConfig::from_object(obj).unwrap();
         assert_eq!(config.cwd, Some(PathBuf::from("/path/to/project")));
+    }
+
+    #[test]
+    fn test_from_object_with_both_fields_parses_cursor_correctly() {
+        let dict = create_full_dict("/path/to/project", "xyz789");
+        let obj = Object::from(dict);
+        let config = ListSessionsConfig::from_object(obj).unwrap();
         assert_eq!(config.cursor, Some("xyz789".to_string()));
+    }
+
+    // Test unknown fields are ignored (only known fields should be parsed)
+    #[test]
+    fn test_from_object_ignores_unknown_fields() {
+        let mut dict = Dictionary::new();
+        dict.insert("cwd", "/valid/path");
+        dict.insert("unknown", "should_be_ignored");
+        dict.insert("cursor", "valid_cursor");
+        let obj = Object::from(dict);
+        let config = ListSessionsConfig::from_object(obj).unwrap();
+        assert_eq!(config.cwd, Some(PathBuf::from("/valid/path")));
+    }
+
+    #[test]
+    fn test_from_object_with_only_unknown_fields_is_default() {
+        let mut dict = Dictionary::new();
+        dict.insert("unknown", "ignored");
+        dict.insert("another", "also_ignored");
+        let obj = Object::from(dict);
+        let config = ListSessionsConfig::from_object(obj).unwrap();
+        assert_eq!(config.cwd, None);
+        assert_eq!(config.cursor, None);
+    }
+
+    // Test config struct creation
+    #[test]
+    fn test_config_default_is_empty() {
+        let config = ListSessionsConfig::default();
+        assert_eq!(config.cwd, None);
+    }
+
+    #[test]
+    fn test_config_default_has_no_cursor() {
+        let config = ListSessionsConfig::default();
+        assert_eq!(config.cursor, None);
     }
 }
