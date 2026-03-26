@@ -34,6 +34,7 @@ describe("hermes.init (main API)", function()
 		package.loaded["hermes.config"] = nil
 		package.loaded["hermes.platform"] = nil
 		package.loaded["hermes.version"] = nil
+		package.loaded["hermes"] = nil
 
 		hermes = require("hermes")
 	end)
