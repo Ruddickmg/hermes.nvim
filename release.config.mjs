@@ -6,19 +6,9 @@ export default {
     "main",
     {name: "development", prerelease: "beta"}
   ],
-  verifyConditions: [
-    "@semantic-release/github"
-  ],
   plugins: [
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
-    [
-      "@semantic-release-cargo/semantic-release-cargo",
-      {
-        "publish": false,
-        "alwaysVerifyToken": false,
-      }
-    ],
     [
       "@semantic-release/github",
       {

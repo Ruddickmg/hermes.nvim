@@ -50,11 +50,22 @@ workflows:
       - integration_tests
       - unit_tests
       - e2e_tests
-      - build-windows-x86_64
-      - build-linux-x86_64
-      - build-linux-aarch64
-      - build-mac-aarch64
-      - build-mac-x86_64
+      - update-cargo-version
+      - build-windows-x86_64:
+          requires:
+            - update-cargo-version
+      - build-linux-x86_64:
+          requires:
+            - update-cargo-version
+      - build-linux-aarch64:
+          requires:
+            - update-cargo-version
+      - build-mac-aarch64:
+          requires:
+            - update-cargo-version
+      - build-mac-x86_64:
+          requires:
+            - update-cargo-version
 
       - release:
           filters:
@@ -78,9 +89,47 @@ workflows:
 #-----------------------------------------------------------------------------------------------------------------------------
 
 jobs:
+  update-cargo-version:
+    executor: node
+    steps:
+      - checkout
+      - run:
+          name: Update Cargo.toml version
+          command: |
+            # Only run semantic-release on release branches
+            if [ "$CIRCLE_BRANCH" = "main" ] || [ "$CIRCLE_BRANCH" = "development" ]; then
+              echo "Running on release branch: $CIRCLE_BRANCH"
+              npm install -g pnpm
+              pnpm install --frozen-lockfile
+              
+              # Run semantic-release in dry-run mode to get next version
+              VERSION_OUTPUT=$(npx semantic-release --dry-run 2>&1 || true)
+              echo "Semantic-release output:"
+              echo "$VERSION_OUTPUT"
+              
+              # Extract the version number from the output
+              NEXT_VERSION=$(echo "$VERSION_OUTPUT" | grep -oP 'The next release version is \K[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+              
+              if [ -n "$NEXT_VERSION" ]; then
+                echo "Next version: $NEXT_VERSION"
+                sed -i "s/^version = \".*\"$/version = \"$NEXT_VERSION\"/" Cargo.toml
+                echo "Updated Cargo.toml with version $NEXT_VERSION"
+              else
+                echo "No new version detected. This is likely an error on a release branch."
+                echo "Semantic-release output was:"
+                echo "$VERSION_OUTPUT"
+                exit 1
+              fi
+            else
+              echo "Not on a release branch (current: $CIRCLE_BRANCH), keeping development version"
+            fi
+      - persist_to_workspace:
+          root: .
+          paths:
+            - Cargo.toml
+            - Cargo.lock
+
   release:
-    environment:
-      CARGO_REGISTRY_TOKEN: "its-stupid-theres-no-way-to-disable-this"
     executor: node
     steps:
       - checkout
@@ -111,6 +160,8 @@ jobs:
     executor: rust-linux-x86_64
     steps:
       - checkout
+      - attach_workspace:
+          at: .
       - run:
           name: Stable Build for x86_64
           command: cargo build --release
@@ -126,6 +177,8 @@ jobs:
     executor: rust-linux-aarch64
     steps:
       - checkout
+      - attach_workspace:
+          at: .
       - run:
           name: Stable Build for aarch64
           command: cargo build --release
@@ -141,6 +194,8 @@ jobs:
     executor: mac-aarch64
     steps:
       - checkout
+      - attach_workspace:
+          at: .
       - run:
           name: Install Rust
           command: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -159,6 +214,8 @@ jobs:
     executor: mac-aarch64
     steps:
       - checkout
+      - attach_workspace:
+          at: .
       - run:
           name: Install Rosetta 2
           command: softwareupdate --install-rosetta --agree-to-license
@@ -178,11 +235,13 @@ jobs:
           root: target/release
           paths:
             - libhermes-macos-x86_64.dylib
- 
+  
   build-windows-x86_64:
     executor: windows/default
     steps:
       - checkout
+      - attach_workspace:
+          at: .
       - run:
           name: Install Rust (MSVC)
           command: |
