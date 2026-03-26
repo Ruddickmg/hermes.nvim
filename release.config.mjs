@@ -7,8 +7,6 @@ export default {
     {name: "development", prerelease: "beta"}
   ],
   verifyConditions: [
-    "@semantic-release/commit-analyzer",
-    "@semantic-release/release-notes-generator",
     "@semantic-release/github"
   ],
   plugins: [
