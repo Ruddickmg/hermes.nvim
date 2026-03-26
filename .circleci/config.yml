@@ -63,18 +63,6 @@ workflows:
             branches:
               only: 
                 - main
-          requires:
-            - build-windows-x86_64
-            - build-linux-x86_64
-            - build-linux-aarch64
-            - build-mac-aarch64
-            - build-mac-x86_64
-
-      - release:
-          name: pre-release
-          filters:
-            branches:
-              only: 
                 - development
           requires:
             - build-windows-x86_64
