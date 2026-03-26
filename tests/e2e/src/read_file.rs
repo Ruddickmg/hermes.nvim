@@ -41,7 +41,7 @@ fn test_copilot_read_text_file_workflow() -> Result<(), nvim_oxi::Error> {
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
     let create_session: Function<CreateSessionArgs, ()> =
-        FromObject::from_object(dict.get("createSession").unwrap().clone())?;
+        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
     let prompt: Function<PromptArgs, ()> =
         FromObject::from_object(dict.get("prompt").unwrap().clone())?;
     let respond: Function<(String, String), ()> =

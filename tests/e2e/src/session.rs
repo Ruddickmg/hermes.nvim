@@ -21,7 +21,7 @@ fn test_default_session_creation() -> Result<(), nvim_oxi::Error> {
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
     let create_session: Function<CreateSessionArgs, ()> =
-        FromObject::from_object(dict.get("createSession").unwrap().clone())?;
+        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
 
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
@@ -51,7 +51,7 @@ fn test_custom_session_creation() -> Result<(), nvim_oxi::Error> {
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
     let create_session: Function<CreateSessionArgs, ()> =
-        FromObject::from_object(dict.get("createSession").unwrap().clone())?;
+        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
 
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
@@ -87,7 +87,7 @@ fn test_cancel_during_prompt() -> Result<(), nvim_oxi::Error> {
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
     let create_session: Function<CreateSessionArgs, ()> =
-        FromObject::from_object(dict.get("createSession").unwrap().clone())?;
+        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
     let prompt: Function<PromptArgs, ()> =
         FromObject::from_object(dict.get("prompt").unwrap().clone())?;
     let cancel: Function<String, ()> =
@@ -150,9 +150,9 @@ fn test_load_session() -> Result<(), nvim_oxi::Error> {
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
     let create_session: Function<CreateSessionArgs, ()> =
-        FromObject::from_object(dict.get("createSession").unwrap().clone())?;
+        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
     let load_session: Function<(String, Option<LoadSessionConfig>), ()> =
-        FromObject::from_object(dict.get("loadSession").unwrap().clone())?;
+        FromObject::from_object(dict.get("load_session").unwrap().clone())?;
 
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);

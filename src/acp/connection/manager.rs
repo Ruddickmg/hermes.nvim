@@ -12,7 +12,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use tokio::sync::Mutex;
-use tracing::{debug, info, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 type ConnectionHandles = Rc<RefCell<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>;
 
@@ -188,6 +188,7 @@ impl ConnectionManager {
                     );
 
                 trace!("Starting agent communication in new thread");
+                let panic_agent = agent.clone(); // Clone for panic message
                 self.handles
                     .try_borrow_mut()
                     .map_err(|e| {
@@ -196,17 +197,27 @@ impl ConnectionManager {
                     .insert(
                         agent.clone(),
                         std::thread::spawn(move || {
-                            let runtime = tokio::runtime::Builder::new_current_thread()
-                                .enable_all()
-                                .build()
-                                .map_err(|e| Error::Internal(e.to_string()))?;
+                            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                let runtime = tokio::runtime::Builder::new_current_thread()
+                                    .enable_all()
+                                    .build()
+                                    .map_err(|e| Error::Internal(e.to_string()))?;
 
-                            trace!("Starting tokio runtime");
-                            runtime.block_on(match protocol {
-                                Protocol::Stdio => stdio::connect(handler, thread_agent, receiver),
-                                Protocol::Http => unimplemented!(),
-                                Protocol::Socket => unimplemented!(),
-                            })
+                                trace!("Starting tokio runtime");
+                                runtime.block_on(match protocol {
+                                    Protocol::Stdio => {
+                                        stdio::connect(handler, thread_agent, receiver)
+                                    }
+                                    Protocol::Http => unimplemented!(),
+                                    Protocol::Socket => unimplemented!(),
+                                })
+                            }))
+                            .map_err(|_| {
+                                let err_msg =
+                                    format!("Agent '{}' connection thread panicked", panic_agent);
+                                error!("{}", err_msg);
+                                Error::Internal(err_msg)
+                            })?
                         }),
                     );
                 self.add_connection(agent.clone(), connection.clone());
@@ -276,6 +287,14 @@ impl ConnectionManager {
             })?;
         debug!("Successfully disconnected from agent {}", assistant);
         Ok(())
+    }
+}
+
+impl Drop for ConnectionManager {
+    fn drop(&mut self) {
+        debug!("ConnectionManager Drop called");
+        self.close_all();
+        debug!("ConnectionManager Drop completed");
     }
 }
 

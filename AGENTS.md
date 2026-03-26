@@ -403,6 +403,108 @@ data.replace(String::from("world"));  // OK!
 Adhere to "Clean Code" patterns.
 - **Design:** Apply SOLID principles where applicable.
 
+### Cross-Platform Compatibility (Lua)
+
+**CRITICAL:** All Lua code must work across Windows, Linux, and macOS. Never use platform-specific shell commands.
+
+## Library Research First
+
+**BEFORE implementing any functionality, ALWAYS research if a library or built-in function already exists.** This applies to ALL contexts - not just cross-platform issues.
+
+### General Rule: Research Before Implementing
+
+Whether working with file operations, HTTP requests, data structures, parsing, or any other functionality:
+1. **Check if Neovim provides a built-in function**
+2. **Check if a standard library (vim.uv, vim.fs, etc.) provides the function**
+3. **Check if an existing module in the codebase already handles this**
+4. **Only implement your own solution as a last resort**
+
+**Why this matters:**
+- Offloads maintenance and correctness to library maintainers
+- Ensures cross-platform compatibility automatically
+- Benefits from community testing and bug fixes
+- Reduces code we need to maintain
+- Prevents "reinventing the wheel"
+
+#### **Example: File Operations**
+
+❌ **DON'T create your own copy function:**
+```lua
+-- ❌ BAD: Reinventing the wheel
+local function copy_file(src, dest)
+  if platform.get_os() == "windows" then
+    vim.fn.system({ "cmd", "/c", "copy", src, dest })
+  else
+    vim.fn.system({ "cp", src, dest })
+  end
+end
+```
+
+✅ **DO use the library function:**
+```lua
+-- ✅ GOOD: Uses existing cross-platform library
+local uv = vim.uv or vim.loop
+uv.fs_copyfile(src, dest)
+```
+
+#### **Cross-Platform APIs**
+
+**Available cross-platform APIs:**
+- **File operations:** `vim.uv.fs_copyfile()`, `vim.uv.fs_rename()`, `vim.uv.fs_mkdir()`, `vim.uv.fs_unlink()`, `vim.uv.fs_rmdir()`, `vim.uv.fs_stat()`
+- **Directory operations:** `vim.fn.mkdir()`, `vim.fn.delete()`
+- **Path operations:** `vim.fs.joinpath()`, `vim.fs.normalize()`, `vim.fs.dirname()`
+- **HTTP requests:** Use `download.lua` module (supports curl, wget, PowerShell)
+
+#### **Forbidden Platform-Specific Commands**
+
+❌ **Never use these directly:**
+- `cp`, `mv`, `rm`, `mkdir` (Unix shell commands)
+- `chmod` (Unix-only permissions)
+- `curl` or `wget` without Windows fallback
+- Hardcoded paths with `/` or `\` separators
+
+✅ **Use these instead:**
+```lua
+-- Copy file (cross-platform)
+local uv = vim.uv or vim.loop
+uv.fs_copyfile(src, dest)
+
+-- Create directory (cross-platform)
+vim.fn.mkdir(path, "p")  -- 'p' creates parent directories
+
+-- Delete file (cross-platform)
+uv.fs_unlink(path)
+
+-- Make executable (Unix only, check platform)
+if platform.get_os() ~= "windows" then
+  vim.fn.system({ "chmod", "+x", path })  -- Only on Unix
+end
+```
+
+#### **Example: HTTP Downloads**
+
+The download module provides cross-platform HTTP support:
+```lua
+local download = require("hermes.download")
+local success, err = download.download(url, dest_path)
+-- Works on: Windows (PowerShell), Linux (curl/wget), macOS (curl)
+```
+
+#### **Example: File Copy**
+
+Before (Unix-only):
+```lua
+-- ❌ BAD: Only works on Unix
+vim.fn.system({ "cp", src, dest })
+```
+
+After (Cross-platform):
+```lua
+-- ✅ GOOD: Works on all platforms
+local uv = vim.uv or vim.loop
+local result, err = uv.fs_copyfile(src, dest)
+```
+
 ## Testing
 
 Tests ensure code reliability and prevent regression.

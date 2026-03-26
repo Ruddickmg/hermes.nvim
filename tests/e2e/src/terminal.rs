@@ -37,7 +37,7 @@ fn test_default_terminal_echo_workflow() -> Result<(), nvim_oxi::Error> {
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
     let create_session: Function<CreateSessionArgs, ()> =
-        FromObject::from_object(dict.get("createSession").unwrap().clone())?;
+        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
     let prompt: Function<PromptArgs, ()> =
         FromObject::from_object(dict.get("prompt").unwrap().clone())?;
     let respond: Function<(String, String), ()> =
@@ -161,7 +161,7 @@ fn test_terminal_exit_code_capture() -> Result<(), nvim_oxi::Error> {
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
     let create_session: Function<CreateSessionArgs, ()> =
-        FromObject::from_object(dict.get("createSession").unwrap().clone())?;
+        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
     let prompt: Function<PromptArgs, ()> =
         FromObject::from_object(dict.get("prompt").unwrap().clone())?;
 

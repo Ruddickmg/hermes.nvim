@@ -29,7 +29,7 @@ fn test_prompt_single_content() -> Result<(), nvim_oxi::Error> {
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
     let create_session: Function<CreateSessionArgs, ()> =
-        FromObject::from_object(dict.get("createSession").unwrap().clone())?;
+        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
     let prompt: Function<PromptArgs, ()> =
         FromObject::from_object(dict.get("prompt").unwrap().clone())?;
 
@@ -74,7 +74,7 @@ fn test_prompt_multiple_content() -> Result<(), nvim_oxi::Error> {
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
     let create_session: Function<CreateSessionArgs, ()> =
-        FromObject::from_object(dict.get("createSession").unwrap().clone())?;
+        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
     let prompt: Function<PromptArgs, ()> =
         FromObject::from_object(dict.get("prompt").unwrap().clone())?;
 

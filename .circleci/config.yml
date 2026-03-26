@@ -12,13 +12,21 @@ executors:
   node:
     docker:
       - image: node:22.16.0
-  mac:
+  mac-aarch64:
     resource_class: macos.m1.medium.gen1 
     macos:
       xcode: 26.3.0
-  rust:
+  rust-linux-x86_64:
     docker:
       - image: cimg/rust:1.93.1
+    resource_class: large
+    environment:
+      PIPELINE_NUM: << pipeline.number >>
+      TZ: "America/Los_Angeles"
+  rust-linux-aarch64:
+    docker:
+      - image: cimg/rust:1.93.1
+    resource_class: arm.medium
     environment:
       PIPELINE_NUM: << pipeline.number >>
       TZ: "America/Los_Angeles"
@@ -38,56 +46,30 @@ workflows:
     jobs:
       # ---- CI ----
       - check_formatting
+      - lua_tests
       - check_license
       - integration_tests
       - unit_tests
       - e2e_tests
-      # TODO: can't get this to work, not trying to spend time on it right now since I don't use windows, low priority, will get to it later
-      # - build-windows
-      - build-mac:
-          filters:
-            branches:
-              ignore:
-                - main
-      - build-linux:
-          filters:
-            branches:
-              ignore:
-                - main
+      # ---- CI Builds (all branches) ----
+      - build-windows-x86_64
+      - build-linux-x86_64
+      - build-linux-aarch64
+      - build-mac-aarch64
+      - build-mac-x86_64
 
-      # ---- CD ---- 
-      - build-mac:
-          name: build-mac-binary
-          filters:
-            branches:
-              only:
-                - main
-          requires:
-            - check_formatting
-            - check_license
-            - integration_tests
-            - e2e_tests
-            - unit_tests
-      - build-linux:
-          name: build-linux-binary
-          filters:
-            branches:
-              only:
-                - main
-          requires:
-            - check_formatting
-            - check_license
-            - integration_tests
-            - e2e_tests
-            - unit_tests
       - release:
           filters:
             branches:
               only: 
                 - main
+                - development
           requires:
-            - build-linux-binary
-            - build-mac-binary
+            - build-windows-x86_64
+            - build-linux-x86_64
+            - build-linux-aarch64
+            - build-mac-aarch64
+            - build-mac-x86_64
 
 #-----------------------------------------------------------------------------------------------------------------------------
 
@@ -107,46 +89,9 @@ jobs:
       - run:
           name: Semantic release
           command: pnpm release
-  
-  build-mac:
-    executor: mac
-    steps:
-      - checkout
-      - run:
-          name: Install Rust
-          command: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-      - run:
-          name: Build Rust Project
-          command: cargo build --release
-      - persist_to_workspace:
-          root: target/release
-          paths:
-            - libhermes.dylib
-
-  build-windows:
-    executor:
-      name: windows/default
-    steps:
-      - checkout
-      - run:
-          name: Install MinGW
-          command: choco install mingw
-      - run:
-          name: Install Rust
-          command: choco install rust -y --no-progress
-      - run:
-          name: Validate GCC
-          command: gcc --version
-      - run:
-          name: Build Project
-          command: cargo build --target x86_64-pc-windows-gnu --release
-      - persist_to_workspace:
-          root: target/release
-          paths:
-            - hermes.dll
 
   check_license:
-    executor: rust
+    executor: rust-linux-x86_64
     steps:
       - checkout
       - run:
@@ -156,25 +101,129 @@ jobs:
           name: Check for license
           command: cargo deny check licenses
 
-  build-linux:
-    executor: rust
+  build-linux-x86_64:
+    executor: rust-linux-x86_64
     steps:
       - checkout
       - run:
-          name: Stable Build
+          name: Stable Build for x86_64
           command: cargo build --release
+      - run:
+          name: Rename binary for architecture
+          command: mv target/release/libhermes.so target/release/libhermes-linux-x86_64.so
       - persist_to_workspace:
           root: target/release
           paths:
-            - libhermes.so
+            - libhermes-linux-x86_64.so
 
-  check_formatting:
-    executor: rust
+  build-linux-aarch64:
+    executor: rust-linux-aarch64
     steps:
       - checkout
       - run:
-          name: Check formatting
+          name: Stable Build for aarch64
+          command: cargo build --release
+      - run:
+          name: Rename binary for architecture
+          command: mv target/release/libhermes.so target/release/libhermes-linux-aarch64.so
+      - persist_to_workspace:
+          root: target/release
+          paths:
+            - libhermes-linux-aarch64.so
+
+  build-mac-aarch64:
+    executor: mac-aarch64
+    steps:
+      - checkout
+      - run:
+          name: Install Rust
+          command: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      - run:
+          name: Build Rust Project for aarch64
+          command: cargo build --release
+      - run:
+          name: Rename binary for architecture
+          command: mv target/release/libhermes.dylib target/release/libhermes-macos-aarch64.dylib
+      - persist_to_workspace:
+          root: target/release
+          paths:
+            - libhermes-macos-aarch64.dylib
+
+  build-mac-x86_64:
+    executor: mac-aarch64
+    steps:
+      - checkout
+      - run:
+          name: Install Rosetta 2
+          command: softwareupdate --install-rosetta --agree-to-license
+      - run:
+          name: Install Rust
+          command: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      - run:
+          name: Install x86_64 target
+          command: rustup target add x86_64-apple-darwin
+      - run:
+          name: Build Rust Project for x86_64 (cross-compile)
+          command: cargo build --release --target x86_64-apple-darwin
+      - run:
+          name: Rename binary for architecture
+          command: mv target/release/libhermes.dylib target/release/libhermes-macos-x86_64.dylib 2>/dev/null || mv target/x86_64-apple-darwin/release/libhermes.dylib target/release/libhermes-macos-x86_64.dylib
+      - persist_to_workspace:
+          root: target/release
+          paths:
+            - libhermes-macos-x86_64.dylib
+ 
+  build-windows-x86_64:
+    executor: windows/default
+    steps:
+      - checkout
+      - run:
+          name: Install Rust (MSVC)
+          command: |
+            choco install rustup.install -y
+            refreshenv
+            $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+            rustup --version
+            rustup toolchain install stable-x86_64-pc-windows-msvc
+            rustup default stable-x86_64-pc-windows-msvc
+            rustup target add x86_64-pc-windows-msvc
+            rustc -vV
+      - run:
+          name: Build for Windows x86_64
+          command: |
+            $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+            cargo build --release --target x86_64-pc-windows-msvc
+      - run:
+          name: Rename DLL
+          command: |
+            $dllPath = "target/x86_64-pc-windows-msvc/release/hermes.dll"
+            if (Test-Path $dllPath) {
+                Move-Item $dllPath "target/x86_64-pc-windows-msvc/release/libhermes-windows-x86_64.dll"
+            } else {
+                Write-Error "DLL not found at expected path"
+                exit 1
+            }
+      - persist_to_workspace:
+          root: target/x86_64-pc-windows-msvc/release
+          paths:
+            - libhermes-windows-x86_64.dll
+
+  check_formatting:
+    executor: rust-linux-x86_64
+    steps:
+      - checkout
+      - run:
+          name: Check Rust formatting
           command: cargo fmt -- --check
+      - run:
+          name: Install Lua tooling
+          command: |
+            # Install selene for Lua linting
+            cargo install selene --locked
+      - run:
+          name: Lint Lua code
+          command: |
+            selene --config selene.toml lua/ tests/lua/spec/
 
   unit_tests:
     environment:
@@ -267,3 +316,63 @@ jobs:
           files: e2e.coverage.info
           git_service: github
           upload_name: e2e
+
+  lua_tests:
+    environment:
+      NEOVIM_VERSION: 0.11.6
+      TERM: xterm-256color
+      LANG: en_US.UTF-8
+    executor: ubuntu
+    steps:
+      - checkout
+      - rust/install
+      - run:
+          name: Install Neovim from tarball
+          command: |
+            curl -LO https://github.com/neovim/neovim/releases/download/v${NEOVIM_VERSION}/nvim-linux-x86_64.tar.gz
+            tar xzf nvim-linux-x86_64.tar.gz
+            sudo mv nvim-linux-x86_64 /opt/nvim
+            sudo ln -sf /opt/nvim/bin/nvim /usr/local/bin/nvim
+            nvim --version
+      - run:
+          name: Build Hermes binary
+          command: cargo build --release
+      - run:
+          name: Install Opencode
+          command: curl -fsSL https://opencode.ai/install | bash
+      - run:
+          name: Install Lua tools
+          command: |
+            # Install luarocks
+            sudo apt-get update
+            sudo apt-get install -y lua5.1 liblua5.1-dev
+
+            wget https://luarocks.org/releases/luarocks-3.9.2.tar.gz
+            tar zxpf luarocks-3.9.2.tar.gz
+            cd luarocks-3.9.2
+            ./configure && make && sudo make install
+
+            # Install vusted for testing and luacov-reporter-lcov for coverage
+            eval $(luarocks path --lua-version 5.1 --bin)
+            luarocks --lua-version=5.1 install vusted --local
+            luarocks --lua-version=5.1 install luacov --local
+            luarocks --lua-version=5.1 install luacov-reporter-lcov --local
+      - run:
+          name: Run Lua tests with coverage
+          command: |
+            eval $(luarocks path --lua-version 5.1 --bin)
+            export PATH="/home/circleci/.local/bin:$PATH"
+            # Run from project root so that plugin/hermes.lua path resolves correctly
+            vusted --coverage -e "package.path = package.path .. ';./tests/lua/?.lua'; package.path = package.path .. ';./tests/lua/spec/?.lua'; package.path = package.path .. ';./lua/?.lua'; package.path = package.path .. ';./lua/?/init.lua'" tests/lua/spec/
+      - run:
+          name: Generate LCOV coverage report
+          command: |
+            eval $(luarocks path --lua-version 5.1 --bin)
+            # Run from project root where luacov.stats.out was generated
+            luacov -c tests/lua/.luacov -r lcov
+            mv luacov.report.out lua.coverage.info
+      - codecov/upload:
+          fail_on_error: false
+          files: lua.coverage.info
+          git_service: github
+          upload_name: lua
