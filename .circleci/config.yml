@@ -62,7 +62,6 @@ workflows:
               only: 
                 - main
                 - development
-                - fix-release
           requires:
             - check_formatting
             - lua_tests
