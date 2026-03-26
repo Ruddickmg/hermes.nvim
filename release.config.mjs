@@ -14,6 +14,7 @@ export default {
       {
         "publish": false,
         "alwaysVerifyToken": false,
+        "verifyConditions": false
       }
     ],
     [
