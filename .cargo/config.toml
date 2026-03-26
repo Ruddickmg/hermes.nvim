@@ -5,7 +5,7 @@ rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]
 rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]
 
 [target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "link-args=/FORCE:MULTIPLE"]
+rustflags = ["-C", "link-args=/FORCE:UNRESOLVED"]
 
 [target.aarch64-pc-windows-msvc]
-rustflags = ["-C", "link-args=/FORCE:MULTIPLE"]
+rustflags = ["-C", "link-args=/FORCE:UNRESOLVED"]
