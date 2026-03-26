@@ -117,10 +117,7 @@ If your platform isn't supported and building from source fails:
 
 - [x] Full implementation of ACP Client (Built on the official [Rust ACP Sdk](https://github.com/agentclientprotocol/rust-sdk))
 - [x] Configurable capabilities (filesystem, terminal, etc)
-- [x] Trigger Autocommands for messages/notifications
-- [ ] Lsp integration
-- [ ] [Recursive language model](https://arxiv.org/abs/2512.24601) integration
-- [ ] Speech to text for audio prompting (If no audio capability is present for the agent)
+- [x] Autocommands for messages/notifications
 
 ## API
 
@@ -364,6 +361,44 @@ vim.api.nvim_create_autocmd("User", {
 ```
 
 > **Triggers:** [SessionLoaded](#sessionloaded) autocommand upon completion
+
+### List Sessions (**Optional**)
+
+List sessions, can be filtered by project path or cursor pagination.
+
+```lua
+local hermes = require("hermes")
+
+-- list all sessions
+hermes.list_sessions()
+
+-- filter by directory
+hermes.list_sessions({
+    cwd = "/path/to/directory",
+})
+
+-- filter by cursor based pagination
+hermes.list_sessions({
+    cursor = "abc123",
+})
+
+-- example
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "SessionsListed",
+    callback = function(args)
+        local next_page = args.data.nextCursor
+
+        -- get next page of sessions with this cursor in the current directory
+        hermes.list_sessions({
+          cwd = vim.fn.getcwd(),
+          cursor = next_page,
+        })
+    end,
+})
+```
+
+> **Triggers:** [SessionsListed](#sessionslisted) autocommand upon completion
 
 ### Prompt
 
@@ -1546,28 +1581,26 @@ Available formats:
 
 ## TODO:
 
+-- infra
+- [ ] use smol instead of tokio to reduce build size
+- [ ] use async for all the things
+
 -- functionality
-- [ ] Complete configuration object and integration with app
 - [x] Allow connecting to Agents
   - [x] Via stdio
   - [ ] Via http
   - [ ] Via linux socket
 - [ ] Add autocommand that triggers on all events
 - [ ] Support "unstable" ACP methods
+  - [ ] model selection
   - [ ] session methods
-    - [ ] List sessions
     - [ ] Merge sessions
     - [ ] Fork sessions
-  - [ ] Allow model selection
 
 -- testing
 - [ ] Create fake/mock Agent used to test agent functionality that is not currently supported by any/many ai agents
 - [ ] Only test "required" methods against actual agents
 - [ ] Create an e2e test suite for running against each supported agent to confirm integration
-
--- infra
-- [ ] use smol instead of tokio to reduce build size
-- [ ] use async for all the things
 
 -- nice to haves
 - [ ] Status bar integration

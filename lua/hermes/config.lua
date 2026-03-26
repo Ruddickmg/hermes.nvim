@@ -8,10 +8,17 @@
 
 local M = {}
 
----@type table
+---@class HermesInstallConfig
+---Installation-specific configuration (subset of full HermesConfig)
+---@field version? string Version to use ("latest" or specific version)
+---@field auto_download_binary? boolean Whether to auto-download binary
+---@field log? {notification?: {level?: number|string}} Log configuration for notifications
+
+---@type HermesInstallConfig
 local _config = {}
 
 ---Default configuration values
+---@type HermesInstallConfig
 local default_config = {
   version = "latest",
   auto_download_binary = true,
@@ -25,7 +32,7 @@ local default_config = {
 ---Setup hermes installation configuration
 ---Only stores version, auto_download_binary, and log.notification.level settings
 ---All other configuration is passed directly to Rust binary
----@param opts? table User configuration options
+---@param opts? HermesInstallConfig User configuration options
 function M.setup(opts)
   opts = opts or {}
   _config.version = opts.version or default_config.version
@@ -47,7 +54,7 @@ function M.setup(opts)
 end
 
 ---Get current installation configuration
----@return table Current configuration
+---@return HermesInstallConfig Current configuration
 function M.get()
   return _config
 end
