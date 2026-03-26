@@ -182,46 +182,21 @@ jobs:
           command: |
             choco install rustup.install -y
             refreshenv
-
-            # Ensure cargo/bin is first in PATH (CRITICAL)
             $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
-
-            # Verify rustup is available
             rustup --version
-
-            # Install MSVC toolchain
             rustup toolchain install stable-x86_64-pc-windows-msvc
-
-            # Needed for core/std
-            rustup component add rust-src   
-
-            # Use MSVC toolchain
             rustup default stable-x86_64-pc-windows-msvc
-
-            # Ensure std/core is installed
             rustup target add x86_64-pc-windows-msvc
-
-            where rustc
-            where cargo
             rustc -vV
-            rustup show
       - run:
-          name: Install Neovim
+          name: Build for Windows x86_64
           command: |
-            choco install neovim -y
-            refreshenv
-      - run:
-          name: Build (MSVC)
-          command: |
-            # Ensure correct rust is used in THIS step too
             $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
-            set RUSTFLAGS=-L "C:\ProgramData\chocolatey\lib\neovim\tools\nvim-win64\bin"
             cargo build --release --target x86_64-pc-windows-msvc
       - run:
           name: Rename DLL
           command: |
             $dllPath = "target/x86_64-pc-windows-msvc/release/hermes.dll"
-
             if (Test-Path $dllPath) {
                 Move-Item $dllPath "target/x86_64-pc-windows-msvc/release/libhermes-windows-x86_64.dll"
             } else {

@@ -10,6 +10,12 @@ export default {
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
     [
+      "@semantic-release-cargo/semantic-release-cargo",
+      {
+        "publish": false
+      }
+    ],
+    [
       "@semantic-release/github",
       {
         "assets": [
