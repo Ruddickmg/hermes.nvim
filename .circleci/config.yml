@@ -213,18 +213,14 @@ jobs:
       - run:
           name: Install libuv
           command: |
-            choco install libuv -y
-            refreshenv
-
-            # Verify installation
-            dir "C:\Program Files\libuv"
+            $libuvDll = "C:\ProgramData\chocolatey\lib\neovim\tools\nvim-win64\bin\libuv.dll"
+            llvm-dlltool -D $libuvDll -l libuv.lib
       - run:
           name: Build (MSVC)
           command: |
             # Ensure correct rust is used in THIS step too
             $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
-            $env:LIB = "C:\Program Files\libuv\lib;$env:LIB"
-            $env:RUSTFLAGS = "-L native=C:\Program Files\libuv\lib -l libuv"
+            set RUSTFLAGS=-L . -l libuv
 
             cargo build --release --target x86_64-pc-windows-msvc
       - run:
