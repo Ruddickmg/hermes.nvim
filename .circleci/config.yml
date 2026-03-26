@@ -44,14 +44,12 @@ executors:
 workflows:
   ci_cd:
     jobs:
-      # ---- CI ----
       - check_formatting
       - lua_tests
       - check_license
       - integration_tests
       - unit_tests
       - e2e_tests
-      # ---- CI Builds (all branches) ----
       - build-windows-x86_64
       - build-linux-x86_64
       - build-linux-aarch64
@@ -64,7 +62,14 @@ workflows:
               only: 
                 - main
                 - development
+                - fix-release
           requires:
+            - check_formatting
+            - lua_tests
+            - check_license
+            - integration_tests
+            - unit_tests
+            - e2e_tests
             - build-windows-x86_64
             - build-linux-x86_64
             - build-linux-aarch64
