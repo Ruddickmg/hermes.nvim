@@ -4,5 +4,3 @@
 //! connection management, etc.) not just struct construction.
 //!
 //! See request/handler.rs for examples of actual integration tests.
-
-pub mod list_sessions;

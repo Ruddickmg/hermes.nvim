@@ -1,8 +1,8 @@
 use agent_client_protocol::ListSessionsRequest;
 use nvim_oxi::{
+    Dictionary, Function, Object,
     conversion::{Error, FromObject},
     lua::{Error as LuaError, Poppable, Pushable},
-    Dictionary, Function, Object,
 };
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 use tracing::{debug, instrument};
@@ -312,57 +312,6 @@ mod tests {
         let config = ListSessionsConfig::from_object(obj).unwrap();
         assert_eq!(config.cwd, None);
         assert_eq!(config.cursor, None);
-    }
-
-    // Test config struct creation
-    #[test]
-    fn test_config_default_is_empty() {
-        let config = ListSessionsConfig::default();
-        assert_eq!(config.cwd, None);
-    }
-
-    #[test]
-    fn test_config_default_has_no_cursor() {
-        let config = ListSessionsConfig::default();
-        assert_eq!(config.cursor, None);
-    }
-
-    // Test struct construction with values
-    #[test]
-    fn test_config_with_cwd_only() {
-        let config = ListSessionsConfig {
-            cwd: Some(PathBuf::from("/test/path")),
-            cursor: None,
-        };
-        assert_eq!(config.cwd, Some(PathBuf::from("/test/path")));
-    }
-
-    #[test]
-    fn test_config_with_cursor_only() {
-        let config = ListSessionsConfig {
-            cwd: None,
-            cursor: Some("test_cursor".to_string()),
-        };
-        assert_eq!(config.cursor, Some("test_cursor".to_string()));
-    }
-
-    #[test]
-    fn test_config_with_both_fields() {
-        let config = ListSessionsConfig {
-            cwd: Some(PathBuf::from("/test/path")),
-            cursor: Some("test_cursor".to_string()),
-        };
-        assert_eq!(config.cwd, Some(PathBuf::from("/test/path")));
-    }
-
-    #[test]
-    fn test_config_clone_preserves_values() {
-        let config = ListSessionsConfig {
-            cwd: Some(PathBuf::from("/test/path")),
-            cursor: Some("cursor123".to_string()),
-        };
-        let cloned = config.clone();
-        assert_eq!(cloned.cwd, Some(PathBuf::from("/test/path")));
     }
 
     // Test error path - invalid object type

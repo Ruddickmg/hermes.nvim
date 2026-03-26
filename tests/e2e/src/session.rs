@@ -235,16 +235,11 @@ fn test_list_sessions_no_filter() -> Result<(), nvim_oxi::Error> {
 
     disconnect.call(DisconnectArgs::All)?;
 
-    assert!(
-        sessions_response.is_ok(),
-        "Should receive SessionsListed autocommand"
-    );
-
-    // Verify response contains sessions
-    let response = sessions_response.unwrap();
+    // Single assertion: verify autocommand fired and returned sessions
+    let response = sessions_response?;
     assert!(
         !response.sessions.is_empty(),
-        "Should have at least one session"
+        "SessionsListed should return at least one session"
     );
 
     Ok(())

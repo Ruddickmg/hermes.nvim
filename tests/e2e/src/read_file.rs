@@ -7,9 +7,7 @@ use agent_client_protocol::{
     SessionId, ToolCall,
 };
 use hermes::{
-    api::{
-        ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent, RespondArgs,
-    },
+    api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
     nvim::{autocommands::Commands, hermes},
 };
 use nvim_oxi::{conversion::FromObject, Dictionary, Function, Object};
