@@ -34,7 +34,8 @@ describe("hermes.init (main API)", function()
 		package.loaded["hermes.config"] = nil
 		package.loaded["hermes.platform"] = nil
 		package.loaded["hermes.version"] = nil
-		package.loaded["hermes"] = nil
+		-- Note: Do NOT clear package.loaded["hermes"] - it will auto-reload 
+		-- the submodules above when required, but keeps the main module reference stable
 
 		hermes = require("hermes")
 	end)
