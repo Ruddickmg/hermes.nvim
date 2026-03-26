@@ -182,9 +182,12 @@ jobs:
       - run:
           name: Install Rust
           command: |
-            choco install rustup.install -y
+            choco install rustup.install -y --force
             refreshenv
-            rustup default stable
+
+            # Remove any default toolchain confusion
+            rustup toolchain uninstall stable || echo "no existing toolchain"
+
             rustup component add rust-src   # Needed for core/std
             rustup target add x86_64-pc-windows-msvc
             # Install MSVC toolchain explicitly
