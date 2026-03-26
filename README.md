@@ -1581,6 +1581,10 @@ Available formats:
 
 ## TODO:
 
+-- infra
+- [ ] use smol instead of tokio to reduce build size
+- [ ] use async for all the things
+
 -- functionality
 - [x] Allow connecting to Agents
   - [x] Via stdio
@@ -1597,10 +1601,6 @@ Available formats:
 - [ ] Create fake/mock Agent used to test agent functionality that is not currently supported by any/many ai agents
 - [ ] Only test "required" methods against actual agents
 - [ ] Create an e2e test suite for running against each supported agent to confirm integration
-
--- infra
-- [ ] use smol instead of tokio to reduce build size
-- [ ] use async for all the things
 
 -- nice to haves
 - [ ] Status bar integration

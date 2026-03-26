@@ -15,6 +15,18 @@ use hermes::{
 use nvim_oxi::{conversion::FromObject, Array, Dictionary, Function, Object};
 
 #[nvim_oxi::test]
+fn test_setup_returns_list_sessions_function() -> Result<(), nvim_oxi::Error> {
+    let dict: Dictionary = hermes()?;
+
+    assert!(
+        dict.get("list_sessions").is_some(),
+        "list_sessions function should be registered"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
 fn test_default_session_creation() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;
     let connect: Function<ConnectionArgs, ()> =

@@ -5,7 +5,7 @@ Repository:     https://github.com/Ruddickmg/hermes.nvim
 License:        MIT
 
 ================================================================================
-CONTENTS                                              *hermes-contents*
+8. CONTENTS                                              *hermes-contents*
 
   1. Introduction .............................. |hermes-introduction|
   2. Installation .............................. |hermes-installation|
@@ -13,13 +13,15 @@ CONTENTS                                              *hermes-contents*
   4. API ....................................... |hermes-api|
     4.1 Connect ................................ |hermes-connect|
     4.2 Disconnect ............................. |hermes-disconnect|
-    4.3 Authenticate ........................... |hermes-authenticate|
-    4.4 Sessions ................................ |hermes-sessions|
-    4.5 Prompt .................................. |hermes-prompt|
-    4.6 Configuration .......................... |hermes-configuration|
-  5. Autocommands .............................. |hermes-autocommands|
-  6. Commands .................................. |hermes-commands|
-  7. Troubleshooting ........................... |hermes-troubleshooting|
+    4.3 List Sessions .......................... |hermes-list-sessions|
+    4.4 Authenticate ........................... |hermes-authenticate|
+    4.5 Sessions ............................... |hermes-sessions|
+    4.6 Prompt .................................. |hermes-prompt|
+    4.7 Configuration ............................ |hermes-configuration|
+  5. Detailed Configuration .................. |hermes-detailed-config|
+  6. Autocommands .............................. |hermes-autocommands|
+  7. Commands .................................. |hermes-commands|
+  8. Troubleshooting ........................... |hermes-troubleshooting|
 
 ================================================================================
 1. INTRODUCTION                                       *hermes-introduction*
@@ -149,7 +151,39 @@ Example: >
 <
 
 ------------------------------------------------------------------------------
-4.3 AUTHENTICATE                                      *hermes-authenticate*
+4.3 LIST SESSIONS                                     *hermes-list-sessions*
+
+*hermes.list_sessions()*                                   List all sessions
+
+List sessions with optional filtering by directory or cursor pagination.
+
+Parameters: ~
+    {opts} (table|nil) Filter options
+
+Options: ~
+    • cwd: Filter by working directory path
+    • cursor: Pagination cursor for fetching next page
+
+Example: >
+    -- List all sessions
+    require("hermes").list_sessions()
+    
+    -- Filter by directory
+    require("hermes").list_sessions({
+        cwd = "/path/to/project"
+    })
+    
+    -- With cursor pagination
+    require("hermes").list_sessions({
+        cursor = "abc123"
+    })
+<
+
+Autocommand triggered: ~
+    SessionsListed - On successful list with session data and nextCursor
+
+------------------------------------------------------------------------------
+4.4 AUTHENTICATE                                      *hermes-authenticate*
 
 *hermes.authenticate()*                                  Authenticate with agent
 
@@ -170,32 +204,62 @@ Autocommand triggered: ~
     Authenticated - On successful authentication
 
 ------------------------------------------------------------------------------
-4.4 SESSIONS                                          *hermes-sessions*
+4.5 SESSIONS                                          *hermes-sessions*
 
 *hermes.create_session()*                                Create new session
 *hermes.load_session()*                                   Load existing session
-*hermes.list_sessions()*                                   List all sessions
-*hermes.fork_session()*                                     Fork a session
-*hermes.resume_session()*                                   Resume a session
-*hermes.set_session_model()*                                Set session model
-*hermes.set_session_config()*                                Set config option
+
+Create or load a session with optional MCP server configuration.
+
+Parameters: ~
+    {opts} (table|nil) Session options
+
+Options: ~
+    • cwd: Working directory for the session
+    • mcpServers: Array of MCP server configurations
+
+MCP Server Options: ~
+    • type: Server type ("http", "sse", or "stdio")
+    • name: Human-readable server name
+    • url: URL for http/sse servers
+    • headers: HTTP headers as array of key-value tables
+    • command: Command for stdio servers
+    • args: Command arguments for stdio servers
+    • env: Environment variables as array of {name, value}
 
 Example: >
     -- Create session
-    local session = require("hermes").create_session({
+    require("hermes").create_session({
         cwd = "."
     })
     
+    -- Create session with MCP servers
+    require("hermes").create_session({
+        cwd = "/project",
+        mcpServers = {
+            {
+                type = "http",
+                name = "Example Server",
+                url = "http://example.com/mcp"
+            },
+            {
+                type = "stdio",
+                name = "Local Server",
+                command = "/path/to/server",
+                args = {"--port", "8080"}
+            }
+        }
+    })
+    
     -- Load session
-    require("hermes").load_session(session.sessionId)
+    require("hermes").load_session("session-id-123")
 <
 
 Autocommands triggered: ~
-    SessionCreated, SessionLoaded, SessionsListed, SessionForked,
-    SessionResumed, SessionModelUpdated, ConfigurationOption
+    SessionCreated, SessionLoaded
 
 ------------------------------------------------------------------------------
-4.5 PROMPT                                            *hermes-prompt*
+4.6 PROMPT                                            *hermes-prompt*
 
 *hermes.prompt()*                                        Send prompt to agent
 
@@ -228,7 +292,7 @@ Autocommands triggered: ~
     AvailableCommands, ModeCurrent
 
 ------------------------------------------------------------------------------
-4.6 CONFIGURATION                                     *hermes-configuration*
+4.7 CONFIGURATION                                     *hermes-configuration*
 
 *hermes.cancel()*                                        Cancel operation
 *hermes.set_mode()*                                       Set session mode
@@ -249,7 +313,45 @@ Autocommands triggered: ~
     ModeUpdated, Prompted
 
 ================================================================================
-5. AUTOCOMMANDS                                       *hermes-autocommands*
+5. DETAILED CONFIGURATION                           *hermes-detailed-config*
+
+Full configuration options for |hermes.setup()|:
+
+root_markers ~
+    List of files/directories to identify project root.
+    Default: {".git"}
+
+permissions ~
+    Permission settings for agent operations:
+    • fs_write_access: Allow file writes (default: true)
+    • fs_read_access: Allow file reads (default: true)
+    • terminal_access: Allow terminal access (default: true)
+    • request_permissions: Allow permission requests (default: true)
+    • send_notifications: Allow notifications (default: true)
+
+terminal ~
+    Terminal configuration:
+    • delete: Auto-delete on exit (default: true)
+    • enabled: Enable terminal (default: true)
+    • buffered: Buffer output (default: true)
+
+buffer ~
+    Buffer settings:
+    • auto_save: Auto-save files (default: false)
+
+log ~
+    Logging configuration with targets: stdio, notification, message, file
+    Each target supports:
+    • level: Log level (vim.log.levels or "trace"/"debug"/"info"/"warn"/"error"/"off")
+    • format: Format style ("compact", "pretty", "full", "json")
+    
+    File logging additional options:
+    • path: Log file path
+    • max_size: Max file size in bytes (default: 10485760)
+    • max_files: Number of log files (default: 5)
+
+================================================================================
+6. AUTOCOMMANDS                                       *hermes-autocommands*
 
 Hermes generates autocommands for agent communication. Listen to them with: >
     vim.api.nvim_create_autocmd("User", {
@@ -264,7 +366,7 @@ See |hermes-api| sections above for autocommands triggered by each method.
 Full autocommand list: |hermes-autocommands-list|
 
 ================================================================================
-6. COMMANDS                                           *hermes-commands*
+7. COMMANDS                                           *hermes-commands*
 
 *:Hermes*                                                 Hermes management
 
@@ -283,7 +385,7 @@ Example: >
 <
 
 ================================================================================
-7. TROUBLESHOOTING                                    *hermes-troubleshooting*
+8. TROUBLESHOOTING                                    *hermes-troubleshooting*
 
 Platform not supported: ~
 If you see a "Platform not supported" error when starting Hermes:

@@ -49,21 +49,8 @@ describe("hermes.init (main API)", function()
 		end
 	end)
 
-	describe("API surface (documented functions only)", function()
-		it("exports required API functions", function()
-			-- Test all API functions are available
-			assert.is_function(hermes.setup)
-			assert.is_function(hermes.connect)
-			assert.is_function(hermes.disconnect)
-			assert.is_function(hermes.authenticate)
-			assert.is_function(hermes.create_session)
-			assert.is_function(hermes.load_session)
-			assert.is_function(hermes.prompt)
-			assert.is_function(hermes.cancel)
-			assert.is_function(hermes.set_mode)
-			assert.is_function(hermes.respond)
-		end)
-	end)
+	-- API surface verification is done in "native module exports" test below
+	-- which tests the Rust FFI boundary directly (more valuable than testing Lua wrappers)
 
 	describe("setup()", function()
 		it("accepts configuration table", function()
@@ -112,6 +99,68 @@ describe("hermes.init (main API)", function()
 		end)
 	end)
 
+	describe("native module exports (get_native())", function()
+		local hermes_module, native
+		
+		before_each(function()
+			-- Clear module cache and reload
+			package.loaded["hermes.init"] = nil
+			
+			-- Load the hermes module fresh
+			hermes_module = require("hermes")
+			
+			-- Setup with auto_download disabled to ensure we load the built binary
+			hermes_module.setup({ auto_download_binary = false })
+			
+			-- Access the native module directly via _get_native()
+			native = hermes_module._get_native()
+		end)
+		
+		it("exports setup from Rust", function()
+			assert.is_function(native.setup)
+		end)
+		
+		it("exports connect from Rust", function()
+			assert.is_function(native.connect)
+		end)
+		
+		it("exports disconnect from Rust", function()
+			assert.is_function(native.disconnect)
+		end)
+		
+		it("exports authenticate from Rust", function()
+			assert.is_function(native.authenticate)
+		end)
+		
+		it("exports create_session from Rust", function()
+			assert.is_function(native.create_session)
+		end)
+		
+		it("exports load_session from Rust", function()
+			assert.is_function(native.load_session)
+		end)
+		
+		it("exports list_sessions from Rust", function()
+			assert.is_function(native.list_sessions)
+		end)
+		
+		it("exports prompt from Rust", function()
+			assert.is_function(native.prompt)
+		end)
+		
+		it("exports cancel from Rust", function()
+			assert.is_function(native.cancel)
+		end)
+		
+		it("exports set_mode from Rust", function()
+			assert.is_function(native.set_mode)
+		end)
+		
+		it("exports respond from Rust", function()
+			assert.is_function(native.respond)
+		end)
+	end)
+
 	describe("API function signatures", function()
 		before_each(function()
 			-- Setup hermes for tests that need it
@@ -129,36 +178,6 @@ describe("hermes.init (main API)", function()
 			assert.has_no.errors(function()
 				hermes.disconnect("opencode")
 			end)
-		end)
-		
-		it("authenticate accepts auth method ID", function()
-			-- Note: This test validates the function exists and accepts arguments
-			-- Actual authentication is not tested to avoid thread cleanup issues
-			assert.is_function(hermes.authenticate)
-		end)
-		
-		it("create_session accepts options table", function()
-			assert.is_function(hermes.create_session)
-		end)
-		
-		it("load_session accepts session ID and optional opts", function()
-			assert.is_function(hermes.load_session)
-		end)
-		
-		it("prompt accepts session_id and content", function()
-			assert.is_function(hermes.prompt)
-		end)
-		
-		it("cancel accepts session_id", function()
-			assert.is_function(hermes.cancel)
-		end)
-		
-		it("set_mode accepts session_id and mode_id", function()
-			assert.is_function(hermes.set_mode)
-		end)
-		
-		it("respond accepts request_id and optional response", function()
-			assert.is_function(hermes.respond)
 		end)
 
 		-- Note: Additional API tests for other methods (create_session, load_session, etc.)

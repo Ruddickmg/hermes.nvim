@@ -197,14 +197,11 @@ mod tests {
     fn test_from_object_nil_creates_default_config() {
         let obj = Object::nil();
         let config = ListSessionsConfig::from_object(obj).unwrap();
-        assert_eq!(config.cwd, None);
-    }
-
-    #[test]
-    fn test_from_object_nil_has_no_cursor() {
-        let obj = Object::nil();
-        let config = ListSessionsConfig::from_object(obj).unwrap();
-        assert_eq!(config.cursor, None);
+        // Single assertion checking both fields are None
+        assert!(
+            config.cwd.is_none() && config.cursor.is_none(),
+            "Nil input should create default config with None fields"
+        );
     }
 
     // Test empty dictionary - should create default config
@@ -213,15 +210,11 @@ mod tests {
         let dict = Dictionary::new();
         let obj = Object::from(dict);
         let config = ListSessionsConfig::from_object(obj).unwrap();
-        assert_eq!(config.cwd, None);
-    }
-
-    #[test]
-    fn test_from_object_empty_dict_has_no_cursor() {
-        let dict = Dictionary::new();
-        let obj = Object::from(dict);
-        let config = ListSessionsConfig::from_object(obj).unwrap();
-        assert_eq!(config.cursor, None);
+        // Single assertion checking both fields are None
+        assert!(
+            config.cwd.is_none() && config.cursor.is_none(),
+            "Empty dict should create default config with None fields"
+        );
     }
 
     // Test cwd field parsing
@@ -274,21 +267,20 @@ mod tests {
         assert_eq!(config.cursor, Some("".to_string()));
     }
 
-    // Test combined fields - verifying each independently
+    // Test combined fields - single assertion for both fields
     #[test]
-    fn test_from_object_with_both_fields_parses_cwd_correctly() {
+    fn test_from_object_with_both_fields_parses_correctly() {
         let dict = create_full_dict("/path/to/project", "xyz789");
         let obj = Object::from(dict);
         let config = ListSessionsConfig::from_object(obj).unwrap();
-        assert_eq!(config.cwd, Some(PathBuf::from("/path/to/project")));
-    }
-
-    #[test]
-    fn test_from_object_with_both_fields_parses_cursor_correctly() {
-        let dict = create_full_dict("/path/to/project", "xyz789");
-        let obj = Object::from(dict);
-        let config = ListSessionsConfig::from_object(obj).unwrap();
-        assert_eq!(config.cursor, Some("xyz789".to_string()));
+        // Single assertion verifying both fields parsed correctly
+        assert_eq!(
+            (config.cwd, config.cursor),
+            (
+                Some(PathBuf::from("/path/to/project")),
+                Some("xyz789".to_string())
+            )
+        );
     }
 
     // Test unknown fields are ignored (only known fields should be parsed)
@@ -310,8 +302,11 @@ mod tests {
         dict.insert("another", "also_ignored");
         let obj = Object::from(dict);
         let config = ListSessionsConfig::from_object(obj).unwrap();
-        assert_eq!(config.cwd, None);
-        assert_eq!(config.cursor, None);
+        // Single assertion checking both fields are None
+        assert!(
+            config.cwd.is_none() && config.cursor.is_none(),
+            "Unknown fields should result in default config"
+        );
     }
 
     // Test error path - invalid object type
