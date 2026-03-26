@@ -365,6 +365,44 @@ vim.api.nvim_create_autocmd("User", {
 
 > **Triggers:** [SessionLoaded](#sessionloaded) autocommand upon completion
 
+### List Sessions (**Optional**)
+
+List sessions, can be filtered by project path or cursor pagination.
+
+```lua
+local hermes = require("hermes")
+
+-- list all sessions
+hermes.list_sessions()
+
+-- filter by directory
+hermes.list_sessions({
+    cwd = "/path/to/directory",
+})
+
+-- filter by cursor based pagination
+hermes.list_sessions({
+    cursor = "abc123",
+})
+
+-- example
+vim.api.nvim_create_autocmd("User", {
+    group = "hermes",
+    pattern = "SessionsListed",
+    callback = function(args)
+        local next_page = args.data.nextCursor
+
+        -- get next page of sessions with this cursor in the current directory
+        hermes.list_sessions({
+          cwd = vim.fn.getcwd(),
+          cursor = next_page,
+        })
+    end,
+})
+```
+
+> **Triggers:** [SessionsListed](#sessionslisted) autocommand upon completion
+
 ### Prompt
 
 Send prompts to the agent 
