@@ -326,4 +326,99 @@ mod tests {
         let config = ListSessionsConfig::default();
         assert_eq!(config.cursor, None);
     }
+
+    // Test struct construction with values
+    #[test]
+    fn test_config_with_cwd_only() {
+        let config = ListSessionsConfig {
+            cwd: Some(PathBuf::from("/test/path")),
+            cursor: None,
+        };
+        assert_eq!(config.cwd, Some(PathBuf::from("/test/path")));
+    }
+
+    #[test]
+    fn test_config_with_cursor_only() {
+        let config = ListSessionsConfig {
+            cwd: None,
+            cursor: Some("test_cursor".to_string()),
+        };
+        assert_eq!(config.cursor, Some("test_cursor".to_string()));
+    }
+
+    #[test]
+    fn test_config_with_both_fields() {
+        let config = ListSessionsConfig {
+            cwd: Some(PathBuf::from("/test/path")),
+            cursor: Some("test_cursor".to_string()),
+        };
+        assert_eq!(config.cwd, Some(PathBuf::from("/test/path")));
+    }
+
+    #[test]
+    fn test_config_clone_preserves_values() {
+        let config = ListSessionsConfig {
+            cwd: Some(PathBuf::from("/test/path")),
+            cursor: Some("cursor123".to_string()),
+        };
+        let cloned = config.clone();
+        assert_eq!(cloned.cwd, Some(PathBuf::from("/test/path")));
+    }
+
+    // Test error path - invalid object type
+    #[test]
+    fn test_from_object_with_invalid_type_returns_error() {
+        // Array is not a valid input for ListSessionsConfig
+        let arr = nvim_oxi::Array::from_iter(vec![Object::from("test")]);
+        let obj = Object::from(arr);
+        let result = ListSessionsConfig::from_object(obj);
+        assert!(
+            result.is_err(),
+            "Should error on non-dictionary/non-nil input"
+        );
+    }
+
+    // Test path edge cases
+    #[test]
+    fn test_from_object_with_special_characters_in_path() {
+        let mut dict = Dictionary::new();
+        dict.insert("cwd", "/path/with-unicode-日本語");
+        let obj = Object::from(dict);
+        let config = ListSessionsConfig::from_object(obj).unwrap();
+        assert_eq!(config.cwd, Some(PathBuf::from("/path/with-unicode-日本語")));
+    }
+
+    #[test]
+    fn test_from_object_with_special_characters_in_cursor() {
+        let mut dict = Dictionary::new();
+        dict.insert("cursor", "cursor-with-chars_123.test");
+        let obj = Object::from(dict);
+        let config = ListSessionsConfig::from_object(obj).unwrap();
+        assert_eq!(
+            config.cursor,
+            Some("cursor-with-chars_123.test".to_string())
+        );
+    }
+
+    #[test]
+    fn test_from_object_with_very_long_cursor() {
+        let long_cursor = "a".repeat(1000);
+        let mut dict = Dictionary::new();
+        dict.insert("cursor", long_cursor.clone());
+        let obj = Object::from(dict);
+        let config = ListSessionsConfig::from_object(obj).unwrap();
+        assert_eq!(config.cursor, Some(long_cursor));
+    }
+
+    #[test]
+    fn test_from_object_with_nested_path() {
+        let mut dict = Dictionary::new();
+        dict.insert("cwd", "/very/nested/deep/path/to/project");
+        let obj = Object::from(dict);
+        let config = ListSessionsConfig::from_object(obj).unwrap();
+        assert_eq!(
+            config.cwd,
+            Some(PathBuf::from("/very/nested/deep/path/to/project"))
+        );
+    }
 }

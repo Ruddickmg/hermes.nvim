@@ -2,12 +2,13 @@ use std::time::Duration;
 
 use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
 use agent_client_protocol::{
-    InitializeResponse, LoadSessionResponse, NewSessionResponse, PromptResponse, StopReason,
+    InitializeResponse, ListSessionsResponse, LoadSessionResponse, NewSessionResponse,
+    PromptResponse, StopReason,
 };
 use hermes::{
     api::{
-        ConnectionArgs, CreateSessionArgs, DisconnectArgs, LoadSessionConfig, PromptArgs,
-        PromptContent,
+        ConnectionArgs, CreateSessionArgs, DisconnectArgs, ListSessionsConfig, LoadSessionConfig,
+        PromptArgs, PromptContent,
     },
     nvim::{autocommands::Commands, hermes},
 };
@@ -194,6 +195,105 @@ fn test_load_session() -> Result<(), nvim_oxi::Error> {
     disconnect.call(DisconnectArgs::All)?;
 
     assert!(loaded_session.is_ok());
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_list_sessions_no_filter() -> Result<(), nvim_oxi::Error> {
+    let dict: Dictionary = hermes()?;
+    let connect: Function<ConnectionArgs, ()> =
+        FromObject::from_object(dict.get("connect").unwrap().clone())?;
+    let disconnect: Function<DisconnectArgs, ()> =
+        FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
+    let create_session: Function<CreateSessionArgs, ()> =
+        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
+    let list_sessions: Function<Option<ListSessionsConfig>, ()> =
+        FromObject::from_object(dict.get("list_sessions").unwrap().clone())?;
+
+    let wait_for_initialization =
+        autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
+    let wait_for_session =
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
+    let wait_for_sessions_listed =
+        autocommand::listen_for_autocommand::<ListSessionsResponse>(Commands::SessionsListed);
+
+    connect.call((nvim_oxi::String::from("opencode"), None))?;
+
+    wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+
+    // Create a session first
+    create_session.call(CreateSessionArgs::Default)?;
+
+    let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+    let _session_id = session.session_id.to_string();
+
+    // List all sessions
+    list_sessions.call(None)?;
+
+    let sessions_response = wait_for_sessions_listed(Duration::from_secs(TIMEOUT_IN_SECONDS));
+
+    disconnect.call(DisconnectArgs::All)?;
+
+    assert!(
+        sessions_response.is_ok(),
+        "Should receive SessionsListed autocommand"
+    );
+
+    // Verify response contains sessions
+    let response = sessions_response.unwrap();
+    assert!(
+        !response.sessions.is_empty(),
+        "Should have at least one session"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_list_sessions_with_cwd_filter() -> Result<(), nvim_oxi::Error> {
+    let dict: Dictionary = hermes()?;
+    let connect: Function<ConnectionArgs, ()> =
+        FromObject::from_object(dict.get("connect").unwrap().clone())?;
+    let disconnect: Function<DisconnectArgs, ()> =
+        FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
+    let create_session: Function<CreateSessionArgs, ()> =
+        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
+    let list_sessions: Function<Option<ListSessionsConfig>, ()> =
+        FromObject::from_object(dict.get("list_sessions").unwrap().clone())?;
+
+    let wait_for_initialization =
+        autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
+    let wait_for_session =
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
+    let wait_for_sessions_listed =
+        autocommand::listen_for_autocommand::<ListSessionsResponse>(Commands::SessionsListed);
+
+    connect.call((nvim_oxi::String::from("opencode"), None))?;
+
+    wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+
+    // Create a session first
+    create_session.call(CreateSessionArgs::Default)?;
+
+    let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+    let _session_id = session.session_id.to_string();
+
+    // List sessions with cwd filter
+    let config = ListSessionsConfig {
+        cwd: Some(std::path::PathBuf::from(".")),
+        cursor: None,
+    };
+    list_sessions.call(Some(config))?;
+
+    let sessions_response = wait_for_sessions_listed(Duration::from_secs(TIMEOUT_IN_SECONDS));
+
+    disconnect.call(DisconnectArgs::All)?;
+
+    assert!(
+        sessions_response.is_ok(),
+        "Should receive SessionsListed autocommand with cwd filter"
+    );
 
     Ok(())
 }
