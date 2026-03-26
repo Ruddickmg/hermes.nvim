@@ -7,6 +7,8 @@ try {
   if (version) {
     process.stdout.write(version);
   } else {
+    // write empty string to stdout so that the last line is an empty string
+    process.stdout.write("");
     process.stderr.write('No next release version determined by semantic-release.\n');
   }
 } catch (err) {
