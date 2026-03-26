@@ -117,10 +117,7 @@ If your platform isn't supported and building from source fails:
 
 - [x] Full implementation of ACP Client (Built on the official [Rust ACP Sdk](https://github.com/agentclientprotocol/rust-sdk))
 - [x] Configurable capabilities (filesystem, terminal, etc)
-- [x] Trigger Autocommands for messages/notifications
-- [ ] Lsp integration
-- [ ] [Recursive language model](https://arxiv.org/abs/2512.24601) integration
-- [ ] Speech to text for audio prompting (If no audio capability is present for the agent)
+- [x] Autocommands for messages/notifications
 
 ## API
 
@@ -1585,18 +1582,16 @@ Available formats:
 ## TODO:
 
 -- functionality
-- [ ] Complete configuration object and integration with app
 - [x] Allow connecting to Agents
   - [x] Via stdio
   - [ ] Via http
   - [ ] Via linux socket
 - [ ] Add autocommand that triggers on all events
 - [ ] Support "unstable" ACP methods
+  - [ ] model selection
   - [ ] session methods
-    - [ ] List sessions
     - [ ] Merge sessions
     - [ ] Fork sessions
-  - [ ] Allow model selection
 
 -- testing
 - [ ] Create fake/mock Agent used to test agent functionality that is not currently supported by any/many ai agents

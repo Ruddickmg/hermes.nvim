@@ -55,6 +55,7 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
             "load_session",
             api::load_session(connection_manager.clone(), plugin_state.clone()),
         ),
+        ("list_sessions", api::list_sessions(connection_manager.clone())),
         ("prompt", api::prompt(connection_manager.clone())),
         ("set_mode", api::set_mode(connection_manager.clone())),
         ("respond", api::respond(request_handler)),
