@@ -5,7 +5,6 @@ use agent_client_protocol::{
     TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
     WriteTextFileRequest, WriteTextFileResponse,
 };
-use nvim_oxi::Dictionary;
 use nvim_oxi::conversion::FromObject;
 use std::sync::Arc;
 use tokio::sync::{Mutex, oneshot};
@@ -16,6 +15,7 @@ use crate::PluginState;
 use crate::acp::Result;
 use crate::acp::error::Error;
 use crate::nvim::autocommands::Commands;
+use crate::nvim::configuration::dict_from_object;
 use crate::nvim::terminal::{Terminal, TerminalManager, parse_exit_code};
 use crate::utilities::{
     NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
@@ -165,8 +165,8 @@ impl Request {
             Ok(output) => Ok((output, false)),
             Err(_) => {
                 // Not a string, try Dictionary
-                let dict = Dictionary::from_object(data)
-                    .map_err(|e| Error::InvalidInput(e.to_string()))?;
+                let dict =
+                    dict_from_object(data).map_err(|e| Error::InvalidInput(e.to_string()))?;
 
                 // "output" field is required and must be a String
                 let output = dict
@@ -209,7 +209,7 @@ impl Request {
                 match i64::from_object(data.clone()) {
                     Ok(exit_code) => Ok(parse_exit_code(exit_code)),
                     Err(_) => {
-                        let dict = Dictionary::from_object(data)
+                        let dict = dict_from_object(data)
                             .map_err(|e| Error::InvalidInput(e.to_string()))?;
 
                         // "exitCode" field is optional

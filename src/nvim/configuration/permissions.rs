@@ -4,6 +4,8 @@ use nvim_oxi::{
     lua::{self, Poppable, Pushable},
 };
 
+use super::dict_from_object;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Permissions {
     pub fs_write_access: bool,
@@ -54,7 +56,7 @@ impl Poppable for Permissions {
 
 impl FromObject for Permissions {
     fn from_object(obj: Object) -> Result<Self, Error> {
-        let dict = Dictionary::from_object(obj)?;
+        let dict = dict_from_object(obj)?;
 
         let fs_write_access = dict
             .get("fs_write_access")
@@ -204,7 +206,7 @@ impl PermissionsPartial {
 
 impl FromObject for PermissionsPartial {
     fn from_object(obj: Object) -> Result<Self, Error> {
-        let dict = Dictionary::from_object(obj)?;
+        let dict = dict_from_object(obj)?;
 
         let fs_write_access = dict
             .get("fs_write_access")

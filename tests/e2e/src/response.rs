@@ -33,7 +33,7 @@ fn can_chose_a_response_to_a_permission_request() -> Result<(), nvim_oxi::Error>
     let dict: Dictionary = hermes()?;
     let connect = create_func::<ConnectionArgs>(dict.clone(), "connect");
     let disconnect = create_func::<DisconnectArgs>(dict.clone(), "disconnect");
-    let create_session = create_func::<CreateSessionArgs>(dict.clone(), "createSession");
+    let create_session = create_func::<CreateSessionArgs>(dict.clone(), "create_session");
     let prompt = create_func::<PromptArgs>(dict.clone(), "prompt");
     let respond = create_func::<RespondArgs>(dict.clone(), "respond");
 
@@ -84,7 +84,7 @@ fn can_chose_a_response_to_a_permission_request() -> Result<(), nvim_oxi::Error>
 
     assert!(
         finished_prompt.is_ok(),
-        "Respond autocommand should fire after setMode call"
+        "Respond autocommand should fire after set_mode call"
     );
 
     Ok(())

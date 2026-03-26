@@ -11,8 +11,107 @@ Hermes focuses on:
 - Hooks into requests from AI assistants that require responses (permission requests, access requests, etc)
 - Autocommands for updates on communication between the user (client) and assistant (agent) 
 
-> [!CAUTION]
-> While Hermes is a complete ACP client, most agents available today don't fully utilize the protocol. Key [optional features](https://agentclientprotocol.com/protocol/overview#optional-methods-2) (file operations, terminal commands, etc) are often handled through agent-specific tools rather than ACP methods. This means some Hermes capabilities may not be exercised depending on which agent you use.
+## Installation
+
+**lazy.nvim**
+```lua
+{
+    "Ruddickmg/hermes.nvim",
+    config = function()
+        require("hermes").setup()
+    end
+}
+```
+
+**paq.nvim**
+```lua
+
+require("paq") {
+    "Ruddickmg/hermes.nvim"
+}
+require("hermes").setup()
+```
+
+
+### Requirements
+
+- Neovim 0.11 or later
+
+### Pre-built Binary
+
+Hermes is built in Rust and so must be integrated with lua during installation, pre built binaries are provided for convenience
+
+#### Supported Platforms
+
+Binaries are available for:
+
+- **Linux:** x86_64, aarch64 (arm64)
+- **macOS:** x86_64, arm64
+- **Windows:** x86_64
+
+> [!NOTE]
+> Hermes will automatically detect and download a pre-built binary for supported platforms.
+>
+> It will:
+> 1. Check if your platform is supported
+> 2. Download the appropriate pre-built binary from GitHub releases
+> 3. Load the native module
+>
+> This happens automatically on first API call.
+>
+> ```lua
+> -- sets up pre-built binary for your system
+> require("hermes").setup({ 
+>     version = "latest",
+> })
+> ```
+>
+> You can also disable this if you would prefer to build from source
+> ```lua
+> -- Will have to set up manually with `:Hermes build` or build manually from source
+> require("hermes").setup({ 
+>     auto_download_binary = false,
+> })
+> ```
+
+### Building from Source (Unsupported Platforms)
+
+If your platform is not in the supported list above, you can build from source:
+
+**Requirements:**
+- [Rust toolchain](https://rustup.rs/) (1.70 or later)
+
+**Scripted**
+
+Run the build command in Neovim:
+   ```
+   :Hermes build
+   ```
+
+   This will:
+   - Compile the Rust code with `cargo build --release`
+   - Install the resulting binary in the correct location
+
+**Manual** 
+
+```bash
+git clone https://github.com/Ruddickmg/hermes.nvim.git
+cd hermes.nvim
+cargo build --release
+
+# Copy target/release/libhermes.* to your Neovim data directory
+```
+
+### Platform Not Supported?
+
+If your platform isn't supported and building from source fails:
+
+1. Create an issue on GitHub: https://github.com/Ruddickmg/hermes.nvim/issues
+2. Include:
+   - Your operating system and version
+   - Output of `:Hermes version` (if available)
+   - Full error messages from `:Hermes build` or `cargo build --release`
+   - Architecture info from `uname -m` (or `uname -a` on macOS)
 
 ## Features
 
@@ -49,6 +148,8 @@ hermes.setup({
 
 -- Full configuration defaults
 hermes.setup({
+    version = "latest", -- specify which hermes release to use
+    auto_download_binary = true, -- automatically download pre-built binary (set to false to build manually)
     root_markers = { ".git" }, -- used to detect the project root by matching file names in the root directory
     permissions = {
         fs_write_access = true,      -- Allow file writes to the agent 
@@ -188,10 +289,10 @@ Create a new session. If no arguments are provided, the session defaults to eith
 local hermes = require("hermes")
 
 -- use default session configuration
-hermes.createSession()
+hermes.create_session()
 
 -- customize connection configuration
-hermes.createSession({
+hermes.create_session({
   cwd = ".", -- path to create the session in (optional)
   mcpServers = {
     { -- Http or Sse MCP server definition
@@ -227,10 +328,10 @@ Load an existing session
 local hermes = require("hermes")
 
 -- call signature (uses defaults)
-hermes.loadSession(sessionId)
+hermes.load_session(sessionId)
 
 -- call signature (with further configuration)
-hermes.loadSession(sessionId, {
+hermes.load_session(sessionId, {
     cwd = ".", -- path to load the session from (optional, defaults to either project root or current directory)
     mcpServers = {
         { -- Http or Sse MCP server definition
@@ -262,7 +363,7 @@ vim.api.nvim_create_autocmd("User", {
     callback = function(args)
         local sessionId = args.data.sessionId
 
-        hermes.loadSession(sessionId)
+        hermes.load_session(sessionId)
     end,
 })
 ```
@@ -378,7 +479,7 @@ Set what mode the agent is in (the plan/build modes for opencode for example)
 local hermes = require("hermes")
 
 -- call signature
-hermes.setMode(sessionId, modeId)
+hermes.set_mode(sessionId, modeId)
 
 -- example
 vim.api.nvim_create_autocmd("User", {
@@ -391,7 +492,7 @@ vim.api.nvim_create_autocmd("User", {
             local selectedModeId = table.remove(modes.availableModes).id -- select mode id somehow
             local sessionId = args.data.sessionId
 
-            hermes.setMode(sessionId, selectedModeId)
+            hermes.set_mode(sessionId, selectedModeId)
         end
     end,
 })
@@ -403,8 +504,10 @@ vim.api.nvim_create_autocmd("User", {
 
 When an agent makes a request that requires user input (such as a permission request), it triggers an autocommand and pauses until the user responds. Use the `respond` method with the request ID to resume the agent's operation. If no autocommand handler is defined, a default workflow will be triggered. Requests can be disabled via the setup configuration. 
 
-#### Permission request
+> [!WARNING]
+> While Hermes is a complete ACP client, most agents available today don't fully utilize the protocol. The following are autocommands are [optional features](https://agentclientprotocol.com/protocol/overview#optional-methods-2) and often handled through agent-specific tools rather than calling the ACP methods that trigger them. This means some Hermes capabilities may not be exercised depending on which agent you use.
 
+#### Permission request
 
 ```lua
 local hermes = require("hermes")
@@ -851,7 +954,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="configurationupdated">
       <td><code>ConfigurationUpdated</code></td>
       <td>Session configuration updated</td>
-      <td>⚡ <a href="#load-session-optional">setSessionConfigOption()</a></td>
+      <td>⚡ <a href="#load-session-optional">set_session_config_option()</a></td>
       <td><pre><code class="language-json">{
   "configOptions": [
     {
@@ -884,7 +987,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
       <td><pre><code class="language-json">{
   "protocolVersion": "string",
   "agentCapabilities": {
-    "loadSession": "boolean",
+    "load_session": "boolean",
     "promptCapabilities": {
       "image": "boolean",
       "audio": "boolean",
@@ -926,7 +1029,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="modeupdated">
       <td><code>ModeUpdated</code></td>
       <td>Session mode changed</td>
-      <td>⚡ <a href="#set-mode-optional">setMode()</a></td>
+      <td>⚡ <a href="#set-mode-optional">set_mode()</a></td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
@@ -1004,7 +1107,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessioncreated">
       <td><code>SessionCreated</code></td>
       <td>New session created</td>
-      <td>⚡ <a href="#create-session">createSession()</a></td>
+      <td>⚡ <a href="#create-session">create_session()</a></td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "modes": {
@@ -1044,7 +1147,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionforked">
       <td><code>SessionForked</code></td>
       <td>Session forked successfully</td>
-      <td>⚡ <a href="#load-session-optional">forkSession()</a></td>
+      <td>⚡ <a href="#load-session-optional">fork_session()</a></td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "modes": {
@@ -1084,7 +1187,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionloaded">
       <td><code>SessionLoaded</code></td>
       <td>Session loaded successfully</td>
-      <td>⚡ <a href="#load-session-optional">loadSession()</a></td>
+      <td>⚡ <a href="#load-session-optional">load_session()</a></td>
       <td><pre><code class="language-json">{
   "modes": {
     "currentModeId": "string",
@@ -1123,14 +1226,14 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionmodelupdated">
       <td><code>SessionModelUpdated</code></td>
       <td>Session model updated</td>
-      <td>⚡ <a href="#load-session-optional">setSessionModel()</a></td>
+      <td>⚡ <a href="#load-session-optional">set_session_model()</a></td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
     <tr id="sessionresumed">
       <td><code>SessionResumed</code></td>
       <td>Session resumed successfully</td>
-      <td>⚡ <a href="#load-session-optional">resumeSession()</a></td>
+      <td>⚡ <a href="#load-session-optional">resume_session()</a></td>
       <td><pre><code class="language-json">{
   "modes": {
     "currentModeId": "string",
@@ -1169,7 +1272,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionslisted">
       <td><code>SessionsListed</code></td>
       <td>Session list received</td>
-      <td>⚡ <a href="#load-session-optional">listSessions()</a></td>
+      <td>⚡ <a href="#load-session-optional">list_sessions()</a></td>
       <td><pre><code class="language-json">{
   "sessions": [
     {
@@ -1448,12 +1551,6 @@ Available formats:
 - **json** - Machine-readable JSON format
 
 ## TODO:
-
--- before v1
-- [x] Add setup function for user configuration
-- [ ] Add logic for loading plugin into neovim
-  - [ ] Figure out how to use pre-built binaries
-  - [ ] Enable local build if pre-built binary doesn't exist for system
 
 -- functionality
 - [ ] Complete configuration object and integration with app

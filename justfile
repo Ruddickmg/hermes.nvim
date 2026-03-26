@@ -12,3 +12,11 @@ integration:
   
 unit:
   cargo nextest run --lib --no-fail-fast
+
+# Run Lua tests using vusted
+lua:
+  vusted -e "package.path = package.path .. ';./tests/lua/?.lua'; package.path = package.path .. ';./tests/lua/spec/?.lua'; package.path = package.path .. ';./lua/?.lua'; package.path = package.path .. ';./lua/?/init.lua'" tests/lua/spec/
+
+# Run specific Lua test file (e.g., just test-lua-file tests/lua/spec/platform_spec.lua)
+lua-file FILE:
+  vusted -e "package.path = package.path .. ';./tests/lua/?.lua'; package.path = package.path .. ';./tests/lua/spec/?.lua'; package.path = package.path .. ';./lua/?.lua'; package.path = package.path .. ';./lua/?/init.lua'" {{FILE}}

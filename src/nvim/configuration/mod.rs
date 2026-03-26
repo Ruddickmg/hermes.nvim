@@ -9,12 +9,36 @@ pub use log::{
     LogTargetConfigPartial,
 };
 use nvim_oxi::{
-    Dictionary, Object,
+    Array, Dictionary, Object, ObjectKind,
     conversion::{Error, FromObject},
     lua::{self, Poppable},
 };
 pub use permissions::{Permissions, PermissionsPartial};
 pub use terminal::{TerminalConfig, TerminalConfigPartial};
+
+/// Converts an [`Object`] to a [`Dictionary`], handling empty Lua tables gracefully.
+///
+/// In Lua, an empty table `{}` is ambiguous—Neovim treats it as an empty array
+/// rather than an empty dictionary. This causes `Dictionary::from_object` to fail
+/// with a type mismatch error. This helper treats empty arrays as empty
+/// dictionaries so that `setup({})` and similar calls work as expected.
+pub(crate) fn dict_from_object(obj: Object) -> Result<Dictionary, Error> {
+    match obj.kind() {
+        ObjectKind::Dictionary => Dictionary::from_object(obj),
+        ObjectKind::Array => {
+            let array = Array::from_object(obj)?;
+            if array.is_empty() {
+                Ok(Dictionary::default())
+            } else {
+                Err(Error::FromWrongType {
+                    expected: "dictionary",
+                    actual: "non-empty array",
+                })
+            }
+        }
+        _ => Dictionary::from_object(obj),
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct ClientConfig {
@@ -75,7 +99,7 @@ impl ClientConfigPartial {
 
 impl FromObject for ClientConfigPartial {
     fn from_object(obj: Object) -> Result<Self, Error> {
-        let dict = Dictionary::from_object(obj)?;
+        let dict = dict_from_object(obj)?;
 
         let permissions = dict
             .get("permissions")
@@ -349,5 +373,46 @@ mod tests {
         assert!(partial.terminal.is_some());
         assert!(partial.buffer.is_some());
         assert!(partial.log.is_some());
+    }
+
+    #[test]
+    fn test_dict_from_object_empty_array_returns_empty_dict() {
+        let empty_array = nvim_oxi::Array::default();
+        let obj = nvim_oxi::Object::from(empty_array);
+        let result = dict_from_object(obj);
+
+        assert!(result.is_ok());
+        let dict = result.unwrap();
+        assert!(dict.is_empty());
+    }
+
+    #[test]
+    fn test_dict_from_object_non_empty_array_returns_error() {
+        let mut array = nvim_oxi::Array::new();
+        array.push(1i64);
+        let obj = nvim_oxi::Object::from(array);
+        let result = dict_from_object(obj);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_dict_from_object_dictionary_passes_through() {
+        let mut dict = nvim_oxi::Dictionary::new();
+        dict.insert("key", "value");
+        let obj = nvim_oxi::Object::from(dict);
+        let result = dict_from_object(obj);
+
+        assert!(result.is_ok());
+        let returned_dict = result.unwrap();
+        assert!(returned_dict.get("key").is_some());
+    }
+
+    #[test]
+    fn test_dict_from_object_nil_returns_error() {
+        let obj = nvim_oxi::Object::nil();
+        let result = dict_from_object(obj);
+
+        assert!(result.is_err());
     }
 }

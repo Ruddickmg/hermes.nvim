@@ -1,8 +1,10 @@
 use crate::utilities::logging::{LogFormat, LogLevel};
 use nvim_oxi::{
-    Dictionary, Object,
+    Object,
     conversion::{Error, FromObject},
 };
+
+use super::dict_from_object;
 
 /// Configuration for a single log target (notification, message, quickfix, etc.)
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -31,7 +33,7 @@ impl LogTargetConfigPartial {
 
 impl FromObject for LogTargetConfigPartial {
     fn from_object(obj: Object) -> Result<Self, Error> {
-        let dict = Dictionary::from_object(obj)?;
+        let dict = dict_from_object(obj)?;
 
         let level = dict
             .get("level")
@@ -100,7 +102,7 @@ impl LogFileConfigPartial {
 
 impl FromObject for LogFileConfigPartial {
     fn from_object(obj: Object) -> Result<Self, Error> {
-        let dict = Dictionary::from_object(obj)?;
+        let dict = dict_from_object(obj)?;
 
         let path = dict
             .get("path")
@@ -184,7 +186,7 @@ impl LogConfigPartial {
 
 impl FromObject for LogConfigPartial {
     fn from_object(obj: Object) -> Result<Self, Error> {
-        let dict = Dictionary::from_object(obj)?;
+        let dict = dict_from_object(obj)?;
 
         let file = dict
             .get("file")
