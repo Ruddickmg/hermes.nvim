@@ -177,21 +177,23 @@ jobs:
     executor: windows/default
     steps:
       - checkout
-
-      # Install Rust
       - run:
-          name: Install Rust
+          name: Fix Rust toolchain (MSVC)
           command: |
-            choco install rustup.install -y --force
-            refreshenv
+            # Ensure we use the preinstalled rustup
+            rustup show
 
-            # Remove any default toolchain confusion
-            rustup toolchain uninstall stable || echo "no existing toolchain"
-
-            rustup component add rust-src   # Needed for core/std
-            rustup target add x86_64-pc-windows-msvc
-            # Install MSVC toolchain explicitly
+            # Install MSVC toolchain properly
             rustup toolchain install stable-x86_64-pc-windows-msvc
+
+            # Force THIS directory to use it
+            rustup override set stable-x86_64-pc-windows-msvc
+
+            # Needed for core/std
+            rustup component add rust-src   
+
+            # Explicitly install std for target (this is what provides `core`)
+            rustup target add x86_64-pc-windows-msvc
 
             # Set it as default
             rustup default stable-x86_64-pc-windows-msvc
