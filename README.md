@@ -167,7 +167,7 @@ hermes.setup({
         auto_save = false,  -- Auto-save modified files after writing to them 
     },
     log = {
-        -- send logs to stdio, You likely don't want this, used for development
+        -- send logs to stdio
         stdio = {
             -- only logs of the set value and above will be sent
             level = vim.log.levels.OFF or "off",
@@ -181,11 +181,6 @@ hermes.setup({
         },
         -- send logs to Neovim ":messages"
         message = {
-            level = vim.log.levels.OFF or "off",
-            format = "compact",
-        },
-        -- send logs to Neovim "quickfix" list
-        quickfix = {
             level = vim.log.levels.OFF or "off",
             format = "compact",
         },
@@ -1519,7 +1514,6 @@ Configure log levels and formats via the `setup()` function:
 ```lua
 require("hermes").setup({
     log = {
-        level = vim.log.levels.DEBUG,                    -- Global log level
         notification = { level = vim.log.levels.ERROR }, -- Per-target config
         message = { 
             level = vim.log.levels.INFO,
