@@ -67,6 +67,11 @@
 ---@field args? string[] Command arguments for stdio connections
 ---@field url? string URL for http/sse connections
 
+---@class EnvVar
+---Environment variable entry
+---@field name string Environment variable name
+---@field value string Environment variable value
+
 ---@class McpServer
 ---MCP (Model Context Protocol) server configuration
 ---@field type "http"|"sse"|"stdio" Server type
@@ -75,7 +80,7 @@
 ---@field headers? table<string, string>[] HTTP headers as array of key-value tables
 ---@field command? string Command to execute for stdio servers (required for stdio type)
 ---@field args? string[] Arguments for stdio server command
----@field env? table<string, string>[] Environment variables as array of {name: string, value: string}
+---@field env? EnvVar[] Environment variables as array of {name: string, value: string}
 
 ---@class SessionOptions
 ---Options for creating or loading a session
