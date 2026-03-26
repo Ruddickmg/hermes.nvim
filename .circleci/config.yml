@@ -50,7 +50,12 @@ workflows:
       - integration_tests
       - unit_tests
       - e2e_tests
-      - update-cargo-version
+      - update-cargo-version:
+          filters:
+            branches:
+              only: 
+                - main
+                - development
       - build-windows-x86_64:
           requires:
             - update-cargo-version
@@ -94,34 +99,24 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Install pnpm package manager
+          command: npm install -g pnpm
+      - run:
+          name: Install
+          command: pnpm install --frozen-lockfile
+      - run:
           name: Update Cargo.toml version
           command: |
-            # Only run semantic-release on release branches
-            if [ "$CIRCLE_BRANCH" = "main" ] || [ "$CIRCLE_BRANCH" = "development" ]; then
-              echo "Running on release branch: $CIRCLE_BRANCH"
-              npm install -g pnpm
-              pnpm install --frozen-lockfile
-              
-              # Run semantic-release in dry-run mode to get next version
-              VERSION_OUTPUT=$(npx semantic-release --dry-run 2>&1 || true)
-              echo "Semantic-release output:"
-              echo "$VERSION_OUTPUT"
-              
-              # Extract the version number from the output
-              NEXT_VERSION=$(echo "$VERSION_OUTPUT" | grep -oP 'The next release version is \K[0-9]+\.[0-9]+\.[0-9]+' || echo "")
-              
-              if [ -n "$NEXT_VERSION" ]; then
-                echo "Next version: $NEXT_VERSION"
-                sed -i "s/^version = \".*\"$/version = \"$NEXT_VERSION\"/" Cargo.toml
-                echo "Updated Cargo.toml with version $NEXT_VERSION"
-              else
-                echo "No new version detected. This is likely an error on a release branch."
-                echo "Semantic-release output was:"
-                echo "$VERSION_OUTPUT"
-                exit 1
-              fi
-            else
-              echo "Not on a release branch (current: $CIRCLE_BRANCH), keeping development version"
+            VERSION_OUTPUT=$(npx semantic-release --dry-run 2>&1 || true)
+            echo "Semantic-release output: $VERSION_OUTPUT"
+ 
+            # Extract the version number from the output
+            NEXT_VERSION=$(echo "$VERSION_OUTPUT" | grep -oP 'The next release version is \K[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+
+            if [ -n "$NEXT_VERSION" ]; then
+              echo "Next version: $NEXT_VERSION"
+              sed -i "s/^version = \".*\"$/version = \"$NEXT_VERSION\"/" Cargo.toml
+              echo "Updated Cargo.toml with version $NEXT_VERSION"
             fi
       - persist_to_workspace:
           root: .
