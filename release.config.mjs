@@ -12,7 +12,8 @@ export default {
     [
       "@semantic-release-cargo/semantic-release-cargo",
       {
-        "publish": false
+        "publish": false,
+        "alwaysVerifyToken": false,
       }
     ],
     [
