@@ -100,6 +100,9 @@ jobs:
       - checkout
       - rust/install
       - run:
+          name: Install cargo edit
+          command: cargo install cargo-edit
+      - run:
           name: Install pnpm package manager
           command: npm install -g pnpm
       - run:
