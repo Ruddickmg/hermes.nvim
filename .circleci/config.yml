@@ -111,8 +111,9 @@ jobs:
       - run:
           name: Update Cargo.toml version
           command: |
-            NEXT_VERSION=$(node .circleci/get-next-version.mjs) || exit 1
-
+            NEXT_VERSION=$(node .circleci/get-next-version.mjs)
+            echo "GOT VERSION"
+            echo "VERSION: $NEXT_VERSION"
             if [ -n "$NEXT_VERSION" ]; then
               echo "Next version: $NEXT_VERSION"
               cargo set-version "$NEXT_VERSION"
