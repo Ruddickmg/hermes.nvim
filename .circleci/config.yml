@@ -98,6 +98,7 @@ jobs:
     executor: node
     steps:
       - checkout
+      - rust/install
       - run:
           name: Install pnpm package manager
           command: npm install -g pnpm
@@ -111,7 +112,7 @@ jobs:
 
             if [ -n "$NEXT_VERSION" ]; then
               echo "Next version: $NEXT_VERSION"
-              sed -i "s/^version = \".*\"$/version = \"$NEXT_VERSION\"/" Cargo.toml
+              cargo set-version "$NEXT_VERSION"
               echo "Updated Cargo.toml with version $NEXT_VERSION"
             fi
       - persist_to_workspace:
