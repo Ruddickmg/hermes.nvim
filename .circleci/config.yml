@@ -79,6 +79,8 @@ workflows:
 
 jobs:
   release:
+    environment:
+      CARGO_REGISTRY_TOKEN: "its-stupid-theres-no-way-to-disable-this"
     executor: node
     steps:
       - checkout
