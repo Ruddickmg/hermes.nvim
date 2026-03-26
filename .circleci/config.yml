@@ -211,17 +211,11 @@ jobs:
             choco install neovim -y
             refreshenv
       - run:
-          name: Install libuv
-          command: |
-            $libuvDll = "C:\ProgramData\chocolatey\lib\neovim\tools\nvim-win64\bin\libuv.dll"
-            llvm-dlltool -D $libuvDll -l libuv.lib
-      - run:
           name: Build (MSVC)
           command: |
             # Ensure correct rust is used in THIS step too
             $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
-            set RUSTFLAGS=-L . -l libuv
-
+            set RUSTFLAGS=-L "C:\ProgramData\chocolatey\lib\neovim\tools\nvim-win64\bin"
             cargo build --release --target x86_64-pc-windows-msvc
       - run:
           name: Rename DLL
