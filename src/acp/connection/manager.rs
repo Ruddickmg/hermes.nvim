@@ -293,7 +293,9 @@ impl ConnectionManager {
 impl Drop for ConnectionManager {
     fn drop(&mut self) {
         debug!("ConnectionManager Drop called");
-        self.close_all();
+        self.close_all()
+            .inspect_err(|e| error!("Error while closing connections in Drop: {:#?}", e))
+            .ok();
         debug!("ConnectionManager Drop completed");
     }
 }
