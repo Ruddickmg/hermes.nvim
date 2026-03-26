@@ -15,7 +15,6 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@semantic-release-cargo/semantic-release-cargo": "^2.4.84",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/release-notes-generator": "^14.1.0",
     "@semantic-release/github": "^12.0.6",
