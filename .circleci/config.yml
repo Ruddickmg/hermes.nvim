@@ -178,41 +178,52 @@ jobs:
     steps:
       - checkout
 
+      # Install Rust
       - run:
-          name: Install Rustup + MSVC toolchain
+          name: Install Rust
           command: |
             choco install rustup.install -y
             refreshenv
+            rustup default stable
+            rustup component add rust-src   # Needed for core/std
+            rustup target add x86_64-pc-windows-msvc
+            # Install MSVC toolchain explicitly
+            rustup toolchain install stable-x86_64-pc-windows-msvc
 
-            # Install MSVC triple Rust toolchain with source
-            rustup toolchain install stable-x86_64-pc-windows-msvc --component rust-src
-
-            # Set MSVC toolchain as default
+            # Set it as default
             rustup default stable-x86_64-pc-windows-msvc
 
+            # Verify
+            rustup show
+            rustc -vV
             rustc --version
             cargo --version
 
+      # Install LLVM (for dlltool)
       - run:
-          name: Install LLVM for import lib generation
+          name: Install LLVM
           command: |
             choco install llvm -y
             refreshenv
 
+      # Install Neovim so we have nvim.dll
       - run:
           name: Install Neovim
           command: |
             choco install neovim -y
             refreshenv
 
+      # Generate MSVC import library for nvim.dll
       - run:
-          name: Generate nvim import library
+          name: Generate nvim.lib
           command: |
             $dll = "C:\ProgramData\chocolatey\lib\neovim\tools\nvim-win64\bin\nvim.dll"
             llvm-dlltool -D $dll -l nvim.lib -d nvim.def
+            dir .
 
+      # Build your Rust plugin for Windows (MSVC)
       - run:
-          name: Build for MSVC
+          name: Build Rust plugin
           command: |
             set RUSTFLAGS=-L .
             cargo build --release --target x86_64-pc-windows-msvc
