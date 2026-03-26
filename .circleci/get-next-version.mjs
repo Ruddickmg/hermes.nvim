@@ -1,21 +1,12 @@
 import semanticRelease from 'semantic-release';
 
 try {
-  const result = await semanticRelease({
-    dryRun: true,
-    logger: {
-      log: () => {},
-      error: () => {},
-      success: () => {},
-      warn: () => {}
-    }
-  });
+  const result = await semanticRelease({ dryRun: true });
   const version = result?.nextRelease?.version;
 
   if (version) {
     process.stdout.write(version);
   } else {
-    console.log("there was no version!");
     process.stderr.write('No next release version determined by semantic-release.\n');
   }
 } catch (err) {
