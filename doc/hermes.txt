@@ -5,7 +5,7 @@ Repository:     https://github.com/Ruddickmg/hermes.nvim
 License:        MIT
 
 ================================================================================
-8. CONTENTS                                              *hermes-contents*
+CONTENTS                                              *hermes-contents*
 
   1. Introduction .............................. |hermes-introduction|
   2. Installation .............................. |hermes-installation|
