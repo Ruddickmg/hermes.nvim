@@ -6,6 +6,11 @@ export default {
     "main",
     {name: "development", prerelease: "beta"}
   ],
+  verifyConditions: [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    "@semantic-release/github"
+  ],
   plugins: [
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
@@ -14,7 +19,6 @@ export default {
       {
         "publish": false,
         "alwaysVerifyToken": false,
-        "verifyConditions": false
       }
     ],
     [
