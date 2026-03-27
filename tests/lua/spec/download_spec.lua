@@ -177,6 +177,23 @@ describe("hermes.download", function()
       
       exec_stub:revert()
     end)
+    
+    it("successfully downloads with PowerShell", function()
+      local exec_stub = stub(vim.fn, "executable")
+      exec_stub.on_call_with("curl").returns(0)
+      exec_stub.on_call_with("wget").returns(0)
+      exec_stub.on_call_with("powershell").returns(1)
+      
+      stub(vim.fn, "system").returns("")
+      stub(vim.uv or vim.loop, "fs_stat").returns({ size = 1000 })
+      
+      local ok, err = download.download("http://example.com/file", "/tmp/test")
+      
+      assert.is_true(ok)
+      assert.is_nil(err)
+      
+      exec_stub:revert()
+    end)
   end)
   
   describe("system()", function()
@@ -188,6 +205,16 @@ describe("hermes.download", function()
       assert.equals("output text", output)
       
       system_stub:revert()
+    end)
+    
+    it("returns output and exit code", function()
+      stub(vim.fn, "system").returns("error output")
+      -- vim.v.shell_error would be non-zero in real failure case
+      
+      local output, exit_code = download.system({"failing", "command"})
+      
+      assert.equals("error output", output)
+      assert.equals("number", type(exit_code))
     end)
   end)
 end)

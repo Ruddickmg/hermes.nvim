@@ -234,37 +234,28 @@ describe("hermes.binary", function()
 
   describe("build_from_source() error handling", function()
     it("returns false when git clone fails", function()
-      local _platform = require("hermes.platform")
       local dest_dir = temp_dir
       
-      -- Mock system to simulate git clone failure
-      local system_stub = stub(vim.fn, "system").returns("fatal: unable to access")
+      -- Mock system to simulate git clone failure with non-zero exit
+      stub(vim.fn, "system").returns("fatal: unable to access")
       stub(vim.fn, "executable").returns(1)
-      -- Mock shell_error to indicate failure
       local notify_stub = stub(require("hermes.logging"), "notify")
       
-      -- Set vim.v.shell_error to non-zero to indicate failure
-      local _ok = pcall(function()
-        -- We need to set shell_error but it's read-only in Lua
-        -- Instead, we'll test that the function returns false when system fails
-        return binary.build_from_source(dest_dir)
-      end)
+      -- vim.v.shell_error cannot be stubbed directly, but we can verify
+      -- the function handles the failure case without crashing
+      local result = binary.build_from_source(dest_dir)
       
-      system_stub:revert()
+      -- Should return false on git clone failure
+      assert.is_false(result)
+      
       notify_stub:revert()
-      
-      -- Test should complete without error
-      assert.is_true(true)
     end)
     
     it("returns false when cargo build fails", function()
-      local _platform = require("hermes.platform")
       local dest_dir = temp_dir
       
       -- Create a mock that simulates successful git clone but failed build
-      local call_count = 0
       local system_stub = stub(vim.fn, "system").invokes(function(cmd)
-        call_count = call_count + 1
         if type(cmd) == "table" then
           if cmd[1] == "git" then
             return "" -- git clone succeeds
@@ -277,14 +268,13 @@ describe("hermes.binary", function()
       stub(vim.fn, "executable").returns(1)
       local notify_stub = stub(require("hermes.logging"), "notify")
       
-      local _ok = pcall(function()
-        return binary.build_from_source(dest_dir)
-      end)
+      local result = binary.build_from_source(dest_dir)
+      
+      -- Should return false on cargo build failure
+      assert.is_false(result)
       
       system_stub:revert()
       notify_stub:revert()
-      
-      assert.is_true(true)
     end)
     
     it("handles copy failure gracefully", function()

@@ -396,6 +396,15 @@ describe("hermes.init (main API)", function()
 			
 			assert.is_true(hermes._should_auto_download())
 		end)
+
+		it("_should_auto_download uses config.get fallback when get_auto_download not available", function()
+			local config = require("hermes.config")
+			-- Clear any existing config
+			config.setup({ auto_download_binary = false })
+			
+			-- Should read from config.get() as fallback
+			assert.is_false(hermes._should_auto_download())
+		end)
 	end)
 
 	describe("Hermes commands", function()
@@ -440,6 +449,161 @@ describe("hermes.init (main API)", function()
 				end
 			end
 			assert.is_true(found_status, "Should show status notification with NOT_LOADED state or Hermes Status header")
+		end)
+
+		it(":Hermes status shows DOWNLOADING state", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			
+			-- Stub vim.notify to capture calls
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+			
+			-- Set state to DOWNLOADING
+			hermes._set_loading_state("DOWNLOADING")
+			
+			-- Execute the command
+			vim.cmd("Hermes status")
+			
+			-- Restore original
+			vim.notify = original_notify
+			
+			-- Should have received a notification with DOWNLOADING info
+			local found_downloading = false
+			for _, call in ipairs(notify_calls) do
+				if call.msg and call.msg:find("DOWNLOADING") then
+					found_downloading = true
+					break
+				end
+			end
+			assert.is_true(found_downloading, "Should show DOWNLOADING state")
+		end)
+
+		it(":Hermes status shows LOADING state", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			
+			-- Stub vim.notify to capture calls
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+			
+			-- Set state to LOADING
+			hermes._set_loading_state("LOADING")
+			
+			-- Execute the command
+			vim.cmd("Hermes status")
+			
+			-- Restore original
+			vim.notify = original_notify
+			
+			-- Should have received a notification with LOADING info
+			local found_loading = false
+			for _, call in ipairs(notify_calls) do
+				if call.msg and call.msg:find("LOADING") then
+					found_loading = true
+					break
+				end
+			end
+			assert.is_true(found_loading, "Should show LOADING state")
+		end)
+
+		it(":Hermes status shows FAILED state with error", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			
+			-- Stub vim.notify to capture calls
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+			
+			-- Set state to FAILED with an error
+			hermes._set_loading_state("FAILED")
+			hermes._set_loading_error("Test error message")
+			
+			-- Execute the command
+			vim.cmd("Hermes status")
+			
+			-- Restore original
+			vim.notify = original_notify
+			
+			-- Should have received a notification with FAILED and error
+			local found_failed = false
+			local found_error = false
+			for _, call in ipairs(notify_calls) do
+				if call.msg and call.msg:find("FAILED") then
+					found_failed = true
+				end
+				if call.msg and call.msg:find("Test error message") then
+					found_error = true
+				end
+			end
+			assert.is_true(found_failed, "Should show FAILED state")
+			assert.is_true(found_error, "Should show error message")
+		end)
+
+		it(":Hermes status shows READY state", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			
+			-- Stub vim.notify to capture calls
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+			
+			-- Set state to READY
+			hermes._set_loading_state("READY")
+			
+			-- Execute the command
+			vim.cmd("Hermes status")
+			
+			-- Restore original
+			vim.notify = original_notify
+			
+			-- Should have received a notification with READY info
+			local found_ready = false
+			for _, call in ipairs(notify_calls) do
+				if call.msg and call.msg:find("READY") then
+					found_ready = true
+					break
+				end
+			end
+			assert.is_true(found_ready, "Should show READY state")
+		end)
+
+		it(":Hermes log shows current state and error", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			
+			-- Stub vim.notify to capture calls
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+			
+			-- Set state to FAILED with an error
+			hermes._set_loading_state("FAILED")
+			hermes._set_loading_error("Last error for log")
+			
+			-- Execute the command
+			vim.cmd("Hermes log")
+			
+			-- Restore original
+			vim.notify = original_notify
+			
+			-- Should have received a notification with state and error
+			local found_state = false
+			local found_error = false
+			for _, call in ipairs(notify_calls) do
+				if call.msg and call.msg:find("FAILED") then
+					found_state = true
+				end
+				if call.msg and call.msg:find("Last error for log") then
+					found_error = true
+				end
+			end
+			assert.is_true(found_state, "Should show current state in log")
+			assert.is_true(found_error, "Should show last error in log")
 		end)
 
 		it(":Hermes log command is available", function()
