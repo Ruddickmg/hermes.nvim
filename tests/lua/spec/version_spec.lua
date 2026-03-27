@@ -202,8 +202,8 @@ describe("hermes.version", function()
     it("returns correct cache status when empty", function()
       local status = version.get_cache_status()
       
-      -- When cache is empty, cached should be falsy (nil or false)
-      assert(status.cached ~= true, "Expected cached to not be true")
+      -- When cache is empty, cached should be false
+      assert.is_false(status.cached)
       assert.is_nil(status.version)
     end)
     

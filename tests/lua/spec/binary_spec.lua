@@ -564,16 +564,20 @@ describe("hermes.binary", function()
       stub(binary, "download").returns(true)
       stub(vim.fn, "writefile")
       
-      local callback_called = false
+      -- Mock download
+      stub(binary, "download").returns(true)
+      stub(vim.fn, "writefile")
       
-      -- Call ensure_binary_async - should trigger download
-      binary.ensure_binary_async(60, function(_success, _result)
-        callback_called = true
+      -- Call should not error even with missing binary
+      local ok = pcall(function()
+        binary.ensure_binary_async(60, function(_success, _result)
+          -- Callback
+        end)
       end)
       
       -- With vim.schedule, callback won't be immediate
-      -- But the function should have been called
-      assert.is_true(callback_called or not callback_called, "ensure_binary_async should handle missing binary")
+      -- but function should either attempt download or return immediately
+      assert.is_true(ok, "ensure_binary_async should not crash when binary is missing")
     end)
     
     it("handles unsupported platform error", function()
