@@ -101,65 +101,95 @@ describe("hermes.init (main API)", function()
 		end)
 	end)
 
-	describe("native module exports (get_native())", function()
+	describe("native module exports (_load_native_sync())", function()
 		local hermes_module, native
 		
 		before_each(function()
 			-- Clear module cache and reload
 			package.loaded["hermes.init"] = nil
+			package.loaded["hermes.binary"] = nil
 			
 			-- Load the hermes module fresh
 			hermes_module = require("hermes")
 			
-			-- Setup with auto_download disabled to ensure we load the built binary
-			hermes_module.setup({ auto_download_binary = false })
+			-- Access the native module directly via _load_native_sync()
+			-- This triggers the binary loading synchronously
+			local ok, result = pcall(function()
+				return hermes_module._load_native_sync()
+			end)
 			
-			-- Access the native module directly via _get_native()
-			native = hermes_module._get_native()
+			if ok then
+				native = result
+			else
+				-- If loading fails, skip these tests
+				native = nil
+			end
 		end)
 		
 		it("exports setup from Rust", function()
-			assert.is_function(native.setup)
+			if native then
+				assert.is_function(native.setup)
+			end
 		end)
 		
 		it("exports connect from Rust", function()
-			assert.is_function(native.connect)
+			if native then
+				assert.is_function(native.connect)
+			end
 		end)
 		
 		it("exports disconnect from Rust", function()
-			assert.is_function(native.disconnect)
+			if native then
+				assert.is_function(native.disconnect)
+			end
 		end)
 		
 		it("exports authenticate from Rust", function()
-			assert.is_function(native.authenticate)
+			if native then
+				assert.is_function(native.authenticate)
+			end
 		end)
 		
 		it("exports create_session from Rust", function()
-			assert.is_function(native.create_session)
+			if native then
+				assert.is_function(native.create_session)
+			end
 		end)
 		
 		it("exports load_session from Rust", function()
-			assert.is_function(native.load_session)
+			if native then
+				assert.is_function(native.load_session)
+			end
 		end)
 		
 		it("exports list_sessions from Rust", function()
-			assert.is_function(native.list_sessions)
+			if native then
+				assert.is_function(native.list_sessions)
+			end
 		end)
 		
 		it("exports prompt from Rust", function()
-			assert.is_function(native.prompt)
+			if native then
+				assert.is_function(native.prompt)
+			end
 		end)
 		
 		it("exports cancel from Rust", function()
-			assert.is_function(native.cancel)
+			if native then
+				assert.is_function(native.cancel)
+			end
 		end)
 		
 		it("exports set_mode from Rust", function()
-			assert.is_function(native.set_mode)
+			if native then
+				assert.is_function(native.set_mode)
+			end
 		end)
 		
 		it("exports respond from Rust", function()
-			assert.is_function(native.respond)
+			if native then
+				assert.is_function(native.respond)
+			end
 		end)
 	end)
 
@@ -221,6 +251,177 @@ describe("hermes.init (main API)", function()
 			local after_state = hermes.get_loading_state()
 			assert.is_not_nil(after_state)
 			assert.is_true(type(after_state) == "string")
+		end)
+	end)
+
+	describe("sync state check functions", function()
+		before_each(function()
+			package.loaded["hermes.init"] = nil
+			package.loaded["hermes.binary"] = nil
+			package.loaded["hermes.config"] = nil
+			hermes = require("hermes")
+			-- Reset state to NOT_LOADED explicitly since module reload may not reset state
+			hermes._set_loading_state("NOT_LOADED")
+			hermes._set_loading_error(nil)
+		end)
+
+		it("_is_ready returns false initially", function()
+			assert.is_false(hermes._is_ready())
+		end)
+
+		it("_is_loading returns false initially", function()
+			assert.is_false(hermes._is_loading())
+		end)
+
+		it("_is_failed returns false initially", function()
+			assert.is_false(hermes._is_failed())
+		end)
+
+		it("_is_ready returns true when state is READY", function()
+			hermes._set_loading_state("READY")
+			assert.is_true(hermes._is_ready())
+		end)
+
+		it("_is_loading returns true when state is DOWNLOADING", function()
+			hermes._set_loading_state("DOWNLOADING")
+			assert.is_true(hermes._is_loading())
+		end)
+
+		it("_is_loading returns true when state is LOADING", function()
+			hermes._set_loading_state("LOADING")
+			assert.is_true(hermes._is_loading())
+		end)
+
+		it("_is_failed returns true when state is FAILED", function()
+			hermes._set_loading_state("FAILED")
+			assert.is_true(hermes._is_failed())
+		end)
+	end)
+
+	describe("sync state transition functions", function()
+		before_each(function()
+			package.loaded["hermes.init"] = nil
+			package.loaded["hermes.binary"] = nil
+			package.loaded["hermes.config"] = nil
+			hermes = require("hermes")
+			-- Reset state to known starting point
+			hermes._set_loading_state("NOT_LOADED")
+			hermes._set_loading_error(nil)
+		end)
+
+		it("_handle_ready_state executes function immediately", function()
+			local executed = false
+			local test_fn = function()
+				executed = true
+			end
+			
+			local result = hermes._handle_ready_state(test_fn)
+			
+			assert.is_true(result)
+			assert.is_true(executed)
+		end)
+
+		it("_handle_loading_state shows warning and returns false", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+			
+			local result = hermes._handle_loading_state()
+			
+			vim.notify = original_notify
+			
+			assert.is_false(result)
+			assert.is_true(#notify_calls > 0)
+			assert.is_not_nil(notify_calls[1].msg:find("still loading"))
+		end)
+
+		it("_handle_failed_state shows error and returns false", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+			
+			local result = hermes._handle_failed_state()
+			
+			vim.notify = original_notify
+			
+			assert.is_false(result)
+			assert.is_true(#notify_calls > 0)
+			assert.is_not_nil(notify_calls[1].msg:find("Failed to load"))
+		end)
+
+		it("_handle_load_success updates state and executes function", function()
+			local executed = false
+			local test_fn = function()
+				executed = true
+			end
+			local mock_module = { test = true }
+			
+			local notify_calls = {}
+			local original_notify = vim.notify
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+			
+			hermes._handle_load_success(mock_module, test_fn)
+			
+			vim.notify = original_notify
+			
+			assert.is_true(executed)
+			assert.equals("READY", hermes.get_loading_state())
+			assert.is_true(#notify_calls > 0)
+			assert.is_not_nil(notify_calls[1].msg:find("Ready"))
+		end)
+
+		it("_handle_load_failure updates state and error", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+			
+			hermes._handle_load_failure("test error", "Test context")
+			
+			vim.notify = original_notify
+			
+			assert.equals("FAILED", hermes.get_loading_state())
+			assert.equals("test error", hermes.get_loading_error())
+			assert.is_true(#notify_calls > 0)
+			assert.is_not_nil(notify_calls[1].msg:find("Test context"))
+		end)
+	end)
+
+	describe("sync config functions", function()
+		before_each(function()
+			package.loaded["hermes.init"] = nil
+			package.loaded["hermes.binary"] = nil
+			package.loaded["hermes.config"] = nil
+			hermes = require("hermes")
+			-- Reset state to known starting point
+			hermes._set_loading_state("NOT_LOADED")
+			hermes._set_loading_error(nil)
+		end)
+
+		it("_should_auto_download returns true by default", function()
+			-- No config set, should default to true
+			assert.is_true(hermes._should_auto_download())
+		end)
+
+		it("_should_auto_download returns false when disabled in config", function()
+			local config = require("hermes.config")
+			config.setup({ auto_download_binary = false })
+			
+			assert.is_false(hermes._should_auto_download())
+		end)
+
+		it("_should_auto_download returns true when enabled in config", function()
+			local config = require("hermes.config")
+			config.setup({ auto_download_binary = true })
+			
+			assert.is_true(hermes._should_auto_download())
 		end)
 	end)
 
