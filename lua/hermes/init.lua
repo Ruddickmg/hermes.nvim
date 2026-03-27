@@ -476,7 +476,11 @@ vim.api.nvim_create_user_command("Hermes", function(opts)
     
     table.insert(status_lines, "")
     table.insert(status_lines, "Configuration:")
-    table.insert(status_lines, "  Auto-download: " .. tostring(download_cfg.auto ~= false))
+    local auto_download = download_cfg.auto_download_binary
+    if auto_download == nil then
+      auto_download = true
+    end
+    table.insert(status_lines, "  Auto-download: " .. tostring(auto_download))
     table.insert(status_lines, "  Version: " .. tostring(download_cfg.version or "latest"))
     table.insert(status_lines, "  Timeout: " .. tostring(download_cfg.timeout or 60) .. " seconds")
     
