@@ -551,9 +551,10 @@ describe("hermes.binary", function()
       end)
       
       -- Callback should be called immediately since no download needed
-      assert.is_true(callback_called, "Callback should be called immediately when binary exists")
-      assert.is_true(callback_success, "Should report success when binary exists")
-      assert.is_not_nil(callback_result, "Should return binary path")
+      assert.is_true(
+        callback_called and callback_success and callback_result ~= nil,
+        "Callback should be called immediately when binary exists, report success, and return a binary path"
+      )
     end)
     
     it("downloads when binary is missing", function()
@@ -565,10 +566,6 @@ describe("hermes.binary", function()
       stub(require("hermes.version"), "get_wanted").returns("v0.0.1")
       
       -- Mock download to succeed
-      stub(binary, "download").returns(true)
-      stub(vim.fn, "writefile")
-      
-      -- Mock download
       stub(binary, "download").returns(true)
       stub(vim.fn, "writefile")
       

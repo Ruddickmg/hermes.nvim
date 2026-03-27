@@ -291,7 +291,7 @@ function M._load_native_sync()
     local ok, result = pcall(binary.load_or_build)
     
     if not ok then
-      error(result)
+      error("Hermes: Failed to load or build native binary: " .. tostring(result))
     end
     
     _native = result

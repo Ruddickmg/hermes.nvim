@@ -350,7 +350,7 @@ function M.ensure_binary_async(timeout, on_complete)
   -- Check if download tools are available
   local download_tool = download.get_available_tool()
   if not download_tool then
-    on_complete(false, "No download tool available. Please install curl or wget.")
+    on_complete(false, "No download tool available. Please install curl, wget, or PowerShell.")
     return
   end
   

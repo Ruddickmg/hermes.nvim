@@ -439,18 +439,11 @@ describe("hermes.init (main API)", function()
 			-- Restore original
 			vim.notify = original_notify
 			
-			-- Should have received a notification
-			assert.is_true(#notify_calls > 0, "Should show status notification")
-			
-			-- Check that at least one message contains "NOT_LOADED" or "Hermes"
-			local found_status = false
-			for _, call in ipairs(notify_calls) do
-				if call.msg and (call.msg:find("NOT_LOADED") or call.msg:find("Hermes Status")) then
-					found_status = true
-					break
-				end
-			end
-			assert.is_true(found_status, "Should show status notification with NOT_LOADED state or Hermes Status header")
+			-- Check that at least one message contains "NOT_LOADED" or "Hermes Status"
+			local status_notifications = vim.tbl_filter(function(call)
+				return call.msg and (call.msg:find("NOT_LOADED") or call.msg:find("Hermes Status"))
+			end, notify_calls)
+			assert.is_true(#status_notifications > 0, "Should show status notification with NOT_LOADED state or Hermes Status header")
 		end)
 
 		it(":Hermes status shows DOWNLOADING state", function()

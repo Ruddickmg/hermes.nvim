@@ -590,11 +590,7 @@ if native then
 end
 ```
 
-**CORRECT (always executes, one success path):**
-```lua
--- ✅ GOOD: Assertion always executes
-assert.is_not_nil(native, "Native module should be loaded")
-assert.is_function(native.setup)
+**CORRECT (always executes without conditionals):**
 ```
 
 **For platform-specific tests:** Create separate test files or use descriptive test names instead of conditionals:
