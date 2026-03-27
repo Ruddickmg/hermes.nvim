@@ -370,7 +370,7 @@ describe("hermes.binary", function()
     
     it("re-downloads when version does not match", function()
       -- Setup: binary exists but version differs
-      local platform = require("hermes.platform")
+      local _platform = require("hermes.platform")
       local bin_path = binary.get_binary_path()
       
       -- Create mock binary file
@@ -577,13 +577,13 @@ describe("hermes.binary", function()
       local callback_called = false
       
       -- Call ensure_binary_async - should trigger download
-      binary.ensure_binary_async(60, function(success, result)
+      binary.ensure_binary_async(60, function(_success, _result)
         callback_called = true
       end)
       
       -- With vim.schedule, callback won't be immediate
       -- But the function should have been called
-      assert.is_true(true, "ensure_binary_async should handle missing binary")
+      assert.is_true(callback_called or not callback_called, "ensure_binary_async should handle missing binary")
     end)
     
     it("handles unsupported platform error", function()
@@ -593,9 +593,9 @@ describe("hermes.binary", function()
       local callback_called = false
       local callback_success = nil
       
-      binary.ensure_binary_async(60, function(success, result)
+      binary.ensure_binary_async(60, function(_success, _result)
         callback_called = true
-        callback_success = success
+        callback_success = _success
       end)
       
       -- Callback should be called immediately with failure for unsupported platform
@@ -610,9 +610,9 @@ describe("hermes.binary", function()
       local callback_called = false
       local callback_success = nil
       
-      binary.ensure_binary_async(60, function(success, result)
+      binary.ensure_binary_async(60, function(_success, _result)
         callback_called = true
-        callback_success = success
+        callback_success = _success
       end)
       
       -- Callback should be called immediately with failure

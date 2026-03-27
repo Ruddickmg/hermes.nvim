@@ -217,8 +217,6 @@ describe("hermes.init (main API)", function()
 		end)
 
 		it("get_loading_state changes after setup", function()
-			local initial_state = hermes.get_loading_state()
-			
 			-- After setup, state should progress (async, so we can't check exact state)
 			-- But we can verify the function returns a string
 			hermes.setup({ auto_download_binary = false })

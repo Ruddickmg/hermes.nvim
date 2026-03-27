@@ -107,7 +107,7 @@ describe("hermes.download", function()
       local system_stub = stub(vim.fn, "system").returns("")
       
       -- Mock successful download
-      stub(download, "download").invokes(function(url, dest)
+      stub(download, "download").invokes(function(_url, _dest)
         -- Verify PowerShell command is constructed
         return true, nil
       end)

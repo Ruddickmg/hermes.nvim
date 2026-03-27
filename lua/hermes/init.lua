@@ -508,7 +508,7 @@ vim.api.nvim_create_user_command("Hermes", function(opts)
   end
 end, {
   nargs = 1,
-  complete = function(ArgLead, CmdLine, CursorPos)
+  complete = function(_ArgLead, _CmdLine, _CursorPos)
     return { "status", "log", "logs" }
   end,
   desc = "Hermes commands: status, log"

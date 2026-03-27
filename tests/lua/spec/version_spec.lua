@@ -106,7 +106,7 @@ describe("hermes.version", function()
       f:close()
       
       -- Stub download to succeed and use our mock file
-      download_stub = stub(require("hermes.download"), "download").invokes(function(url, dest)
+      download_stub = stub(require("hermes.download"), "download").invokes(function(_url, dest)
         -- Copy mock file to destination
         local uv = vim.uv or vim.loop
         uv.fs_copyfile(mock_file, dest)
