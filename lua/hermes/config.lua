@@ -80,4 +80,14 @@ function M.get_notification_level()
   return default_config.log.notification.level
 end
 
+---Get download configuration as a table
+---@return {auto_download_binary: boolean, version: string, timeout: number}
+function M.get_download()
+  return {
+    auto_download_binary = M.get_auto_download(),
+    version = M.get_version(),
+    timeout = 60,  -- Default timeout
+  }
+end
+
 return M

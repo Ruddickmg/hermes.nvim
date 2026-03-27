@@ -321,4 +321,76 @@ function M.load_or_build()
   return lib()
 end
 
+---Ensure binary is available asynchronously
+---Downloads binary if needed, then calls on_complete with the binary path
+---@param timeout number Timeout in seconds
+---@param on_complete function Callback function(success: boolean, result: string)
+function M.ensure_binary_async(timeout, on_complete)
+  timeout = timeout or 60
+  
+  local platform = require("hermes.platform")
+  local version = require("hermes.version")
+  
+  -- Check if platform is supported
+  local platform_key = platform.get_platform_key()
+  if not platform_key then
+    on_complete(false, "Unable to determine platform")
+    return
+  end
+  
+  if not M.SUPPORTED_PLATFORMS[platform_key] then
+    on_complete(false, 
+      "Platform not supported for automatic binary download: " .. platform.get_display_string() .. 
+      ". Consider building from source.")
+    return
+  end
+  
+  -- Check if download tools are available
+  local download_tool = download.get_available_tool()
+  if not download_tool then
+    on_complete(false, "No download tool available. Please install curl or wget.")
+    return
+  end
+  
+  local bin_path = M.get_binary_path()
+  local ver_file = M.get_version_file()
+  local wanted_ver = version.get_wanted()
+  
+  -- Check if we need to download
+  local needs_download = false
+  
+  if vim.fn.filereadable(bin_path) == 0 then
+    needs_download = true
+  else
+    -- Check if version matches
+    if vim.fn.filereadable(ver_file) == 1 then
+      local current_ver = vim.fn.readfile(ver_file)[1]
+      if current_ver ~= wanted_ver then
+        needs_download = true
+      end
+    else
+      needs_download = true
+    end
+  end
+  
+  if not needs_download then
+    -- Binary exists and version matches
+    on_complete(true, bin_path)
+    return
+  end
+  
+  -- Need to download - use vim.schedule to make it async
+  -- This wraps the existing tested sync download function
+  vim.schedule(function()
+    local download_ok, download_err = M.download(bin_path, wanted_ver)
+    if download_ok then
+      -- Save version
+      vim.fn.writefile({wanted_ver}, ver_file)
+      on_complete(true, bin_path)
+    else
+      on_complete(false, download_err or "Download failed")
+    end
+  end)
+end
+
 return M

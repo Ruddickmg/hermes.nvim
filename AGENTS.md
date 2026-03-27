@@ -836,6 +836,41 @@ fn test_write_file_creates_buffer() -> nvim_oxi::Result<()> {
 }
 ```
 
+### Coverage Requirements
+
+**Lua code must maintain 80% test coverage.** This requirement applies to all Lua files in `lua/hermes/`.
+
+- **Current coverage target:** 80%
+- **Coverage tool:** luacov (as used in CI)
+- **Coverage scope:** All files in `lua/hermes/` (configured in `tests/lua/.luacov`)
+
+**Running Lua Coverage Locally:**
+
+Use the same tooling as CI:
+
+```bash
+# Install dependencies (same as CI)
+eval $(luarocks path --lua-version 5.1 --bin)
+luarocks --lua-version=5.1 install vusted --local
+luarocks --lua-version=5.1 install luacov --local
+luarocks --lua-version=5.1 install luacov-reporter-lcov --local
+
+# Run tests with coverage
+eval $(luarocks path --lua-version 5.1 --bin)
+vusted --coverage -e "package.path = package.path .. ';./tests/lua/?.lua'; package.path = package.path .. ';./tests/lua/spec/?.lua'; package.path = package.path .. ';./lua/?.lua'; package.path = package.path .. ';./lua/?/init.lua'" tests/lua/spec/
+
+# Generate LCOV report
+luacov -c tests/lua/.luacov -r lcov
+
+# View human-readable report
+luacov -c tests/lua/.luacov
+```
+
+**Understanding Coverage:**
+- luacov generates `luacov.stats.out` (raw stats) and `luacov.report.out` (human-readable)
+- Coverage inside `vim.schedule()` callbacks is not tracked (known limitation)
+- Focus on testing sync code paths and state management
+
 ### Running Tests
 
 We use [cargo-nextest](https://nexte.st/) as our test runner. Nextest provides:

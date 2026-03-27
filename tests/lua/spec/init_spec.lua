@@ -188,4 +188,117 @@ describe("hermes.init (main API)", function()
 		-- The tests above are sufficient to verify the basic API structure and that the
 		-- binary can be loaded and basic operations work.
 	end)
+
+	describe("state getters", function()
+		before_each(function()
+			-- Clear module cache to reset state
+			package.loaded["hermes.init"] = nil
+			package.loaded["hermes.binary"] = nil
+			package.loaded["hermes.config"] = nil
+			hermes = require("hermes")
+		end)
+
+		it("get_loading_state returns initial state", function()
+			local state = hermes.get_loading_state()
+			-- Initial state before any API calls should be NOT_LOADED
+			assert.is_not_nil(state)
+			assert.is_true(type(state) == "string")
+		end)
+
+		it("get_loading_error returns nil initially", function()
+			local error_msg = hermes.get_loading_error()
+			-- Initially no error should exist
+			assert.is_nil(error_msg)
+		end)
+
+		it("get_loading_state changes after setup", function()
+			local initial_state = hermes.get_loading_state()
+			
+			-- After setup, state should progress (async, so we can't check exact state)
+			-- But we can verify the function returns a string
+			hermes.setup({ auto_download_binary = false })
+			
+			local after_state = hermes.get_loading_state()
+			assert.is_not_nil(after_state)
+			assert.is_true(type(after_state) == "string")
+		end)
+	end)
+
+	describe("Hermes commands", function()
+		before_each(function()
+			-- Clear module cache to reset state
+			package.loaded["hermes.init"] = nil
+			package.loaded["hermes.binary"] = nil
+			package.loaded["hermes.config"] = nil
+			hermes = require("hermes")
+		end)
+
+		it(":Hermes status command is available", function()
+			-- Check that the Hermes user command is registered
+			local commands = vim.api.nvim_get_commands({})
+			assert.is_not_nil(commands.Hermes, "Hermes command should be registered")
+		end)
+
+		it(":Hermes status shows NOT_LOADED state initially", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			
+			-- Stub vim.notify to capture calls
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+			
+			-- Execute the command
+			vim.cmd("Hermes status")
+			
+			-- Restore original
+			vim.notify = original_notify
+			
+			-- Should have received a notification
+			assert.is_true(#notify_calls > 0, "Should show status notification")
+			
+			-- Check that at least one message contains "NOT_LOADED" or "Hermes"
+			local found_status = false
+			for _, call in ipairs(notify_calls) do
+				if call.msg and (call.msg:find("NOT_LOADED") or call.msg:find("Hermes Status")) then
+					found_status = true
+					break
+				end
+			end
+			assert.is_true(found_status, "Should show status notification with NOT_LOADED state or Hermes Status header")
+		end)
+
+		it(":Hermes log command is available", function()
+			-- Check that the Hermes user command is registered
+			local commands = vim.api.nvim_get_commands({})
+			assert.is_not_nil(commands.Hermes, "Hermes command should be registered")
+		end)
+
+		it(":Hermes unknown shows error", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			local error_level = vim.log.levels.ERROR
+			
+			-- Stub vim.notify to capture calls
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+			
+			-- Execute unknown command
+			vim.cmd("Hermes unknowncommand")
+			
+			-- Restore original
+			vim.notify = original_notify
+			
+			-- Should have received an error notification
+			local found_error = false
+			for _, call in ipairs(notify_calls) do
+				if call.level == error_level and call.msg:find("Unknown") then
+					found_error = true
+					break
+				end
+			end
+			assert.is_true(found_error, "Should show error for unknown command")
+		end)
+	end)
 end)

@@ -134,9 +134,118 @@ local M = {}
 -- Lazy-loaded native module
 local _native = nil
 
--- Load native module on first use
+-- Forward declaration
+local get_native
+
+-- Async loading state
+local _loading_state = "NOT_LOADED"  -- NOT_LOADED, DOWNLOADING, LOADING, READY, FAILED
+local _loading_error = nil
+local _download_timeout = 60
+
+-- Execute function asynchronously with loading state management
+-- Minimal untestable wrapper (~25 lines)
+local function execute_async(fn)
+  if _loading_state == "READY" then
+    -- Already loaded, execute immediately
+    fn()
+    return
+  end
+  
+  if _loading_state == "DOWNLOADING" or _loading_state == "LOADING" then
+    -- Still loading, notify user
+    vim.notify("Hermes: Binary is still loading. Check :Hermes status for progress.", vim.log.levels.WARN)
+    return
+  end
+  
+  if _loading_state == "FAILED" then
+    -- Previously failed
+    vim.notify("Hermes: Failed to load. Run :Hermes status for details or :Hermes log for errors.", vim.log.levels.ERROR)
+    return
+  end
+  
+  -- NOT_LOADED: Start async loading
+  local binary = require("hermes.binary")
+  local config = require("hermes.config")
+  
+  -- Get download settings
+  local download_cfg = config.get_download and config.get_download() or { auto_download_binary = true, timeout = 60 }
+  local auto_download = download_cfg.auto_download_binary
+  _download_timeout = download_cfg.timeout or 60
+  
+  if auto_download == false then
+    -- User disabled auto-download, only load existing binary
+    _loading_state = "LOADING"
+    vim.schedule(function()
+      local ok, loaded = pcall(function()
+        local bin_path = binary.load_existing_binary()
+        local lib, err = package.loadlib(bin_path, "luaopen_hermes")
+        if not lib then
+          error(string.format("Failed to load: %s", tostring(err)))
+        end
+        return lib()
+      end)
+      
+      if ok then
+        _native = loaded
+        _loading_state = "READY"
+        fn()
+      else
+        _loading_state = "FAILED"
+        _loading_error = tostring(loaded)
+        vim.notify("Hermes: Failed to load binary (auto-download disabled). Run :Hermes status for details.", vim.log.levels.ERROR)
+      end
+    end)
+    return
+  end
+  
+  -- Auto-download enabled
+  _loading_state = "DOWNLOADING"
+  vim.notify("Hermes: Downloading binary...", vim.log.levels.INFO)
+  
+  -- Use async download wrapper
+  binary.ensure_binary_async(_download_timeout, function(success, result)
+    vim.schedule(function()
+      if not success then
+        _loading_state = "FAILED"
+        _loading_error = tostring(result)
+        vim.notify("Hermes: Binary download failed. Run :Hermes status or :Hermes log for details.", vim.log.levels.ERROR)
+        return
+      end
+      
+      -- Download successful, now load the binary
+      _loading_state = "LOADING"
+      local ok, loaded = pcall(get_native)
+      
+      if not ok then
+        _loading_state = "FAILED"
+        _loading_error = tostring(loaded)
+        vim.notify("Hermes: Failed to load binary. Run :Hermes status or :Hermes log for details.", vim.log.levels.ERROR)
+        return
+      end
+      
+      _native = loaded
+      _loading_state = "READY"
+      vim.notify("Hermes: Ready", vim.log.levels.INFO)
+      
+      -- Execute the queued function
+      fn()
+    end)
+  end)
+end
+
+-- Get current loading state
+function M.get_loading_state()
+  return _loading_state
+end
+
+-- Get loading error if any
+function M.get_loading_error()
+  return _loading_error
+end
+
+-- Load native module on first use (synchronous, called by execute_async)
 ---@return table native_module The loaded native Hermes module
-local function get_native()
+get_native = function()
   if not _native then
     local binary = require("hermes.binary")
     local config = require("hermes.config")
@@ -209,11 +318,13 @@ function M.setup(opts)
     log = opts.log,
   })
   
-  -- Ensure native module is loaded and pass all config to Rust binary
-  -- This eager loading ensures configuration is always applied immediately
-  get_native().setup(opts)
+  -- Execute async with loading state management
+  execute_async(function()
+    get_native().setup(opts)
+  end)
 end
 
+-- ============================================================================
 -- ============================================================================
 -- API Exports (match Rust API exactly per README.md)
 -- ============================================================================
@@ -222,66 +333,157 @@ end
 ---@param agent "opencode"|"copilot"|"gemini"|string Agent name (predefined or custom)
 ---@param opts? ConnectionOptions Connection options
 function M.connect(agent, opts)
-  return get_native().connect(agent, opts or {})
+  execute_async(function()
+    get_native().connect(agent, opts or {})
+  end)
 end
 
 ---Disconnect from agent(s)
 ---@param agents? string|string[] Agent name(s) to disconnect, nil for all
 function M.disconnect(agents)
-  return get_native().disconnect(agents)
+  execute_async(function()
+    get_native().disconnect(agents)
+  end)
 end
 
 ---Authenticate with an agent
 ---@param auth_method_id string Authentication method ID from ConnectionInitialized
 function M.authenticate(auth_method_id)
-  return get_native().authenticate(auth_method_id)
+  execute_async(function()
+    get_native().authenticate(auth_method_id)
+  end)
 end
 
 ---Create a new session
 ---@param opts? SessionOptions Session configuration options
 function M.create_session(opts)
-  return get_native().create_session(opts or {})
+  execute_async(function()
+    get_native().create_session(opts or {})
+  end)
 end
 
 ---Load an existing session
 ---@param session_id string Session ID to load
 ---@param opts? SessionOptions Session configuration options
 function M.load_session(session_id, opts)
-  return get_native().load_session(session_id, opts or {})
+  execute_async(function()
+    get_native().load_session(session_id, opts or {})
+  end)
 end
 
 ---List sessions with optional filtering
 ---@param opts? ListSessionsOptions Filter options
 function M.list_sessions(opts)
-  return get_native().list_sessions(opts)
+  execute_async(function()
+    get_native().list_sessions(opts)
+  end)
 end
 
 ---Send a prompt to the agent
 ---@param session_id string Session ID
 ---@param content PromptContent|PromptContent[] Content to send (single item or array)
 function M.prompt(session_id, content)
-  return get_native().prompt(session_id, content)
+  execute_async(function()
+    get_native().prompt(session_id, content)
+  end)
 end
 
 ---Cancel current operation
 ---@param session_id string Session ID
 function M.cancel(session_id)
-  return get_native().cancel(session_id)
+  execute_async(function()
+    get_native().cancel(session_id)
+  end)
 end
 
 ---Set session mode
 ---@param session_id string Session ID
 ---@param mode_id string Mode ID
 function M.set_mode(session_id, mode_id)
-  return get_native().set_mode(session_id, mode_id)
+  execute_async(function()
+    get_native().set_mode(session_id, mode_id)
+  end)
 end
 
 ---Respond to a request
 ---@param request_id string Request ID from autocommand
 ---@param response? any Response data
 function M.respond(request_id, response)
-  return get_native().respond(request_id, response)
+  execute_async(function()
+    get_native().respond(request_id, response)
+  end)
 end
+
+-- ============================================================================
+-- User Commands (:Hermes status, :Hermes log)
+-- ============================================================================
+
+-- Create user commands with space-separated names
+vim.api.nvim_create_user_command("Hermes", function(opts)
+  local subcommand = opts.args
+  local state = M.get_loading_state()
+  local error_msg = M.get_loading_error()
+  local config = require("hermes.config")
+  local download_cfg = config.get_download and config.get_download() or {}
+  
+  if subcommand == "status" then
+    local status_lines = {
+      "Hermes Status",
+      "=============",
+      "",
+      "State: " .. state,
+    }
+    
+    if state == "NOT_LOADED" then
+      table.insert(status_lines, "The binary has not been loaded yet. Run any Hermes API method to start loading.")
+    elseif state == "DOWNLOADING" then
+      table.insert(status_lines, "The binary is being downloaded...")
+      table.insert(status_lines, "Timeout: " .. tostring(_download_timeout) .. " seconds")
+    elseif state == "LOADING" then
+      table.insert(status_lines, "The binary has been downloaded and is being loaded...")
+    elseif state == "READY" then
+      table.insert(status_lines, "Hermes is ready to use!")
+    elseif state == "FAILED" then
+      table.insert(status_lines, "Loading failed with error:")
+      table.insert(status_lines, error_msg or "Unknown error")
+    end
+    
+    table.insert(status_lines, "")
+    table.insert(status_lines, "Configuration:")
+    table.insert(status_lines, "  Auto-download: " .. tostring(download_cfg.auto ~= false))
+    table.insert(status_lines, "  Version: " .. tostring(download_cfg.version or "latest"))
+    table.insert(status_lines, "  Timeout: " .. tostring(download_cfg.timeout or 60) .. " seconds")
+    
+    vim.notify(table.concat(status_lines, "\n"), vim.log.levels.INFO)
+    
+  elseif subcommand == "log" or subcommand == "logs" then
+    -- Show recent log messages
+    local log_lines = {
+      "Hermes Log",
+      "==========",
+      "",
+      "Recent log messages will appear here.",
+      "Use :messages to see all notifications.",
+      "",
+      "Current State: " .. state,
+    }
+    
+    if error_msg then
+      table.insert(log_lines, "Last Error: " .. error_msg)
+    end
+    
+    vim.notify(table.concat(log_lines, "\n"), vim.log.levels.INFO)
+    
+  else
+    vim.notify("Unknown Hermes command: " .. tostring(subcommand) .. ". Use :Hermes status or :Hermes log", vim.log.levels.ERROR)
+  end
+end, {
+  nargs = 1,
+  complete = function(ArgLead, CmdLine, CursorPos)
+    return { "status", "log", "logs" }
+  end,
+  desc = "Hermes commands: status, log"
+})
 
 -- Export get_native for testing purposes
 -- This allows tests to verify the Rust FFI boundary
