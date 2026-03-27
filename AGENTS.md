@@ -574,6 +574,66 @@ mod tests {
 - Easy debugging without guessing which assertion failed
 - Tests serve as living documentation of specific behaviors
 
+### No Conditional Assertions Rule
+
+**CRITICAL:** Assertions must NEVER be wrapped in conditional statements (`if`, `elseif`, `else`). Each test must have exactly ONE success path that always executes the assertion. This ensures:
+- Every test actually validates the expected behavior
+- No silent skips when conditions aren't met
+- Clear failure messages when assertions fail
+- Tests serve as reliable documentation
+
+**WRONG (conditional assertion that may not execute):**
+```lua
+-- ❌ BAD: Assertion might not run if native is nil
+if native then
+    assert.is_function(native.setup)
+end
+```
+
+**CORRECT (always executes, one success path):**
+```lua
+-- ✅ GOOD: Assertion always executes
+assert.is_not_nil(native, "Native module should be loaded")
+assert.is_function(native.setup)
+```
+
+**For platform-specific tests:** Create separate test files or use descriptive test names instead of conditionals:
+```lua
+-- ❌ BAD: Conditional assertion based on OS
+if os == "linux" then
+    assert.equals("so", ext)
+elseif os == "macos" then
+    assert.equals("dylib", ext)
+end
+
+-- ✅ GOOD: Separate tests for each platform
+it("returns so extension on Linux", function()
+    stub(platform, "get_os").returns("linux")
+    assert.equals("so", platform.get_ext())
+end)
+
+it("returns dylib extension on macOS", function()
+    stub(platform, "get_os").returns("macos")
+    assert.equals("dylib", platform.get_ext())
+end)
+```
+
+**For search/validation patterns:** Assert on the result directly instead of using flags:
+```lua
+-- ❌ BAD: Conditional flag with late assertion
+local found = false
+for _, item in ipairs(list) do
+    if item == "expected" then
+        found = true
+        break
+    end
+end
+assert.is_true(found)
+
+-- ✅ GOOD: Direct assertion using table functions
+assert.is_not_nil(vim.tbl_find(list, "expected"), "Should find expected item in list")
+```
+
 **WRONG (multiple assertions in one test):**
 ```rust
 #[nvim_oxi::test]

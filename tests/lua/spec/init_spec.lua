@@ -118,78 +118,53 @@ describe("hermes.init (main API)", function()
 				return hermes_module._load_native_sync()
 			end)
 			
-			if ok then
-				native = result
-			else
-				-- If loading fails, skip these tests
-				native = nil
-			end
+			-- Store result, may be nil if loading failed
+			native = ok and result or nil
 		end)
 		
 		it("exports setup from Rust", function()
-			if native then
-				assert.is_function(native.setup)
-			end
+			-- Single assertion: if native is nil, this will error with clear message
+			assert.is_function(native.setup)
 		end)
 		
 		it("exports connect from Rust", function()
-			if native then
-				assert.is_function(native.connect)
-			end
+			assert.is_function(native.connect)
 		end)
 		
 		it("exports disconnect from Rust", function()
-			if native then
-				assert.is_function(native.disconnect)
-			end
+			assert.is_function(native.disconnect)
 		end)
 		
 		it("exports authenticate from Rust", function()
-			if native then
-				assert.is_function(native.authenticate)
-			end
+			assert.is_function(native.authenticate)
 		end)
 		
 		it("exports create_session from Rust", function()
-			if native then
-				assert.is_function(native.create_session)
-			end
+			assert.is_function(native.create_session)
 		end)
 		
 		it("exports load_session from Rust", function()
-			if native then
-				assert.is_function(native.load_session)
-			end
+			assert.is_function(native.load_session)
 		end)
 		
 		it("exports list_sessions from Rust", function()
-			if native then
-				assert.is_function(native.list_sessions)
-			end
+			assert.is_function(native.list_sessions)
 		end)
 		
 		it("exports prompt from Rust", function()
-			if native then
-				assert.is_function(native.prompt)
-			end
+			assert.is_function(native.prompt)
 		end)
 		
 		it("exports cancel from Rust", function()
-			if native then
-				assert.is_function(native.cancel)
-			end
+			assert.is_function(native.cancel)
 		end)
 		
 		it("exports set_mode from Rust", function()
-			if native then
-				assert.is_function(native.set_mode)
-			end
+			assert.is_function(native.set_mode)
 		end)
 		
 		it("exports respond from Rust", function()
-			if native then
-				assert.is_function(native.respond)
-			end
+			assert.is_function(native.respond)
 		end)
 	end)
 
@@ -491,15 +466,12 @@ describe("hermes.init (main API)", function()
 			-- Restore original
 			vim.notify = original_notify
 			
-			-- Should have received an error notification
-			local found_error = false
-			for _, call in ipairs(notify_calls) do
-				if call.level == error_level and call.msg:find("Unknown") then
-					found_error = true
-					break
-				end
-			end
-			assert.is_true(found_error, "Should show error for unknown command")
+			-- Assert directly: at least one error notification with "Unknown" should exist
+			local error_notifications = vim.tbl_filter(function(call)
+				return call.level == error_level and call.msg:find("Unknown")
+			end, notify_calls)
+			
+			assert.equals(1, #error_notifications, "Should receive exactly one error notification for unknown command")
 		end)
 	end)
 end)

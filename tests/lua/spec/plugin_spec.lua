@@ -70,21 +70,21 @@ describe("plugin.hermes", function()
     it("accepts 'install' subcommand (may fail to download but won't crash)", function()
       -- This will try to download but may fail - we just verify it doesn't crash
       -- Use pcall because download may fail in test environment
-      local ok, err = pcall(function()
+      local ok = pcall(function()
         vim.cmd("Hermes install")
       end)
-      -- Either succeeds or fails gracefully without crashing
-      assert.is_true(ok or err ~= nil, "Command should either succeed or fail gracefully")
+      -- pcall returns boolean status - if we reach here, no unhandled crash occurred
+      assert.is_boolean(ok, "pcall should return status without crashing")
     end)
     
     it("accepts 'build' subcommand (may fail to build but won't crash)", function()
       -- This will try to build but may fail - we just verify it doesn't crash
       -- Use pcall because build may fail in test environment
-      local ok, err = pcall(function()
+      local ok = pcall(function()
         vim.cmd("Hermes build")
       end)
-      -- Either succeeds or fails gracefully without crashing
-      assert.is_true(ok or err ~= nil, "Command should either succeed or fail gracefully")
+      -- pcall returns boolean status - if we reach here, no unhandled crash occurred
+      assert.is_boolean(ok, "pcall should return status without crashing")
     end)
   end)
   

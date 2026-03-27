@@ -130,17 +130,19 @@ describe("hermes.platform", function()
   end)
 
   describe("get_ext()", function()
-    it("returns correct extension", function()
-      local ext = platform.get_ext()
-      local os = platform.get_os()
-
-      if os == "linux" then
-        assert.equals("so", ext)
-      elseif os == "macos" then
-        assert.equals("dylib", ext)
-      elseif os == "windows" then
-        assert.equals("dll", ext)
-      end
+    it("returns so on Linux", function()
+      stub(platform, "get_os").returns("linux")
+      assert.equals("so", platform.get_ext())
+    end)
+    
+    it("returns dylib on macOS", function()
+      stub(platform, "get_os").returns("macos")
+      assert.equals("dylib", platform.get_ext())
+    end)
+    
+    it("returns dll on Windows", function()
+      stub(platform, "get_os").returns("windows")
+      assert.equals("dll", platform.get_ext())
     end)
   end)
 

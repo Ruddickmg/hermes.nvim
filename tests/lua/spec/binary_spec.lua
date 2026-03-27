@@ -512,9 +512,8 @@ describe("hermes.binary", function()
       
       -- Should succeed and return a table (the native module)
       assert.is_true(ok, "load_or_build should succeed with real binary: " .. tostring(result))
-      if ok then
-        assert.is_table(result, "Should return native module as table")
-      end
+      -- Result is a table when successful
+      assert.equals("table", type(result), "Should return native module as table")
     end)
   end)
 

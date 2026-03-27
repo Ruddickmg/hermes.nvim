@@ -130,12 +130,12 @@ describe("hermes.download", function()
       stub(vim.fn, "system").returns("curl: command not found")
       
       -- Mock shell_error to indicate failure
-      local ok, err = pcall(function()
+      local ok = pcall(function()
         return download.download("http://example.com/file", "/tmp/test")
       end)
       
-      -- Should fail with error mentioning command not found
-      assert.is_true(ok or not ok)  -- Just verify it doesn't crash
+      -- Should not crash (pcall catches errors)
+      assert.is_true(ok, "Should handle command not found without crashing")
       
       exec_stub:revert()
     end)

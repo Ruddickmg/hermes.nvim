@@ -99,26 +99,32 @@ describe("hermes.version", function()
     end)
     
     it("refetches when cache is expired", function()
-      download_stub = stub(require("hermes.download"), "download").returns(true, nil)
-      notify_stub = stub(vim, "notify")
+      -- Create a mock temp file with valid JSON response
+      local mock_file = os.tmpname()
+      local f = io.open(mock_file, "w")
+      f:write('{"tag_name": "v1.0.0", "name": "Release v1.0.0"}')
+      f:close()
       
+      -- Stub download to succeed and use our mock file
+      download_stub = stub(require("hermes.download"), "download").invokes(function(url, dest)
+        -- Copy mock file to destination
+        local uv = vim.uv or vim.loop
+        uv.fs_copyfile(mock_file, dest)
+        return true, nil
+      end)
+      
+      notify_stub = stub(vim, "notify")
       local config_stub = stub(require("hermes.config"), "get").returns({ version = "latest" })
       
-      -- First call to populate cache
-      local fetch_stub = stub(version, "fetch_latest")
-      fetch_stub.on_call_with().returns("v1.0.0")
+      -- First call to populate cache - this calls real fetch_latest
       version.get_wanted()
-      fetch_stub:revert()
       
-      -- Manually expire the cache by setting time far in the past
-      -- We'll need to access internal cache time - this is implementation-specific
-      -- Instead, let's verify the cache status shows invalid when expired
+      -- Verify cache was populated
       local status = version.get_cache_status()
-      if status.cached then
-        -- If we have a cached version, the age should be very small (just cached)
-        assert.is_true(status.age < 5, "Cache age should be less than 5 seconds")
-      end
+      assert.is_true(status.cached and status.age < 5, "Cache should be populated with age < 5 seconds")
       
+      -- Cleanup
+      os.remove(mock_file)
       config_stub:revert()
       notify_stub:revert()
     end)
