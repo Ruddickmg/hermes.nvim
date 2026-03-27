@@ -70,7 +70,9 @@ Binaries are available for:
 > ```lua
 > -- Will have to set up manually with `:Hermes build` or build manually from source
 > require("hermes").setup({ 
->     auto_download_binary = false,
+>     download = {
+>         auto = false,
+>     },
 > })
 > ```
 
@@ -145,8 +147,11 @@ hermes.setup({
 
 -- Full configuration defaults
 hermes.setup({
-    version = "latest", -- specify which hermes release to use
-    auto_download_binary = true, -- automatically download pre-built binary (set to false to build manually)
+    download = {
+        version = "latest", -- specify which hermes release to use
+        auto = true, -- automatically download pre-built binary (set to false to build manually)
+        timeout = 60, -- timeout in seconds for download
+    },
     root_markers = { ".git" }, -- used to detect the project root by matching file names in the root directory
     permissions = {
         fs_write_access = true,      -- Allow file writes to the agent 

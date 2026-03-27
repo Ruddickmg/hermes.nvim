@@ -12,10 +12,15 @@
 -- Type Definitions for IDE/LSP Support
 -- ============================================================================
 
+---@class HermesDownloadConfig
+---Download configuration for binary management
+---@field version? string Version to use ("latest" or specific version like "v0.1.0")
+---@field auto? boolean Whether to auto-download pre-built binary (default: true)
+---@field timeout? number Download timeout in seconds (default: 60)
+
 ---@class HermesConfig
 ---Hermes plugin configuration options
----@field version? string Version to use ("latest" or specific version like "v0.1.0")
----@field auto_download_binary? boolean Whether to auto-download pre-built binary (default: true)
+---@field download? HermesDownloadConfig Download configuration for binary management
 ---@field root_markers? string[] Files/directories to identify project root (default: {".git"})
 ---@field permissions? HermesPermissions Permission settings for agent operations
 ---@field terminal? HermesTerminalConfig Terminal configuration
@@ -185,15 +190,8 @@ end
 -- Get auto-download setting from config (sync)
 local function should_auto_download()
   local config = require("hermes.config")
-  if type(config.get_auto_download) == "function" then
-    return config.get_auto_download()
-  elseif type(config.get) == "function" then
-    local cfg = config.get()
-    if cfg and cfg.auto_download_binary ~= nil then
-      return cfg.auto_download_binary
-    end
-  end
-  return true
+  local download_cfg = config.get_download()
+  return download_cfg.auto ~= false
 end
 
 -- ============================================================================
@@ -347,8 +345,7 @@ function M.setup(opts)
   
   -- Store installation-related config locally
   require("hermes.config").setup({
-    version = opts.version,
-    auto_download_binary = opts.auto_download_binary,
+    download = opts.download,
     log = opts.log,
   })
   

@@ -57,10 +57,12 @@ describe("hermes.init (main API)", function()
 	describe("setup()", function()
 		it("accepts configuration table", function()
 			local ok = pcall(function()
-				hermes.setup({
-					auto_download_binary = false,
-					version = "latest",
-				})
+					hermes.setup({
+						download = {
+							auto = false,
+							version = "latest",
+						},
+					})
 			end)
 
 			assert.is_true(ok)
@@ -90,7 +92,7 @@ describe("hermes.init (main API)", function()
 			assert.is_function(config.get)
 			
 			-- Setup with auto_download disabled
-			config.setup({ auto_download_binary = false })
+			config.setup({ download = { auto = false } })
 			
 			-- This should work without error
 			local ok = pcall(function()
@@ -171,7 +173,7 @@ describe("hermes.init (main API)", function()
 	describe("API function signatures", function()
 		before_each(function()
 			-- Setup hermes for tests that need it
-			hermes.setup({ auto_download_binary = false })
+			hermes.setup({ download = { auto = false } })
 		end)
 
 		it("connect accepts agent name as first argument", function()
@@ -219,7 +221,7 @@ describe("hermes.init (main API)", function()
 		it("get_loading_state changes after setup", function()
 			-- After setup, state should progress (async, so we can't check exact state)
 			-- But we can verify the function returns a string
-			hermes.setup({ auto_download_binary = false })
+			hermes.setup({ download = { auto = false } })
 			
 			local after_state = hermes.get_loading_state()
 			assert.is_not_nil(after_state)
@@ -385,14 +387,14 @@ describe("hermes.init (main API)", function()
 
 		it("_should_auto_download returns false when disabled in config", function()
 			local config = require("hermes.config")
-			config.setup({ auto_download_binary = false })
+			config.setup({ download = { auto = false } })
 			
 			assert.is_false(hermes._should_auto_download())
 		end)
 
 		it("_should_auto_download returns true when enabled in config", function()
 			local config = require("hermes.config")
-			config.setup({ auto_download_binary = true })
+			config.setup({ download = { auto = true } })
 			
 			assert.is_true(hermes._should_auto_download())
 		end)
@@ -400,7 +402,7 @@ describe("hermes.init (main API)", function()
 		it("_should_auto_download uses config.get fallback when get_auto_download not available", function()
 			local config = require("hermes.config")
 			-- Clear any existing config
-			config.setup({ auto_download_binary = false })
+			config.setup({ download = { auto = false } })
 			
 			-- Should read from config.get() as fallback
 			assert.is_false(hermes._should_auto_download())

@@ -327,8 +327,10 @@ describe("hermes.binary", function()
       -- Setup: no binary, auto-download disabled
       stub(vim.fn, "filereadable").returns(0)
       stub(require("hermes.config"), "get").returns({ 
-        auto_download_binary = false,
-        version = "latest"
+        download = {
+          auto = false,
+          version = "latest"
+        }
       })
       
       local ok, err = pcall(function()
@@ -336,15 +338,17 @@ describe("hermes.binary", function()
       end)
       
       assert.is_false(ok)
-      assert.truthy(err:match("auto_download_binary") or err:match("disabled"))
+      assert.truthy(err:match("download") or err:match("auto") or err:match("disabled"))
     end)
     
     it("handles download failure gracefully", function()
       -- Setup: missing binary, download will fail
       stub(vim.fn, "filereadable").returns(0)
       stub(require("hermes.config"), "get").returns({ 
-        auto_download_binary = true,
-        version = "v9.9.9"
+        download = {
+          auto = true,
+          version = "v9.9.9"
+        }
       })
       stub(require("hermes.download"), "download").returns(false, "HTTP 404")
       stub(require("hermes.platform"), "is_supported").returns(true)

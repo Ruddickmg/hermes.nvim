@@ -280,12 +280,14 @@ function M.load_existing_binary()
     local platform = require("hermes.platform")
     error(
       string.format(
-        "Binary not found and auto_download_binary is disabled.\n\n" ..
+        "Binary not found and download.auto is disabled.\n\n" ..
         "Current platform: %s\n\n" ..
         "To resolve this, choose one option:\n\n" ..
         "Option 1 - Enable auto-download in your config:\n" ..
         "  require(\"hermes\").setup({\n" ..
-        "    auto_download_binary = true,\n" ..
+        "    download = {\n" ..
+        "      auto = true,\n" ..
+        "    },\n" ..
         "  })\n\n" ..
         "Option 2 - Build manually:\n" ..
         "  1. Install Rust: https://rustup.rs/\n" ..
