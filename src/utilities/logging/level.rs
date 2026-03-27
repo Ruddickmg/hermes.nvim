@@ -6,10 +6,10 @@ use tracing_subscriber::EnvFilter;
 pub enum LogLevel {
     Trace = 0,
     Debug = 1,
-    #[default]
     Info = 2,
     Warn = 3,
     Error = 4,
+    #[default]
     Off = 5,
 }
 
