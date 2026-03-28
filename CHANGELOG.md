@@ -8,11 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **BREAKING**: Simplified version management - binaries are now downloaded once and never auto-updated
+  - Removed automatic cache and version checking on startup
+  - Removed `HERMES_CACHE_DURATION` global variable
+  - Removed version comparison logic that caused unnecessary HTTP requests
 - **BREAKING**: Removed `HERMES_LOG_FORMAT` global variable - logging format now configured via `setup()`
 - **BREAKING**: Unified log target configuration - each target (notification, message, quickfix, local_list) now uses `{ level, format }` structure
 - Removed dependency on global Neovim log level - Hermes now uses defaults until configured
 
 ### Added
+- `:Hermes update` command - explicitly fetch and install the latest version from GitHub
 - Per-target format configuration (each target has its own format, defaults to "compact")
 - `LogTargetConfig` and `LogTargetConfigPartial` structs for unified target configuration
 - Each log target can have its own format (no global format, each target is independent)

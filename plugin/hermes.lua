@@ -7,19 +7,75 @@ if vim.fn.has("nvim-0.11") ~= 1 then
   return
 end
 
--- Create user command
+-- Create user command (single source of truth - defined here in plugin script)
 vim.api.nvim_create_user_command("Hermes", function(args)
   local subcmd = args.fargs[1]
-  
-  if subcmd == "install" or subcmd == "download" then
+    
+    if subcmd == "status" then
+      -- Show Hermes loading status
+      local hermes = require("hermes")
+      local state = hermes.get_loading_state()
+      local error_msg = hermes.get_loading_error()
+      local config = require("hermes.config")
+      local download_cfg = config.get_download()
+      
+      local status_lines = {
+        "Hermes Status",
+        "=============",
+        "",
+        "State: " .. state,
+      }
+      
+      if state == "NOT_LOADED" then
+        table.insert(status_lines, "The binary has not been loaded yet. Run any Hermes API method to start loading.")
+      elseif state == "DOWNLOADING" then
+        table.insert(status_lines, "The binary is being downloaded...")
+        table.insert(status_lines, "Timeout: " .. tostring(download_cfg.timeout or 60) .. " seconds")
+      elseif state == "LOADING" then
+        table.insert(status_lines, "The binary has been downloaded and is being loaded...")
+      elseif state == "READY" then
+        table.insert(status_lines, "Hermes is ready to use!")
+      elseif state == "FAILED" then
+        table.insert(status_lines, "Loading failed with error:")
+        table.insert(status_lines, error_msg or "Unknown error")
+      end
+      
+      table.insert(status_lines, "")
+      table.insert(status_lines, "Configuration:")
+      table.insert(status_lines, "  Auto-download: " .. tostring(download_cfg.auto ~= false))
+      table.insert(status_lines, "  Version: " .. tostring(download_cfg.version or "latest"))
+      table.insert(status_lines, "  Timeout: " .. tostring(download_cfg.timeout or 60) .. " seconds")
+      
+      vim.notify(table.concat(status_lines, "\n"), vim.log.levels.INFO)
+      
+    elseif subcmd == "log" or subcmd == "logs" then
+      -- Show recent log messages
+      local hermes = require("hermes")
+      local state = hermes.get_loading_state()
+      local error_msg = hermes.get_loading_error()
+      
+      local log_lines = {
+        "Hermes Log",
+        "==========",
+        "",
+        "Recent log messages will appear here.",
+        "Use :messages to see all notifications.",
+        "",
+        "Current State: " .. state,
+      }
+      
+      if error_msg then
+        table.insert(log_lines, "Last Error: " .. error_msg)
+      end
+      
+      vim.notify(table.concat(log_lines, "\n"), vim.log.levels.INFO)
+      
+    elseif subcmd == "install" or subcmd == "download" then
     -- Force download/install
     vim.notify("Installing Hermes binary...", vim.log.levels.INFO)
     local ok, err = pcall(function()
       local binary = require("hermes.binary")
       local version = require("hermes.version")
-      
-      -- Clear cache to ensure fresh download
-      version.clear_cache()
       
       local ver = version.get_wanted()
       
@@ -43,6 +99,41 @@ vim.api.nvim_create_user_command("Hermes", function(args)
       vim.notify("Hermes binary installed successfully!", vim.log.levels.INFO)
     else
       vim.notify("Installation failed: " .. tostring(err), vim.log.levels.ERROR)
+    end
+    
+  elseif subcmd == "update" then
+    -- Update to latest version (fetches from GitHub and downloads)
+    vim.notify("Updating Hermes binary...", vim.log.levels.INFO)
+    local ok, err = pcall(function()
+      local binary = require("hermes.binary")
+      local version = require("hermes.version")
+      
+      -- Fetch latest version from GitHub
+      local latest_ver = version.fetch_latest()
+      vim.notify("Latest version: " .. latest_ver, vim.log.levels.INFO)
+      
+      local path = binary.get_binary_path()
+      -- Remove existing binary
+      if vim.fn.filereadable(path) == 1 then
+        vim.fn.delete(path)
+      end
+      
+      -- Download latest version
+      local success = binary.download(path, latest_ver)
+      if not success then
+        error("Download failed")
+      end
+      
+      -- Save version
+      vim.fn.writefile({latest_ver}, binary.get_version_file())
+      
+      return latest_ver
+    end)
+    
+    if ok then
+      vim.notify("Hermes updated to version " .. err .. " successfully!", vim.log.levels.INFO)
+    else
+      vim.notify("Update failed: " .. tostring(err), vim.log.levels.ERROR)
     end
     
   elseif subcmd == "build" then
@@ -80,17 +171,11 @@ vim.api.nvim_create_user_command("Hermes", function(args)
     require("hermes.config")
     
     local wanted = version.get_wanted()
-    local cache_status = version.get_cache_status()
     local platform_str = platform.get_display_string()
     
     print("Hermes Version Information:")
     print("  Wanted version: " .. wanted)
     print("  Platform: " .. platform_str)
-    print("  Version cached: " .. tostring(cache_status.cached))
-    if cache_status.cached then
-      print("  Cached version: " .. tostring(cache_status.version))
-      print("  Cache age: " .. tostring(cache_status.age) .. " seconds")
-    end
     
     -- Check if binary exists
     local binary = require("hermes.binary")
@@ -110,19 +195,15 @@ vim.api.nvim_create_user_command("Hermes", function(args)
     end
     
   elseif subcmd == "clean" then
-    -- Clear binary and cache
+    -- Clear binary
     vim.notify("Cleaning Hermes installation...", vim.log.levels.INFO)
     local binary = require("hermes.binary")
-    local version = require("hermes.version")
     local data_dir = binary.get_data_dir()
     
     -- Remove data directory
     if vim.fn.isdirectory(data_dir) == 1 then
       vim.fn.delete(data_dir, "rf")
     end
-    
-    -- Clear version cache
-    version.clear_cache()
     
     vim.notify("Hermes cleaned successfully!", vim.log.levels.INFO)
     
@@ -136,12 +217,15 @@ vim.api.nvim_create_user_command("Hermes", function(args)
     
   else
     vim.notify(
-      "Usage: :Hermes {install|build|version|clean|setup}\n\n" ..
+      "Usage: :Hermes {status|log|install|update|build|version|clean|setup}\n\n" ..
       "Commands:\n" ..
+      "  status   - Show loading status and configuration\n" ..
+      "  log      - Show recent log messages\n" ..
       "  install  - Download and install the binary\n" ..
+      "  update   - Update to the latest version from GitHub\n" ..
       "  build    - Build binary from source\n" ..
       "  version  - Show version information\n" ..
-      "  clean    - Remove binary and cache\n" ..
+      "  clean    - Remove binary\n" ..
       "  setup    - Show current configuration",
       vim.log.levels.INFO
     )
@@ -149,7 +233,7 @@ vim.api.nvim_create_user_command("Hermes", function(args)
 end, {
   nargs = "?",
   complete = function()
-    return {"install", "build", "version", "clean", "setup"}
+    return {"status", "log", "install", "update", "build", "version", "clean", "setup"}
   end,
   desc = "Hermes binary management and info"
 })
