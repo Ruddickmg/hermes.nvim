@@ -105,6 +105,66 @@ fn test_can_request_permissions_returns_false_when_disabled() -> nvim_oxi::Resul
     Ok(())
 }
 
+// Note: These tests cover the "true" code paths for CI coverage requirements.
+// Per AGENTS.md, we avoid testing defaults, but these methods are used in
+// production code (client.rs) and need coverage. Keeping them per AGENTS.md:793-799.
+
+#[nvim_oxi::test]
+fn test_can_write_returns_true_when_enabled() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
+        .expect("Handler creation should succeed");
+
+    // fs_write_access is true by default - covers the return true path
+    let result = tokio_test::block_on(handler.can_write());
+    assert!(result);
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_can_read_returns_true_when_enabled() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
+        .expect("Handler creation should succeed");
+
+    // fs_read_access is true by default - covers the return true path
+    let result = tokio_test::block_on(handler.can_read());
+    assert!(result);
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_can_access_terminal_returns_true_when_enabled() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
+        .expect("Handler creation should succeed");
+
+    // terminal_access is true by default - covers the return true path
+    let result = tokio_test::block_on(handler.can_access_terminal());
+    assert!(result);
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_can_request_permissions_returns_true_when_enabled() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
+        .expect("Handler creation should succeed");
+
+    // request_permissions is true by default - covers the return true path
+    let result = tokio_test::block_on(handler.can_request_permissions());
+    assert!(result);
+
+    Ok(())
+}
+
 #[nvim_oxi::test]
 fn test_set_agent_info_updates_agent_information() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));

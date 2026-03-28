@@ -215,3 +215,31 @@ fn numeric_type_from_thread_reaches_callback() -> nvim_oxi::Result<()> {
     );
     Ok(())
 }
+
+#[nvim_oxi::test]
+fn callback_error_is_handled_gracefully() -> nvim_oxi::Result<()> {
+    // Test that when the callback returns an error, it's logged but not propagated
+    // This covers the error handling path in src/utilities/nvim.rs:29
+    // The error!() macro logs the error, and the send operation should still succeed
+    
+    // Callback that returns an error - error should be logged via error!()
+    let callback = move |_data: String| -> nvim_oxi::Result<()> {
+        Err(nvim_oxi::Error::Api(nvim_oxi::api::Error::Other("Test callback error".to_string())))
+    };
+
+    let handler = NvimMessenger::initialize(callback).expect("Handler should initialize");
+
+    // Spawn thread that sends data - this should succeed even though callback returns error
+    let send_result = std::thread::spawn(move || {
+        handler.blocking_send("test message".to_string())
+    })
+    .join()
+    .expect("Thread should not panic");
+
+    // Verify that send succeeded (error was logged, not propagated)
+    assert!(
+        send_result.is_ok(),
+        "Send should succeed even when callback returns error"
+    );
+    Ok(())
+}
