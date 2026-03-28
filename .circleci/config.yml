@@ -401,6 +401,9 @@ jobs:
           name: Install Opencode
           command: curl -fsSL https://opencode.ai/install | bash
       - run:
+          name: Install GitHub Copilot
+          command: curl -fsSL https://gh.io/copilot-install | bash
+      - run:
           name: Install Lua tools
           command: |
             # Install luarocks

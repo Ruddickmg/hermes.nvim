@@ -26,6 +26,9 @@ describe("hermes.init (main API)", function()
 		local dest_bin = bin_dir .. "/" .. bin_name
 		local uv = vim.uv or vim.loop
 		uv.fs_copyfile(source_bin, dest_bin)
+		
+		-- Write version file so binary is recognized as valid
+		vim.fn.writefile({"latest"}, bin_dir .. "/version.txt")
 
 		-- Only clear modules and load binary on first test
 		-- (reloading the .so file can cause issues with static state)
@@ -104,93 +107,68 @@ describe("hermes.init (main API)", function()
 	end)
 
 	describe("native module exports (_load_native_sync())", function()
-		local hermes_module, native
-		local binary_available = false
+		-- Note: Relies on outer before_each which already:
+		-- 1. Stubs vim.fn.stdpath("data") to return temp_dir
+		-- 2. Copies binary from target/release to temp_dir/hermes/
+		-- 3. Clears and reloads hermes module
+		
+		local native
 		
 		before_each(function()
-			-- Clear module cache and reload
-			package.loaded["hermes.init"] = nil
-			package.loaded["hermes.binary"] = nil
-			
-			-- Check if binary exists before trying to load
-			local platform = require("hermes.platform")
-			local binary = require("hermes.binary")
-			local bin_path = binary.get_binary_path()
-			
-			-- Try to copy binary if source exists
-			local source_bin = vim.fn.getcwd() .. "/target/release/libhermes." .. platform.get_ext()
-			if vim.fn.filereadable(source_bin) == 1 then
-				vim.fn.mkdir(binary.get_data_dir(), "p")
-				local uv = vim.uv or vim.loop
-				uv.fs_copyfile(source_bin, bin_path)
-				binary_available = true
-			end
-			
-			-- Load the hermes module fresh
-			hermes_module = require("hermes")
-			
-			-- Access the native module directly via _load_native_sync()
-			-- This triggers the binary loading synchronously
+			-- Load native module via _load_native_sync
+			-- The outer before_each already ensured binary is at the expected path
 			local ok, result = pcall(function()
-				return hermes_module._load_native_sync()
+				return hermes._load_native_sync()
 			end)
 			
-			-- Store result, may be nil if loading failed
-			native = ok and result or nil
+			if not ok then
+				error("Failed to load native module: " .. tostring(result))
+			end
+			
+			native = result
 		end)
 		
 		it("exports setup from Rust", function()
-			-- Single assertion: if native is nil, this will error with clear message
 			assert.is_function(native.setup)
 		end)
 		
 		it("exports connect from Rust", function()
-			if not binary_available then return end
 			assert.is_function(native.connect)
 		end)
 		
 		it("exports disconnect from Rust", function()
-			if not binary_available then return end
 			assert.is_function(native.disconnect)
 		end)
 		
 		it("exports authenticate from Rust", function()
-			if not binary_available then return end
 			assert.is_function(native.authenticate)
 		end)
 		
 		it("exports create_session from Rust", function()
-			if not binary_available then return end
 			assert.is_function(native.create_session)
 		end)
 		
 		it("exports load_session from Rust", function()
-			if not binary_available then return end
 			assert.is_function(native.load_session)
 		end)
 		
 		it("exports list_sessions from Rust", function()
-			if not binary_available then return end
 			assert.is_function(native.list_sessions)
 		end)
 		
 		it("exports prompt from Rust", function()
-			if not binary_available then return end
 			assert.is_function(native.prompt)
 		end)
 		
 		it("exports cancel from Rust", function()
-			if not binary_available then return end
 			assert.is_function(native.cancel)
 		end)
 		
 		it("exports set_mode from Rust", function()
-			if not binary_available then return end
 			assert.is_function(native.set_mode)
 		end)
 		
 		it("exports respond from Rust", function()
-			if not binary_available then return end
 			assert.is_function(native.respond)
 		end)
 	end)
