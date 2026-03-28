@@ -2,6 +2,7 @@ use crate::acp::{Result, error::Error};
 use nvim_oxi::IntoResult;
 use nvim_oxi::libuv::AsyncHandle;
 use std::sync::Arc;
+use tracing::error;
 
 #[derive(Clone)]
 pub struct NvimMessenger<T: 'static> {
@@ -17,14 +18,20 @@ impl<T> NvimMessenger<T> {
         R::Error: std::error::Error + 'static,
     {
         let (sender, mut receiver) = tokio::sync::mpsc::channel::<T>(100);
-        let handle = AsyncHandle::new(move || {
-            while let Ok(data) = receiver.try_recv() {
-                if let Err(err) = callback(data).into_result() {
-                    eprintln!("Error in NvimHandler callback: {}", err);
+        let handle =
+            AsyncHandle::new(move || {
+                // CRITICAL: This callback is invoked from C code via FFI.
+                // ANY panic that crosses this boundary will abort the process.
+                // We use catch_unwind to prevent this.
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                while let Ok(data) = receiver.try_recv() {
+                    if let Err(err) = callback(data).into_result() {
+                        error!("Error in NvimHandler callback: {}", err);
+                    }
                 }
-            }
-        })
-        .map_err(|e| Error::Internal(e.to_string()))?;
+            })).inspect_err(|e|error!("Panic occurred in the AsyncHandle call initialized in the NvimMessenger: {:?}", e)).ok(); // Ignore the result - we just need to catch the panic
+            })
+            .map_err(|e| Error::Internal(e.to_string()))?;
         Ok(Self {
             handle: Arc::new(handle),
             sender: Arc::new(sender),

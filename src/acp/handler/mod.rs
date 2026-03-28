@@ -56,25 +56,26 @@ impl Handler {
                                 error!("Error executing autocommand: '{}': {:#?}", command, err);
                             }
                         }
-                        Err(e) => error!(
-                            "Failed to deserialize autocommand data for '{}': {:#?}",
-                            command, e
-                        ),
+                        Err(e) => {
+                            error!(
+                                "Failed to deserialize autocommand data for '{}': {:#?}",
+                                command, e
+                            );
+                        }
                     }
                 } else if let Some(request_id) = request {
                     warn!(
                         "No listener attached for command '{}'. Using default implementation",
                         command
                     );
-                    nvim_requests
+                    let _ = nvim_requests
                         .default_response(&request_id, data)
                         .map_err(|e| {
                             error!(
                                 "Failed to send default response for command '{}': {:#?}",
                                 command, e
                             )
-                        })
-                        .ok();
+                        });
                 } else {
                     warn!("No listener attached for command '{}'", command);
                 }

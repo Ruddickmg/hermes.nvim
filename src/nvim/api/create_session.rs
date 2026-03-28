@@ -1,6 +1,6 @@
 use agent_client_protocol::{McpServer, NewSessionRequest};
 use nvim_oxi::{
-    Dictionary, Function, Object,
+    Array, Dictionary, Function, Object,
     conversion::{Error, FromObject},
     lua::{Poppable, Pushable},
 };
@@ -27,7 +27,8 @@ impl FromObject for CreateSessionArgs {
             return Ok(Self::Default);
         }
 
-        let dict: Dictionary = obj.try_into()?;
+        // Convert Object to Dictionary, handling empty Lua tables
+        let dict = crate::nvim::configuration::dict_from_object(obj)?;
 
         let cwd: Option<PathBuf> = dict.get("cwd").and_then(|obj| {
             obj.clone()
