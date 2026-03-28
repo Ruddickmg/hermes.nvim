@@ -474,6 +474,7 @@ describe("hermes.init (main API)", function()
 	describe("E2E async download and load flow", function()
 		before_each(function()
 			-- Clear all module caches for fresh start
+			package.loaded["hermes"] = nil
 			package.loaded["hermes.init"] = nil
 			package.loaded["hermes.binary"] = nil
 			package.loaded["hermes.config"] = nil
@@ -554,18 +555,18 @@ describe("hermes.init (main API)", function()
 			)
 		end)
 
-		it("auto-download disabled does not start download", function()
+		it("auto-download disabled triggers direct load (not download)", function()
 			hermes.setup({ download = { auto = false, version = "latest" } })
 			
 			-- Verify auto-download is disabled
 			assert.is_false(hermes._should_auto_download())
 			
-			-- State should be NOT_LOADED or FAILED (if already tried and failed)
-			-- since auto-download is disabled and no manual load triggered
+			-- Calling setup() with auto=false triggers direct loading (not downloading)
+			-- State transitions: NOT_LOADED -> LOADING (immediately)
 			local state = hermes.get_loading_state()
 			assert.is_true(
-				state == "NOT_LOADED" or state == "FAILED",
-				"State should be NOT_LOADED or FAILED when auto-download is disabled: " .. tostring(state)
+				state == "LOADING" or state == "READY" or state == "FAILED",
+				"State should be LOADING, READY, or FAILED when auto-download is disabled: " .. tostring(state)
 			)
 		end)
 
@@ -604,32 +605,28 @@ describe("hermes.init (main API)", function()
 
 		it("download failure sets FAILED state and records error", function()
 			-- Setup with invalid platform to force download failure
-			hermes.setup({ download = { auto = true, version = "latest" } })
-			
-			-- Stub platform to return unsupported
+			-- Stub platform BEFORE setup so download fails immediately
 			local platform = require("hermes.platform")
 			local orig_get_platform_key = platform.get_platform_key
 			platform.get_platform_key = function() return "unsupported-platform" end
 			
-			-- Trigger load
-			pcall(function()
-				-- This should fail since platform is not supported
-				hermes._load_native_sync()
-			end)
+			hermes.setup({ download = { auto = true, version = "latest" } })
+			
+			-- Wait for async download to complete and fail
+			vim.wait(100)
 			
 			-- Restore
 			platform.get_platform_key = orig_get_platform_key
 			
 			-- Check state is FAILED
 			assert.equals("FAILED", hermes.get_loading_state())
+			
 			-- Check error is recorded
 			assert.is_not_nil(hermes.get_loading_error())
 		end)
 
 		it("load success transitions to READY state when binary exists", function()
-			hermes.setup({ download = { auto = false, version = "latest" } })
-			
-			-- Setup: Ensure real binary exists
+			-- Setup: Ensure real binary exists FIRST (before calling setup)
 			local platform = require("hermes.platform")
 			local binary = require("hermes.binary")
 			local bin_path = binary.get_binary_path()
@@ -644,9 +641,11 @@ describe("hermes.init (main API)", function()
 			-- Write version file
 			vim.fn.writefile({"latest"}, binary.get_version_file())
 			
-			-- Reset state before loading
-			hermes._set_loading_state("NOT_LOADED")
-			hermes._set_loading_error(nil)
+			-- Now call setup with auto=false - it should find the binary and load successfully
+			hermes.setup({ download = { auto = false, version = "latest" } })
+			
+			-- Wait for async load to complete
+			vim.wait(100)
 			
 			-- Now load should succeed
 			local ok, result = pcall(function()
