@@ -52,13 +52,13 @@ function M.download(url, dest_path)
   
   local cmd
   if tool == "curl" then
-    cmd = { "curl", "-sL", "-o", dest_path, url }
+    cmd = { "curl", "-sL", "-H", "User-Agent: hermes.nvim/0.1", "-o", dest_path, url }
   elseif tool == "wget" then
-    cmd = { "wget", "-q", "-O", dest_path, url }
+    cmd = { "wget", "-q", "--user-agent=hermes.nvim/0.1", "-O", dest_path, url }
   else
     -- PowerShell for Windows
     local ps_cmd = string.format(
-      'Invoke-WebRequest -Uri "%s" -OutFile "%s" -UseBasicParsing',
+      'Invoke-WebRequest -Uri "%s" -OutFile "%s" -UseBasicParsing -UserAgent "hermes.nvim/0.1"',
       url, dest_path
     )
     cmd = { "powershell", "-Command", ps_cmd }
