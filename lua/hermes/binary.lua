@@ -63,7 +63,7 @@ end
 ---@return boolean success Whether download succeeded
 function M.download(dest_path, ver)
   local platform = require("hermes.platform")
-  local download = get_download()
+  local download_mod = get_download()
   
   -- Ensure data directory exists
   vim.fn.mkdir(M.get_data_dir(), "p")
@@ -88,7 +88,7 @@ function M.download(dest_path, ver)
   )
   
   -- Download the binary
-  local ok, err = download.download(url, dest_path)
+  local ok, err = download_mod.download(url, dest_path)
   
   if not ok then
     return false, err or "Download failed"
@@ -107,7 +107,7 @@ end
 ---@return boolean success Whether build succeeded
 function M.build_from_source(dest_dir)
   local logging = require("hermes.logging")
-  local download = get_download()
+  local download_mod = get_download()
   
   -- Ensure destination directory exists
   vim.fn.mkdir(dest_dir, "p")
@@ -126,7 +126,7 @@ function M.build_from_source(dest_dir)
   -- Clone repository
   local clone_dir = dest_dir .. "/build"
   logging.notify("Cloning repository...", vim.log.levels.INFO)
-  local clone_ok = download.system({"git", "clone", REPO_URL, clone_dir})
+  download_mod.system({"git", "clone", REPO_URL, clone_dir})
   
   if vim.v.shell_error ~= 0 then
     logging.notify("Failed to clone repository", vim.log.levels.ERROR)
@@ -136,7 +136,7 @@ function M.build_from_source(dest_dir)
   -- Build with cargo
   logging.notify("Building with cargo...", vim.log.levels.INFO)
   local build_cmd = "cd " .. clone_dir .. " && cargo build --release"
-  download.system(build_cmd)
+  download_mod.system(build_cmd)
   
   if vim.v.shell_error ~= 0 then
     logging.notify("Cargo build failed", vim.log.levels.ERROR)
@@ -247,7 +247,6 @@ function M.ensure_binary()
   end
   
   -- Download binary for supported platform
-  local wanted_ver = version.get_wanted()
   local download_ok = M.download(bin_path, wanted_ver)
   
   if not download_ok then
@@ -272,7 +271,6 @@ function M.ensure_binary()
   end
   
   -- Save version for reference
-  local ver_file = M.get_version_file()
   vim.fn.writefile({wanted_ver}, ver_file)
   
   return bin_path
