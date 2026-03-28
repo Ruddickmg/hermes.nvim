@@ -44,6 +44,20 @@ describe("hermes.platform", function()
 			assert.equals("windows", os)
 		end)
 
+		it("detects macOS via Darwin sysname", function()
+			os_uname_stub = stub(vim.loop, "os_uname").returns({
+				sysname = "Darwin",
+				machine = "x86_64",
+			})
+
+			package.loaded["hermes.platform"] = nil
+			platform = require("hermes.platform")
+
+			local os = platform.get_os()
+
+			assert.equals("macos", os)
+		end)
+
 		it("falls back to vim.fn.has for unknown sysname", function()
 			os_uname_stub = stub(vim.loop, "os_uname").returns({
 				sysname = "UnknownOS",
@@ -59,6 +73,46 @@ describe("hermes.platform", function()
 			local os = platform.get_os()
 
 			assert.equals("macos", os)
+			has_stub:revert()
+		end)
+
+		it("detects Windows via vim.fn.has fallback", function()
+			os_uname_stub = stub(vim.loop, "os_uname").returns({
+				sysname = "UnknownOS",
+				machine = "x86_64",
+			})
+			local has_stub = stub(vim.fn, "has")
+			has_stub.on_call_with("win32").returns(1)
+			has_stub.on_call_with("win64").returns(0)
+			has_stub.on_call_with("mac").returns(0)
+			has_stub.on_call_with("osx").returns(0)
+			has_stub.on_call_with("linux").returns(0)
+
+			package.loaded["hermes.platform"] = nil
+			platform = require("hermes.platform")
+
+			local os = platform.get_os()
+
+			assert.equals("windows", os)
+			has_stub:revert()
+		end)
+
+		it("errors on unsupported operating system", function()
+			os_uname_stub = stub(vim.loop, "os_uname").returns({
+				sysname = "FreeBSD",
+				machine = "x86_64",
+			})
+			local has_stub = stub(vim.fn, "has").returns(0)
+
+			package.loaded["hermes.platform"] = nil
+			platform = require("hermes.platform")
+
+			local ok, err = pcall(function()
+				return platform.get_os()
+			end)
+
+			assert.is_false(ok)
+			assert.truthy(err:match("Unsupported operating system"))
 			has_stub:revert()
 		end)
 	end)

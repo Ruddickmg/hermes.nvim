@@ -121,5 +121,22 @@ describe("hermes.version", function()
 			download_stub:revert()
 			notify_stub:revert()
 		end)
+
+		it("returns fallback when file cannot be read", function()
+			-- Stub download to succeed but file doesn't exist (can't be opened)
+			local download_stub = stub(require("hermes.download"), "download").returns(true, nil)
+			local notify_stub = stub(vim, "notify")
+			
+			-- Don't create the file, so io.open returns nil
+			-- The temp file path returned by os.tmpname() won't exist
+
+			local result = version.fetch_latest()
+
+			-- Should return fallback version (v0.1.0)
+			assert.equals("v0.1.0", result)
+
+			download_stub:revert()
+			notify_stub:revert()
+		end)
 	end)
 end)
