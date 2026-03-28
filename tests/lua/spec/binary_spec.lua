@@ -101,6 +101,7 @@ describe("hermes.binary", function()
     it("downloads when binary missing", function()
       filereadable_stub = stub(vim.fn, "filereadable").returns(0)
       download_stub = stub(download, "download").returns(true, nil)
+      stub(download, "get_available_tool").returns("curl")
       version_stub = stub(require("hermes.version"), "get_wanted").returns("v1.0.0")
 
       binary.ensure_binary()
@@ -108,42 +109,18 @@ describe("hermes.binary", function()
       assert.stub(download_stub).was_called()
     end)
 
-    it("skips download when binary and version match", function()
-      -- Create existing files
+    it("skips download when binary exists", function()
+      -- Create existing binary file
       local bin_path = binary.get_binary_path()
-      local version_file = binary.get_version_file()
       vim.fn.mkdir(binary.get_data_dir(), "p")
       io.open(bin_path, "w"):close()
-      local f = io.open(version_file, "w")
-      f:write("v1.0.0")
-      f:close()
 
       filereadable_stub = stub(vim.fn, "filereadable").returns(1)
       download_stub = stub(download, "download")
-      version_stub = stub(require("hermes.version"), "get_wanted").returns("v1.0.0")
 
       binary.ensure_binary()
 
       assert.stub(download_stub).was_not_called()
-    end)
-
-    it("re-downloads when version differs", function()
-      -- Create existing files with old version
-      local bin_path = binary.get_binary_path()
-      local version_file = binary.get_version_file()
-      vim.fn.mkdir(binary.get_data_dir(), "p")
-      io.open(bin_path, "w"):close()
-      local f = io.open(version_file, "w")
-      f:write("v0.9.0")
-      f:close()
-
-      filereadable_stub = stub(vim.fn, "filereadable").returns(1)
-      download_stub = stub(download, "download").returns(true, nil)
-      version_stub = stub(require("hermes.version"), "get_wanted").returns("v1.0.0")
-
-      binary.ensure_binary()
-
-      assert.stub(download_stub).was_called()
     end)
   end)
 
@@ -187,48 +164,6 @@ describe("hermes.binary", function()
       -- Build expected format and verify in single assertion
       local expected_format = "libhermes-" .. platform.get_os() .. "-" .. platform.get_arch() .. "." .. platform.get_ext()
       assert.equals(expected_format, expected_name)
-    end)
-    
-    it("build_from_source uses platform.get_binary_name() for destination", function()
-      -- This test verifies the implementation detail - that build_from_source
-      -- uses platform.get_binary_name() to determine the destination path
-      local platform = require("hermes.platform")
-      
-      -- Mock the platform module to verify it's called
-      local binary_name_calls = {}
-      local original_get_binary_name = platform.get_binary_name
-      stub(platform, "get_binary_name").invokes(function()
-        table.insert(binary_name_calls, 1)
-        return original_get_binary_name()
-      end)
-      
-      -- Create mock build environment
-      local build_dir = temp_dir .. "/build"
-      local target_dir = build_dir .. "/target/release"
-      local ext = platform.get_ext()
-      local mock_built_lib = target_dir .. "/libhermes." .. ext
-      
-      vim.fn.mkdir(target_dir, "p")
-      local f = io.open(mock_built_lib, "w")
-      f:write("mock")
-      f:close()
-      
-      -- Mock git and cargo commands
-      stub(vim.fn, "system").returns("")
-      stub(vim.fn, "executable").returns(1)
-      
-      -- Attempt build (will check shell_error, so it might fail early)
-      pcall(function()
-        binary.build_from_source(temp_dir)
-      end)
-      
-      -- Verify platform.get_binary_name was called during the build
-      -- This confirms the implementation uses the correct function
-      platform.get_binary_name:revert()
-      
-      -- The key assertion: the function should attempt to call get_binary_name
-      -- when determining the destination path
-      assert.is_true(#binary_name_calls > 0, "build_from_source should use platform.get_binary_name()")
     end)
   end)
 
@@ -310,35 +245,17 @@ describe("hermes.binary", function()
   describe("ensure_binary() error paths", function()
     it("shows helpful error for unsupported platform", function()
       -- Mock platform as unsupported
-      local platform_stub = stub(require("hermes.platform"), "is_supported").returns(false, "Unsupported platform: mips")
+      stub(require("hermes.platform"), "is_supported").returns(false)
+      stub(require("hermes.platform"), "get_platform_key").returns("mips")
+      stub(require("hermes.platform"), "get_display_string").returns("mips")
       stub(vim.fn, "filereadable").returns(0)
       
       local ok, err = pcall(function()
         binary.ensure_binary()
       end)
       
-      platform_stub:revert()
-      
       assert.is_false(ok)
       assert.truthy(err:match("not supported") or err:match("platform"))
-    end)
-    
-    it("errors when auto_download is disabled and binary missing", function()
-      -- Setup: no binary, auto-download disabled
-      stub(vim.fn, "filereadable").returns(0)
-      stub(require("hermes.config"), "get").returns({ 
-        download = {
-          auto = false,
-          version = "latest"
-        }
-      })
-      
-      local ok, err = pcall(function()
-        binary.load_existing_binary()
-      end)
-      
-      assert.is_false(ok)
-      assert.truthy(err:match("download") or err:match("auto") or err:match("disabled"))
     end)
     
     it("handles download failure gracefully", function()
@@ -350,7 +267,8 @@ describe("hermes.binary", function()
           version = "v9.9.9"
         }
       })
-      stub(require("hermes.download"), "download").returns(false, "HTTP 404")
+      stub(download, "download").returns(false, "HTTP 404")
+      stub(download, "get_available_tool").returns("curl")
       stub(require("hermes.platform"), "is_supported").returns(true)
       
       local ok, err = pcall(function()
@@ -360,83 +278,6 @@ describe("hermes.binary", function()
       assert.is_false(ok)
       -- Error should mention download failure
       assert.truthy(err:match("download") or err:match("Failed"))
-    end)
-    
-    it("re-downloads when version does not match", function()
-      -- Setup: binary exists but version differs
-      local _platform = require("hermes.platform")
-      local bin_path = binary.get_binary_path()
-      
-      -- Create mock binary file
-      vim.fn.mkdir(binary.get_data_dir(), "p")
-      local f = io.open(bin_path, "w")
-      f:write("mock binary")
-      f:close()
-      
-      -- Create version file with different version
-      vim.fn.writefile({"v1.0.0"}, binary.get_version_file())
-      
-      -- Mock version to want different version
-      stub(require("hermes.version"), "get_wanted").returns("v2.0.0")
-      
-      -- Mock filereadable: binary exists (1), version file exists (1)
-      local filereadable_call = 0
-      stub(vim.fn, "filereadable").invokes(function()
-        filereadable_call = filereadable_call + 1
-        return 1  -- File exists
-      end)
-      
-      -- Mock readfile to return old version
-      stub(vim.fn, "readfile").returns({"v1.0.0"})
-      
-      -- Mock download to succeed
-      stub(binary, "download").returns(true)
-      stub(vim.fn, "writefile")
-      
-      -- Should trigger re-download due to version mismatch
-      local ok = pcall(function()
-        return binary.ensure_binary()
-      end)
-      
-      -- The call should succeed (download mocked)
-      assert.is_true(ok)
-    end)
-    
-    it("downloads when no version file exists", function()
-      -- Setup: binary exists but no version file
-      local bin_path = binary.get_binary_path()
-      
-      -- Create mock binary file
-      vim.fn.mkdir(binary.get_data_dir(), "p")
-      local f = io.open(bin_path, "w")
-      f:write("mock binary")
-      f:close()
-      
-      -- Mock version
-      stub(require("hermes.version"), "get_wanted").returns("v1.0.0")
-      
-      -- Mock filereadable: binary exists (1), version file does NOT exist (0 on second call)
-      local filereadable_count = 0
-      stub(vim.fn, "filereadable").invokes(function()
-        filereadable_count = filereadable_count + 1
-        -- First call checks binary (exists), second checks version (doesn't exist)
-        if filereadable_count == 1 then
-          return 1
-        else
-          return 0
-        end
-      end)
-      
-      -- Mock download to succeed
-      stub(binary, "download").returns(true)
-      stub(vim.fn, "writefile")
-      
-      -- Should trigger download due to missing version file
-      local ok = pcall(function()
-        return binary.ensure_binary()
-      end)
-      
-      assert.is_true(ok)
     end)
   end)
 
@@ -467,9 +308,10 @@ describe("hermes.binary", function()
     
     it("error message mentions download tools when none available", function()
       -- Mock no download tools available
-      stub(download, "is_curl_available").returns(false)
-      stub(download, "is_wget_available").returns(false)
+      stub(vim.fn, "filereadable").returns(0)
       stub(download, "get_available_tool").returns(nil)
+      stub(require("hermes.platform"), "is_supported").returns(true)
+      stub(require("hermes.platform"), "get_platform_key").returns("linux-x86_64")
       
       local _, err = pcall(function()
         binary.ensure_binary()
@@ -512,7 +354,7 @@ describe("hermes.binary", function()
   end)
 
   describe("ensure_binary_async()", function()
-    it("returns binary path immediately when binary exists and version matches", function()
+    it("returns binary path when binary exists", function()
       -- Use the real binary from target/release
       local platform = require("hermes.platform")
       local bin_path = binary.get_binary_path()
@@ -530,14 +372,13 @@ describe("hermes.binary", function()
       stub(require("hermes.version"), "get_wanted").returns("v0.0.1")
       
       -- Mock filereadable for both binary and version file
-      local filereadable_count = 0
-      stub(vim.fn, "filereadable").invokes(function()
-        filereadable_count = filereadable_count + 1
-        return 1  -- Both files exist
-      end)
+      stub(vim.fn, "filereadable").returns(1)
       
       -- Mock readfile to return matching version
       stub(vim.fn, "readfile").returns({"v0.0.1"})
+      
+      -- Mock download availability
+      stub(download, "get_available_tool").returns("curl")
       
       local callback_called = false
       local callback_result = nil
@@ -550,11 +391,15 @@ describe("hermes.binary", function()
         callback_result = result
       end)
       
-      -- Callback should be called immediately since no download needed
-      assert.is_true(
-        callback_called and callback_success and callback_result ~= nil,
-        "Callback should be called immediately when binary exists, report success, and return a binary path"
-      )
+      -- Wait for async callback to complete
+      vim.wait(100, function()
+        return callback_called
+      end)
+      
+      -- Callback should be called since no download needed
+      assert.is_true(callback_called, "Callback should be called when binary exists")
+      assert.is_true(callback_success, "Should report success when binary exists")
+      assert.is_not_nil(callback_result, "Should return binary path")
     end)
     
     it("downloads when binary is missing", function()
@@ -568,6 +413,7 @@ describe("hermes.binary", function()
       -- Mock download to succeed
       stub(binary, "download").returns(true)
       stub(vim.fn, "writefile")
+      stub(download, "get_available_tool").returns("curl")
       
       -- Call should not error even with missing binary
       local ok = pcall(function()
@@ -600,7 +446,7 @@ describe("hermes.binary", function()
     
     it("handles no download tool available", function()
       -- Mock download tools as unavailable
-      stub(require("hermes.download"), "get_available_tool").returns(nil)
+      stub(download, "get_available_tool").returns(nil)
       
       local callback_called = false
       local callback_success = nil

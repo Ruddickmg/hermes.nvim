@@ -154,44 +154,44 @@ local _download_timeout = 60
 
 -- Get current loading state
 function M.get_loading_state()
-  return _loading_state
+	return _loading_state
 end
 
 -- Get loading error if any
 function M.get_loading_error()
-  return _loading_error
+	return _loading_error
 end
 
 -- Check if binary is already ready (sync)
 local function is_ready()
-  return _loading_state == "READY"
+	return _loading_state == "READY"
 end
 
 -- Check if binary is currently loading (sync)
 local function is_loading()
-  return _loading_state == "DOWNLOADING" or _loading_state == "LOADING"
+	return _loading_state == "DOWNLOADING" or _loading_state == "LOADING"
 end
 
 -- Check if loading previously failed (sync)
 local function is_failed()
-  return _loading_state == "FAILED"
+	return _loading_state == "FAILED"
 end
 
 -- Set loading state (sync, for testing)
 local function set_loading_state(state)
-  _loading_state = state
+	_loading_state = state
 end
 
 -- Set loading error (sync, for testing)
 local function set_loading_error(err)
-  _loading_error = err
+	_loading_error = err
 end
 
 -- Get auto-download setting from config (sync)
 local function should_auto_download()
-  local config = require("hermes.config")
-  local download_cfg = config.get_download()
-  return download_cfg.auto ~= false
+	local config = require("hermes.config")
+	local download_cfg = config.get_download()
+	return download_cfg.auto ~= false
 end
 
 -- ============================================================================
@@ -200,84 +200,87 @@ end
 
 -- Handle READY state: execute function immediately
 local function handle_ready_state(fn)
-  fn()
-  return true
+	fn()
+	return true
 end
 
 -- Handle loading states: show warning and return
 local function handle_loading_state()
-  vim.notify("Hermes: Binary is still loading. Check :Hermes status for progress.", vim.log.levels.WARN)
-  return false
+	vim.notify("Hermes: Binary is still loading. Check :Hermes status for progress.", vim.log.levels.WARN)
+	return false
 end
 
 -- Handle FAILED state: show error and return
 local function handle_failed_state()
-  vim.notify("Hermes: Failed to load. Run :Hermes status for details or :Hermes log for errors.", vim.log.levels.ERROR)
-  return false
+	vim.notify(
+		"Hermes: Failed to load. Run :Hermes status for details or :Hermes log for errors.",
+		vim.log.levels.ERROR
+	)
+	return false
 end
 
 -- Handle successful load completion (sync state update)
 local function handle_load_success(loaded_module, fn)
-  _native = loaded_module
-  _loading_state = "READY"
-  vim.notify("Hermes: Ready", vim.log.levels.INFO)
-  fn()
+	_native = loaded_module
+	_loading_state = "READY"
+	vim.notify("Hermes: Ready", vim.log.levels.INFO)
+	fn()
 end
 
 -- Handle load failure (sync state update)
 local function handle_load_failure(err_msg, context)
-  _loading_state = "FAILED"
-  _loading_error = err_msg
-  vim.notify("Hermes: " .. context .. ". Run :Hermes status or :Hermes log for details.", vim.log.levels.ERROR)
+	_loading_state = "FAILED"
+	_loading_error = err_msg
+	vim.notify("Hermes: " .. context .. ". Run :Hermes status or :Hermes log for details.", vim.log.levels.ERROR)
 end
 
 -- Handle download completion and trigger load (async entry point)
 local function handle_download_complete(success, result, fn)
-  if not success then
-    handle_load_failure(tostring(result), "Binary download failed")
-    return
-  end
-  
-  -- Download successful, now load the binary
-  _loading_state = "LOADING"
-  
-  -- Use vim.schedule for the actual loading (only async part)
-  vim.schedule(function()
-    local ok, loaded = pcall(M._load_native_sync)
-    
-    if not ok then
-      handle_load_failure(tostring(loaded), "Failed to load binary")
-      return
-    end
-    
-    handle_load_success(loaded, fn)
-  end)
+	if not success then
+		handle_load_failure(tostring(result), "Binary download failed")
+		return
+	end
+
+	-- Download successful, now load the binary
+	_loading_state = "LOADING"
+
+	-- Use vim.schedule for the actual loading (only async part)
+	vim.schedule(function()
+		local ok, loaded = pcall(M._load_native_sync)
+
+		if not ok then
+			handle_load_failure(tostring(loaded), "Failed to load binary")
+			return
+		end
+
+		handle_load_success(loaded, fn)
+	end)
 end
 
 -- Handle auto-download disabled path (async entry point)
 local function handle_auto_download_disabled(fn)
-  _loading_state = "LOADING"
-  vim.notify("Hermes: Loading binary...", vim.log.levels.INFO)
-  
-  -- Use vim.schedule for the actual loading (only async part)
-  vim.schedule(function()
-    local binary = require("hermes.binary")
-    
-    local ok, loaded = pcall(function()
-      local bin_path = binary.load_existing_binary()
-      local lib, err = package.loadlib(bin_path, "luaopen_hermes")
-      if not lib then
-        error(string.format("Failed to load: %s", tostring(err)))
-      end
-      return lib()
-    end)
-    
-    if ok then
-      handle_load_success(loaded, fn)
-    else
-      handle_load_failure(tostring(loaded), "Failed to load binary (auto-download disabled)")
-    end
-  end)
+	_loading_state = "LOADING"
+	vim.notify("Hermes: Loading binary...", vim.log.levels.INFO)
+
+	-- Use vim.schedule for the actual loading (only async part)
+	vim.schedule(function()
+		local binary = require("hermes.binary")
+
+		local ok, loaded = pcall(function()
+			local bin_path = binary.load_existing_binary()
+			local lib, err = package.loadlib(bin_path, "luaopen_hermes")
+			if not lib then
+				error(string.format("Failed to load: %s", tostring(err)))
+			end
+			return lib()
+		end)
+
+		if ok then
+			handle_load_success(loaded, fn)
+		else
+			handle_load_failure(tostring(loaded), "Failed to load binary (auto-download disabled)")
+		end
+	end)
 end
 
 -- ============================================================================
@@ -286,51 +289,51 @@ end
 
 -- Load native module synchronously (can be tested with mocked deps)
 function M._load_native_sync()
-  if not _native then
-    local binary = require("hermes.binary")
-    local ok, result = pcall(binary.load_or_build)
-    
-    if not ok then
-      error("Hermes: Failed to load or build native binary: " .. tostring(result))
-    end
-    
-    _native = result
-  end
-  return _native
+	if not _native then
+		local binary = require("hermes.binary")
+		local ok, result = pcall(binary.load_or_build)
+
+		if not ok then
+			error("Hermes: Failed to load or build native binary: " .. tostring(result))
+		end
+
+		_native = result
+	end
+	return _native
 end
 
 -- Main async executor - minimal async code, delegates to sync functions
 local function execute_async(fn)
-  -- Check states in priority order (all sync checks)
-  if is_ready() then
-    return handle_ready_state(fn)
-  end
-  
-  if is_loading() then
-    return handle_loading_state()
-  end
-  
-  if is_failed() then
-    return handle_failed_state()
-  end
-  
-  -- NOT_LOADED: Need to start loading
-  local config = require("hermes.config")
-  local download_cfg = config.get_download and config.get_download() or { auto_download_binary = true, timeout = 60 }
-  _download_timeout = download_cfg.timeout or 60
-  
-  if not should_auto_download() then
-    return handle_auto_download_disabled(fn)
-  end
-  
-  -- Start async download
-  _loading_state = "DOWNLOADING"
-  vim.notify("Hermes: Downloading binary...", vim.log.levels.INFO)
-  
-  local binary = require("hermes.binary")
-  binary.ensure_binary_async(_download_timeout, function(success, result)
-    handle_download_complete(success, result, fn)
-  end)
+	-- Check states in priority order (all sync checks)
+	if is_ready() then
+		return handle_ready_state(fn)
+	end
+
+	if is_loading() then
+		return handle_loading_state()
+	end
+
+	if is_failed() then
+		return handle_failed_state()
+	end
+
+	-- NOT_LOADED: Need to start loading
+	local config = require("hermes.config")
+	local download_cfg = config.get_download and config.get_download() or { auto_download_binary = true, timeout = 60 }
+	_download_timeout = download_cfg.timeout or 60
+
+	if not should_auto_download() then
+		return handle_auto_download_disabled(fn)
+	end
+
+	-- Start async download
+	_loading_state = "DOWNLOADING"
+	vim.notify("Hermes: Downloading binary...", vim.log.levels.INFO)
+
+	local binary = require("hermes.binary")
+	binary.ensure_binary_async(_download_timeout, function(success, result)
+		handle_download_complete(success, result, fn)
+	end)
 end
 
 -- ============================================================================
@@ -341,179 +344,110 @@ end
 ---All configuration is passed to the Rust binary
 ---@param opts? HermesConfig User configuration options
 function M.setup(opts)
-  opts = opts or {}
-  
-  -- Store installation-related config locally
-  require("hermes.config").setup({
-    download = opts.download,
-    log = opts.log,
-  })
-  
-  -- Execute async with loading state management
-  execute_async(function()
-    M._load_native_sync().setup(opts)
-  end)
+	opts = opts or {}
+
+	-- Store installation-related config locally
+	require("hermes.config").setup({
+		download = opts.download,
+		log = opts.log,
+	})
+
+	-- Execute async with loading state management
+	execute_async(function()
+		M._load_native_sync().setup(opts)
+	end)
 end
 
 ---Connect to an ACP agent
 ---@param agent "opencode"|"copilot"|"gemini"|string Agent name (predefined or custom)
 ---@param opts? ConnectionOptions Connection options
 function M.connect(agent, opts)
-  execute_async(function()
-    M._load_native_sync().connect(agent, opts or {})
-  end)
+	execute_async(function()
+		M._load_native_sync().connect(agent, opts or {})
+	end)
 end
 
 ---Disconnect from agent(s)
 ---@param agents? string|string[] Agent name(s) to disconnect, nil for all
 function M.disconnect(agents)
-  execute_async(function()
-    M._load_native_sync().disconnect(agents)
-  end)
+	execute_async(function()
+		M._load_native_sync().disconnect(agents)
+	end)
 end
 
 ---Authenticate with an agent
 ---@param auth_method_id string Authentication method ID from ConnectionInitialized
 function M.authenticate(auth_method_id)
-  execute_async(function()
-    M._load_native_sync().authenticate(auth_method_id)
-  end)
+	execute_async(function()
+		M._load_native_sync().authenticate(auth_method_id)
+	end)
 end
 
 ---Create a new session
 ---@param opts? SessionOptions Session configuration options
 function M.create_session(opts)
-  execute_async(function()
-    M._load_native_sync().create_session(opts or {})
-  end)
+	execute_async(function()
+		M._load_native_sync().create_session(opts or {})
+	end)
 end
 
 ---Load an existing session
 ---@param session_id string Session ID to load
 ---@param opts? SessionOptions Session configuration options
 function M.load_session(session_id, opts)
-  execute_async(function()
-    M._load_native_sync().load_session(session_id, opts or {})
-  end)
+	execute_async(function()
+		M._load_native_sync().load_session(session_id, opts or {})
+	end)
 end
 
 ---List sessions with optional filtering
 ---@param opts? ListSessionsOptions Filter options
 function M.list_sessions(opts)
-  execute_async(function()
-    M._load_native_sync().list_sessions(opts)
-  end)
+	execute_async(function()
+		M._load_native_sync().list_sessions(opts)
+	end)
 end
 
 ---Send a prompt to the agent
 ---@param session_id string Session ID
 ---@param content PromptContent|PromptContent[] Content to send (single item or array)
 function M.prompt(session_id, content)
-  execute_async(function()
-    M._load_native_sync().prompt(session_id, content)
-  end)
+	execute_async(function()
+		M._load_native_sync().prompt(session_id, content)
+	end)
 end
 
 ---Cancel current operation
 ---@param session_id string Session ID
 function M.cancel(session_id)
-  execute_async(function()
-    M._load_native_sync().cancel(session_id)
-  end)
+	execute_async(function()
+		M._load_native_sync().cancel(session_id)
+	end)
 end
 
 ---Set session mode
 ---@param session_id string Session ID
 ---@param mode_id string Mode ID
 function M.set_mode(session_id, mode_id)
-  execute_async(function()
-    M._load_native_sync().set_mode(session_id, mode_id)
-  end)
+	execute_async(function()
+		M._load_native_sync().set_mode(session_id, mode_id)
+	end)
 end
 
 ---Respond to a request
 ---@param request_id string Request ID from autocommand
 ---@param response? any Response data
 function M.respond(request_id, response)
-  execute_async(function()
-    M._load_native_sync().respond(request_id, response)
-  end)
+	execute_async(function()
+		M._load_native_sync().respond(request_id, response)
+	end)
 end
 
 -- ============================================================================
 -- User Commands (:Hermes status, :Hermes log)
 -- ============================================================================
 
--- Create user commands with space-separated names
-vim.api.nvim_create_user_command("Hermes", function(opts)
-  local subcommand = opts.args
-  local state = M.get_loading_state()
-  local error_msg = M.get_loading_error()
-  local config = require("hermes.config")
-  local download_cfg = config.get_download and config.get_download() or {}
-  
-  if subcommand == "status" then
-    local status_lines = {
-      "Hermes Status",
-      "=============",
-      "",
-      "State: " .. state,
-    }
-    
-    if state == "NOT_LOADED" then
-      table.insert(status_lines, "The binary has not been loaded yet. Run any Hermes API method to start loading.")
-    elseif state == "DOWNLOADING" then
-      table.insert(status_lines, "The binary is being downloaded...")
-      table.insert(status_lines, "Timeout: " .. tostring(_download_timeout) .. " seconds")
-    elseif state == "LOADING" then
-      table.insert(status_lines, "The binary has been downloaded and is being loaded...")
-    elseif state == "READY" then
-      table.insert(status_lines, "Hermes is ready to use!")
-    elseif state == "FAILED" then
-      table.insert(status_lines, "Loading failed with error:")
-      table.insert(status_lines, error_msg or "Unknown error")
-    end
-    
-    table.insert(status_lines, "")
-    table.insert(status_lines, "Configuration:")
-    local auto_download = download_cfg.auto_download_binary
-    if auto_download == nil then
-      auto_download = true
-    end
-    table.insert(status_lines, "  Auto-download: " .. tostring(auto_download))
-    table.insert(status_lines, "  Version: " .. tostring(download_cfg.version or "latest"))
-    table.insert(status_lines, "  Timeout: " .. tostring(download_cfg.timeout or 60) .. " seconds")
-    
-    vim.notify(table.concat(status_lines, "\n"), vim.log.levels.INFO)
-    
-  elseif subcommand == "log" or subcommand == "logs" then
-    -- Show recent log messages
-    local log_lines = {
-      "Hermes Log",
-      "==========",
-      "",
-      "Recent log messages will appear here.",
-      "Use :messages to see all notifications.",
-      "",
-      "Current State: " .. state,
-    }
-    
-    if error_msg then
-      table.insert(log_lines, "Last Error: " .. error_msg)
-    end
-    
-    vim.notify(table.concat(log_lines, "\n"), vim.log.levels.INFO)
-    
-  else
-    vim.notify("Unknown Hermes command: " .. tostring(subcommand) .. ". Use :Hermes status or :Hermes log", vim.log.levels.ERROR)
-  end
-end, {
-  nargs = 1,
-  complete = function(_ArgLead, _CmdLine, _CursorPos)
-    return { "status", "log", "logs" }
-  end,
-  desc = "Hermes commands: status, log"
-})
+
 
 -- Export internal functions for testing
 M._is_ready = is_ready
