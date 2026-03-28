@@ -83,8 +83,9 @@ describe("hermes.download", function()
       
       local ok, err = download.download("http://example.com/file", "/tmp/test")
       
-      assert.is_false(ok)
-      assert.truthy(err:match("No download tool available"))
+      -- Combined assertion: should fail with appropriate error message
+      assert.is_true(not ok and err:match("No download tool available") ~= nil,
+        "Should return false with 'No download tool available' error")
     end)
     
     it("detects download command failure", function()
@@ -94,8 +95,8 @@ describe("hermes.download", function()
       
       local ok, err = download.download("http://example.com/file", "/tmp/test")
       
-      assert.is_false(ok)
-      assert.is_not_nil(err)
+      -- Combined assertion: should fail with error message
+      assert.is_true(not ok and err ~= nil, "Should return false with error message")
     end)
     
     it("falls back to PowerShell on Windows", function()

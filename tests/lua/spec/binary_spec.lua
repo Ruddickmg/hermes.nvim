@@ -191,10 +191,10 @@ describe("hermes.binary", function()
       -- Manually copy the file to simulate what build_from_source should do
       local result, err = uv.fs_copyfile(mock_built_lib, final_path)
       
-      assert.is_true(result, "Failed to copy: " .. (err or "unknown error"))
-      -- Verify the file was copied to the correct path (with platform suffix)
-      assert.equals(1, vim.fn.filereadable(expected_final_path), 
-        "Library should be copied to: " .. expected_final_path .. " (expected name: " .. expected_bin_name .. ")")
+      -- Verify both that copy succeeded AND file exists at expected path
+      local file_exists = vim.fn.filereadable(expected_final_path) == 1
+      assert.is_true(result and file_exists, 
+        "Failed to copy: " .. (err or "unknown error") .. " or file not found at: " .. expected_final_path)
     end)
     
     it("uses correct filename format consistent with get_binary_path()", function()
@@ -386,10 +386,9 @@ describe("hermes.binary", function()
         return binary.load_or_build()
       end)
       
-      -- Should succeed and return a table (the native module)
-      assert.is_true(ok, "load_or_build should succeed with real binary: " .. tostring(result))
-      -- Result is a table when successful
-      assert.equals("table", type(result), "Should return native module as table")
+      -- Should succeed and return a table (the native module) - combined assertion
+      assert.is_true(ok and type(result) == "table", 
+        "load_or_build should succeed and return native module table: " .. tostring(result))
     end)
   end)
 
@@ -436,10 +435,9 @@ describe("hermes.binary", function()
         return callback_called
       end)
       
-      -- Callback should be called since no download needed
-      assert.is_true(callback_called, "Callback should be called when binary exists")
-      assert.is_true(callback_success, "Should report success when binary exists")
-      assert.is_not_nil(callback_result, "Should return binary path")
+      -- Callback should be called with success=true and a valid path
+      assert.is_true(callback_called and callback_success and callback_result ~= nil, 
+        "Callback should be called with success and binary path when binary exists")
     end)
     
     it("downloads when binary is missing", function()

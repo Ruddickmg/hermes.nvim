@@ -205,11 +205,10 @@ describe("hermes.init (main API)", function()
 			hermes = require("hermes")
 		end)
 
-		it("get_loading_state returns initial state", function()
+		it("get_loading_state returns string type initially", function()
 			local state = hermes.get_loading_state()
-			-- Initial state before any API calls should be NOT_LOADED
-			assert.is_not_nil(state)
-			assert.is_true(type(state) == "string")
+			-- Initial state before any API calls should be a string (NOT_LOADED)
+			assert.equals("string", type(state))
 		end)
 
 		it("get_loading_error returns nil initially", function()
@@ -218,14 +217,13 @@ describe("hermes.init (main API)", function()
 			assert.is_nil(error_msg)
 		end)
 
-		it("get_loading_state changes after setup", function()
+		it("get_loading_state returns string after setup", function()
 			-- After setup, state should progress (async, so we can't check exact state)
 			-- But we can verify the function returns a string
 			hermes.setup({ download = { auto = false } })
 			
 			local after_state = hermes.get_loading_state()
-			assert.is_not_nil(after_state)
-			assert.is_true(type(after_state) == "string")
+			assert.equals("string", type(after_state))
 		end)
 	end)
 
@@ -284,74 +282,113 @@ describe("hermes.init (main API)", function()
 			hermes._set_loading_error(nil)
 		end)
 
+		it("_handle_ready_state returns true", function()
+			local test_fn = function() end
+			
+			local result = hermes._handle_ready_state(test_fn)
+			
+			assert.is_true(result)
+		end)
+
 		it("_handle_ready_state executes function immediately", function()
 			local executed = false
 			local test_fn = function()
 				executed = true
 			end
 			
-			local result = hermes._handle_ready_state(test_fn)
+			hermes._handle_ready_state(test_fn)
 			
-			assert.is_true(result)
 			assert.is_true(executed)
 		end)
 
-		it("_handle_loading_state shows warning and returns false", function()
-			local notify_calls = {}
-			local original_notify = vim.notify
-			vim.notify = function(msg, level)
-				table.insert(notify_calls, { msg = msg, level = level })
-			end
-			
+		it("_handle_loading_state returns false", function()
 			local result = hermes._handle_loading_state()
 			
-			vim.notify = original_notify
-			
 			assert.is_false(result)
-			assert.is_true(#notify_calls > 0)
-			assert.is_not_nil(notify_calls[1].msg:find("still loading"))
 		end)
 
-		it("_handle_failed_state shows error and returns false", function()
+		it("_handle_loading_state shows loading warning", function()
 			local notify_calls = {}
 			local original_notify = vim.notify
 			vim.notify = function(msg, level)
 				table.insert(notify_calls, { msg = msg, level = level })
 			end
 			
-			local result = hermes._handle_failed_state()
+			hermes._handle_loading_state()
 			
 			vim.notify = original_notify
 			
-			assert.is_false(result)
-			assert.is_true(#notify_calls > 0)
-			assert.is_not_nil(notify_calls[1].msg:find("Failed to load"))
+			assert.is_true(#notify_calls > 0 and notify_calls[1].msg:find("still loading") ~= nil)
 		end)
 
-		it("_handle_load_success updates state and executes function", function()
+		it("_handle_failed_state returns false", function()
+			local result = hermes._handle_failed_state()
+			
+			assert.is_false(result)
+		end)
+
+		it("_handle_failed_state shows error message", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+			
+			hermes._handle_failed_state()
+			
+			vim.notify = original_notify
+			
+			assert.is_true(#notify_calls > 0 and notify_calls[1].msg:find("Failed to load") ~= nil)
+		end)
+
+		it("_handle_load_success sets state to READY", function()
+			local test_fn = function() end
+			local mock_module = { test = true }
+			
+			hermes._handle_load_success(mock_module, test_fn)
+			
+			assert.equals("READY", hermes.get_loading_state())
+		end)
+
+		it("_handle_load_success executes callback function", function()
 			local executed = false
 			local test_fn = function()
 				executed = true
 			end
 			local mock_module = { test = true }
 			
+			hermes._handle_load_success(mock_module, test_fn)
+			
+			assert.is_true(executed)
+		end)
+
+		it("_handle_load_success shows ready notification", function()
 			local notify_calls = {}
 			local original_notify = vim.notify
 			vim.notify = function(msg, level)
 				table.insert(notify_calls, { msg = msg, level = level })
 			end
 			
-			hermes._handle_load_success(mock_module, test_fn)
+			hermes._handle_load_success({}, function() end)
 			
 			vim.notify = original_notify
 			
-			assert.is_true(executed)
-			assert.equals("READY", hermes.get_loading_state())
-			assert.is_true(#notify_calls > 0)
-			assert.is_not_nil(notify_calls[1].msg:find("Ready"))
+			assert.is_true(#notify_calls > 0 and notify_calls[1].msg:find("Ready") ~= nil)
 		end)
 
-		it("_handle_load_failure updates state and error", function()
+		it("_handle_load_failure sets state to FAILED", function()
+			hermes._handle_load_failure("test error", "Test context")
+			
+			assert.equals("FAILED", hermes.get_loading_state())
+		end)
+
+		it("_handle_load_failure sets error message", function()
+			hermes._handle_load_failure("test error", "Test context")
+			
+			assert.equals("test error", hermes.get_loading_error())
+		end)
+
+		it("_handle_load_failure shows error notification", function()
 			local notify_calls = {}
 			local original_notify = vim.notify
 			vim.notify = function(msg, level)
@@ -362,10 +399,7 @@ describe("hermes.init (main API)", function()
 			
 			vim.notify = original_notify
 			
-			assert.equals("FAILED", hermes.get_loading_state())
-			assert.equals("test error", hermes.get_loading_error())
-			assert.is_true(#notify_calls > 0)
-			assert.is_not_nil(notify_calls[1].msg:find("Test context"))
+			assert.is_true(#notify_calls > 0 and notify_calls[1].msg:find("Test context") ~= nil)
 		end)
 	end)
 
