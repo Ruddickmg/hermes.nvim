@@ -41,28 +41,21 @@ impl Handler {
                     request_id
                 });
                 if Self::listener_attached(command.to_string()) {
-                    serde_json::from_value::<Object>(data)
-                        .map(|obj| {
-                            let opts = ExecAutocmdsOpts::builder()
-                                .patterns(command.to_string())
-                                .data(obj)
-                                .group(GROUP)
-                                .build();
-                            debug!(
-                                "Executing autocommand: {} with options: {:#?}",
-                                command, opts
-                            );
-                            nvim_oxi::api::exec_autocmds(["User"], &opts).inspect_err(|err| {
-                                error!("Error executing autocommand: '{}': {:#?}", command, err)
-                            })
-                        })
-                        .inspect_err(|e| {
-                            error!(
-                                "Failed to deserialize autocommand data for '{}': {:#?}",
-                                command, e
-                            )
-                        })
-                        .ok();
+                    // NOTE: It's practically impossible for a lua object to fail conversion into json which makes testing impossible as well. If somehow this fails we can refactor, until then a panic is okay here
+                    let obj = serde_json::from_value::<Object>(data)
+                        .expect("Failed to parse json from lua object");
+                    let opts = ExecAutocmdsOpts::builder()
+                        .patterns(command.to_string())
+                        .data(obj)
+                        .group(GROUP)
+                        .build();
+                    debug!(
+                        "Executing autocommand: {} with options: {:#?}",
+                        command, opts
+                    );
+                    if let Err(err) = nvim_oxi::api::exec_autocmds(["User"], &opts) {
+                        error!("Error executing autocommand: '{}': {:#?}", command, err);
+                    }
                 } else if let Some(request_id) = request {
                     warn!(
                         "No listener attached for command '{}'. Using default implementation",

@@ -66,13 +66,3 @@ impl<T> TransmitToNvim<T> for NvimMessenger<T> {
             .map_err(|e| Error::Internal(e.to_string()))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    // Note: These tests require Neovim to be available at link time.
-    // They will fail to compile in a regular `cargo test` environment.
-    // Run with: cargo test --features neovim-tests or use #[nvim_oxi::test]
-
-    // For now, these are placeholder tests to ensure the code compiles.
-    // The actual functionality is tested via integration tests.
-}
