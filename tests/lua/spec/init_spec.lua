@@ -140,10 +140,7 @@ describe("hermes.init (main API)", function()
 		end)
 		
 		it("exports setup from Rust", function()
-			-- Skip if binary not available (e.g., in CI without target/release)
-			if not binary_available then
-				return
-			end
+			-- Single assertion: if native is nil, this will error with clear message
 			assert.is_function(native.setup)
 		end)
 		
