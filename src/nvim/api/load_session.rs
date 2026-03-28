@@ -24,7 +24,8 @@ pub struct LoadSessionConfig {
 
 impl FromObject for LoadSessionConfig {
     fn from_object(obj: Object) -> Result<Self, Error> {
-        let dict: Dictionary = obj.try_into()?;
+        // Convert Object to Dictionary, handling empty Lua tables
+        let dict = crate::nvim::configuration::dict_from_object(obj)?;
 
         let cwd: Option<PathBuf> = dict.get("cwd").and_then(|obj| {
             obj.clone()
