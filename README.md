@@ -115,7 +115,7 @@ If your platform isn't supported and building from source fails:
    - Full error messages from `:Hermes build` or `cargo build --release`
    - Architecture info from `uname -m` (or `uname -a` on macOS)
 
-### Version Management
+## Commands
 
 **Check status:**
 ```
@@ -141,21 +141,11 @@ Shows installed version, platform info, and binary status.
 ```
 Fetches the latest release from GitHub and replaces the current binary.
 
-**Install specific version:**
-```lua
-require("hermes").setup({
-  download = {
-    version = "v0.2.0",  -- or "1.2.3" (v prefix optional)
-  }
-})
-```
-Then run `:Hermes install` to download that version.
-
 **Manual install:**
 ```
 :Hermes install
 ```
-Force re-download of the configured version.
+Download the currently configured version.
 
 **Clean installation:**
 ```

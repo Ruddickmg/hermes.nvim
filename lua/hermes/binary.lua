@@ -165,19 +165,30 @@ function M.build_from_source(dest_dir)
 end
 
 ---Ensure binary is available (synchronous)
----Downloads binary only if it doesn't exist (first time setup)
+---Downloads binary only if it doesn't exist or version differs from config
 ---@return string path Path to binary
 function M.ensure_binary()
   local bin_path = M.get_binary_path()
+  local ver_file = M.get_version_file()
+  local version = require("hermes.version")
+  local wanted_ver = version.get_wanted()
   
-  -- Check if binary already exists - if yes, just use it
+  -- Check if binary already exists
   if vim.fn.filereadable(bin_path) == 1 then
-    return bin_path
+    -- Binary exists - check if version matches config
+    if vim.fn.filereadable(ver_file) == 1 then
+      local current_ver = vim.fn.readfile(ver_file)[1]
+      -- If versions match, use existing binary
+      if current_ver == wanted_ver then
+        return bin_path
+      end
+      -- Versions differ - need to download new version
+    end
+    -- No version file or version mismatch - will download new version
   end
   
-  -- Binary doesn't exist - need to download or build
+  -- Binary doesn't exist or version differs - need to download
   local platform = require("hermes.platform")
-  local version = require("hermes.version")
   
   -- Check if platform is supported for pre-built binaries
   local platform_key = platform.get_platform_key()
@@ -353,20 +364,29 @@ function M.ensure_binary_async(timeout, on_complete)
   -- Use vim.schedule to make the entire process async
   vim.schedule(function()
     local bin_path = M.get_binary_path()
+    local ver_file = M.get_version_file()
+    local wanted_ver = version.get_wanted()
     
     -- Check if binary already exists
     if vim.fn.filereadable(bin_path) == 1 then
-      on_complete(true, bin_path)
-      return
+      -- Binary exists - check if version matches config
+      if vim.fn.filereadable(ver_file) == 1 then
+        local current_ver = vim.fn.readfile(ver_file)[1]
+        -- If versions match, use existing binary
+        if current_ver == wanted_ver then
+          on_complete(true, bin_path)
+          return
+        end
+        -- Versions differ - will download new version
+      end
+      -- No version file or version mismatch - will download
     end
     
-    -- Binary doesn't exist, need to download
-    local wanted_ver = version.get_wanted()
+    -- Binary doesn't exist or version differs, need to download
     local download_ok, download_err = M.download(bin_path, wanted_ver)
     
     if download_ok then
       -- Save version for reference
-      local ver_file = M.get_version_file()
       vim.fn.writefile({wanted_ver}, ver_file)
       on_complete(true, bin_path)
     else
