@@ -338,3 +338,26 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
     assert!(result.is_ok(), "Send should succeed even with no listener");
     Ok(())
 }
+
+#[nvim_oxi::test]
+fn test_no_listener_no_request_triggers_warn_path() -> nvim_oxi::Result<()> {
+    // Test line 67: "No listener attached for command" warn! path
+    // This triggers when no autocommand listener is attached AND no request is provided
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
+        .expect("Handler creation should succeed");
+
+    // Call execute_autocommand (not execute_autocommand_request) with no listener
+    // This passes None for response_data, hitting the else branch at line 79-80
+    let result = tokio_test::block_on(handler.execute_autocommand(
+        "TestWarnCommand", // No listener for this command, no request
+        serde_json::json!({"data": "value"}),
+    ));
+
+    // Send should succeed (warn is logged, not propagated)
+    assert!(
+        result.is_ok(),
+        "Send should succeed even with no listener and no request"
+    );
+    Ok(())
+}
