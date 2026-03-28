@@ -61,6 +61,7 @@ end
 ---@param dest_path string Destination path for binary
 ---@param ver string Version to download
 ---@return boolean success Whether download succeeded
+---@return table|nil error Error info table if failed (structured error from download module)
 function M.download(dest_path, ver)
   local platform = require("hermes.platform")
   local download_mod = get_download()
@@ -71,7 +72,14 @@ function M.download(dest_path, ver)
   -- Get platform info
   local platform_key = platform.get_platform_key()
   if not platform_key then
-    return false, "Unable to determine platform"
+    return false, {
+      message = "Unable to determine platform",
+      url = nil,
+      http_code = nil,
+      tool = nil,
+      exit_code = nil,
+      stderr = nil,
+    }
   end
   
   -- If version is "latest", fetch the actual latest version
@@ -91,7 +99,8 @@ function M.download(dest_path, ver)
   local ok, err = download_mod.download(url, dest_path)
   
   if not ok then
-    return false, err or "Download failed"
+    -- err is now a structured error table from download module
+    return false, err
   end
   
   -- Make executable (Unix-like systems)

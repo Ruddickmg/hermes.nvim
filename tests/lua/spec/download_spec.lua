@@ -83,9 +83,14 @@ describe("hermes.download", function()
       
       local ok, err = download.download("http://example.com/file", "/tmp/test")
       
-      -- Combined assertion: should fail with appropriate error message
-      assert.is_true(not ok and err:match("No download tool available") ~= nil,
-        "Should return false with 'No download tool available' error")
+      -- err should now be a structured error table
+      assert.is_false(ok)
+      assert.is_table(err)
+      assert.is_not_nil(err.message)
+      assert.truthy(err.message:match("No download tool available"))
+      assert.equals("http://example.com/file", err.url)
+      assert.is_nil(err.http_code)
+      assert.is_nil(err.tool)
     end)
     
     it("detects download command failure", function()
@@ -156,7 +161,11 @@ describe("hermes.download", function()
       
       -- Should fail because file is too small
       assert.is_false(ok)
-      assert.truthy(err:match("too small") or err:match("empty"))
+      assert.is_table(err)
+      assert.truthy(err.message:match("too small") or err.message:match("empty"))
+      assert.equals("http://example.com/file", err.url)
+      assert.equals(200, err.http_code) -- Should capture HTTP 200 from curl
+      assert.equals("curl", err.tool)
       
       uv_stub:revert()
       if unlink_stub then unlink_stub:revert() end
@@ -180,20 +189,39 @@ describe("hermes.download", function()
     end)
     
     it("successfully downloads with PowerShell", function()
-      local exec_stub = stub(vim.fn, "executable")
-      exec_stub.on_call_with("curl").returns(0)
-      exec_stub.on_call_with("wget").returns(0)
-      exec_stub.on_call_with("powershell").returns(1)
+       local exec_stub = stub(vim.fn, "executable")
+       exec_stub.on_call_with("curl").returns(0)
+       exec_stub.on_call_with("wget").returns(0)
+       exec_stub.on_call_with("powershell").returns(1)
+       
+       stub(vim.fn, "system").returns("")
+       stub(vim.uv or vim.loop, "fs_stat").returns({ size = 1000 })
+       
+       local ok, err = download.download("http://example.com/file", "/tmp/test")
+       
+       assert.is_true(ok)
+       assert.is_nil(err)
+       
+       exec_stub:revert()
+     end)
+    
+    it("captures HTTP code from curl output", function()
+      stub(vim.fn, "executable").returns(1)
       
-      stub(vim.fn, "system").returns("")
-      stub(vim.uv or vim.loop, "fs_stat").returns({ size = 1000 })
+      -- Mock curl to return a 200 response code at end of output
+      stub(vim.fn, "system").returns("200")
+      -- Use size < 100 to trigger the "too small" error
+      stub(vim.uv or vim.loop, "fs_stat").returns({ size = 50 })
+      stub(vim.uv or vim.loop, "fs_unlink")
       
       local ok, err = download.download("http://example.com/file", "/tmp/test")
       
-      assert.is_true(ok)
-      assert.is_nil(err)
-      
-      exec_stub:revert()
+      -- Small file triggers error but should have captured HTTP code 200
+      assert.is_false(ok)
+      assert.is_table(err)
+      assert.equals("http://example.com/file", err.url)
+      assert.equals("curl", err.tool)
+      assert.equals(200, err.http_code)
     end)
     
     describe("User-Agent header", function()

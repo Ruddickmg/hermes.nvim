@@ -45,15 +45,30 @@ end
 ---@param url string URL to download
 ---@param dest_path string Destination path
 ---@return boolean success Whether download succeeded
----@return string|nil error Error message if failed
+---@return table|nil error Error info table if failed, containing:
+---   - message: Human readable error message
+---   - url: URL that was attempted
+---   - http_code: HTTP status code (if available)
+---   - tool: Which download tool was used
+---   - exit_code: Shell exit code
+---   - stderr: Raw error output from tool
 function M.download(url, dest_path)
   local tool = M.get_available_tool()
   
   if not tool then
-    return false, "No download tool available (tried curl, wget, PowerShell). Please install curl or wget."
+    return false, {
+      message = "No download tool available (tried curl, wget, PowerShell). Please install curl or wget.",
+      url = url,
+      http_code = nil,
+      tool = nil,
+      exit_code = nil,
+      stderr = nil,
+    }
   end
   
   local cmd
+  local http_code = nil
+  
   if tool == "curl" then
     cmd = { "curl", "-sL", "-H", "User-Agent: " .. USER_AGENT, "-o", dest_path, url }
   elseif tool == "wget" then
@@ -68,13 +83,32 @@ function M.download(url, dest_path)
   end
   
   local result = vim.fn.system(cmd)
+  local exit_code = vim.v.shell_error
   
-  if vim.v.shell_error ~= 0 then
-    -- Check if it's a command not found error vs network error
-    if result:match("command not found") or result:match("not installed") or result:match("is not recognized") then
-      return false, tool .. " appears to be installed but execution failed: " .. result
+  -- For curl, extract HTTP code from the end of output (since we used -w %{http_code})
+  if tool == "curl" and result then
+    -- The HTTP code is appended to stdout after the file is written
+    http_code = result:match("(%d%d%d)$")
+    if http_code then
+      http_code = tonumber(http_code)
     end
-    return false, result
+  end
+  
+  if exit_code ~= 0 then
+    -- Check if it's a command not found error vs network error
+    local error_msg = result
+    if result:match("command not found") or result:match("not installed") or result:match("is not recognized") then
+      error_msg = tool .. " appears to be installed but execution failed: " .. result
+    end
+    
+    return false, {
+      message = error_msg,
+      url = url,
+      http_code = http_code,
+      tool = tool,
+      exit_code = exit_code,
+      stderr = result,
+    }
   end
   
   -- Verify file was downloaded and has reasonable size using vim.uv for cross-platform compatibility
@@ -83,7 +117,14 @@ function M.download(url, dest_path)
   if not stat or stat.size < 100 then
     -- Use vim.uv.fs_unlink for cross-platform file deletion
     uv.fs_unlink(dest_path)
-    return false, "Downloaded file is too small or empty"
+    return false, {
+      message = "Downloaded file is too small or empty",
+      url = url,
+      http_code = http_code or 200,
+      tool = tool,
+      exit_code = 0,
+      stderr = "File size: " .. (stat and stat.size or 0) .. " bytes",
+    }
   end
   
   return true, nil
