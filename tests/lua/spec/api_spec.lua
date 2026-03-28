@@ -41,19 +41,6 @@ describe("Hermes API Endpoints (E2E)", function()
 	-- Track autocommands for cleanup
 	local test_autocmds = {}
 
-	-- Helper: Ensure hermes augroup exists and is cleared
-	local function setup_hermes_group()
-		-- Clear existing hermes autocommands if group exists
-		local ok, group_id = pcall(vim.api.nvim_get_augroup_id, "hermes")
-		if ok then
-			pcall(function()
-				vim.api.nvim_clear_autocmds({ group = group_id })
-			end)
-		end
-		-- Create fresh group
-		return vim.api.nvim_create_augroup("hermes", { clear = true })
-	end
-
 	-- Helper: Full setup for endpoint test
 	local function setup_endpoint_test(_agent_name)
 		clear_modules()
@@ -85,58 +72,6 @@ describe("Hermes API Endpoints (E2E)", function()
 			vim.wait(100)
 		end
 		return hermes.get_loading_state() == "READY"
-	end
-
-	-- Helper: Wait for autocommand and return received data
-	local function wait_for_autocommand(pattern, timeout_ms)
-		timeout_ms = timeout_ms or 30000
-		local received = false
-		local data = nil
-		local error_msg = nil
-
-		-- Ensure hermes group exists
-		local group_id = vim.api.nvim_create_augroup("hermes", { clear = false })
-
-		-- Register autocommand listener with error handling
-		local ok, autocmd_result = pcall(function()
-			return vim.api.nvim_create_autocmd("User", {
-				group = group_id,
-				pattern = pattern,
-				once = true,
-				callback = function(args)
-					-- Wrap in pcall to catch any errors in the callback itself
-					local cb_ok, cb_result = pcall(function()
-						received = true
-						data = args.data
-					end)
-					if not cb_ok then
-						error_msg = "Error in autocommand callback: " .. tostring(cb_result)
-					end
-				end,
-			})
-		end)
-
-		if not ok then
-			return false, nil, "Failed to create autocommand: " .. tostring(autocmd_result)
-		end
-
-		table.insert(test_autocmds, autocmd_result)
-
-		-- Wait for the autocommand to fire
-		local start_time = vim.loop.now()
-		while not received and (vim.loop.now() - start_time) < timeout_ms do
-			vim.wait(100)
-		end
-
-		if error_msg then
-			return false, nil, error_msg
-		end
-
-		if not received then
-			return false, nil, "Autocommand '" .. pattern .. "' not received within " .. (timeout_ms / 1000) .. "s"
-		end
-
-		return true, data, nil
 	end
 
 	-- Helper: Cleanup after test
@@ -255,15 +190,13 @@ describe("Hermes API Endpoints (E2E)", function()
 
 			-- Setup listener for Authenticated
 			local received = false
-			local data = nil
 			local autocmd_ok, autocmd_id = pcall(function()
 				return vim.api.nvim_create_autocmd("User", {
 					group = vim.api.nvim_create_augroup("hermes", { clear = false }),
 					pattern = "Authenticated",
 					once = true,
-					callback = function(args)
+					callback = function(_args)
 						received = true
-						data = args.data
 					end,
 				})
 			end)
@@ -276,11 +209,10 @@ describe("Hermes API Endpoints (E2E)", function()
 			end)
 			assert.is_true(ok, "authenticate() should not crash: " .. tostring(err))
 
-			-- Wait for and verify autocommand
-			local wait_ok = vim.wait(30000, function()
+			-- Wait for autocommand (may not fire immediately - agent handles auth asynchronously)
+			vim.wait(30000, function()
 				return received
 			end, 100)
-			-- Note: Authenticated may not fire immediately - agent handles auth asynchronously
 		end)
 
 		it("create_session endpoint callable with opencode", function()
@@ -299,15 +231,13 @@ describe("Hermes API Endpoints (E2E)", function()
 
 			-- Setup listener for SessionCreated
 			local received = false
-			local data = nil
 			local autocmd_ok, autocmd_id = pcall(function()
 				return vim.api.nvim_create_autocmd("User", {
 					group = vim.api.nvim_create_augroup("hermes", { clear = false }),
 					pattern = "SessionCreated",
 					once = true,
-					callback = function(args)
+					callback = function(_args)
 						received = true
-						data = args.data
 					end,
 				})
 			end)
@@ -320,12 +250,12 @@ describe("Hermes API Endpoints (E2E)", function()
 			end)
 			assert.is_true(ok, "create_session() should not crash: " .. tostring(err))
 
-			-- Wait for and verify autocommand is received (may take time for agent to respond)
-			local wait_ok = vim.wait(30000, function()
-				return received
-			end, 100)
+			-- Wait for autocommand (may take time for agent to respond)
 			-- Note: SessionCreated may not fire immediately or may require actual session creation
 			-- If it doesn't fire, that's ok - the API call itself succeeded
+			vim.wait(30000, function()
+				return received
+			end, 100)
 		end)
 
 		it("load_session endpoint callable with opencode", function()
@@ -344,15 +274,13 @@ describe("Hermes API Endpoints (E2E)", function()
 
 			-- Setup listener for SessionLoaded
 			local received = false
-			local data = nil
 			local autocmd_ok, autocmd_id = pcall(function()
 				return vim.api.nvim_create_autocmd("User", {
 					group = vim.api.nvim_create_augroup("hermes", { clear = false }),
 					pattern = "SessionLoaded",
 					once = true,
-					callback = function(args)
+					callback = function(_args)
 						received = true
-						data = args.data
 					end,
 				})
 			end)
@@ -365,11 +293,10 @@ describe("Hermes API Endpoints (E2E)", function()
 			end)
 			assert.is_true(ok, "load_session() should not crash: " .. tostring(err))
 
-			-- Wait for and verify autocommand
-			local wait_ok = vim.wait(30000, function()
+			-- Wait for autocommand (may not fire immediately)
+			vim.wait(30000, function()
 				return received
 			end, 100)
-			-- Note: SessionLoaded may not fire immediately
 		end)
 
 		it("list_sessions endpoint callable with opencode", function()
@@ -388,15 +315,13 @@ describe("Hermes API Endpoints (E2E)", function()
 
 			-- Setup listener for SessionsListed
 			local received = false
-			local data = nil
 			local autocmd_ok, autocmd_id = pcall(function()
 				return vim.api.nvim_create_autocmd("User", {
 					group = vim.api.nvim_create_augroup("hermes", { clear = false }),
 					pattern = "SessionsListed",
 					once = true,
-					callback = function(args)
+					callback = function(_args)
 						received = true
-						data = args.data
 					end,
 				})
 			end)
@@ -409,11 +334,10 @@ describe("Hermes API Endpoints (E2E)", function()
 			end)
 			assert.is_true(ok, "list_sessions() should not crash: " .. tostring(err))
 
-			-- Wait for and verify autocommand
-			local wait_ok = vim.wait(30000, function()
+			-- Wait for autocommand (may not fire immediately)
+			vim.wait(30000, function()
 				return received
 			end, 100)
-			-- Note: SessionsListed may not fire immediately
 		end)
 
 		it("prompt endpoint callable with opencode", function()
@@ -432,15 +356,13 @@ describe("Hermes API Endpoints (E2E)", function()
 
 			-- Setup listener for Prompted
 			local received = false
-			local data = nil
 			local autocmd_ok, autocmd_id = pcall(function()
 				return vim.api.nvim_create_autocmd("User", {
 					group = vim.api.nvim_create_augroup("hermes", { clear = false }),
 					pattern = "Prompted",
 					once = true,
-					callback = function(args)
+					callback = function(_args)
 						received = true
-						data = args.data
 					end,
 				})
 			end)
@@ -450,17 +372,15 @@ describe("Hermes API Endpoints (E2E)", function()
 			-- Call prompt
 			ok, err = pcall(function()
 				hermes.prompt("test-session-id", {
-					type = "text",
-					text = "Hello, this is a test message",
+					{ type = "text", text = "Hello, this is a test message" }
 				})
 			end)
 			assert.is_true(ok, "prompt() should not crash: " .. tostring(err))
 
-			-- Wait for and verify autocommand
-			local wait_ok = vim.wait(30000, function()
+			-- Wait for autocommand (may not fire immediately)
+			vim.wait(30000, function()
 				return received
 			end, 100)
-			-- Note: Prompted may not fire immediately
 		end)
 
 		it("cancel endpoint callable with opencode", function()
@@ -500,15 +420,13 @@ describe("Hermes API Endpoints (E2E)", function()
 
 			-- Setup listener for ModeUpdated
 			local received = false
-			local data = nil
 			local autocmd_ok, autocmd_id = pcall(function()
 				return vim.api.nvim_create_autocmd("User", {
 					group = vim.api.nvim_create_augroup("hermes", { clear = false }),
 					pattern = "ModeUpdated",
 					once = true,
-					callback = function(args)
+					callback = function(_args)
 						received = true
-						data = args.data
 					end,
 				})
 			end)
@@ -521,15 +439,21 @@ describe("Hermes API Endpoints (E2E)", function()
 			end)
 			assert.is_true(ok, "set_mode() should not crash: " .. tostring(err))
 
-			-- Wait for and verify autocommand
-			local wait_ok = vim.wait(30000, function()
+			-- Wait for autocommand (may not fire immediately)
+			vim.wait(30000, function()
 				return received
 			end, 100)
-			-- Note: ModeUpdated may not fire immediately
 		end)
 	end)
 
 	describe("with copilot agent (for permission requests)", function()
+		-- NOTE: This test verifies that the respond() endpoint is callable and handles
+		-- edge cases gracefully. We cannot test a full permission request/response flow
+		-- because current ACP agents (copilot, opencode) handle file/terminal operations
+		-- using internal tools rather than the ACP PermissionRequest protocol.
+		-- See src/acp/handler/client.rs and the ignored test in tests/e2e/src/read_file.rs
+		-- for more context. When copilot does send a PermissionRequest, it will trigger
+		-- the autocommand and user code can respond via hermes.respond(request_id, response).
 		after_each(function()
 			cleanup_test()
 		end)
@@ -548,12 +472,23 @@ describe("Hermes API Endpoints (E2E)", function()
 
 			vim.wait(500)
 
-			-- Try to respond (may fail without permission request, but shouldn't crash)
+			-- Try to respond with a valid UUID format
+			-- If there's no pending request, it will fail gracefully with "No pending request" error
 			ok, err = pcall(function()
-				hermes.respond("test-request-id", "approve")
+				hermes.respond("550e8400-e29b-41d4-a716-446655440000", { approved = true, message = "Test approval" })
 			end)
 
-			assert.is_true(ok, "respond() should not crash: " .. tostring(err))
+			-- respond() should be callable without crashing
+			-- It will either succeed (if there's a pending request) or fail gracefully
+			if not ok then
+				-- Verify it's the expected "no pending request" error, not a crash/panic
+				assert.is_true(
+					tostring(err):match("No matching request found") ~= nil or
+					tostring(err):match("No pending request") ~= nil,
+					"respond() should fail gracefully with 'no pending request' error, not crash: " .. tostring(err)
+				)
+			end
+			-- Test passes if respond() is callable and either succeeds or fails gracefully
 		end)
 	end)
 end)

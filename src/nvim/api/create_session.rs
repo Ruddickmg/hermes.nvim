@@ -1,15 +1,15 @@
 use agent_client_protocol::{McpServer, NewSessionRequest};
 use nvim_oxi::{
-    Array, Dictionary, Function, Object,
     conversion::{Error, FromObject},
     lua::{Poppable, Pushable},
+    Dictionary, Function, Object,
 };
 use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{debug, instrument};
 
 use crate::{
-    PluginState, acp::connection::ConnectionManager, api::mcp_servers::parse_mcp_servers, utilities,
+    acp::connection::ConnectionManager, api::mcp_servers::parse_mcp_servers, utilities, PluginState,
 };
 
 #[derive(Debug, Clone)]
@@ -181,7 +181,7 @@ pub fn create_session(
 mod session_args_tests {
     use crate::api::mcp_servers::McpServerType;
     use agent_client_protocol::McpServer;
-    use nvim_oxi::{Dictionary, Object, conversion::FromObject};
+    use nvim_oxi::{conversion::FromObject, Dictionary, Object};
     use pretty_assertions::assert_eq;
     use proptest::prelude::*;
     use std::path::PathBuf;

@@ -508,10 +508,6 @@ describe("hermes.init (main API)", function()
 			-- Configure to auto-download
 			hermes.setup({ download = { auto = true, version = "latest" } })
 			
-			local load_success = false
-			local load_error = nil
-			local load_result = nil
-			
 			-- Trigger async load
 			local ok = pcall(function()
 				-- Call an API method which triggers async loading
@@ -530,9 +526,6 @@ describe("hermes.init (main API)", function()
 
 		it("download state transitions correctly", function()
 			hermes.setup({ download = { auto = true, version = "latest" } })
-			
-			-- Get initial state
-			local initial_state = hermes.get_loading_state()
 			
 			-- Trigger an API call to start loading
 			pcall(function()
@@ -587,9 +580,6 @@ describe("hermes.init (main API)", function()
 			
 			-- Write different version to trigger mismatch
 			vim.fn.writefile({"v0.0.1"}, ver_file)
-			
-			-- Now trigger load - it should detect version mismatch
-			local triggered_download = false
 			
 			-- The version check happens in ensure_binary, which is called during load
 			-- We can verify the version getter works
@@ -667,9 +657,6 @@ describe("hermes.init (main API)", function()
 
 		it("consecutive API calls handle loading state correctly", function()
 			hermes.setup({ download = { auto = true, version = "latest" } })
-			
-			-- First call should trigger loading
-			local state1 = hermes.get_loading_state()
 			
 			-- Second call should see the same loading state (not crash)
 			local ok2 = pcall(function()
