@@ -5,6 +5,9 @@
 
 local M = {}
 
+local USER_AGENT = "hermes.nvim/0.1"
+M.USER_AGENT = USER_AGENT
+
 ---Check if curl is available on the system
 ---@return boolean available
 function M.is_curl_available()
@@ -52,14 +55,14 @@ function M.download(url, dest_path)
   
   local cmd
   if tool == "curl" then
-    cmd = { "curl", "-sL", "-H", "User-Agent: hermes.nvim/0.1", "-o", dest_path, url }
+    cmd = { "curl", "-sL", "-H", "User-Agent: " .. USER_AGENT, "-o", dest_path, url }
   elseif tool == "wget" then
-    cmd = { "wget", "-q", "--user-agent=hermes.nvim/0.1", "-O", dest_path, url }
+    cmd = { "wget", "-q", "--user-agent=" .. USER_AGENT, "-O", dest_path, url }
   else
     -- PowerShell for Windows
     local ps_cmd = string.format(
-      'Invoke-WebRequest -Uri "%s" -OutFile "%s" -UseBasicParsing -UserAgent "hermes.nvim/0.1"',
-      url, dest_path
+      'Invoke-WebRequest -Uri "%s" -OutFile "%s" -UseBasicParsing -UserAgent "%s"',
+      url, dest_path, USER_AGENT
     )
     cmd = { "powershell", "-Command", ps_cmd }
   end

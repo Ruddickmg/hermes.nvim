@@ -195,6 +195,83 @@ describe("hermes.download", function()
       
       exec_stub:revert()
     end)
+    
+    describe("User-Agent header", function()
+      it("includes User-Agent header in curl command", function()
+        local exec_stub = stub(vim.fn, "executable")
+        exec_stub.on_call_with("curl").returns(1)
+        exec_stub.on_call_with("wget").returns(0)
+        exec_stub.on_call_with("powershell").returns(0)
+
+        local captured_cmd
+        local system_stub = stub(vim.fn, "system").invokes(function(cmd)
+          captured_cmd = cmd
+          return ""
+        end)
+        local uv = vim.uv or vim.loop
+        local fs_stat_stub = stub(uv, "fs_stat").returns({ size = 1000 })
+
+        download.download("http://example.com/file", "/tmp/test")
+
+        local has_ua = vim.tbl_contains(captured_cmd, "User-Agent: " .. download.USER_AGENT)
+
+        exec_stub:revert()
+        system_stub:revert()
+        fs_stat_stub:revert()
+
+        assert.is_true(has_ua)
+      end)
+
+      it("includes User-Agent flag in wget command", function()
+        local exec_stub = stub(vim.fn, "executable")
+        exec_stub.on_call_with("curl").returns(0)
+        exec_stub.on_call_with("wget").returns(1)
+        exec_stub.on_call_with("powershell").returns(0)
+
+        local captured_cmd
+        local system_stub = stub(vim.fn, "system").invokes(function(cmd)
+          captured_cmd = cmd
+          return ""
+        end)
+        local uv = vim.uv or vim.loop
+        local fs_stat_stub = stub(uv, "fs_stat").returns({ size = 1000 })
+
+        download.download("http://example.com/file", "/tmp/test")
+
+        local has_ua = vim.tbl_contains(captured_cmd, "--user-agent=" .. download.USER_AGENT)
+
+        exec_stub:revert()
+        system_stub:revert()
+        fs_stat_stub:revert()
+
+        assert.is_true(has_ua)
+      end)
+
+      it("includes UserAgent parameter in PowerShell command", function()
+        local exec_stub = stub(vim.fn, "executable")
+        exec_stub.on_call_with("curl").returns(0)
+        exec_stub.on_call_with("wget").returns(0)
+        exec_stub.on_call_with("powershell").returns(1)
+
+        local captured_cmd
+        local system_stub = stub(vim.fn, "system").invokes(function(cmd)
+          captured_cmd = cmd
+          return ""
+        end)
+        local uv = vim.uv or vim.loop
+        local fs_stat_stub = stub(uv, "fs_stat").returns({ size = 1000 })
+
+        download.download("http://example.com/file", "/tmp/test")
+
+        local ps_command = captured_cmd[3]
+
+        exec_stub:revert()
+        system_stub:revert()
+        fs_stat_stub:revert()
+
+        assert.truthy(ps_command:match('UserAgent "' .. download.USER_AGENT .. '"'))
+      end)
+    end)
   end)
   
   describe("system()", function()
