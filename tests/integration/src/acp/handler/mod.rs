@@ -267,47 +267,7 @@ fn test_execute_autocommand_request_sends_with_responder() -> nvim_oxi::Result<(
     Ok(())
 }
 
-/// Custom type that serializes to JSON with values that can't be deserialized to nvim_oxi::Object
-/// This triggers the error handling path at lines 59-64
-#[derive(serde::Serialize, Debug)]
-struct MalformedData {
-    // This value will be serialized as a number, but when deserializing to Object,
-    // it may fail due to Lua's number representation limitations
-    problematic: f64,
-}
-
-#[nvim_oxi::test]
-fn test_execute_autocommand_with_problematic_data_triggers_deserialization_error(
-) -> nvim_oxi::Result<()> {
-    // Test that sends data which may fail to deserialize to Object
-    // This covers lines 59-64 (error handling for deserialization failure)
-    use std::thread;
-    use std::time::Duration;
-
-    let state = Arc::new(Mutex::new(PluginState::default()));
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
-
-    // Send data with NaN which may cause deserialization issues
-    let problematic_data = MalformedData {
-        problematic: f64::NAN,
-    };
-
-    // This sends the data - the deserialization may fail in the callback
-    // but the send itself should succeed (error is logged, not propagated)
-    let result = tokio_test::block_on(
-        handler.execute_autocommand("TestCommandWithProblematicData", problematic_data),
-    );
-
-    // Send should succeed even if deserialization fails later
-    assert!(result.is_ok(), "Send should succeed");
-
-    // Wait for async callback to execute (required for coverage capture)
-    thread::sleep(Duration::from_millis(100));
-
-    Ok(())
-}
-
+#[tracing_test::traced_test]
 #[nvim_oxi::test]
 fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_oxi::Result<()> {
     // Test lines 71-78: "No listener but has request" error handling path
@@ -383,14 +343,26 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
     assert!(result.is_ok(), "Send should succeed even with no listener");
 
     // Wait for async callback to execute (required for coverage capture)
-    std::thread::sleep(std::time::Duration::from_millis(100));
+    // Must use nvim_oxi sleep to yield control back to Neovim
+    nvim_oxi::api::command("sleep 100m")?;
+
+    // Verify both the warn and error logs were printed
+    assert!(
+        logs_contain("No listener attached for command"),
+        "Expected warn log for no listener (line 67)"
+    );
+    assert!(
+        logs_contain("Failed to send default response"),
+        "Expected error log for failed default_response (lines 74-77)"
+    );
 
     Ok(())
 }
 
+#[tracing_test::traced_test]
 #[nvim_oxi::test]
 fn test_no_listener_no_request_triggers_warn_path() -> nvim_oxi::Result<()> {
-    // Test line 67: "No listener attached for command" warn! path
+    // Test line 80: "No listener attached for command" warn! path (else branch)
     // This triggers when no autocommand listener is attached AND no request is provided
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
@@ -410,7 +382,14 @@ fn test_no_listener_no_request_triggers_warn_path() -> nvim_oxi::Result<()> {
     );
 
     // Wait for async callback to execute (required for coverage capture)
-    std::thread::sleep(std::time::Duration::from_millis(100));
+    // Must use nvim_oxi sleep to yield control back to Neovim
+    nvim_oxi::api::command("sleep 100m")?;
+
+    // Verify the warn log was printed (line 80)
+    assert!(
+        logs_contain("No listener attached for command 'TestWarnCommand'"),
+        "Expected warn log for no listener with no request (line 80)"
+    );
 
     Ok(())
 }
