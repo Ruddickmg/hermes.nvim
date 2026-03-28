@@ -16,10 +16,10 @@ Hermes focuses on:
 **lazy.nvim**
 ```lua
 {
-    "Ruddickmg/hermes.nvim",
-    config = function()
-        require("hermes").setup()
-    end
+  "Ruddickmg/hermes.nvim",
+  config = function()
+    require("hermes").setup()
+  end
 }
 ```
 
@@ -27,7 +27,7 @@ Hermes focuses on:
 ```lua
 
 require("paq") {
-    "Ruddickmg/hermes.nvim"
+  "Ruddickmg/hermes.nvim"
 }
 require("hermes").setup()
 ```
@@ -86,13 +86,13 @@ If your platform is not in the supported list above, you can build from source:
 **Scripted**
 
 Run the build command in Neovim:
-   ```
-   :Hermes build
-   ```
+  ```
+  :Hermes build
+  ```
 
-   This will:
-   - Compile the Rust code with `cargo build --release`
-   - Install the resulting binary in the correct location
+  This will:
+  - Compile the Rust code with `cargo build --release`
+  - Install the resulting binary in the correct location
 
 **Manual** 
 
@@ -114,6 +114,66 @@ If your platform isn't supported and building from source fails:
    - Output of `:Hermes version` (if available)
    - Full error messages from `:Hermes build` or `cargo build --release`
    - Architecture info from `uname -m` (or `uname -a` on macOS)
+
+### Version Management
+
+**Check status:**
+```
+:Hermes status
+```
+Shows loading state, configuration, and current status of Hermes.
+
+**View logs:**
+```
+:Hermes log
+```
+Shows recent log messages and current state information.
+
+**Check current version:**
+```
+:Hermes version
+```
+Shows installed version, platform info, and binary status.
+
+**Update to latest:**
+```
+:Hermes update
+```
+Fetches the latest release from GitHub and replaces the current binary.
+
+**Install specific version:**
+```lua
+require("hermes").setup({
+  download = {
+    version = "v0.2.0",  -- or "1.2.3" (v prefix optional)
+  }
+})
+```
+Then run `:Hermes install` to download that version.
+
+**Manual install:**
+```
+:Hermes install
+```
+Force re-download of the configured version.
+
+**Clean installation:**
+```
+:Hermes clean
+```
+Removes the binary. Run `:Hermes install` or use Hermes API to re-download.
+
+**Build from source:**
+```
+:Hermes build
+```
+Compiles from source (requires Rust toolchain).
+
+**View configuration:**
+```
+:Hermes setup
+```
+Shows current Hermes configuration settings.
 
 ## Features
 
@@ -139,62 +199,62 @@ hermes.setup()
 
 -- Configure specific permissions
 hermes.setup({
-    permissions = {
-        fs_write_access = true,
-        terminal_access = true,
-    }
+  permissions = {
+    fs_write_access = true,
+    terminal_access = true,
+  }
 })
 
 -- Full configuration defaults
 hermes.setup({
-    download = {
-        version = "latest", -- specify which hermes release to use
-        auto = true, -- automatically download pre-built binary (set to false to build manually)
-        timeout = 60, -- timeout in seconds for download
+  download = {
+    version = "latest", -- specify which hermes release to use
+    auto = true, -- automatically download pre-built binary (set to false to build manually)
+    timeout = 60, -- timeout in seconds for download
+  },
+  root_markers = { ".git" }, -- used to detect the project root by matching file names in the root directory
+  permissions = {
+    fs_write_access = true,      -- Allow file writes to the agent 
+    fs_read_access = true,       -- Allow file reads to the agent 
+    terminal_access = true,      -- Allow terminal access to the agent 
+    request_permissions = true,  -- Allow agent to send permission requests 
+    send_notifications = true,  -- Allow the agent to send notifications 
+  },
+  terminal = {
+    delete = true,    -- Auto-delete terminals on exit
+    enabled = true,    -- Enable terminal functionality
+    buffered = true,   -- Buffer terminal output 
+  },
+  buffer = {
+    auto_save = false,  -- Auto-save modified files after writing to them 
+  },
+  log = {
+    -- send logs to stdio
+    stdio = {
+      -- only logs of the set value and above will be sent
+      level = vim.log.levels.OFF or "off",
+      -- logs  stdio logs will be formatted with the selected format 
+      format = "compact",
     },
-    root_markers = { ".git" }, -- used to detect the project root by matching file names in the root directory
-    permissions = {
-        fs_write_access = true,      -- Allow file writes to the agent 
-        fs_read_access = true,       -- Allow file reads to the agent 
-        terminal_access = true,      -- Allow terminal access to the agent 
-        request_permissions = true,  -- Allow agent to send permission requests 
-        send_notifications = true,  -- Allow the agent to send notifications 
+    -- send logs to Neovim "notify"
+    notification = {
+      level = vim.log.levels.ERROR or "error",
+      format = "compact",
     },
-    terminal = {
-        delete = true,    -- Auto-delete terminals on exit
-        enabled = true,    -- Enable terminal functionality
-        buffered = true,   -- Buffer terminal output 
+    -- send logs to Neovim ":messages"
+    message = {
+      level = vim.log.levels.OFF or "off",
+      format = "compact",
     },
-    buffer = {
-        auto_save = false,  -- Auto-save modified files after writing to them 
+    -- send logs to log files
+    file = {
+      level = vim.log.levels.OFF or "off",
+      format = "json",
+      path = vim.fn.stdpath('state') .. "/nvim/hermes.log", -- path to log file(s)
+      max_size = 10485760, -- 10mb in bytes
+      max_files = 5, -- Max log files to generate
     },
-    log = {
-        -- send logs to stdio
-        stdio = {
-            -- only logs of the set value and above will be sent
-            level = vim.log.levels.OFF or "off",
-            -- logs  stdio logs will be formatted with the selected format 
-            format = "compact",
-        },
-        -- send logs to Neovim "notify"
-        notification = {
-            level = vim.log.levels.ERROR or "error",
-            format = "compact",
-        },
-        -- send logs to Neovim ":messages"
-        message = {
-            level = vim.log.levels.OFF or "off",
-            format = "compact",
-        },
-        -- send logs to log files
-        file = {
-            level = vim.log.levels.OFF or "off",
-            format = "json",
-            path = vim.fn.stdpath('state') .. "/nvim/hermes.log", -- path to log file(s)
-            max_size = 10485760, -- 10mb in bytes
-            max_files = 5, -- Max log files to generate
-        },
-    },
+  },
 })
 ```
 
@@ -221,17 +281,17 @@ hermes.connect("copilot")
 
 -- configure protocol
 hermes.connect("opencode", {
-   protocol = "http",
+  protocol = "http",
 })
 
 -- connect to custom agent (not pre-defined)
 hermes.connect(
-    "my-claude", -- this will be the key you use for other methods (disconnect for example) 
-    {
-        protocol = "socket", -- optional (Defaults to "stdio")
-        command = "claude-acp",
-        args = { "--socket", "/tmp/claude.sock" },
-    }
+  "my-claude", -- this will be the key you use for other methods (disconnect for example) 
+  {
+    protocol = "socket", -- optional (Defaults to "stdio")
+    command = "claude-acp",
+    args = { "--socket", "/tmp/claude.sock" },
+  }
 )
 ```
 
@@ -266,13 +326,13 @@ hermes.authenticate(auth_method_id)
 
 -- example
 vim.api.nvim_create_autocmd("User", {
-    group = "hermes",
-    pattern = "ConnectionInitialized",
-    callback = function(args)
-        local auth_method_id = table.remove(args.data.authMethods).id -- select auth method id somehow
+  group = "hermes",
+  pattern = "ConnectionInitialized",
+  callback = function(args)
+    local auth_method_id = table.remove(args.data.authMethods).id -- select auth method id somehow
 
-        hermes.authenticate(auth_method_id)
-    end,
+    hermes.authenticate(auth_method_id)
+  end,
 })
 ```
 
@@ -291,6 +351,45 @@ hermes.create_session()
 -- customize connection configuration
 hermes.create_session({
   cwd = ".", -- path to create the session in (optional)
+  mcpServers = {
+  { -- Http or Sse MCP server definition
+    type = "http", -- or "sse"
+    name = "Human readable name for MCP server",
+    url = "http://url-to-mcp-server.com",
+    headers = {
+    { ["Content-Type"] = "application/json" },
+    { headerName = "header value" },
+    },
+  },
+  {  -- Stdio MCP server definition
+    type = "stdio",
+    name = "Human readable name for MCP server",
+    command = "/path/to/the/MCP/server/executable",
+    args = { "run", "--flag", "something" },
+    -- Environment variables to set when launching the MCP server.
+    env = {
+    { name = "ENVIRONMENT_VAR_NAME", value = "value" },
+    },
+  },
+  },
+})
+```
+
+> **Triggers:** [SessionCreated](#sessioncreated) autocommand upon completion.
+
+### Load Session (**Optional**)
+
+Load an existing session
+
+```lua
+local hermes = require("hermes")
+
+-- call signature (uses defaults)
+hermes.load_session(sessionId)
+
+-- call signature (with further configuration)
+hermes.load_session(sessionId, {
+  cwd = ".", -- path to load the session from (optional, defaults to either project root or current directory)
   mcpServers = {
     { -- Http or Sse MCP server definition
       type = "http", -- or "sse"
@@ -313,55 +412,16 @@ hermes.create_session({
     },
   },
 })
-```
-
-> **Triggers:** [SessionCreated](#sessioncreated) autocommand upon completion.
-
-### Load Session (**Optional**)
-
-Load an existing session
-
-```lua
-local hermes = require("hermes")
-
--- call signature (uses defaults)
-hermes.load_session(sessionId)
-
--- call signature (with further configuration)
-hermes.load_session(sessionId, {
-    cwd = ".", -- path to load the session from (optional, defaults to either project root or current directory)
-    mcpServers = {
-        { -- Http or Sse MCP server definition
-            type = "http", -- or "sse"
-            name = "Human readable name for MCP server",
-            url = "http://url-to-mcp-server.com",
-            headers = {
-                { ["Content-Type"] = "application/json" },
-                { headerName = "header value" },
-            },
-        },
-        {  -- Stdio MCP server definition
-            type = "stdio",
-            name = "Human readable name for MCP server",
-            command = "/path/to/the/MCP/server/executable",
-            args = { "run", "--flag", "something" },
-            -- Environment variables to set when launching the MCP server.
-            env = {
-                { name = "ENVIRONMENT_VAR_NAME", value = "value" },
-            },
-        },
-    },
-})
 
 -- example
 vim.api.nvim_create_autocmd("User", {
-    group = "hermes",
-    pattern = "SessionCreated",
-    callback = function(args)
-        local sessionId = args.data.sessionId
+  group = "hermes",
+  pattern = "SessionCreated",
+  callback = function(args)
+    local sessionId = args.data.sessionId
 
-        hermes.load_session(sessionId)
-    end,
+    hermes.load_session(sessionId)
+  end,
 })
 ```
 
@@ -379,27 +439,27 @@ hermes.list_sessions()
 
 -- filter by directory
 hermes.list_sessions({
-    cwd = "/path/to/directory",
+  cwd = "/path/to/directory",
 })
 
 -- filter by cursor based pagination
 hermes.list_sessions({
-    cursor = "abc123",
+  cursor = "abc123",
 })
 
 -- example
 vim.api.nvim_create_autocmd("User", {
-    group = "hermes",
-    pattern = "SessionsListed",
-    callback = function(args)
-        local next_page = args.data.nextCursor
+  group = "hermes",
+  pattern = "SessionsListed",
+  callback = function(args)
+    local next_page = args.data.nextCursor
 
-        -- get next page of sessions with this cursor in the current directory
-        hermes.list_sessions({
-          cwd = vim.fn.getcwd(),
-          cursor = next_page,
-        })
-    end,
+    -- get next page of sessions with this cursor in the current directory
+    hermes.list_sessions({
+      cwd = vim.fn.getcwd(),
+      cursor = next_page,
+    })
+  end,
 })
 ```
 
@@ -422,61 +482,61 @@ local sessionId = "current-session-id";
 
 -- single prompt call signature
 hermes.prompt(sessionId, {
-    type = "text",
-    text = "What time is it?"
+  type = "text",
+  text = "What time is it?"
 })
 
 -- multiple prompt call signature
 hermes.prompt(sessionId, {
   {
-    type = "text",
-    text = "What time is it?"
+  type = "text",
+  text = "What time is it?"
   },
   {
-    type = "link",
-    name = "Example file",
-    uri = "/path/to/example.txt"
+  type = "link",
+  name = "Example file",
+  uri = "/path/to/example.txt"
   },
   { -- text
-    type = "embedded",
-    resource = {
-      uri = "file:///home/user/script.py",
-      mimeType = "text/x-python",
-      text = "def hello():\n    print('Hello, world!')"
-    }
+  type = "embedded",
+  resource = {
+    uri = "file:///home/user/script.py",
+    mimeType = "text/x-python",
+    text = "def hello():\n    print('Hello, world!')"
+  }
   },
   { -- blob
-    type = "embedded",
-    resource = {
-      uri = "file:///home/user/script.py",
-      mimeType = "application/pdf",
-      blob = "Base64-encoded binary data"
-    }
+  type = "embedded",
+  resource = {
+    uri = "file:///home/user/script.py",
+    mimeType = "application/pdf",
+    blob = "Base64-encoded binary data"
+  }
   },
   {
-    type = "image",
-    data = "base64-encoded-image-data",
-    mimeType = "image/png"
+  type = "image",
+  data = "base64-encoded-image-data",
+  mimeType = "image/png"
   },
   {
-    type = "audio",
-    data = "base64-encoded-audio-data",
-    mimeType = "audio/wav"
+  type = "audio",
+  data = "base64-encoded-audio-data",
+  mimeType = "audio/wav"
   }
 }
 
 -- example
 vim.api.nvim_create_autocmd("User", {
-    group = "hermes",
-    pattern = "SessionCreated",
-    callback = function(args)
-        local sessionId = args.data.sessionId
+  group = "hermes",
+  pattern = "SessionCreated",
+  callback = function(args)
+    local sessionId = args.data.sessionId
 
-        hermes.prompt(sessionId, {
-          type = "text",
-          text = "What time is it?"
-        })
-    end,
+    hermes.prompt(sessionId, {
+      type = "text",
+      text = "What time is it?"
+    })
+  end,
 })
 ```
 
@@ -495,14 +555,14 @@ hermes.cancel(sessionId)
 
 -- example
 vim.api.nvim_create_autocmd("User", {
-    group = "hermes",
-    pattern = "SessionCreated",
-    callback = function(args)
-        local sessionId = args.data.sessionId
+  group = "hermes",
+  pattern = "SessionCreated",
+  callback = function(args)
+    local sessionId = args.data.sessionId
 
-        hermes.cancel(sessionId)
-        
-    end,
+    hermes.cancel(sessionId)
+    
+  end,
 })
 ```
 
@@ -518,18 +578,18 @@ hermes.set_mode(sessionId, modeId)
 
 -- example
 vim.api.nvim_create_autocmd("User", {
-    group = "hermes",
-    pattern = "SessionCreated",
-    callback = function(args)
-        local modes = args.data.modes
-        -- modes is optional for an agent, some may not have different modes to select
-        if modes ~= nil then
-            local selectedModeId = table.remove(modes.availableModes).id -- select mode id somehow
-            local sessionId = args.data.sessionId
+  group = "hermes",
+  pattern = "SessionCreated",
+  callback = function(args)
+    local modes = args.data.modes
+    -- modes is optional for an agent, some may not have different modes to select
+    if modes ~= nil then
+      local selectedModeId = table.remove(modes.availableModes).id -- select mode id somehow
+      local sessionId = args.data.sessionId
 
-            hermes.set_mode(sessionId, selectedModeId)
-        end
-    end,
+      hermes.set_mode(sessionId, selectedModeId)
+    end
+  end,
 })
 ```
 
@@ -552,15 +612,15 @@ hermes.respond("requestId", "optionId")
 
 -- example: 
 vim.api.nvim_create_autocmd("User", {
-    group = "hermes",
-    pattern = "PermissionRequest",
-    callback = function(args)
-        local selectedOptionId = table.remove(args.data.options).optionId -- select id somehow
-        local requestId = args.data.requestId
+  group = "hermes",
+  pattern = "PermissionRequest",
+  callback = function(args)
+    local selectedOptionId = table.remove(args.data.options).optionId -- select id somehow
+    local requestId = args.data.requestId
 
-        hermes.respond(requestId, selectedOptionId)
-        
-    end,
+    hermes.respond(requestId, selectedOptionId)
+    
+  end,
 })
 ```
 
@@ -579,14 +639,14 @@ hermes.respond("requestId")
 
 -- example: 
 vim.api.nvim_create_autocmd("User", {
-    group = "hermes",
-    pattern = "WriteTextFile",
-    callback = function(args)
-        local requestId = args.data.requestId
+  group = "hermes",
+  pattern = "WriteTextFile",
+  callback = function(args)
+    local requestId = args.data.requestId
 
-        -- writing to a file doesn't take any data, but a notification is required when it is finished
-        hermes.respond(requestId)
-    end,
+    -- writing to a file doesn't take any data, but a notification is required when it is finished
+    hermes.respond(requestId)
+  end,
 })
 ```
 
@@ -608,19 +668,19 @@ hermes.respond("requestId", "Hello World!")
 
 -- example: 
 vim.api.nvim_create_autocmd("User", {
-    group = "hermes",
-    pattern = "ReadTextFile",
-    callback = function(args)
-        local requestId = args.data.requestId
-        local filename = args.data.path
-        local _start = args.data.line -- optional, may not be provided by the agent
-        local _end = args.data.limit -- optional, may not be provided by the agent 
-        local file = io.open(filename, "r")
-        local content = file:read("*all")
-        file:close()
+  group = "hermes",
+  pattern = "ReadTextFile",
+  callback = function(args)
+    local requestId = args.data.requestId
+    local filename = args.data.path
+    local _start = args.data.line -- optional, may not be provided by the agent
+    local _end = args.data.limit -- optional, may not be provided by the agent 
+    local file = io.open(filename, "r")
+    local content = file:read("*all")
+    file:close()
 
-        hermes.respond(requestId, content)
-    end,
+    hermes.respond(requestId, content)
+  end,
 })
 ```
 
@@ -644,25 +704,25 @@ hermes.respond("requestId", "terminalId")
 
 -- example:     
 vim.api.nvim_create_autocmd("User", {
-    group = "hermes",
-    pattern = "TerminalCreate",
-    callback = function(event)
-        local terminalId = "your-generated-terminal-id" -- generate a unique id for terminal
-        local requestId = event.data.requestId
-        local command = event.data.command
-        local term_args = event.data.args or {}
-        local byte_limit = event.data.output_byte_limit
+  group = "hermes",
+  pattern = "TerminalCreate",
+  callback = function(event)
+    local terminalId = "your-generated-terminal-id" -- generate a unique id for terminal
+    local requestId = event.data.requestId
+    local command = event.data.command
+    local term_args = event.data.args or {}
+    local byte_limit = event.data.output_byte_limit
 
-        -- lua combines args and command (add command to the beginning of args)
-        table.insert(term_args, 1, command)
+    -- lua combines args and command (add command to the beginning of args)
+    table.insert(term_args, 1, command)
 
-        terminals[terminalId] = vim.fn.jobstart(term_args, {
-            env = event.data.env,
-            cwd = event.data.cwd,
-        })
+    terminals[terminalId] = vim.fn.jobstart(term_args, {
+      env = event.data.env,
+      cwd = event.data.cwd,
+    })
 
-        hermes.respond(requestId, terminalId);
-    end,
+    hermes.respond(requestId, terminalId);
+  end,
 })
 ```
 
@@ -687,21 +747,21 @@ hermes.respond("requestId", "terminal output text")
 
 -- call signature with truncation defined
 hermes.respond("requestId", {
-    output = "terminal output text",
-    truncated = is_truncated,
+  output = "terminal output text",
+  truncated = is_truncated,
 })
 
 -- example:
 vim.api.nvim_create_autocmd("User", {
-    group = "hermes",
-    pattern = "TerminalOutput",
-    callback = function(args)
-        local requestId = args.data.requestId
-        local terminalId = args.data.terminalId
-        local terminalOutput = terminals[terminalId].output -- get output somehow
+  group = "hermes",
+  pattern = "TerminalOutput",
+  callback = function(args)
+    local requestId = args.data.requestId
+    local terminalId = args.data.terminalId
+    local terminalOutput = terminals[terminalId].output -- get output somehow
 
-        hermes.respond(requestId, terminalOutput);
-    end,
+    hermes.respond(requestId, terminalOutput);
+  end,
 })
 ```
 
@@ -725,23 +785,23 @@ hermes.respond("requestId", 0)
 
 -- call signature with exit code and termination signal
 hermes.respond("requestId", {
-    exitCode = 9,
-    signal = "SIGKILL"
+  exitCode = 9,
+  signal = "SIGKILL"
 })
 
 -- example:
 vim.api.nvim_create_autocmd("User", {
-    group = "hermes",
-    pattern = "TerminalExit",
-    callback = function(args)
-        local requestId = args.data.requestId
-        local terminalId = args.data.terminalId
+  group = "hermes",
+  pattern = "TerminalExit",
+  callback = function(args)
+    local requestId = args.data.requestId
+    local terminalId = args.data.terminalId
 
-        hermes.respond(requestId, {
-            exitCode = terminals[terminalId].exitCode, -- get output somehow
-            signal = terminals[terminalId].signal, -- get output somehow
-        });
-    end,
+    hermes.respond(requestId, {
+      exitCode = terminals[terminalId].exitCode, -- get output somehow
+      signal = terminals[terminalId].signal, -- get output somehow
+    });
+  end,
 })
 ```
 
@@ -761,13 +821,13 @@ hermes.respond("requestId")
 
 -- example:
 vim.api.nvim_create_autocmd("User", {
-    group = "hermes",
-    pattern = "TerminalKill",
-    callback = function(args)
-        local requestId = args.data.requestId
+  group = "hermes",
+  pattern = "TerminalKill",
+  callback = function(args)
+    local requestId = args.data.requestId
 
-        hermes.respond(requestId);
-    end,
+    hermes.respond(requestId);
+  end,
 })
 ```
 
@@ -787,13 +847,13 @@ hermes.respond("requestId")
 
 -- example:
 vim.api.nvim_create_autocmd("User", {
-    group = "hermes",
-    pattern = "TerminalRelease",
-    callback = function(args)
-        local requestId = args.data.requestId
+  group = "hermes",
+  pattern = "TerminalRelease",
+  callback = function(args)
+    local requestId = args.data.requestId
 
-        hermes.respond(requestId);
-    end,
+    hermes.respond(requestId);
+  end,
 })
 ```
 
@@ -810,11 +870,11 @@ Hermes generates autocommands for all communication between agent and client. He
 
 ```lua
 vim.api.nvim_create_autocmd("User", {
-    group = "hermes",
-    pattern = "AgentTextMessage",
-    callback = function(args)
-        print("Received some text from our assistant: " .. args.data.text)
-    end,
+  group = "hermes",
+  pattern = "AgentTextMessage",
+  callback = function(args)
+    print("Received some text from our assistant: " .. args.data.text)
+  end,
 })
 ```
 
@@ -1553,13 +1613,13 @@ Hermes defaults to `INFO` log level until configured via `setup()`.
 Configure log levels and formats via the `setup()` function:
 ```lua
 require("hermes").setup({
-    log = {
-        notification = { level = vim.log.levels.ERROR }, -- Per-target config
-        message = { 
-            level = vim.log.levels.INFO,
-            format = "pretty"  -- Each target has its own format
-        },
-    }
+  log = {
+    notification = { level = vim.log.levels.ERROR }, -- Per-target config
+    message = { 
+      level = vim.log.levels.INFO,
+      format = "pretty"  -- Each target has its own format
+    },
+  }
 })
 ```
 
@@ -1569,12 +1629,12 @@ Log formats can be configured per-target via `setup()`. Each target has its own 
 
 ```lua
 require("hermes").setup({
-    log = {
-        -- Each target has its own format (defaults to "compact" if not set):
-        notification = { format = "pretty" },
-        message = { format = "json" },
-        quickfix = { format = nil },  -- nil = use default ("compact")
-    }
+  log = {
+    -- Each target has its own format (defaults to "compact" if not set):
+    notification = { format = "pretty" },
+    message = { format = "json" },
+    quickfix = { format = nil },  -- nil = use default ("compact")
+  }
 })
 ```
 
