@@ -207,3 +207,7 @@ impl Handler {
         Ok(())
     }
 }
+
+// Note: Tests for Handler are in tests/integration/src/request/handler.rs
+// Unit tests here would require nvim-oxi which needs Neovim at link time.
+// The permission methods (can_write, can_read, etc.) are covered by integration tests.
