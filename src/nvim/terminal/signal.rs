@@ -134,7 +134,7 @@ mod tests {
             Some("SIGSYS".to_string()),
         ];
 
-        let actual: Vec<Option<String>> = (1..=31).map(|code| map_codes(code)).collect();
+        let actual: Vec<Option<String>> = (1..=31).map(map_codes).collect();
         assert_eq!(actual, expected);
     }
 

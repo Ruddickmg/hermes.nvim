@@ -7,8 +7,8 @@ local M = {}
 ---Returns either user-specified version or "latest" as default
 ---@return string version Version string (e.g., "v0.1.0" or "latest")
 function M.get_wanted()
-	local config = require("hermes.config").get()
-	local wanted = config.version or "latest"
+	local config = require("hermes.config")
+	local wanted = config.get_version()
 
 	if wanted == "latest" then
 		return "latest"

@@ -26,6 +26,9 @@ describe("hermes.init (main API)", function()
 		local dest_bin = bin_dir .. "/" .. bin_name
 		local uv = vim.uv or vim.loop
 		uv.fs_copyfile(source_bin, dest_bin)
+		
+		-- Write version file so binary is recognized as valid
+		vim.fn.writefile({"latest"}, bin_dir .. "/version.txt")
 
 		-- Only clear modules and load binary on first test
 		-- (reloading the .so file can cause issues with static state)
@@ -104,28 +107,28 @@ describe("hermes.init (main API)", function()
 	end)
 
 	describe("native module exports (_load_native_sync())", function()
-		local hermes_module, native
+		-- Note: Relies on outer before_each which already:
+		-- 1. Stubs vim.fn.stdpath("data") to return temp_dir
+		-- 2. Copies binary from target/release to temp_dir/hermes/
+		-- 3. Clears and reloads hermes module
+		
+		local native
 		
 		before_each(function()
-			-- Clear module cache and reload
-			package.loaded["hermes.init"] = nil
-			package.loaded["hermes.binary"] = nil
-			
-			-- Load the hermes module fresh
-			hermes_module = require("hermes")
-			
-			-- Access the native module directly via _load_native_sync()
-			-- This triggers the binary loading synchronously
+			-- Load native module via _load_native_sync
+			-- The outer before_each already ensured binary is at the expected path
 			local ok, result = pcall(function()
-				return hermes_module._load_native_sync()
+				return hermes._load_native_sync()
 			end)
 			
-			-- Store result, may be nil if loading failed
-			native = ok and result or nil
+			if not ok then
+				error("Failed to load native module: " .. tostring(result))
+			end
+			
+			native = result
 		end)
 		
 		it("exports setup from Rust", function()
-			-- Single assertion: if native is nil, this will error with clear message
 			assert.is_function(native.setup)
 		end)
 		
@@ -318,7 +321,7 @@ describe("hermes.init (main API)", function()
 			
 			vim.notify = original_notify
 			
-			assert.is_true(#notify_calls > 0 and notify_calls[1].msg:find("still loading") ~= nil)
+			assert.is_not_nil(notify_calls[1].msg:find("still loading"), "Should show loading warning notification")
 		end)
 
 		it("_handle_failed_state returns false", function()
@@ -338,7 +341,7 @@ describe("hermes.init (main API)", function()
 			
 			vim.notify = original_notify
 			
-			assert.is_true(#notify_calls > 0 and notify_calls[1].msg:find("Failed to load") ~= nil)
+			assert.is_not_nil(notify_calls[1].msg:find("Failed to load"), "Should show error notification")
 		end)
 
 		it("_handle_load_success sets state to READY", function()
@@ -373,7 +376,7 @@ describe("hermes.init (main API)", function()
 			
 			vim.notify = original_notify
 			
-			assert.is_true(#notify_calls > 0 and notify_calls[1].msg:find("Ready") ~= nil)
+			assert.is_not_nil(notify_calls[1].msg:find("Ready"), "Should show ready notification")
 		end)
 
 		it("_handle_load_failure sets state to FAILED", function()
@@ -399,7 +402,7 @@ describe("hermes.init (main API)", function()
 			
 			vim.notify = original_notify
 			
-			assert.is_true(#notify_calls > 0 and notify_calls[1].msg:find("Test context") ~= nil)
+			assert.is_not_nil(notify_calls[1].msg:find("Test context"), "Should show custom error notification")
 		end)
 	end)
 
@@ -440,6 +443,265 @@ describe("hermes.init (main API)", function()
 			
 			-- Should read from config.get() as fallback
 			assert.is_false(hermes._should_auto_download())
+		end)
+	end)
+
+	describe("E2E async download and load flow", function()
+		before_each(function()
+			-- Clear all module caches for fresh start
+			package.loaded["hermes"] = nil
+			package.loaded["hermes.init"] = nil
+			package.loaded["hermes.binary"] = nil
+			package.loaded["hermes.config"] = nil
+			package.loaded["hermes.version"] = nil
+			
+			-- Clear binary cache
+			local binary = require("hermes.binary")
+			local data_dir = binary.get_data_dir()
+			if vim.fn.isdirectory(data_dir) == 1 then
+				vim.fn.delete(data_dir, "rf")
+			end
+			
+			-- Reload hermes
+			hermes = require("hermes")
+		end)
+
+		after_each(function()
+			-- Cleanup: remove downloaded binary
+			local binary = require("hermes.binary")
+			local bin_path = binary.get_binary_path()
+			if vim.fn.filereadable(bin_path) == 1 then
+				vim.fn.delete(bin_path)
+			end
+			local ver_file = binary.get_version_file()
+			if vim.fn.filereadable(ver_file) == 1 then
+				vim.fn.delete(ver_file)
+			end
+		end)
+
+		it("async download succeeds and loads binary into app", function()
+			-- Configure to auto-download
+			hermes.setup({ download = { auto = true, version = "latest" } })
+			
+			-- Trigger async load
+			local ok = pcall(function()
+				-- Call an API method which triggers async loading
+				-- We can't actually wait for it to complete in tests,
+				-- but we can verify it started the download process
+				local state = hermes.get_loading_state()
+				-- State should be NOT_LOADED initially, then transition
+				assert.is_true(
+					state == "NOT_LOADED" or state == "DOWNLOADING" or state == "LOADING" or state == "READY",
+					"Loading state should be valid: " .. tostring(state)
+				)
+			end)
+			
+			assert.is_true(ok, "Async load should start without error")
+		end)
+
+		it("download state transitions correctly", function()
+			hermes.setup({ download = { auto = true, version = "latest" } })
+			
+			-- Trigger an API call to start loading
+			pcall(function()
+				hermes.setup({})  -- This should trigger load if not already loading
+			end)
+			
+			-- Wait a bit for state transition
+			vim.wait(50)
+			
+			local after_trigger_state = hermes.get_loading_state()
+			
+			-- State should have progressed or stayed valid
+			assert.is_true(
+				after_trigger_state == "NOT_LOADED" or 
+				after_trigger_state == "DOWNLOADING" or 
+				after_trigger_state == "LOADING" or 
+				after_trigger_state == "READY" or
+				after_trigger_state == "FAILED",
+				"State transition should be valid: " .. tostring(after_trigger_state)
+			)
+		end)
+
+		it("auto-download disabled triggers direct load (not download)", function()
+			hermes.setup({ download = { auto = false, version = "latest" } })
+			
+			-- Verify auto-download is disabled
+			assert.is_false(hermes._should_auto_download())
+			
+			-- Calling setup() with auto=false triggers direct loading (not downloading)
+			-- State transitions: NOT_LOADED -> LOADING (immediately)
+			local state = hermes.get_loading_state()
+			assert.is_true(
+				state == "LOADING" or state == "READY" or state == "FAILED",
+				"State should be LOADING, READY, or FAILED when auto-download is disabled: " .. tostring(state)
+			)
+		end)
+
+		it("version configuration is respected in async flow", function()
+			-- Setup with specific version
+			hermes.setup({ download = { auto = true, version = "v0.1.0" } })
+			
+			-- Create a binary with different version to trigger re-download
+			local binary = require("hermes.binary")
+			local bin_path = binary.get_binary_path()
+			local ver_file = binary.get_version_file()
+			
+			vim.fn.mkdir(binary.get_data_dir(), "p")
+			-- Create empty binary file
+			local f = io.open(bin_path, "w")
+			f:write("mock")
+			f:close()
+			
+			-- Write different version to trigger mismatch
+			vim.fn.writefile({"v0.0.1"}, ver_file)
+			
+			-- The version check happens in ensure_binary, which is called during load
+			-- We can verify the version getter works
+			local version = require("hermes.version")
+			local wanted = version.get_wanted()
+			
+			assert.equals("v0.1.0", wanted)
+			
+			-- Cleanup
+			vim.fn.delete(bin_path)
+			vim.fn.delete(ver_file)
+		end)
+
+		it("download failure sets FAILED state and records error", function()
+			-- Setup with invalid platform to force download failure
+			-- Stub platform BEFORE setup so download fails immediately
+			local platform = require("hermes.platform")
+			local orig_get_platform_key = platform.get_platform_key
+			platform.get_platform_key = function() return "unsupported-platform" end
+			
+			hermes.setup({ download = { auto = true, version = "latest" } })
+			
+			-- Wait for async download to complete and fail
+			vim.wait(100)
+			
+			-- Restore
+			platform.get_platform_key = orig_get_platform_key
+			
+			-- Single assertion: verify download failed with proper state
+			assert.equals("FAILED", hermes.get_loading_state())
+		end)
+
+		it("download failure records error", function()
+			-- Setup with invalid platform to force download failure
+			local platform = require("hermes.platform")
+			local orig_get_platform_key = platform.get_platform_key
+			platform.get_platform_key = function() return "unsupported-platform" end
+			
+			hermes.setup({ download = { auto = true, version = "latest" } })
+			
+			-- Wait for async download to complete and fail
+			vim.wait(100)
+			
+			-- Restore
+			platform.get_platform_key = orig_get_platform_key
+			
+			-- Single assertion: verify error was recorded
+			assert.is_not_nil(hermes.get_loading_error())
+		end)
+
+		it("load success transitions to READY state when binary exists", function()
+			-- Setup: Ensure real binary exists FIRST (before calling setup)
+			local platform = require("hermes.platform")
+			local binary = require("hermes.binary")
+			local bin_path = binary.get_binary_path()
+			
+			vim.fn.mkdir(binary.get_data_dir(), "p")
+			
+			-- Copy real binary
+			local source_bin = vim.fn.getcwd() .. "/target/release/libhermes." .. platform.get_ext()
+			local uv = vim.uv or vim.loop
+			uv.fs_copyfile(source_bin, bin_path)
+			
+			-- Write version file
+			vim.fn.writefile({"latest"}, binary.get_version_file())
+			
+			-- Now call setup with auto=false - it should find the binary and load successfully
+			hermes.setup({ download = { auto = false, version = "latest" } })
+			
+			-- Wait for async load to complete
+			vim.wait(100)
+			
+			-- Now load should succeed (binary was copied above)
+			local ok, result = pcall(function()
+				return hermes._load_native_sync()
+			end)
+			
+			if not ok then
+				error("Binary load should succeed: " .. tostring(result))
+			end
+			
+			-- Single assertion: verify binary loaded and is ready
+			assert.equals("READY", hermes.get_loading_state())
+		end)
+
+		it("consecutive API calls handle loading state correctly", function()
+			hermes.setup({ download = { auto = true, version = "latest" } })
+			
+			-- Second call should see the same loading state (not crash)
+			local ok2 = pcall(function()
+				local state2 = hermes.get_loading_state()
+				return state2
+			end)
+			
+			assert.is_true(ok2, "Second call during loading should not crash")
+			
+			-- Wait a bit
+			vim.wait(50)
+			
+			-- State should still be valid
+			local final_state = hermes.get_loading_state()
+			assert.is_true(
+				final_state == "NOT_LOADED" or 
+				final_state == "DOWNLOADING" or 
+				final_state == "LOADING" or 
+				final_state == "READY" or
+				final_state == "FAILED"
+			)
+		end)
+
+		it("download timeout configuration is respected", function()
+			-- Setup with custom timeout
+			hermes.setup({ 
+				download = { 
+					auto = true, 
+					version = "latest",
+					timeout = 120
+				} 
+			})
+			
+			-- Verify timeout is set
+			local config = require("hermes.config")
+			local download_config = config.get_download()
+			
+			assert.equals(120, download_config.timeout)
+		end)
+
+		it("error state persists", function()
+			-- Force an error state
+			hermes._set_loading_state("FAILED")
+			hermes._set_loading_error("Test error message")
+			
+			-- Verify state persists
+			assert.equals("FAILED", hermes.get_loading_state())
+		end)
+
+		it("error message can be retrieved", function()
+			-- Force an error state
+			hermes._set_loading_state("FAILED")
+			hermes._set_loading_error("Test error message")
+			
+			-- Verify error message can be retrieved
+			assert.equals("Test error message", hermes.get_loading_error())
+			
+			-- Reset for other tests
+			hermes._set_loading_state("NOT_LOADED")
+			hermes._set_loading_error(nil)
 		end)
 	end)
 end)

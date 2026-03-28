@@ -27,7 +27,8 @@ impl FromObject for CreateSessionArgs {
             return Ok(Self::Default);
         }
 
-        let dict: Dictionary = obj.try_into()?;
+        // Convert Object to Dictionary, handling empty Lua tables
+        let dict = crate::nvim::configuration::dict_from_object(obj)?;
 
         let cwd: Option<PathBuf> = dict.get("cwd").and_then(|obj| {
             obj.clone()

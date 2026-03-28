@@ -14,7 +14,7 @@ describe("hermes.version", function()
 	describe("get_wanted()", function()
 		it("returns latest when version is 'latest'", function()
 			-- Stub config to return latest
-			local config_stub = stub(require("hermes.config"), "get").returns({ version = "latest" })
+			local config_stub = stub(require("hermes.config"), "get_version").returns("latest")
 
 			local result = version.get_wanted()
 
@@ -24,7 +24,7 @@ describe("hermes.version", function()
 		end)
 
 		it("adds 'v' prefix when version doesn't have it", function()
-			local config_stub = stub(require("hermes.config"), "get").returns({ version = "1.2.3" })
+			local config_stub = stub(require("hermes.config"), "get_version").returns("1.2.3")
 
 			local result = version.get_wanted()
 
@@ -34,7 +34,7 @@ describe("hermes.version", function()
 		end)
 
 		it("preserves 'v' prefix when version already has it", function()
-			local config_stub = stub(require("hermes.config"), "get").returns({ version = "v1.2.3" })
+			local config_stub = stub(require("hermes.config"), "get_version").returns("v1.2.3")
 
 			local result = version.get_wanted()
 

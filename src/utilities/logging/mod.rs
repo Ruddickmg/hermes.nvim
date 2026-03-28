@@ -123,7 +123,7 @@ impl Logger {
         Ok(LOGGER.get_or_init(|| {
             // Use try_init to avoid panicking if a global subscriber is already set.
             // This can happen when the binary is reloaded (e.g., in tests).
-            if let Err(_) = tracing::subscriber::set_global_default(subscriber) {
+            if tracing::subscriber::set_global_default(subscriber).is_err() {
                 // Global subscriber already set, that's fine - we'll reuse it
             }
             Self {
