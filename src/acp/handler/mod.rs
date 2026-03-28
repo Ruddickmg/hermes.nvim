@@ -41,21 +41,28 @@ impl Handler {
                     request_id
                 });
                 if Self::listener_attached(command.to_string()) {
-                    // INFO: converting a lua object to json is practically impossible to fail, so we don't omit error handling here
-                    if let Ok(obj) = serde_json::from_value::<Object>(data) {
-                        let opts = ExecAutocmdsOpts::builder()
-                            .patterns(command.to_string())
-                            .data(obj)
-                            .group(GROUP)
-                            .build();
-                        debug!(
-                            "Executing autocommand: {} with options: {:#?}",
-                            command, opts
-                        );
-                        if let Err(err) = nvim_oxi::api::exec_autocmds(["User"], &opts) {
-                            error!("Error executing autocommand: '{}': {:#?}", command, err);
-                        }
-                    }
+                    serde_json::from_value::<Object>(data)
+                        .map(|obj| {
+                            let opts = ExecAutocmdsOpts::builder()
+                                .patterns(command.to_string())
+                                .data(obj)
+                                .group(GROUP)
+                                .build();
+                            debug!(
+                                "Executing autocommand: {} with options: {:#?}",
+                                command, opts
+                            );
+                            nvim_oxi::api::exec_autocmds(["User"], &opts).inspect_err(|err| {
+                                error!("Error executing autocommand: '{}': {:#?}", command, err)
+                            })
+                        })
+                        .inspect_err(|e| {
+                            error!(
+                                "Failed to deserialize autocommand data for '{}': {:#?}",
+                                command, e
+                            )
+                        })
+                        .ok();
                 } else if let Some(request_id) = request {
                     warn!(
                         "No listener attached for command '{}'. Using default implementation",
