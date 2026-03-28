@@ -489,16 +489,16 @@ describe("hermes.binary", function()
       stub(binary, "download").returns(true)
       stub(download, "get_available_tool").returns("curl")
       
-      local download_called = false
+      local callback_called = false
       binary.ensure_binary_async(60, function(_success, _result)
-        -- Callback after download attempt
+        callback_called = true
       end)
       
       -- Wait for async operation
       vim.wait(100)
       
-      -- Should attempt download due to version mismatch
-      assert.is_true(true, "Version mismatch should trigger download")
+      -- Callback should be called
+      assert.is_true(callback_called, "Callback should be called for version mismatch")
     end)
     
     it("handles unsupported platform error", function()
