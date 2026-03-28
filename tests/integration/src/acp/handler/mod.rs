@@ -281,6 +281,9 @@ fn test_execute_autocommand_with_problematic_data_triggers_deserialization_error
 ) -> nvim_oxi::Result<()> {
     // Test that sends data which may fail to deserialize to Object
     // This covers lines 59-64 (error handling for deserialization failure)
+    use std::thread;
+    use std::time::Duration;
+
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
         .expect("Handler creation should succeed");
@@ -298,6 +301,10 @@ fn test_execute_autocommand_with_problematic_data_triggers_deserialization_error
 
     // Send should succeed even if deserialization fails later
     assert!(result.is_ok(), "Send should succeed");
+
+    // Wait for async callback to execute (required for coverage capture)
+    thread::sleep(Duration::from_millis(100));
+
     Ok(())
 }
 
@@ -305,13 +312,50 @@ fn test_execute_autocommand_with_problematic_data_triggers_deserialization_error
 fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_oxi::Result<()> {
     // Test lines 71-78: "No listener but has request" error handling path
     // This triggers when no autocommand listener is attached but a request is provided
+    // AND when default_response fails (to trigger the error! at lines 74-77)
     use agent_client_protocol::WriteTextFileResponse;
-    use hermes::nvim::requests::Responder;
+    use hermes::nvim::requests::{RequestHandler, Responder};
     use std::sync::Arc;
     use tokio::sync::oneshot;
+    use uuid::Uuid;
+
+    // Create a mock that fails on default_response to trigger error! at lines 74-77
+    struct FailingMockRequestHandler;
+    impl RequestHandler for FailingMockRequestHandler {
+        fn default_response(
+            &self,
+            _request_id: &Uuid,
+            _data: serde_json::Value,
+        ) -> hermes::acp::Result<()> {
+            // Return an error to trigger the error! logging at lines 74-77
+            Err(hermes::acp::error::Error::Internal(
+                "Test error from default_response".to_string(),
+            ))
+        }
+
+        fn handle_response(
+            &self,
+            _request_id: &Uuid,
+            _response: nvim_oxi::Object,
+        ) -> hermes::acp::Result<()> {
+            Ok(())
+        }
+
+        fn cancel_session_requests(&self, _session_id: String) -> hermes::acp::Result<()> {
+            Ok(())
+        }
+
+        fn add_request(&self, _session_id: String, _responder: Responder) -> Uuid {
+            Uuid::new_v4()
+        }
+
+        fn get_request(&self, _request_id: &Uuid) -> Option<hermes::nvim::requests::Request> {
+            None
+        }
+    }
 
     let state = Arc::new(Mutex::new(PluginState::default()));
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
+    let handler = Handler::new(state.clone(), std::rc::Rc::new(FailingMockRequestHandler))
         .expect("Handler creation should succeed");
 
     // Create a responder which will generate a request_id
@@ -327,6 +371,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
     );
 
     // Send with a responder but NO listener attached - triggers lines 71-78
+    // With the failing mock, default_response will fail, triggering the error! at 74-77
     let result = tokio_test::block_on(handler.execute_autocommand_request(
         "test-session".to_string(),
         "TestErrorCommand", // No listener for this command
@@ -336,6 +381,10 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
 
     // Send should succeed even if default_response fails (error is logged, not propagated)
     assert!(result.is_ok(), "Send should succeed even with no listener");
+
+    // Wait for async callback to execute (required for coverage capture)
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
     Ok(())
 }
 
@@ -359,5 +408,9 @@ fn test_no_listener_no_request_triggers_warn_path() -> nvim_oxi::Result<()> {
         result.is_ok(),
         "Send should succeed even with no listener and no request"
     );
+
+    // Wait for async callback to execute (required for coverage capture)
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
     Ok(())
 }
