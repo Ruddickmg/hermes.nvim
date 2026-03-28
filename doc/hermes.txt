@@ -21,6 +21,7 @@ CONTENTS                                              *hermes-contents*
   5. Detailed Configuration .................. |hermes-detailed-config|
   6. Autocommands .............................. |hermes-autocommands|
   7. Commands .................................. |hermes-commands|
+     7.1 Version Management ...................... |hermes-version-mgmt|
   8. Troubleshooting ........................... |hermes-troubleshooting|
 
 ================================================================================
@@ -55,15 +56,20 @@ Using paq.nvim: >
     require("hermes").setup()
 <
 
-The binary is automatically downloaded on first use for supported platforms
+The binary is automatically downloaded once on first use for supported platforms
 (Linux x86_64/aarch64, macOS x86_64/aarch64, Windows x86_64).
+
+Once downloaded, the binary is never auto-updated. Use `:Hermes update` to
+manually fetch the latest version when desired.
 
 If your platform is not supported, you'll see an error message with
 instructions. Install Rust and run `:Hermes build` to build from source.
 
 To disable automatic binary download and manage the binary manually: >
     require("hermes").setup({
-        auto_download_binary = false,
+        download = {
+            auto = false,
+        },
     })
 <
 With this setting, Hermes will not download or build automatically.
@@ -85,8 +91,9 @@ Configuration options: ~
     • terminal:             Terminal configuration
     • buffer:               Buffer settings
     • log:                  Logging configuration
-    • version:              Binary version to use (default: "latest")
-    • auto_download_binary: Auto-download binary on first use (default: true)
+    • download.version:     Binary version to use (default: "latest")
+    • download.auto:        Auto-download binary on first use (default: true)
+    • download.timeout:     Download timeout in seconds (default: 60)
 
 Example: >
     require("hermes").setup({
@@ -371,18 +378,48 @@ Full autocommand list: |hermes-autocommands-list|
 *:Hermes*                                                 Hermes management
 
 Subcommands: ~
+    status     Show loading status and configuration
+    log        Show recent log messages
     install    Download and install binary
+    update     Update to latest version from GitHub
     build      Build binary from source
     version    Show version information
-    clean      Remove binary and cache
+    clean      Remove binary
     setup      Show current configuration
 
 Example: >
-    :Hermes install    " Force download latest binary
+    :Hermes status     " Check Hermes status
+    :Hermes log        " View recent logs
+    :Hermes install    " Download binary (first time or specific version)
+    :Hermes update     " Fetch and install latest version
     :Hermes build      " Build from source
     :Hermes version    " Show version info
-    :Hermes clean      " Remove all binaries
+    :Hermes clean      " Remove binary
+    :Hermes setup      " Show configuration
 <
+
+------------------------------------------------------------------------------
+7.1 VERSION MANAGEMENT                            *hermes-version-mgmt*
+
+Hermes downloads the binary once on first use and never auto-updates.
+
+To install a specific version: >
+    require("hermes").setup({
+        download = {
+            version = "v0.2.0",  -- or "1.2.3" (v prefix optional)
+        },
+    })
+    :Hermes install
+<
+
+To update to the latest version: >
+    :Hermes update
+<
+
+The version is only checked/downloaded:
+- On first use (if binary doesn't exist)
+- When running `:Hermes install` or `:Hermes update`
+- Never automatically on startup
 
 ================================================================================
 8. TROUBLESHOOTING                                    *hermes-troubleshooting*

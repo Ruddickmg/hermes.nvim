@@ -1,17 +1,23 @@
 ---Configuration management for Hermes (Installation-only)
 ---@module hermes.config
 ---Only stores installation-related configuration:
----  - version: which binary version to download
----  - auto_download_binary: whether to auto-download or require manual build
+---  - download.version: which binary version to download
+---  - download.auto: whether to auto-download or require manual build
+---  - download.timeout: download timeout in seconds
 ---  - log.notification.level: log level for vim.notify filtering
 ---All other configuration is passed directly to the Rust binary
 
 local M = {}
 
+---@class HermesDownloadConfig
+---Download configuration for binary management
+---@field version? string Version to use ("latest" or specific version like "v0.1.0")
+---@field auto? boolean Whether to auto-download binary (default: true)
+---@field timeout? number Download timeout in seconds (default: 60)
+
 ---@class HermesInstallConfig
 ---Installation-specific configuration (subset of full HermesConfig)
----@field version? string Version to use ("latest" or specific version)
----@field auto_download_binary? boolean Whether to auto-download binary
+---@field download? HermesDownloadConfig Download configuration
 ---@field log? {notification?: {level?: number|string}} Log configuration for notifications
 
 ---@type HermesInstallConfig
@@ -20,8 +26,11 @@ local _config = {}
 ---Default configuration values
 ---@type HermesInstallConfig
 local default_config = {
-  version = "latest",
-  auto_download_binary = true,
+  download = {
+    version = "latest",
+    auto = true,
+    timeout = 60,
+  },
   log = {
     notification = {
       level = "error",  -- Default per README.md
@@ -30,13 +39,18 @@ local default_config = {
 }
 
 ---Setup hermes installation configuration
----Only stores version, auto_download_binary, and log.notification.level settings
+---Only stores download config (version, auto, timeout) and log.notification.level settings
 ---All other configuration is passed directly to Rust binary
 ---@param opts? HermesInstallConfig User configuration options
 function M.setup(opts)
   opts = opts or {}
-  _config.version = opts.version or default_config.version
-  _config.auto_download_binary = opts.auto_download_binary ~= false -- default true
+  
+  -- Initialize download config with defaults
+  _config.download = {
+    version = (opts.download and opts.download.version) or default_config.download.version,
+    auto = (opts.download and opts.download.auto) ~= false, -- default true
+    timeout = (opts.download and opts.download.timeout) or default_config.download.timeout,
+  }
   
   -- Store log.notification.level for internal filtering
   if opts.log and opts.log.notification and opts.log.notification.level then
@@ -59,16 +73,28 @@ function M.get()
   return _config
 end
 
+---Get download configuration
+---@return HermesDownloadConfig Download configuration with version, auto, and timeout
+function M.get_download()
+  return _config.download or default_config.download
+end
+
 ---Get binary version setting
 ---@return string Binary version to use
 function M.get_version()
-  return _config.version or default_config.version
+  return (_config.download and _config.download.version) or default_config.download.version
 end
 
----Get auto_download_binary setting
+---Get auto download setting
 ---@return boolean Whether to auto-download binary
 function M.get_auto_download()
-  return _config.auto_download_binary ~= false
+  return (_config.download and _config.download.auto) ~= false
+end
+
+---Get download timeout
+---@return number Download timeout in seconds
+function M.get_download_timeout()
+  return (_config.download and _config.download.timeout) or default_config.download.timeout
 end
 
 ---Get notification log level for vim.notify filtering

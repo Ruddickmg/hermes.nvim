@@ -1,0 +1,1333 @@
+==============================================================================
+/var/www/hermes/lua/hermes/binary.lua
+==============================================================================
+      ---Binary management for Hermes
+      ---@module hermes.binary
+
+  136 local M = {}
+
+      -- Repository URL for manual builds
+  388 local REPO_URL = "https://github.com/Ruddickmg/hermes.nvim.git"
+
+      ---Download module (lazy-loaded)
+      ---@type table|nil
+  136 local download = nil
+
+      ---Get download module (lazy-load)
+      ---@return table download_module The download module
+      local function get_download()
+   68   if not download then
+  309     download = require("hermes.download")
+        end
+   68   return download
+      end
+
+      ---Supported platforms for pre-built binaries
+      ---@type table<string, boolean>
+  136 M.SUPPORTED_PLATFORMS = {
+        ["linux-x86_64"] = true,
+        ["linux-aarch64"] = true,
+  252   ["macos-x86_64"] = true,
+  978   ["macos-aarch64"] = true,
+  252   ["windows-x86_64"] = true,
+  136 }
+
+      ---Get the data directory for Hermes
+      ---@return string data_dir Path to data directory
+  350 function M.get_data_dir()
+  414   return vim.fn.stdpath("data") .. "/hermes"
+      end
+
+      ---Get the binary name for current platform
+      ---@return string binary_name Name of the binary file
+  136 function M.get_binary_name()
+  367   local platform = require("hermes.platform")
+  302   local os = platform.get_os()
+  302   local arch = platform.get_arch()
+  302   local ext = platform.get_ext()
+  302   return string.format("libhermes-%s-%s.%s", os, arch, ext)
+      end
+
+      ---Get the full path to the binary
+      ---@return string binary_path Full path to binary
+  388 function M.get_binary_path()
+  529   return M.get_data_dir() .. "/" .. M.get_binary_name()
+      end
+
+      ---Get the version file path
+      ---@return string version_file_path Path to version file
+  136 function M.get_version_file()
+   28   return M.get_data_dir() .. "/version.txt"
+      end
+
+      ---Download binary for platform
+      ---@param dest_path string Destination path for binary
+      ---@param ver string Version to download
+      ---@return boolean success Whether download succeeded
+  270 function M.download(dest_path, ver)
+  160   local platform = require("hermes.platform")
+   93   local download = get_download()
+        
+        -- Ensure data directory exists
+  186   vim.fn.mkdir(M.get_data_dir(), "p")
+        
+        -- Get platform info
+   93   local platform_key = platform.get_platform_key()
+   26   if not platform_key then
+   67     return false, "Unable to determine platform"
+        end
+        
+        -- If version is "latest", fetch the actual latest version
+   26   if ver == "latest" then
+    8     local version = require("hermes.version")
+  102     ver = version.fetch_latest()
+        end
+        
+        -- Construct download URL
+   95   local url = string.format(
+   69     "https://github.com/Ruddickmg/hermes.nvim/releases/download/%s/%s",
+  278     ver,
+   26     M.get_binary_name()
+        )
+        
+        -- Download the binary
+   26   local ok, err = download.download(url, dest_path)
+        
+  106   if not ok then
+   53     return false, err or "Download failed"
+        end
+        
+        -- Make executable (Unix-like systems)
+   26   if vim.fn.has("win32") ~= 1 then
+   53     vim.fn.system({"chmod", "+x", dest_path})
+        end
+        
+   53   return true
+      end
+
+      ---Build from source
+      ---@param dest_dir string Destination directory
+      ---@return boolean success Whether build succeeded
+  176 function M.build_from_source(dest_dir)
+   61   local logging = require("hermes.logging")
+  101   local download = get_download()
+        
+        -- Ensure destination directory exists
+   21   vim.fn.mkdir(dest_dir, "p")
+        
+        -- Check for required tools
+   82   if vim.fn.executable("git") ~= 1 then
+   45     logging.notify("Git is required to build from source", vim.log.levels.ERROR)
+   45     return false
+        end
+        
+   32   if vim.fn.executable("cargo") ~= 1 then
+****0     logging.notify("Rust/Cargo is required to build from source", vim.log.levels.ERROR)
+****0     return false
+        end
+        
+        -- Clone repository
+   56   local clone_dir = dest_dir .. "/build"
+   56   logging.notify("Cloning repository...", vim.log.levels.INFO)
+   16   local clone_ok = download.system({"git", "clone", REPO_URL, clone_dir})
+        
+   72   if vim.v.shell_error ~= 0 then
+   56     logging.notify("Failed to clone repository", vim.log.levels.ERROR)
+   16     return false
+        end
+        
+        -- Build with cargo
+****0   logging.notify("Building with cargo...", vim.log.levels.INFO)
+****0   local build_cmd = "cd " .. clone_dir .. " && cargo build --release"
+****0   download.system(build_cmd)
+        
+****0   if vim.v.shell_error ~= 0 then
+****0     logging.notify("Cargo build failed", vim.log.levels.ERROR)
+****0     return false
+        end
+        
+        -- Copy built binary to destination
+****0   local platform = require("hermes.platform")
+****0   local ext = platform.get_ext()
+****0   local built_lib = clone_dir .. "/target/release/libhermes." .. ext
+  252   local dest_lib = dest_dir .. "/" .. M.get_binary_name()
+        
+****0   local uv = vim.uv or vim.loop
+****0   local copy_ok = uv.fs_copyfile(built_lib, dest_lib)
+        
+****0   if not copy_ok then
+  252     logging.notify("Failed to copy built library", vim.log.levels.ERROR)
+   83     return false
+        end
+        
+        -- Clean up build directory
+   83   vim.fn.delete(clone_dir, "rf")
+        
+****0   logging.notify("Build successful!", vim.log.levels.INFO)
+****0   return true
+      end
+
+      ---Ensure binary is available (synchronous)
+      ---Downloads binary only if it doesn't exist (first time setup)
+      ---@return string path Path to binary
+  219 function M.ensure_binary()
+   40   local bin_path = M.get_binary_path()
+        
+        -- Check if binary already exists - if yes, just use it
+   80   if vim.fn.filereadable(bin_path) == 1 then
+   15     return bin_path
+        end
+        
+        -- Binary doesn't exist - need to download or build
+   25   local platform = require("hermes.platform")
+   25   local version = require("hermes.version")
+        
+        -- Check if platform is supported for pre-built binaries
+   25   local platform_key = platform.get_platform_key()
+   25   if not platform_key then
+****0     error(
+****0       "Unable to determine platform.\n\n" ..
+****0       "Please check the installation instructions:\n" ..
+            "https://github.com/Ruddickmg/hermes.nvim#installation"
+          )
+        end
+        
+   25   if not M.SUPPORTED_PLATFORMS[platform_key] then
+    4     local supported_list = {}
+   24     for plat, _ in pairs(M.SUPPORTED_PLATFORMS) do
+   20       table.insert(supported_list, "  - " .. plat:gsub("-", " "):gsub("^%l", string.upper))
+          end
+    4     table.sort(supported_list)
+          
+    8     error(
+   91       string.format(
+   87         "Platform not supported for automatic binary download: %s\n\n" ..
+   36         "Pre-built binaries are available for these platforms:\n%s\n\n" ..
+   20         "To use Hermes on your platform, you have two options:\n\n" ..
+   20         "Option 1 - Build manually (Recommended):\n" ..
+   20         "  1. Install Rust: https://rustup.rs/\n" ..
+   20         "  2. Run :Hermes build inside Neovim\n\n" ..
+   20         "Option 2 - Build outside Neovim:\n" ..
+   20         "  1. Clone: git clone %s\n" ..
+   20         "  2. Build: cargo build --release\n" ..
+   20         "  3. Copy target/release/libhermes.* to %s\n\n" ..
+   20         "For detailed instructions, see:\n" ..
+    4         "https://github.com/Ruddickmg/hermes.nvim#installation",
+    4         platform.get_display_string(),
+    4         table.concat(supported_list, "\n"),
+   71         REPO_URL,
+   71         M.get_data_dir()
+   67       )
+          )
+        end
+        
+        -- Check if download tools are available
+  155   local download_mod = get_download()
+   36   local download_tool = download_mod.get_available_tool()
+   12   if not download_tool then
+   12     error(
+   92       "Unable to download Hermes binary.\n\n" ..
+   84       "No download tool found. Please install one of the following:\n" ..
+   41       "  - curl (preferred)\n" ..
+   44       "  - wget\n\n" ..
+   25       "Alternatively, you can build from source:\n" ..
+   25       "  1. Install Rust: https://rustup.rs/\n" ..
+   25       "  2. Run :Hermes build inside Neovim\n\n" ..
+   25       "For detailed instructions, see:\n" ..
+   25       "https://github.com/Ruddickmg/hermes.nvim#installation"
+          )
+        end
+        
+        -- Download binary for supported platform
+    6   local wanted_ver = version.get_wanted()
+   73   local download_ok = M.download(bin_path, wanted_ver)
+        
+   57   if not download_ok then
+          -- Download failed on a supposedly supported platform
+   57     error(
+    6       string.format(
+   35         "Failed to download Hermes binary for %s.\n\n" ..
+   35         "This is unexpected for a supported platform.\n\n" ..
+   19         "Troubleshooting steps:\n" ..
+   19         "  1. Check your internet connection\n" ..
+   19         "  2. Check if GitHub is accessible\n" ..
+   19         "  3. The release may not exist yet for version %s\n\n" ..
+   19         "To build manually:\n" ..
+   19         "  1. Install Rust: https://rustup.rs/\n" ..
+   19         "  2. Run :Hermes build inside Neovim\n\n" ..
+   19         "For detailed instructions, see:\n" ..
+   19         "https://github.com/Ruddickmg/hermes.nvim#installation",
+   19         platform.get_display_string(),
+   16         wanted_ver
+   19       )
+          )
+        end
+        
+        -- Save version for reference
+    3   local ver_file = M.get_version_file()
+    6   vim.fn.writefile({wanted_ver}, ver_file)
+        
+   58   return bin_path
+      end
+
+      ---Load existing binary without downloading
+      ---Checks if binary exists at expected path, errors if not found
+      ---@return string path Path to existing binary
+   83 function M.load_existing_binary()
+    3   local bin_path = M.get_binary_path()
+        
+        -- Check if binary already exists
+    6   if vim.fn.filereadable(bin_path) == 0 then
+****0     local platform = require("hermes.platform")
+   32     error(
+    8       string.format(
+   16         "Binary not found and download.auto is disabled.\n\n" ..
+   16         "Current platform: %s\n\n" ..
+    8         "To resolve this, choose one option:\n\n" ..
+    8         "Option 1 - Enable auto-download in your config:\n" ..
+    8         "  require(\"hermes\").setup({\n" ..
+    8         "    download = {\n" ..
+    8         "      auto = true,\n" ..
+    8         "    },\n" ..
+    8         "  })\n\n" ..
+    8         "Option 2 - Build manually:\n" ..
+    8         "  1. Install Rust: https://rustup.rs/\n" ..
+    8         "  2. Run :Hermes build inside Neovim\n\n" ..
+    8         "For detailed instructions, see:\n" ..
+    8         "https://github.com/Ruddickmg/hermes.nvim#installation",
+    8         platform.get_display_string()
+    8       )
+    8     )
+        end
+        
+   58   return bin_path
+      end
+
+      ---Load native module
+      ---Ensures binary is available and loads it
+      ---@return table native_module The loaded native module
+   85 function M.load_or_build()
+    6   local bin_path = M.ensure_binary()
+        
+  262   local lib, err = package.loadlib(bin_path, "luaopen_hermes")
+   17   if not lib then
+****0     error(string.format(
+   11       "Failed to load native module from: %s\nError: %s",
+            bin_path,
+   11       tostring(err)
+   11     ))
+        end
+        
+   61   return lib()
+      end
+
+      ---Ensure binary is available asynchronously
+      ---Downloads binary if needed, then calls on_complete with the binary path
+      ---@param timeout number Timeout in seconds
+      ---@param on_complete function Callback function(success: boolean, result: string)
+   89 function M.ensure_binary_async(timeout, on_complete)
+   12   timeout = timeout or 60
+        
+   20   local platform = require("hermes.platform")
+   12   local version = require("hermes.version")
+        
+        -- Check if platform is supported
+   20   local platform_key = platform.get_platform_key()
+   46   if not platform_key then
+   37     on_complete(false, "Unable to determine platform")
+    3     return
+        end
+        
+   41   if not M.SUPPORTED_PLATFORMS[platform_key] then
+    8     on_complete(false, 
+    8       "Platform not supported for automatic binary download: " .. platform.get_display_string() .. 
+****0       ". Consider building from source.")
+****0     return
+        end
+        
+        -- Check if download tools are available
+    9   local download_mod = get_download()
+    9   local download_tool = download_mod.get_available_tool()
+    9   if not download_tool then
+    3     on_complete(false, "No download tool available. Please install curl, wget, or PowerShell.")
+    3     return
+        end
+        
+        -- Use vim.schedule to make the entire process async
+   20   vim.schedule(function()
+    3     local bin_path = M.get_binary_path()
+          
+          -- Check if binary already exists
+    6     if vim.fn.filereadable(bin_path) == 1 then
+   35       on_complete(true, bin_path)
+   11       return
+          end
+          
+          -- Binary doesn't exist, need to download
+****0     local wanted_ver = version.get_wanted()
+    8     local download_ok, download_err = M.download(bin_path, wanted_ver)
+          
+****0     if download_ok then
+            -- Save version for reference
+****0       local ver_file = M.get_version_file()
+   16       vim.fn.writefile({wanted_ver}, ver_file)
+****0       on_complete(true, bin_path)
+          else
+****0       on_complete(false, download_err or "Download failed")
+          end
+        end)
+      end
+
+   81 return M
+
+==============================================================================
+/var/www/hermes/lua/hermes/config.lua
+==============================================================================
+      ---Configuration management for Hermes (Installation-only)
+      ---@module hermes.config
+      ---Only stores installation-related configuration:
+      ---  - download.version: which binary version to download
+      ---  - download.auto: whether to auto-download or require manual build
+      ---  - download.timeout: download timeout in seconds
+      ---  - log.notification.level: log level for vim.notify filtering
+      ---All other configuration is passed directly to the Rust binary
+
+  466 local M = {}
+
+      ---@class HermesDownloadConfig
+      ---Download configuration for binary management
+      ---@field version? string Version to use ("latest" or specific version like "v0.1.0")
+      ---@field auto? boolean Whether to auto-download binary (default: true)
+      ---@field timeout? number Download timeout in seconds (default: 60)
+
+      ---@class HermesInstallConfig
+      ---Installation-specific configuration (subset of full HermesConfig)
+      ---@field download? HermesDownloadConfig Download configuration
+      ---@field log? {notification?: {level?: number|string}} Log configuration for notifications
+
+      ---@type HermesInstallConfig
+  466 local _config = {}
+
+      ---Default configuration values
+      ---@type HermesInstallConfig
+  466 local default_config = {
+  466   download = {
+          version = "latest",
+          auto = true,
+          timeout = 60,
+  466   },
+  466   log = {
+  466     notification = {
+            level = "error",  -- Default per README.md
+  466     },
+  466   },
+      }
+
+      ---Setup hermes installation configuration
+      ---Only stores download config (version, auto, timeout) and log.notification.level settings
+      ---All other configuration is passed directly to Rust binary
+      ---@param opts? HermesInstallConfig User configuration options
+  466 function M.setup(opts)
+  335   opts = opts or {}
+        
+        -- Initialize download config with defaults
+  335   _config.download = {
+  335     version = (opts.download and opts.download.version) or default_config.download.version,
+  335     auto = (opts.download and opts.download.auto) ~= false, -- default true
+  335     timeout = (opts.download and opts.download.timeout) or default_config.download.timeout,
+  335   }
+        
+        -- Store log.notification.level for internal filtering
+  335   if opts.log and opts.log.notification and opts.log.notification.level then
+  104     _config.log = _config.log or {}
+  104     _config.log.notification = _config.log.notification or {}
+  104     _config.log.notification.level = opts.log.notification.level
+        else
+          -- Ensure default is set
+  231     _config.log = {
+  231       notification = {
+  231         level = default_config.log.notification.level,
+  231       },
+  231     }
+        end
+      end
+
+      ---Get current installation configuration
+      ---@return HermesInstallConfig Current configuration
+  466 function M.get()
+   63   return _config
+      end
+
+      ---Get download configuration
+      ---@return HermesDownloadConfig Download configuration with version, auto, and timeout
+  466 function M.get_download()
+   61   return _config.download or default_config.download
+      end
+
+      ---Get binary version setting
+      ---@return string Binary version to use
+  466 function M.get_version()
+   26   return (_config.download and _config.download.version) or default_config.download.version
+      end
+
+      ---Get auto download setting
+      ---@return boolean Whether to auto-download binary
+  466 function M.get_auto_download()
+   13   return (_config.download and _config.download.auto) ~= false
+      end
+
+      ---Get download timeout
+      ---@return number Download timeout in seconds
+  466 function M.get_download_timeout()
+   13   return (_config.download and _config.download.timeout) or default_config.download.timeout
+      end
+
+      ---Get notification log level for vim.notify filtering
+      ---@return number|string Log level (vim.log.levels.* or string)
+  466 function M.get_notification_level()
+  608   if _config.log and _config.log.notification then
+  169     return _config.log.notification.level
+        end
+  439   return default_config.log.notification.level
+      end
+
+  466 return M
+
+==============================================================================
+/var/www/hermes/lua/hermes/download.lua
+==============================================================================
+      ---HTTP download utilities
+      ---@module hermes.download
+      ---Provides a clean wrapper around HTTP download functionality with cross-platform support
+      ---Uses curl (Unix), wget (Unix fallback), or PowerShell (Windows)
+
+  586 local M = {}
+
+      ---Check if curl is available on the system
+      ---@return boolean available
+  586 function M.is_curl_available()
+  564   return vim.fn.executable("curl") == 1
+      end
+
+      ---Check if wget is available on the system
+      ---@return boolean available
+  586 function M.is_wget_available()
+  202   return vim.fn.executable("wget") == 1
+      end
+
+      ---Check if PowerShell is available (Windows)
+      ---@return boolean available
+  586 function M.is_powershell_available()
+  150   return vim.fn.executable("powershell") == 1
+      end
+
+      ---Get available download tool
+      ---Priority: curl (Unix) > wget (Unix) > PowerShell (Windows)
+      ---@return string|nil tool_name Name of available tool, or nil if none
+  586 function M.get_available_tool()
+  512   if M.is_curl_available() then
+  168     return "curl"
+  176   elseif M.is_wget_available() then
+   26     return "wget"
+  124   elseif M.is_powershell_available() then
+   36     return "powershell"
+        end
+   26   return nil
+      end
+
+      ---Download file from URL using available tool
+      ---Cross-platform: curl (Unix), wget (Unix fallback), PowerShell (Windows)
+      ---@param url string URL to download
+      ---@param dest_path string Destination path
+      ---@return boolean success Whether download succeeded
+      ---@return string|nil error Error message if failed
+  586 function M.download(url, dest_path)
+  121   local tool = M.get_available_tool()
+        
+  121   if not tool then
+   13     return false, "No download tool available (tried curl, wget, PowerShell). Please install curl or wget."
+        end
+        
+        local cmd
+  108   if tool == "curl" then
+   72     cmd = { "curl", "-sL", "-o", dest_path, url }
+   36   elseif tool == "wget" then
+   13     cmd = { "wget", "-q", "-O", dest_path, url }
+        else
+          -- PowerShell for Windows
+   46     local ps_cmd = string.format(
+   23       'Invoke-WebRequest -Uri "%s" -OutFile "%s" -UseBasicParsing',
+   23       url, dest_path
+   23     )
+   23     cmd = { "powershell", "-Command", ps_cmd }
+        end
+        
+  108   local result = vim.fn.system(cmd)
+        
+  216   if vim.v.shell_error ~= 0 then
+          -- Check if it's a command not found error vs network error
+   30     if result:match("command not found") or result:match("not installed") or result:match("is not recognized") then
+    5       return false, tool .. " appears to be installed but execution failed: " .. result
+          end
+   25     return false, result
+        end
+        
+        -- Verify file was downloaded and has reasonable size using vim.uv for cross-platform compatibility
+   78   local uv = vim.uv or vim.loop
+   78   local stat = uv.fs_stat(dest_path)
+   78   if not stat or stat.size < 100 then
+          -- Use vim.uv.fs_unlink for cross-platform file deletion
+   32     uv.fs_unlink(dest_path)
+   32     return false, "Downloaded file is too small or empty"
+        end
+        
+   46   return true, nil
+      end
+
+      ---Execute a shell command and return result
+      ---Simple wrapper around vim.fn.system for consistency
+      ---@param cmd table|string Command as array or string
+      ---@return string output Command output
+      ---@return number exit_code Exit code (0 = success)
+  586 function M.system(cmd)
+   42   local output = vim.fn.system(cmd)
+   84   return output, vim.v.shell_error
+      end
+
+  586 return M
+
+==============================================================================
+/var/www/hermes/lua/hermes/init.lua
+==============================================================================
+      ---@brief [[
+      --- Hermes - ACP (Agent Client Protocol) client for Neovim
+      --- Provides APIs for communicating with AI assistants
+      ---
+      --- Usage:
+      ---   require("hermes").setup()  -- Initialize with defaults
+      ---   require("hermes").connect("opencode")  -- Connect to agent
+      ---
+      ---@brief ]]
+
+      -- ============================================================================
+      -- Type Definitions for IDE/LSP Support
+      -- ============================================================================
+
+      ---@class HermesDownloadConfig
+      ---Download configuration for binary management
+      ---@field version? string Version to use ("latest" or specific version like "v0.1.0")
+      ---@field auto? boolean Whether to auto-download pre-built binary (default: true)
+      ---@field timeout? number Download timeout in seconds (default: 60)
+
+      ---@class HermesConfig
+      ---Hermes plugin configuration options
+      ---@field download? HermesDownloadConfig Download configuration for binary management
+      ---@field root_markers? string[] Files/directories to identify project root (default: {".git"})
+      ---@field permissions? HermesPermissions Permission settings for agent operations
+      ---@field terminal? HermesTerminalConfig Terminal configuration
+      ---@field buffer? HermesBufferConfig Buffer configuration
+      ---@field log? HermesLogConfig Logging configuration
+
+      ---@class HermesPermissions
+      ---Permission settings for agent operations
+      ---@field fs_write_access? boolean Allow agent to write files (default: true)
+      ---@field fs_read_access? boolean Allow agent to read files (default: true)
+      ---@field terminal_access? boolean Allow agent to execute terminal commands (default: true)
+      ---@field request_permissions? boolean Allow agent to send permission requests (default: true)
+      ---@field send_notifications? boolean Allow agent to send notifications (default: true)
+
+      ---@class HermesTerminalConfig
+      ---Terminal configuration options
+      ---@field delete? boolean Auto-delete terminals on exit (default: true)
+      ---@field enabled? boolean Enable terminal functionality (default: true)
+      ---@field buffered? boolean Buffer terminal output (default: true)
+
+      ---@class HermesBufferConfig
+      ---Buffer configuration options
+      ---@field auto_save? boolean Auto-save modified files after writing (default: false)
+
+      ---@class HermesLogConfig
+      ---Logging configuration options
+      ---@field stdio? HermesLogTargetConfig Stdio logging settings
+      ---@field notification? HermesLogTargetConfig Notification logging settings
+      ---@field message? HermesLogTargetConfig Message logging settings (for :messages)
+      ---@field file? HermesLogFileConfig File logging settings
+
+      ---@class HermesLogTargetConfig
+      ---Log target configuration (stdio, notification, message)
+      ---@field level? number|string Log level (vim.log.levels.* or "trace", "debug", "info", "warn", "error", "off")
+      ---@field format? "compact"|"pretty"|"full"|"json" Log format (default: "compact")
+
+      ---@class HermesLogFileConfig
+      ---File logging configuration
+      ---@field level? number|string Log level (vim.log.levels.* or string)
+      ---@field format? "compact"|"pretty"|"full"|"json" Log format (default: "json")
+      ---@field path? string Path to log file (default: vim.fn.stdpath('state') .. "/nvim/hermes.log")
+      ---@field max_size? number Maximum file size in bytes (default: 10485760 = 10MB)
+      ---@field max_files? number Maximum number of log files to keep (default: 5)
+
+      ---@class ConnectionOptions
+      ---Options for connecting to an agent
+      ---@field protocol? "stdio"|"http"|"socket" Connection protocol (default: "stdio")
+      ---@field command? string Command to run for stdio connections
+      ---@field args? string[] Command arguments for stdio connections
+      ---@field url? string URL for http/sse connections
+
+      ---@class EnvVar
+      ---Environment variable entry
+      ---@field name string Environment variable name
+      ---@field value string Environment variable value
+
+      ---@class McpServer
+      ---MCP (Model Context Protocol) server configuration
+      ---@field type "http"|"sse"|"stdio" Server type
+      ---@field name string Human-readable server name
+      ---@field url? string URL for http/sse servers (required for http/sse types)
+      ---@field headers? table<string, string>[] HTTP headers as array of key-value tables
+      ---@field command? string Command to execute for stdio servers (required for stdio type)
+      ---@field args? string[] Arguments for stdio server command
+      ---@field env? EnvVar[] Environment variables as array of {name: string, value: string}
+
+      ---@class SessionOptions
+      ---Options for creating or loading a session
+      ---@field cwd? string Working directory for the session
+      ---@field mcpServers? McpServer[] Array of MCP server configurations
+
+      ---@class ListSessionsOptions
+      ---Options for listing sessions
+      ---@field cwd? string Filter by working directory path
+      ---@field cursor? string Pagination cursor for fetching next page
+
+      ---@class TextContent
+      ---Text content for prompts
+      ---@field type "text" Type identifier
+      ---@field text string The text content to send
+
+      ---@class LinkContent
+      ---Resource link content for prompts
+      ---@field type "link" Type identifier
+      ---@field name string Human-readable resource name
+      ---@field uri string Resource URI (file path or URL)
+
+      ---@class EmbeddedResource
+      ---Embedded resource data
+      ---@field uri string Resource URI
+      ---@field mimeType? string MIME type of the resource (e.g., "text/x-python", "application/pdf")
+      ---@field text? string Text content (for text resources)
+      ---@field blob? string Base64-encoded binary data (for blob resources)
+
+      ---@class EmbeddedContent
+      ---Embedded resource content for prompts
+      ---@field type "embedded" Type identifier
+      ---@field resource EmbeddedResource The embedded resource
+
+      ---@class ImageContent
+      ---Image content for prompts
+      ---@field type "image" Type identifier
+      ---@field data string Base64-encoded image data
+      ---@field mimeType string MIME type (e.g., "image/png", "image/jpeg")
+
+      ---@class AudioContent
+      ---Audio content for prompts
+      ---@field type "audio" Type identifier
+      ---@field data string Base64-encoded audio data
+      ---@field mimeType string MIME type (e.g., "audio/wav", "audio/mpeg")
+
+      ---@alias PromptContent TextContent|LinkContent|EmbeddedContent|ImageContent|AudioContent|table
+
+    8 local M = {}
+
+      -- ============================================================================
+      -- Module State (all testable sync operations)
+      -- ============================================================================
+
+      -- Lazy-loaded native module
+    8 local _native = nil
+
+      -- Loading state: NOT_LOADED, DOWNLOADING, LOADING, READY, FAILED
+    8 local _loading_state = "NOT_LOADED"
+    8 local _loading_error = nil
+    8 local _download_timeout = 60
+
+      -- ============================================================================
+      -- Pure Sync State Management (fully testable)
+      -- ============================================================================
+
+      -- Get current loading state
+    8 function M.get_loading_state()
+   32 	return _loading_state
+      end
+
+      -- Get loading error if any
+    8 function M.get_loading_error()
+   16 	return _loading_error
+      end
+
+      -- Check if binary is already ready (sync)
+      local function is_ready()
+   88 	return _loading_state == "READY"
+      end
+
+      -- Check if binary is currently loading (sync)
+      local function is_loading()
+   96 	return _loading_state == "DOWNLOADING" or _loading_state == "LOADING"
+      end
+
+      -- Check if loading previously failed (sync)
+      local function is_failed()
+   24 	return _loading_state == "FAILED"
+      end
+
+      -- Set loading state (sync, for testing)
+      local function set_loading_state(state)
+  167 	_loading_state = state
+      end
+
+      -- Set loading error (sync, for testing)
+      local function set_loading_error(err)
+  132 	_loading_error = err
+      end
+
+      -- Get auto-download setting from config (sync)
+      local function should_auto_download()
+   40 	local config = require("hermes.config")
+   40 	local download_cfg = config.get_download()
+   40 	return download_cfg.auto ~= false
+      end
+
+      -- ============================================================================
+      -- State Transition Functions (pure sync, fully testable)
+      -- ============================================================================
+
+      -- Handle READY state: execute function immediately
+      local function handle_ready_state(fn)
+    8 	fn()
+    8 	return true
+      end
+
+      -- Handle loading states: show warning and return
+      local function handle_loading_state()
+   72 	vim.notify("Hermes: Binary is still loading. Check :Hermes status for progress.", vim.log.levels.WARN)
+   72 	return false
+      end
+
+      -- Handle FAILED state: show error and return
+      local function handle_failed_state()
+   16 	vim.notify(
+    8 		"Hermes: Failed to load. Run :Hermes status for details or :Hermes log for errors.",
+    8 		vim.log.levels.ERROR
+    8 	)
+    8 	return false
+      end
+
+      -- Handle successful load completion (sync state update)
+      local function handle_load_success(loaded_module, fn)
+    8 	_native = loaded_module
+    8 	_loading_state = "READY"
+    8 	vim.notify("Hermes: Ready", vim.log.levels.INFO)
+    8 	fn()
+      end
+
+      -- Handle load failure (sync state update)
+      local function handle_load_failure(err_msg, context)
+    8 	_loading_state = "FAILED"
+    8 	_loading_error = err_msg
+    8 	vim.notify("Hermes: " .. context .. ". Run :Hermes status or :Hermes log for details.", vim.log.levels.ERROR)
+      end
+
+      -- Handle download completion and trigger load (async entry point)
+      local function handle_download_complete(success, result, fn)
+****0 	if not success then
+****0 		handle_load_failure(tostring(result), "Binary download failed")
+****0 		return
+      	end
+
+      	-- Download successful, now load the binary
+****0 	_loading_state = "LOADING"
+
+      	-- Use vim.schedule for the actual loading (only async part)
+****0 	vim.schedule(function()
+****0 		local ok, loaded = pcall(M._load_native_sync)
+
+****0 		if not ok then
+****0 			handle_load_failure(tostring(loaded), "Failed to load binary")
+****0 			return
+      		end
+
+****0 		handle_load_success(loaded, fn)
+      	end)
+      end
+
+      -- Handle auto-download disabled path (async entry point)
+      local function handle_auto_download_disabled(fn)
+    8 	_loading_state = "LOADING"
+    8 	vim.notify("Hermes: Loading binary...", vim.log.levels.INFO)
+
+      	-- Use vim.schedule for the actual loading (only async part)
+   16 	vim.schedule(function()
+****0 		local binary = require("hermes.binary")
+
+****0 		local ok, loaded = pcall(function()
+****0 			local bin_path = binary.load_existing_binary()
+****0 			local lib, err = package.loadlib(bin_path, "luaopen_hermes")
+****0 			if not lib then
+****0 				error(string.format("Failed to load: %s", tostring(err)))
+      			end
+****0 			return lib()
+      		end)
+
+****0 		if ok then
+****0 			handle_load_success(loaded, fn)
+      		else
+****0 			handle_load_failure(tostring(loaded), "Failed to load binary (auto-download disabled)")
+      		end
+      	end)
+      end
+
+      -- ============================================================================
+      -- Binary Loading (sync version for testing, async wrapper for production)
+      -- ============================================================================
+
+      -- Load native module synchronously (can be tested with mocked deps)
+    8 function M._load_native_sync()
+   88 	if not _native then
+    8 		local binary = require("hermes.binary")
+    8 		local ok, result = pcall(binary.load_or_build)
+
+    8 		if not ok then
+****0 			error("Hermes: Failed to load or build native binary: " .. tostring(result))
+      		end
+
+    8 		_native = result
+      	end
+   88 	return _native
+      end
+
+      -- Main async executor - minimal async code, delegates to sync functions
+      local function execute_async(fn)
+      	-- Check states in priority order (all sync checks)
+  144 	if is_ready() then
+****0 		return handle_ready_state(fn)
+      	end
+
+  144 	if is_loading() then
+   64 		return handle_loading_state()
+      	end
+
+   16 	if is_failed() then
+****0 		return handle_failed_state()
+      	end
+
+      	-- NOT_LOADED: Need to start loading
+    8 	local config = require("hermes.config")
+   16 	local download_cfg = config.get_download and config.get_download() or { auto_download_binary = true, timeout = 60 }
+    8 	_download_timeout = download_cfg.timeout or 60
+
+   16 	if not should_auto_download() then
+    8 		return handle_auto_download_disabled(fn)
+      	end
+
+      	-- Start async download
+****0 	_loading_state = "DOWNLOADING"
+****0 	vim.notify("Hermes: Downloading binary...", vim.log.levels.INFO)
+
+****0 	local binary = require("hermes.binary")
+****0 	binary.ensure_binary_async(_download_timeout, function(success, result)
+****0 		handle_download_complete(success, result, fn)
+      	end)
+      end
+
+      -- ============================================================================
+      -- API Exports (match Rust API exactly per README.md)
+      -- ============================================================================
+
+      ---Setup hermes plugin with configuration
+      ---All configuration is passed to the Rust binary
+      ---@param opts? HermesConfig User configuration options
+    8 function M.setup(opts)
+   56 	opts = opts or {}
+
+      	-- Store installation-related config locally
+  112 	require("hermes.config").setup({
+   56 		download = opts.download,
+   56 		log = opts.log,
+      	})
+
+      	-- Execute async with loading state management
+  112 	execute_async(function()
+****0 		M._load_native_sync().setup(opts)
+      	end)
+      end
+
+      ---Connect to an ACP agent
+      ---@param agent "opencode"|"copilot"|"gemini"|string Agent name (predefined or custom)
+      ---@param opts? ConnectionOptions Connection options
+    8 function M.connect(agent, opts)
+   16 	execute_async(function()
+****0 		M._load_native_sync().connect(agent, opts or {})
+      	end)
+      end
+
+      ---Disconnect from agent(s)
+      ---@param agents? string|string[] Agent name(s) to disconnect, nil for all
+    8 function M.disconnect(agents)
+   16 	execute_async(function()
+****0 		M._load_native_sync().disconnect(agents)
+      	end)
+      end
+
+      ---Authenticate with an agent
+      ---@param auth_method_id string Authentication method ID from ConnectionInitialized
+    8 function M.authenticate(auth_method_id)
+****0 	execute_async(function()
+****0 		M._load_native_sync().authenticate(auth_method_id)
+      	end)
+      end
+
+      ---Create a new session
+      ---@param opts? SessionOptions Session configuration options
+    8 function M.create_session(opts)
+****0 	execute_async(function()
+****0 		M._load_native_sync().create_session(opts or {})
+      	end)
+      end
+
+      ---Load an existing session
+      ---@param session_id string Session ID to load
+      ---@param opts? SessionOptions Session configuration options
+    8 function M.load_session(session_id, opts)
+****0 	execute_async(function()
+****0 		M._load_native_sync().load_session(session_id, opts or {})
+      	end)
+      end
+
+      ---List sessions with optional filtering
+      ---@param opts? ListSessionsOptions Filter options
+    8 function M.list_sessions(opts)
+****0 	execute_async(function()
+****0 		M._load_native_sync().list_sessions(opts)
+      	end)
+      end
+
+      ---Send a prompt to the agent
+      ---@param session_id string Session ID
+      ---@param content PromptContent|PromptContent[] Content to send (single item or array)
+    8 function M.prompt(session_id, content)
+****0 	execute_async(function()
+****0 		M._load_native_sync().prompt(session_id, content)
+      	end)
+      end
+
+      ---Cancel current operation
+      ---@param session_id string Session ID
+    8 function M.cancel(session_id)
+****0 	execute_async(function()
+****0 		M._load_native_sync().cancel(session_id)
+      	end)
+      end
+
+      ---Set session mode
+      ---@param session_id string Session ID
+      ---@param mode_id string Mode ID
+    8 function M.set_mode(session_id, mode_id)
+****0 	execute_async(function()
+****0 		M._load_native_sync().set_mode(session_id, mode_id)
+      	end)
+      end
+
+      ---Respond to a request
+      ---@param request_id string Request ID from autocommand
+      ---@param response? any Response data
+    8 function M.respond(request_id, response)
+****0 	execute_async(function()
+****0 		M._load_native_sync().respond(request_id, response)
+      	end)
+      end
+
+      -- ============================================================================
+      -- User Commands (:Hermes status, :Hermes log)
+      -- ============================================================================
+
+
+
+      -- Export internal functions for testing
+    8 M._is_ready = is_ready
+    8 M._is_loading = is_loading
+    8 M._is_failed = is_failed
+    8 M._set_loading_state = set_loading_state
+    8 M._set_loading_error = set_loading_error
+    8 M._handle_ready_state = handle_ready_state
+    8 M._handle_loading_state = handle_loading_state
+    8 M._handle_failed_state = handle_failed_state
+    8 M._handle_load_success = handle_load_success
+    8 M._handle_load_failure = handle_load_failure
+    8 M._should_auto_download = should_auto_download
+
+    8 return M
+
+==============================================================================
+/var/www/hermes/lua/hermes/logging.lua
+==============================================================================
+      ---Logging utilities with level filtering for internal use
+      ---@module hermes.logging
+      ---Provides vim.notify wrapper that respects config.log.notification.level
+
+  194 local M = {}
+
+      ---Normalize log level to numeric value for comparison
+      ---Supports both vim.log.levels constants and string values
+      ---@param level number|string Log level
+      ---@return number numeric_level Normalized numeric level (0-5)
+      local function normalize_level(level)
+ 1203   if type(level) == "number" then
+  543     return level
+        end
+        
+        -- String level mapping (case-insensitive)
+  660   local levels = {
+          trace = 0,
+          debug = 1,
+          info = 2,
+          warn = 3,
+          warning = 3,
+          error = 4,
+          off = 5,
+        }
+        
+ 1320   return levels[level:lower()] or 4  -- Default to ERROR if unknown
+      end
+
+      ---Internal notify wrapper that filters based on configured log level
+      ---Only messages with level >= configured minimum level are shown
+      ---@param message string Message to display
+      ---@param level? number|string Log level (vim.log.levels.* or string), defaults to ERROR
+      ---@param opts? table Additional options for vim.notify
+  194 function M.notify(message, level, opts)
+  582   level = level or vim.log.levels.ERROR
+  582   opts = opts or {}
+        
+  582   local config = require("hermes.config")
+  582   local configured_level = config.get_notification_level()
+        
+        -- Convert both to numeric values for comparison
+  582   local message_level = normalize_level(level)
+  582   local min_level = normalize_level(configured_level)
+        
+        -- Only show if message level is >= configured minimum level
+        -- Higher numbers = more severe (ERROR=4, WARN=3, INFO=2, DEBUG=1, TRACE=0)
+  582   if message_level >= min_level then
+  150     local notify_level = level
+  150     if type(notify_level) == "string" then
+   78       notify_level = normalize_level(notify_level)
+          end
+  150     vim.notify(message, notify_level, opts)
+        end
+      end
+
+  194 return M
+
+==============================================================================
+/var/www/hermes/lua/hermes/platform.lua
+==============================================================================
+      ---Platform detection utilities
+      ---@module hermes.platform
+
+ 1078 local M = {}
+
+      ---Get operating system
+      ---@return string os_name Operating system: "linux", "macos", or "windows"
+ 1078 function M.get_os()
+ 2495   local uname = vim.loop.os_uname()
+ 2495   local sysname = uname.sysname
+        
+ 2495   if sysname == "Linux" then
+ 2425     return "linux"
+   70   elseif sysname == "Darwin" then
+****0     return "macos"
+   70   elseif sysname:match("Windows") or sysname:match("WIN") then
+   14     return "windows"
+        else
+          -- Try to detect from vim functions
+  168     if vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1 then
+****0       return "windows"
+  154     elseif vim.fn.has("mac") == 1 or vim.fn.has("osx") == 1 then
+   14       return "macos"
+   84     elseif vim.fn.has("linux") == 1 then
+   42       return "linux"
+          end
+          
+****0     error("Unsupported operating system: " .. sysname)
+        end
+      end
+
+      ---Get architecture
+      ---@return string arch Architecture: "x86_64" or "aarch64"
+ 1078 function M.get_arch()
+ 1391   local machine = vim.loop.os_uname().machine
+        
+        -- Normalize architecture names
+ 1293   if machine == "x86_64" or machine == "amd64" or machine == "x64" then
+ 1209     return "x86_64"
+   84   elseif machine == "aarch64" or machine == "arm64" then
+   14     return "aarch64"
+   70   elseif machine == "i386" or machine == "i686" then
+   14     error("x86 (32-bit) architecture is not supported. Please use x86_64 or aarch64.")
+        else
+   56     error("Unsupported architecture: " .. machine .. ". Please use x86_64 or aarch64.")
+        end
+      end
+
+      ---Get library extension for current platform
+      ---@return string ext Library extension: "so", "dylib", or "dll"
+ 1078 function M.get_ext()
+ 1243   local os = M.get_os()
+ 1243   if os == "linux" then
+ 1215     return "so"
+   28   elseif os == "macos" then
+   14     return "dylib"
+   14   elseif os == "windows" then
+   14     return "dll"
+        end
+      end
+
+      ---Get binary filename for current platform
+      ---@return string filename Binary filename (e.g., "libhermes-linux-x86_64.so")
+ 1078 function M.get_binary_name()
+  360   local os = M.get_os()
+  360   local arch = M.get_arch()
+  360   local ext = M.get_ext()
+  360   return string.format("libhermes-%s-%s.%s", os, arch, ext)
+      end
+
+      ---Check if current platform is supported
+      ---@return boolean supported Whether platform is supported
+      ---@return string|nil error Error message if not supported
+ 1078 function M.is_supported()
+   56   local ok, err = pcall(function()
+   28     M.get_os()
+   28     M.get_arch()
+        end)
+   28   return ok, err
+      end
+
+      ---Get platform string for display
+      ---@return string platform Platform string (e.g., "Linux x86_64")
+ 1078 function M.get_display_string()
+  262   local ok, os, arch = pcall(function()
+  379     return M.get_os(), M.get_arch()
+        end)
+  131   if ok then
+  117     return string.format("%s %s", os:gsub("^%l", string.upper), arch)
+        else
+   14     return "Unknown Platform"
+        end
+      end
+
+      ---Get platform key for checking against supported platforms
+      ---@return string|nil key Platform key (e.g., "linux-x86_64") or nil if not determinable
+ 1078 function M.get_platform_key()
+ 1012   local ok, os, arch = pcall(function()
+ 1504     return M.get_os(), M.get_arch()
+        end)
+  506   if ok then
+  492     return string.format("%s-%s", os, arch)
+        end
+   14   return nil
+      end
+
+ 1078 return M
+
+==============================================================================
+/var/www/hermes/lua/hermes/version.lua
+==============================================================================
+      ---Version management for Hermes binaries
+      ---@module hermes.version
+
+  320 local M = {}
+
+      ---Get the version to use
+      ---Returns either user-specified version or "latest" as default
+      ---@return string version Version string (e.g., "v0.1.0" or "latest")
+   85 function M.get_wanted()
+  263 	local config = require("hermes.config").get()
+   28 	local wanted = config.version or "latest"
+
+  263 	if wanted == "latest" then
+   18 		return "latest"
+      	end
+
+      	-- Ensure version starts with 'v'
+   10 	if not wanted:match("^v") then
+    5 		wanted = "v" .. wanted
+      	end
+
+  101 	return wanted
+      end
+
+      ---Fetch latest release version from GitHub
+      ---@return string version Latest version tag (e.g., "v0.1.0")
+   85 function M.fetch_latest()
+   23 	local logging = require("hermes.logging")
+   23 	local fallback_version = "v0.1.0"
+
+   31 	logging.notify("Fetching latest Hermes version from GitHub...", vim.log.levels.INFO)
+
+      	-- Use download module for cross-platform HTTP support
+   39 	local download = require("hermes.download")
+  258 	local url = "https://api.github.com/repos/Ruddickmg/hermes.nvim/releases/latest"
+      	
+      	-- Create a temporary file for the response
+   23 	local temp_file = os.tmpname()
+      	
+   23 	local success, err = download.download(url, temp_file)
+      	
+   23 	if not success then
+   88 		logging.notify("Failed to fetch latest version: " .. (err or "Unknown error") .. ". Using fallback.", vim.log.levels.WARN)
+   13 		os.remove(temp_file)
+   13 		return fallback_version
+      	end
+
+      	-- Read the response
+   10 	local f = io.open(temp_file, "r")
+   10 	if not f then
+   75 		logging.notify("Could not read version response. Using fallback.", vim.log.levels.WARN)
+   75 		os.remove(temp_file)
+****0 		return fallback_version
+      	end
+      	
+   10 	local result = f:read("*all")
+   85 	f:close()
+      	
+      	-- Clean up temp file
+   34 	os.remove(temp_file)
+
+      	-- Parse JSON response (simple pattern matching)
+   10 	local tag = result:match('"tag_name":%s*"([^"]+)"')
+
+   10 	if not tag then
+   56 		logging.notify("Could not parse version from response. Using fallback.", vim.log.levels.WARN)
+   56 		return fallback_version
+      	end
+
+    5 	logging.notify("Latest version: " .. tag, vim.log.levels.INFO)
+
+    5 	return tag
+      end
+
+   85 return M
+
+==============================================================================
+Summary
+==============================================================================
+
+File                                    Hits Missed Coverage
+------------------------------------------------------------
+/var/www/hermes/lua/hermes/binary.lua   183  28     86.73%
+/var/www/hermes/lua/hermes/config.lua   40   0      100.00%
+/var/www/hermes/lua/hermes/download.lua 43   0      100.00%
+/var/www/hermes/lua/hermes/init.lua     82   47     63.57%
+/var/www/hermes/lua/hermes/logging.lua  18   0      100.00%
+/var/www/hermes/lua/hermes/platform.lua 54   3      94.74%
+/var/www/hermes/lua/hermes/version.lua  35   1      97.22%
+------------------------------------------------------------
+Total                                   455  79     85.21%

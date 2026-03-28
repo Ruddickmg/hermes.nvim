@@ -1,18 +1,25 @@
-local download = require("hermes.download")
-local logging = require("hermes.logging")
-
----Binary download and compilation management
+---Binary management for Hermes
 ---@module hermes.binary
 
 local M = {}
 
----@type string Base URL for GitHub releases
-local BASE_URL = "https://github.com/Ruddickmg/hermes.nvim/releases/download"
-
----@type string Repository URL for building from source
+-- Repository URL for manual builds
 local REPO_URL = "https://github.com/Ruddickmg/hermes.nvim.git"
 
----List of officially supported platforms for pre-built binaries
+---Download module (lazy-loaded)
+---@type table|nil
+local download = nil
+
+---Get download module (lazy-load)
+---@return table download_module The download module
+local function get_download()
+  if not download then
+    download = require("hermes.download")
+  end
+  return download
+end
+
+---Supported platforms for pre-built binaries
 ---@type table<string, boolean>
 M.SUPPORTED_PLATFORMS = {
   ["linux-x86_64"] = true,
@@ -22,140 +29,166 @@ M.SUPPORTED_PLATFORMS = {
   ["windows-x86_64"] = true,
 }
 
----Get path to binary storage directory
----@return string path Path to data directory
+---Get the data directory for Hermes
+---@return string data_dir Path to data directory
 function M.get_data_dir()
   return vim.fn.stdpath("data") .. "/hermes"
 end
 
----Ensure directory exists
----@param path string Directory path
-local function ensure_dir(path)
-  if vim.fn.isdirectory(path) == 0 then
-    vim.fn.mkdir(path, "p")
-  end
-end
-
----Get full path to binary file
----@return string path Full path to binary
-function M.get_binary_path()
+---Get the binary name for current platform
+---@return string binary_name Name of the binary file
+function M.get_binary_name()
   local platform = require("hermes.platform")
-  local data_dir = M.get_data_dir()
-  local bin_name = platform.get_binary_name()
-  return data_dir .. "/" .. bin_name
+  local os = platform.get_os()
+  local arch = platform.get_arch()
+  local ext = platform.get_ext()
+  return string.format("libhermes-%s-%s.%s", os, arch, ext)
 end
 
----Get path to version file
----@return string path Path to version file
+---Get the full path to the binary
+---@return string binary_path Full path to binary
+function M.get_binary_path()
+  return M.get_data_dir() .. "/" .. M.get_binary_name()
+end
+
+---Get the version file path
+---@return string version_file_path Path to version file
 function M.get_version_file()
   return M.get_data_dir() .. "/version.txt"
 end
 
----Download binary from GitHub releases
----Shows progress to user during download
+---Download binary for platform
 ---@param dest_path string Destination path for binary
----@param version string Version to download
+---@param ver string Version to download
 ---@return boolean success Whether download succeeded
-function M.download(dest_path, version)
+function M.download(dest_path, ver)
   local platform = require("hermes.platform")
-  local bin_name = platform.get_binary_name()
-  local url = string.format("%s/%s/%s", BASE_URL, version, bin_name)
+  local download_mod = get_download()
   
-    logging.notify(
-    string.format("Downloading Hermes binary for %s...", platform.get_display_string()),
-    vim.log.levels.INFO
+  -- Ensure data directory exists
+  vim.fn.mkdir(M.get_data_dir(), "p")
+  
+  -- Get platform info
+  local platform_key = platform.get_platform_key()
+  if not platform_key then
+    return false, "Unable to determine platform"
+  end
+  
+  -- If version is "latest", fetch the actual latest version
+  if ver == "latest" then
+    local version = require("hermes.version")
+    ver = version.fetch_latest()
+  end
+  
+  -- Construct download URL
+  local url = string.format(
+    "https://github.com/Ruddickmg/hermes.nvim/releases/download/%s/%s",
+    ver,
+    M.get_binary_name()
   )
   
-  ensure_dir(M.get_data_dir())
-  
-  -- Download using the download module
-  local ok, err = download.download(url, dest_path)
+  -- Download the binary
+  local ok, err = download_mod.download(url, dest_path)
   
   if not ok then
-    logging.notify("Download failed: " .. (err or "Unknown error"), vim.log.levels.ERROR)
-    return false
+    return false, err or "Download failed"
   end
   
-  -- Make executable on Unix
-  if platform.get_os() ~= "windows" then
-    vim.fn.system({ "chmod", "+x", dest_path })
+  -- Make executable (Unix-like systems)
+  if vim.fn.has("win32") ~= 1 then
+    vim.fn.system({"chmod", "+x", dest_path})
   end
   
-    logging.notify("Binary downloaded successfully!", vim.log.levels.INFO)
   return true
 end
 
----Build binary from source
----Fallback when pre-built binary is not available
+---Build from source
 ---@param dest_dir string Destination directory
 ---@return boolean success Whether build succeeded
 function M.build_from_source(dest_dir)
-    logging.notify(
-    "Pre-built binary not available for your platform. Building from source...\n" ..
-    "This may take a few minutes.",
-    vim.log.levels.WARN
-  )
+  local logging = require("hermes.logging")
+  local download_mod = get_download()
   
-  ensure_dir(dest_dir)
-  local build_dir = dest_dir .. "/build"
+  -- Ensure destination directory exists
+  vim.fn.mkdir(dest_dir, "p")
   
-  vim.fn.delete(build_dir, "rf") -- Clean up any existing build directory
+  -- Check for required tools
+  if vim.fn.executable("git") ~= 1 then
+    logging.notify("Git is required to build from source", vim.log.levels.ERROR)
+    return false
+  end
+  
+  if vim.fn.executable("cargo") ~= 1 then
+    logging.notify("Rust/Cargo is required to build from source", vim.log.levels.ERROR)
+    return false
+  end
+  
   -- Clone repository
-    logging.notify("Cloning Hermes repository...", vim.log.levels.INFO)
-  local clone_cmd = {
-    "git", "clone", "--depth", "1", "--branch", "main",
-    REPO_URL, build_dir
-  }
-  local clone_result = vim.fn.system(clone_cmd)
+  local clone_dir = dest_dir .. "/build"
+  logging.notify("Cloning repository...", vim.log.levels.INFO)
+  download_mod.system({"git", "clone", REPO_URL, clone_dir})
+  
   if vim.v.shell_error ~= 0 then
-    logging.notify("Failed to clone repository: " .. clone_result, vim.log.levels.ERROR)
+    logging.notify("Failed to clone repository", vim.log.levels.ERROR)
     return false
   end
   
   -- Build with cargo
-    logging.notify("Building Hermes from source (this may take a few minutes)...", vim.log.levels.INFO)
-  local build_cmd = { "cargo", "build", "--release", "--manifest-path", build_dir .. "/Cargo.toml" }
-  local build_result = vim.fn.system(build_cmd)
+  logging.notify("Building with cargo...", vim.log.levels.INFO)
+  local build_cmd = "cd " .. clone_dir .. " && cargo build --release"
+  download_mod.system(build_cmd)
+  
   if vim.v.shell_error ~= 0 then
-    logging.notify("Build failed: " .. build_result, vim.log.levels.ERROR)
+    logging.notify("Cargo build failed", vim.log.levels.ERROR)
     return false
   end
   
-  -- Find and copy the built library
+  -- Copy built binary to destination
   local platform = require("hermes.platform")
   local ext = platform.get_ext()
-  local bin_name = platform.get_binary_name()
-  local built_lib = build_dir .. "/target/release/libhermes." .. ext
+  local built_lib = clone_dir .. "/target/release/libhermes." .. ext
+  local dest_lib = dest_dir .. "/" .. M.get_binary_name()
   
-  if vim.fn.filereadable(built_lib) == 0 then
-    logging.notify("Could not find built library at: " .. built_lib, vim.log.levels.ERROR)
-    return false
-  end
-  
-  -- Copy to destination using vim.uv.fs_copyfile (cross-platform via libuv)
-  -- Use the platform-specific binary name (e.g., libhermes-linux-x86_64.so)
-  local final_path = dest_dir .. "/" .. bin_name
   local uv = vim.uv or vim.loop
-  local result, err = uv.fs_copyfile(built_lib, final_path)
-  if not result then
-    logging.notify("Failed to copy built library to: " .. final_path .. " - " .. (err or "unknown error"), vim.log.levels.ERROR)
+  local copy_ok = uv.fs_copyfile(built_lib, dest_lib)
+  
+  if not copy_ok then
+    logging.notify("Failed to copy built library", vim.log.levels.ERROR)
     return false
   end
   
   -- Clean up build directory
-  vim.fn.delete(build_dir, "rf")
+  vim.fn.delete(clone_dir, "rf")
   
-    logging.notify("Build completed successfully!", vim.log.levels.INFO)
+  logging.notify("Build successful!", vim.log.levels.INFO)
   return true
 end
 
----Ensure binary is available
----Downloads pre-built binary if platform is supported
----Returns error with helpful message if platform not supported
+---Ensure binary is available (synchronous)
+---Downloads binary only if it doesn't exist or version differs from config
 ---@return string path Path to binary
 function M.ensure_binary()
-  local platform = require("hermes.platform")
+  local bin_path = M.get_binary_path()
+  local ver_file = M.get_version_file()
   local version = require("hermes.version")
+  local wanted_ver = version.get_wanted()
+  
+  -- Check if binary already exists
+  if vim.fn.filereadable(bin_path) == 1 then
+    -- Binary exists - check if version matches config
+    if vim.fn.filereadable(ver_file) == 1 then
+      local current_ver = vim.fn.readfile(ver_file)[1]
+      -- If versions match, use existing binary
+      if current_ver == wanted_ver then
+        return bin_path
+      end
+      -- Versions differ - need to download new version
+    end
+    -- No version file or version mismatch - will download new version
+  end
+  
+  -- Binary doesn't exist or version differs - need to download
+  local platform = require("hermes.platform")
   
   -- Check if platform is supported for pre-built binaries
   local platform_key = platform.get_platform_key()
@@ -197,7 +230,8 @@ function M.ensure_binary()
   end
   
   -- Check if download tools are available
-  local download_tool = download.get_available_tool()
+  local download_mod = get_download()
+  local download_tool = download_mod.get_available_tool()
   if not download_tool then
     error(
       "Unable to download Hermes binary.\n\n" ..
@@ -212,59 +246,32 @@ function M.ensure_binary()
     )
   end
   
-  local bin_path = M.get_binary_path()
-  local ver_file = M.get_version_file()
-  local wanted_ver = version.get_wanted()
+  -- Download binary for supported platform
+  local download_ok = M.download(bin_path, wanted_ver)
   
-  -- Check if we need to download
-  local needs_download = false
-  
-  if vim.fn.filereadable(bin_path) == 0 then
-    needs_download = true
-  else
-    -- Check if version matches
-    if vim.fn.filereadable(ver_file) == 1 then
-      local current_ver = vim.fn.readfile(ver_file)[1]
-      if current_ver ~= wanted_ver then
-        logging.notify(
-          string.format("Version mismatch: have %s, want %s", current_ver, wanted_ver),
-          vim.log.levels.INFO
-        )
-        needs_download = true
-      end
-    else
-      needs_download = true
-    end
-  end
-  
-  if needs_download then
-    -- Download binary for supported platform
-    local download_ok = M.download(bin_path, wanted_ver)
-    
-    if not download_ok then
-      -- Download failed on a supposedly supported platform
-      error(
-        string.format(
-          "Failed to download Hermes binary for %s.\n\n" ..
-          "This is unexpected for a supported platform.\n\n" ..
-          "Troubleshooting steps:\n" ..
-          "  1. Check your internet connection\n" ..
-          "  2. Check if GitHub is accessible\n" ..
-          "  3. The release may not exist yet for version %s\n\n" ..
-          "To build manually:\n" ..
-          "  1. Install Rust: https://rustup.rs/\n" ..
-          "  2. Run :Hermes build inside Neovim\n\n" ..
-          "For detailed instructions, see:\n" ..
-          "https://github.com/Ruddickmg/hermes.nvim#installation",
-          platform.get_display_string(),
-          wanted_ver
-        )
+  if not download_ok then
+    -- Download failed on a supposedly supported platform
+    error(
+      string.format(
+        "Failed to download Hermes binary for %s.\n\n" ..
+        "This is unexpected for a supported platform.\n\n" ..
+        "Troubleshooting steps:\n" ..
+        "  1. Check your internet connection\n" ..
+        "  2. Check if GitHub is accessible\n" ..
+        "  3. The release may not exist yet for version %s\n\n" ..
+        "To build manually:\n" ..
+        "  1. Install Rust: https://rustup.rs/\n" ..
+        "  2. Run :Hermes build inside Neovim\n\n" ..
+        "For detailed instructions, see:\n" ..
+        "https://github.com/Ruddickmg/hermes.nvim#installation",
+        platform.get_display_string(),
+        wanted_ver
       )
-    end
-    
-    -- Save version
-    vim.fn.writefile({wanted_ver}, ver_file)
+    )
   end
+  
+  -- Save version for reference
+  vim.fn.writefile({wanted_ver}, ver_file)
   
   return bin_path
 end
@@ -280,12 +287,14 @@ function M.load_existing_binary()
     local platform = require("hermes.platform")
     error(
       string.format(
-        "Binary not found and auto_download_binary is disabled.\n\n" ..
+        "Binary not found and download.auto is disabled.\n\n" ..
         "Current platform: %s\n\n" ..
         "To resolve this, choose one option:\n\n" ..
         "Option 1 - Enable auto-download in your config:\n" ..
         "  require(\"hermes\").setup({\n" ..
-        "    auto_download_binary = true,\n" ..
+        "    download = {\n" ..
+        "      auto = true,\n" ..
+        "    },\n" ..
         "  })\n\n" ..
         "Option 2 - Build manually:\n" ..
         "  1. Install Rust: https://rustup.rs/\n" ..
@@ -297,7 +306,6 @@ function M.load_existing_binary()
     )
   end
   
-    logging.notify("Using existing Hermes binary: " .. bin_path, vim.log.levels.INFO)
   return bin_path
 end
 
@@ -306,8 +314,6 @@ end
 ---@return table native_module The loaded native module
 function M.load_or_build()
   local bin_path = M.ensure_binary()
-  
-    logging.notify("Loading Hermes binary...", vim.log.levels.DEBUG)
   
   local lib, err = package.loadlib(bin_path, "luaopen_hermes")
   if not lib then
@@ -319,6 +325,72 @@ function M.load_or_build()
   end
   
   return lib()
+end
+
+---Ensure binary is available asynchronously
+---Downloads binary if needed, then calls on_complete with the binary path
+---@param timeout number Timeout in seconds
+---@param on_complete function Callback function(success: boolean, result: string)
+function M.ensure_binary_async(timeout, on_complete)
+  timeout = timeout or 60
+  
+  local platform = require("hermes.platform")
+  local version = require("hermes.version")
+  
+  -- Check if platform is supported
+  local platform_key = platform.get_platform_key()
+  if not platform_key then
+    on_complete(false, "Unable to determine platform")
+    return
+  end
+  
+  if not M.SUPPORTED_PLATFORMS[platform_key] then
+    on_complete(false, 
+      "Platform not supported for automatic binary download: " .. platform.get_display_string() .. 
+      ". Consider building from source.")
+    return
+  end
+  
+  -- Check if download tools are available
+  local download_mod = get_download()
+  local download_tool = download_mod.get_available_tool()
+  if not download_tool then
+    on_complete(false, "No download tool available. Please install curl, wget, or PowerShell.")
+    return
+  end
+  
+  -- Use vim.schedule to make the entire process async
+  vim.schedule(function()
+    local bin_path = M.get_binary_path()
+    local ver_file = M.get_version_file()
+    local wanted_ver = version.get_wanted()
+    
+    -- Check if binary already exists
+    if vim.fn.filereadable(bin_path) == 1 then
+      -- Binary exists - check if version matches config
+      if vim.fn.filereadable(ver_file) == 1 then
+        local current_ver = vim.fn.readfile(ver_file)[1]
+        -- If versions match, use existing binary
+        if current_ver == wanted_ver then
+          on_complete(true, bin_path)
+          return
+        end
+        -- Versions differ - will download new version
+      end
+      -- No version file or version mismatch - will download
+    end
+    
+    -- Binary doesn't exist or version differs, need to download
+    local download_ok, download_err = M.download(bin_path, wanted_ver)
+    
+    if download_ok then
+      -- Save version for reference
+      vim.fn.writefile({wanted_ver}, ver_file)
+      on_complete(true, bin_path)
+    else
+      on_complete(false, download_err or "Download failed")
+    end
+  end)
 end
 
 return M
