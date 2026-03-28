@@ -243,3 +243,31 @@ fn callback_error_is_handled_gracefully() -> nvim_oxi::Result<()> {
     );
     Ok(())
 }
+
+#[nvim_oxi::test]
+fn callback_panic_is_caught_without_crashing() -> nvim_oxi::Result<()> {
+    // Test that when the callback panics, it's caught via catch_unwind
+    // and logged via inspect_err on line 32 of src/utilities/nvim.rs
+    // The process should NOT crash, and send should still succeed
+    
+    // Callback that panics - this tests the catch_unwind protection
+    let callback = move |_data: String| -> nvim_oxi::Result<()> {
+        panic!("intentional test panic in NvimMessenger callback");
+    };
+
+    let handler = NvimMessenger::initialize(callback).expect("Handler should initialize");
+
+    // Spawn thread that sends data - this should succeed even though callback panics
+    let send_result = std::thread::spawn(move || {
+        handler.blocking_send("trigger panic".to_string())
+    })
+    .join()
+    .expect("Thread should not panic");
+
+    // Verify that send succeeded (panic was caught and logged, not propagated)
+    assert!(
+        send_result.is_ok(),
+        "Send should succeed even when callback panics"
+    );
+    Ok(())
+}

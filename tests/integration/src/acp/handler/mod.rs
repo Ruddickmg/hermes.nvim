@@ -203,3 +203,31 @@ fn test_session_notification_usage_update_succeeds() -> nvim_oxi::Result<()> {
 
     Ok(())
 }
+
+#[nvim_oxi::test]
+fn test_can_receive_notifications_returns_false_when_disabled() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    state.blocking_lock().config.permissions.send_notifications = false;
+
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
+        .expect("Handler creation should succeed");
+
+    let result = tokio_test::block_on(handler.can_receive_notifications());
+    assert!(!result, "Should return false when disabled");
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_can_receive_notifications_returns_true_when_enabled() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+
+    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
+        .expect("Handler creation should succeed");
+
+    // send_notifications is true by default - covers the return true path
+    let result = tokio_test::block_on(handler.can_receive_notifications());
+    assert!(result);
+
+    Ok(())
+}
