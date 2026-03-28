@@ -116,11 +116,14 @@ describe("Hermes API Endpoints (E2E)", function()
 		it("connect endpoint callable with opencode", function()
 			local hermes = setup_endpoint_test("opencode")
 
+			-- Wait for binary to be ready
 			local ready = wait_for_ready(hermes, 30000)
-			assert.is_true(ready, "Binary should be in READY state")
+			if not ready then
+				error("Binary should be in READY state")
+			end
 
 			-- Setup listener BEFORE calling connect
-			local received = false
+			local _received = false
 			local data = nil
 			local autocmd_ok, autocmd_id = pcall(function()
 				return vim.api.nvim_create_autocmd("User", {
@@ -128,41 +131,51 @@ describe("Hermes API Endpoints (E2E)", function()
 					pattern = "ConnectionInitialized",
 					once = true,
 					callback = function(args)
-						received = true
+						_received = true
 						data = args.data
 					end,
 				})
 			end)
-			assert.is_true(autocmd_ok, "Should create autocommand listener")
+			if not autocmd_ok then
+				error("Should create autocommand listener")
+			end
 			table.insert(test_autocmds, autocmd_id)
 
 			-- Call connect
 			local ok, err = pcall(function()
 				hermes.connect("opencode")
 			end)
-			assert.is_true(ok, "connect() should not crash: " .. tostring(err))
+			if not ok then
+				error("connect() should not crash: " .. tostring(err))
+			end
 
-			-- Wait for and verify autocommand is received
+			-- Wait for autocommand
 			local wait_ok = vim.wait(30000, function()
-				return received
+				return _received
 			end, 100)
-			assert.is_true(wait_ok, "Should receive ConnectionInitialized autocommand within 30s")
-			assert.is_not_nil(data, "Should receive autocommand data")
-			assert.is_table(data, "Autocommand data should be a table")
-			assert.is_not_nil(data.agentInfo, "Should receive agentInfo in autocommand data")
+			if not wait_ok then
+				error("Should receive ConnectionInitialized autocommand within 30s")
+			end
+
+			-- Single assertion: verify the full behavior
+			assert.is_not_nil(data.agentInfo, "ConnectionInitialized autocommand should contain agentInfo")
 		end)
 
 		it("disconnect endpoint callable with opencode", function()
 			local hermes = setup_endpoint_test("opencode")
 
 			local ready = wait_for_ready(hermes, 30000)
-			assert.is_true(ready, "Binary should be in READY state")
+			if not ready then
+				error("Binary should be in READY state")
+			end
 
 			-- First connect
 			local ok, err = pcall(function()
 				hermes.connect("opencode")
 			end)
-			assert.is_true(ok, "connect() should not crash: " .. tostring(err))
+			if not ok then
+				error("connect() should not crash: " .. tostring(err))
+			end
 
 			vim.wait(500)
 
@@ -171,6 +184,7 @@ describe("Hermes API Endpoints (E2E)", function()
 				hermes.disconnect("opencode")
 			end)
 
+			-- Single assertion at the end
 			assert.is_true(ok, "disconnect() should not crash: " .. tostring(err))
 		end)
 
@@ -178,195 +192,211 @@ describe("Hermes API Endpoints (E2E)", function()
 			local hermes = setup_endpoint_test("opencode")
 
 			local ready = wait_for_ready(hermes, 30000)
-			assert.is_true(ready, "Binary should be in READY state")
+			if not ready then
+				error("Binary should be in READY state")
+			end
 
 			-- First connect
 			local ok, err = pcall(function()
 				hermes.connect("opencode")
 			end)
-			assert.is_true(ok, "connect() should not crash: " .. tostring(err))
+			if not ok then
+				error("connect() should not crash: " .. tostring(err))
+			end
 
 			vim.wait(500)
 
 			-- Setup listener for Authenticated
-			local received = false
+			local _received = false
 			local autocmd_ok, autocmd_id = pcall(function()
 				return vim.api.nvim_create_autocmd("User", {
 					group = vim.api.nvim_create_augroup("hermes", { clear = false }),
 					pattern = "Authenticated",
 					once = true,
 					callback = function(_args)
-						received = true
+						_received = true
 					end,
 				})
 			end)
-			assert.is_true(autocmd_ok, "Should create Authenticated autocommand listener")
+			if not autocmd_ok then
+				error("Should create Authenticated autocommand listener")
+			end
 			table.insert(test_autocmds, autocmd_id)
 
 			-- Call authenticate
 			ok, err = pcall(function()
 				hermes.authenticate("opencode-login")
 			end)
-			assert.is_true(ok, "authenticate() should not crash: " .. tostring(err))
 
-			-- Wait for autocommand (may not fire immediately - agent handles auth asynchronously)
-			vim.wait(30000, function()
-				return received
-			end, 100)
+			-- Single assertion at the end
+			assert.is_true(ok, "authenticate() should not crash: " .. tostring(err))
 		end)
 
 		it("create_session endpoint callable with opencode", function()
 			local hermes = setup_endpoint_test("opencode")
 
 			local ready = wait_for_ready(hermes, 30000)
-			assert.is_true(ready, "Binary should be in READY state")
+			if not ready then
+				error("Binary should be in READY state")
+			end
 
 			-- First connect
 			local ok, err = pcall(function()
 				hermes.connect("opencode")
 			end)
-			assert.is_true(ok, "connect() should not crash: " .. tostring(err))
+			if not ok then
+				error("connect() should not crash: " .. tostring(err))
+			end
 
 			vim.wait(500)
 
 			-- Setup listener for SessionCreated
-			local received = false
+			local _received = false
 			local autocmd_ok, autocmd_id = pcall(function()
 				return vim.api.nvim_create_autocmd("User", {
 					group = vim.api.nvim_create_augroup("hermes", { clear = false }),
 					pattern = "SessionCreated",
 					once = true,
 					callback = function(_args)
-						received = true
+						_received = true
 					end,
 				})
 			end)
-			assert.is_true(autocmd_ok, "Should create SessionCreated autocommand listener")
+			if not autocmd_ok then
+				error("Should create SessionCreated autocommand listener")
+			end
 			table.insert(test_autocmds, autocmd_id)
 
 			-- Call create_session
 			ok, err = pcall(function()
 				hermes.create_session(nil)
 			end)
-			assert.is_true(ok, "create_session() should not crash: " .. tostring(err))
 
-			-- Wait for autocommand (may take time for agent to respond)
-			-- Note: SessionCreated may not fire immediately or may require actual session creation
-			-- If it doesn't fire, that's ok - the API call itself succeeded
-			vim.wait(30000, function()
-				return received
-			end, 100)
+			-- Single assertion at the end
+			assert.is_true(ok, "create_session() should not crash: " .. tostring(err))
 		end)
 
 		it("load_session endpoint callable with opencode", function()
 			local hermes = setup_endpoint_test("opencode")
 
 			local ready = wait_for_ready(hermes, 30000)
-			assert.is_true(ready, "Binary should be in READY state")
+			if not ready then
+				error("Binary should be in READY state")
+			end
 
 			-- First connect
 			local ok, err = pcall(function()
 				hermes.connect("opencode")
 			end)
-			assert.is_true(ok, "connect() should not crash: " .. tostring(err))
+			if not ok then
+				error("connect() should not crash: " .. tostring(err))
+			end
 
 			vim.wait(500)
 
 			-- Setup listener for SessionLoaded
-			local received = false
+			local _received = false
 			local autocmd_ok, autocmd_id = pcall(function()
 				return vim.api.nvim_create_autocmd("User", {
 					group = vim.api.nvim_create_augroup("hermes", { clear = false }),
 					pattern = "SessionLoaded",
 					once = true,
 					callback = function(_args)
-						received = true
+						_received = true
 					end,
 				})
 			end)
-			assert.is_true(autocmd_ok, "Should create SessionLoaded autocommand listener")
+			if not autocmd_ok then
+				error("Should create SessionLoaded autocommand listener")
+			end
 			table.insert(test_autocmds, autocmd_id)
 
 			-- Call load_session
 			ok, err = pcall(function()
 				hermes.load_session("test-session-id", nil)
 			end)
-			assert.is_true(ok, "load_session() should not crash: " .. tostring(err))
 
-			-- Wait for autocommand (may not fire immediately)
-			vim.wait(30000, function()
-				return received
-			end, 100)
+			-- Single assertion at the end
+			assert.is_true(ok, "load_session() should not crash: " .. tostring(err))
 		end)
 
 		it("list_sessions endpoint callable with opencode", function()
 			local hermes = setup_endpoint_test("opencode")
 
 			local ready = wait_for_ready(hermes, 30000)
-			assert.is_true(ready, "Binary should be in READY state")
+			if not ready then
+				error("Binary should be in READY state")
+			end
 
 			-- First connect
 			local ok, err = pcall(function()
 				hermes.connect("opencode")
 			end)
-			assert.is_true(ok, "connect() should not crash: " .. tostring(err))
+			if not ok then
+				error("connect() should not crash: " .. tostring(err))
+			end
 
 			vim.wait(500)
 
 			-- Setup listener for SessionsListed
-			local received = false
+			local _received = false
 			local autocmd_ok, autocmd_id = pcall(function()
 				return vim.api.nvim_create_autocmd("User", {
 					group = vim.api.nvim_create_augroup("hermes", { clear = false }),
 					pattern = "SessionsListed",
 					once = true,
 					callback = function(_args)
-						received = true
+						_received = true
 					end,
 				})
 			end)
-			assert.is_true(autocmd_ok, "Should create SessionsListed autocommand listener")
+			if not autocmd_ok then
+				error("Should create SessionsListed autocommand listener")
+			end
 			table.insert(test_autocmds, autocmd_id)
 
 			-- Call list_sessions
 			ok, err = pcall(function()
 				hermes.list_sessions()
 			end)
-			assert.is_true(ok, "list_sessions() should not crash: " .. tostring(err))
 
-			-- Wait for autocommand (may not fire immediately)
-			vim.wait(30000, function()
-				return received
-			end, 100)
+			-- Single assertion at the end
+			assert.is_true(ok, "list_sessions() should not crash: " .. tostring(err))
 		end)
 
 		it("prompt endpoint callable with opencode", function()
 			local hermes = setup_endpoint_test("opencode")
 
 			local ready = wait_for_ready(hermes, 30000)
-			assert.is_true(ready, "Binary should be in READY state")
+			if not ready then
+				error("Binary should be in READY state")
+			end
 
 			-- First connect
 			local ok, err = pcall(function()
 				hermes.connect("opencode")
 			end)
-			assert.is_true(ok, "connect() should not crash: " .. tostring(err))
+			if not ok then
+				error("connect() should not crash: " .. tostring(err))
+			end
 
 			vim.wait(500)
 
 			-- Setup listener for Prompted
-			local received = false
+			local _received = false
 			local autocmd_ok, autocmd_id = pcall(function()
 				return vim.api.nvim_create_autocmd("User", {
 					group = vim.api.nvim_create_augroup("hermes", { clear = false }),
 					pattern = "Prompted",
 					once = true,
 					callback = function(_args)
-						received = true
+						_received = true
 					end,
 				})
 			end)
-			assert.is_true(autocmd_ok, "Should create Prompted autocommand listener")
+			if not autocmd_ok then
+				error("Should create Prompted autocommand listener")
+			end
 			table.insert(test_autocmds, autocmd_id)
 
 			-- Call prompt
@@ -375,25 +405,26 @@ describe("Hermes API Endpoints (E2E)", function()
 					{ type = "text", text = "Hello, this is a test message" }
 				})
 			end)
-			assert.is_true(ok, "prompt() should not crash: " .. tostring(err))
 
-			-- Wait for autocommand (may not fire immediately)
-			vim.wait(30000, function()
-				return received
-			end, 100)
+			-- Single assertion at the end
+			assert.is_true(ok, "prompt() should not crash: " .. tostring(err))
 		end)
 
 		it("cancel endpoint callable with opencode", function()
 			local hermes = setup_endpoint_test("opencode")
 
 			local ready = wait_for_ready(hermes, 30000)
-			assert.is_true(ready, "Binary should be in READY state")
+			if not ready then
+				error("Binary should be in READY state")
+			end
 
 			-- First connect
 			local ok, err = pcall(function()
 				hermes.connect("opencode")
 			end)
-			assert.is_true(ok, "connect() should not crash: " .. tostring(err))
+			if not ok then
+				error("connect() should not crash: " .. tostring(err))
+			end
 
 			vim.wait(500)
 
@@ -401,6 +432,8 @@ describe("Hermes API Endpoints (E2E)", function()
 			ok, err = pcall(function()
 				hermes.cancel("test-session-id")
 			end)
+
+			-- Single assertion at the end
 			assert.is_true(ok, "cancel() should not crash: " .. tostring(err))
 		end)
 
@@ -408,41 +441,44 @@ describe("Hermes API Endpoints (E2E)", function()
 			local hermes = setup_endpoint_test("opencode")
 
 			local ready = wait_for_ready(hermes, 30000)
-			assert.is_true(ready, "Binary should be in READY state")
+			if not ready then
+				error("Binary should be in READY state")
+			end
 
 			-- First connect
 			local ok, err = pcall(function()
 				hermes.connect("opencode")
 			end)
-			assert.is_true(ok, "connect() should not crash: " .. tostring(err))
+			if not ok then
+				error("connect() should not crash: " .. tostring(err))
+			end
 
 			vim.wait(500)
 
 			-- Setup listener for ModeUpdated
-			local received = false
+			local _received = false
 			local autocmd_ok, autocmd_id = pcall(function()
 				return vim.api.nvim_create_autocmd("User", {
 					group = vim.api.nvim_create_augroup("hermes", { clear = false }),
 					pattern = "ModeUpdated",
 					once = true,
 					callback = function(_args)
-						received = true
+						_received = true
 					end,
 				})
 			end)
-			assert.is_true(autocmd_ok, "Should create ModeUpdated autocommand listener")
+			if not autocmd_ok then
+				error("Should create ModeUpdated autocommand listener")
+			end
 			table.insert(test_autocmds, autocmd_id)
 
 			-- Call set_mode
 			ok, err = pcall(function()
 				hermes.set_mode("test-session-id", "default")
 			end)
-			assert.is_true(ok, "set_mode() should not crash: " .. tostring(err))
 
-			-- Wait for autocommand (may not fire immediately)
-			vim.wait(30000, function()
-				return received
-			end, 100)
+			-- Single assertion at the end
+			assert.is_true(ok, "set_mode() should not crash: " .. tostring(err))
 		end)
 	end)
 
@@ -451,9 +487,6 @@ describe("Hermes API Endpoints (E2E)", function()
 		-- edge cases gracefully. We cannot test a full permission request/response flow
 		-- because current ACP agents (copilot, opencode) handle file/terminal operations
 		-- using internal tools rather than the ACP PermissionRequest protocol.
-		-- See src/acp/handler/client.rs and the ignored test in tests/e2e/src/read_file.rs
-		-- for more context. When copilot does send a PermissionRequest, it will trigger
-		-- the autocommand and user code can respond via hermes.respond(request_id, response).
 		after_each(function()
 			cleanup_test()
 		end)
@@ -462,33 +495,30 @@ describe("Hermes API Endpoints (E2E)", function()
 			local hermes = setup_endpoint_test("copilot")
 
 			local ready = wait_for_ready(hermes, 30000)
-			assert.is_true(ready, "Binary should be in READY state")
+			if not ready then
+				error("Binary should be in READY state")
+			end
 
 			-- Connect to copilot
 			local ok, err = pcall(function()
 				hermes.connect("copilot")
 			end)
-			assert.is_true(ok, "connect() should not crash: " .. tostring(err))
+			if not ok then
+				error("connect() should not crash: " .. tostring(err))
+			end
 
 			vim.wait(500)
 
-			-- Try to respond with a valid UUID format
-			-- If there's no pending request, it will fail gracefully with "No pending request" error
+			-- Try to respond with a valid UUID format (no pending request expected)
 			ok, err = pcall(function()
 				hermes.respond("550e8400-e29b-41d4-a716-446655440000", { approved = true, message = "Test approval" })
 			end)
 
-			-- respond() should be callable without crashing
-			-- It will either succeed (if there's a pending request) or fail gracefully
-			if not ok then
-				-- Verify it's the expected "no pending request" error, not a crash/panic
-				assert.is_true(
-					tostring(err):match("No matching request found") ~= nil or
-					tostring(err):match("No pending request") ~= nil,
-					"respond() should fail gracefully with 'no pending request' error, not crash: " .. tostring(err)
-				)
-			end
-			-- Test passes if respond() is callable and either succeeds or fails gracefully
+			-- Single assertion: verify it fails gracefully with expected error (no pending request)
+			assert.is_true(
+				ok or tostring(err):match("No matching request found") ~= nil or tostring(err):match("No pending request") ~= nil,
+				"respond() should either succeed or fail gracefully with 'no pending request' error: " .. tostring(err)
+			)
 		end)
 	end)
 end)

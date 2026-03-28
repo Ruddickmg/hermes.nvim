@@ -343,7 +343,7 @@ describe("hermes.init (main API)", function()
 			
 			vim.notify = original_notify
 			
-			assert.is_true(#notify_calls > 0 and notify_calls[1].msg:find("still loading") ~= nil)
+			assert.is_not_nil(notify_calls[1].msg:find("still loading"), "Should show loading warning notification")
 		end)
 
 		it("_handle_failed_state returns false", function()
@@ -363,7 +363,7 @@ describe("hermes.init (main API)", function()
 			
 			vim.notify = original_notify
 			
-			assert.is_true(#notify_calls > 0 and notify_calls[1].msg:find("Failed to load") ~= nil)
+			assert.is_not_nil(notify_calls[1].msg:find("Failed to load"), "Should show error notification")
 		end)
 
 		it("_handle_load_success sets state to READY", function()
@@ -398,7 +398,7 @@ describe("hermes.init (main API)", function()
 			
 			vim.notify = original_notify
 			
-			assert.is_true(#notify_calls > 0 and notify_calls[1].msg:find("Ready") ~= nil)
+			assert.is_not_nil(notify_calls[1].msg:find("Ready"), "Should show ready notification")
 		end)
 
 		it("_handle_load_failure sets state to FAILED", function()
@@ -424,7 +424,7 @@ describe("hermes.init (main API)", function()
 			
 			vim.notify = original_notify
 			
-			assert.is_true(#notify_calls > 0 and notify_calls[1].msg:find("Test context") ~= nil)
+			assert.is_not_nil(notify_calls[1].msg:find("Test context"), "Should show custom error notification")
 		end)
 	end)
 
@@ -605,10 +605,25 @@ describe("hermes.init (main API)", function()
 			-- Restore
 			platform.get_platform_key = orig_get_platform_key
 			
-			-- Check state is FAILED
+			-- Single assertion: verify download failed with proper state
 			assert.equals("FAILED", hermes.get_loading_state())
+		end)
+
+		it("download failure records error", function()
+			-- Setup with invalid platform to force download failure
+			local platform = require("hermes.platform")
+			local orig_get_platform_key = platform.get_platform_key
+			platform.get_platform_key = function() return "unsupported-platform" end
 			
-			-- Check error is recorded
+			hermes.setup({ download = { auto = true, version = "latest" } })
+			
+			-- Wait for async download to complete and fail
+			vim.wait(100)
+			
+			-- Restore
+			platform.get_platform_key = orig_get_platform_key
+			
+			-- Single assertion: verify error was recorded
 			assert.is_not_nil(hermes.get_loading_error())
 		end)
 
@@ -634,22 +649,17 @@ describe("hermes.init (main API)", function()
 			-- Wait for async load to complete
 			vim.wait(100)
 			
-			-- Now load should succeed
+			-- Now load should succeed (binary was copied above)
 			local ok, result = pcall(function()
 				return hermes._load_native_sync()
 			end)
 			
-			if ok then
-				-- If load succeeded, state should be READY
-				assert.equals("READY", hermes.get_loading_state())
-				-- Should be able to call setup on native module
-				assert.is_function(result.setup)
-			else
-				-- If binary load failed (e.g., missing target/release binary), 
-				-- verify state is FAILED
-				assert.equals("FAILED", hermes.get_loading_state())
-				assert.is_not_nil(hermes.get_loading_error())
+			if not ok then
+				error("Binary load should succeed: " .. tostring(result))
 			end
+			
+			-- Single assertion: verify binary loaded and is ready
+			assert.equals("READY", hermes.get_loading_state())
 		end)
 
 		it("consecutive API calls handle loading state correctly", function()
@@ -694,13 +704,21 @@ describe("hermes.init (main API)", function()
 			assert.equals(120, download_config.timeout)
 		end)
 
-		it("error state persists and can be retrieved", function()
+		it("error state persists", function()
 			-- Force an error state
 			hermes._set_loading_state("FAILED")
 			hermes._set_loading_error("Test error message")
 			
 			-- Verify state persists
 			assert.equals("FAILED", hermes.get_loading_state())
+		end)
+
+		it("error message can be retrieved", function()
+			-- Force an error state
+			hermes._set_loading_state("FAILED")
+			hermes._set_loading_error("Test error message")
+			
+			-- Verify error message can be retrieved
 			assert.equals("Test error message", hermes.get_loading_error())
 			
 			-- Reset for other tests
