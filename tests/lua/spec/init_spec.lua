@@ -354,12 +354,12 @@ describe("hermes.init (main API)", function()
 			vim.notify = function(msg, level)
 				table.insert(notify_calls, { msg = msg, level = level })
 			end
-			
-			hermes._handle_loading_state()
-			
+
+			hermes._handle_loading_state(function() end)
+
 			vim.notify = original_notify
-			
-			assert.is_not_nil(notify_calls[1].msg:find("still loading"), "Should show loading warning notification")
+
+			assert.is_not_nil(notify_calls[1].msg:find("queued"), "Should show queue notification")
 		end)
 
 		it("_handle_failed_state returns false", function()

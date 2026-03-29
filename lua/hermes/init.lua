@@ -212,14 +212,26 @@ local function handle_ready_state(fn)
 	return true
 end
 
--- Handle loading states: show warning and return
-local function handle_loading_state()
-	vim.notify("Hermes: Binary is still loading. Check :Hermes status for progress.", vim.log.levels.WARN)
+-- Handle loading states: queue the request and return
+local function handle_loading_state(fn)
+	local queue = require("hermes.queue")
+	queue.push(fn)
+	vim.notify("Hermes: Request queued, will execute when ready", vim.log.levels.DEBUG)
 	return false
 end
 
--- Handle FAILED state: show error and return
+-- Handle FAILED state: show error, clear queue, and return
 local function handle_failed_state()
+	-- Clear any queued calls since binary won't load
+	local queue = require("hermes.queue")
+	local cleared = queue.clear()
+	if cleared > 0 then
+		vim.notify(
+			string.format("Hermes: Cleared %d queued operations due to load failure", cleared),
+			vim.log.levels.WARN
+		)
+	end
+
 	vim.notify(
 		"Hermes: Failed to load. Run :Hermes status for details or :Hermes log for errors.",
 		vim.log.levels.ERROR
@@ -233,6 +245,15 @@ local function handle_load_success(loaded_module, fn)
 	_loading_state = "READY"
 	vim.notify("Hermes: Ready", vim.log.levels.INFO)
 	fn()
+
+	-- Execute any queued calls
+	local queue = require("hermes.queue")
+	if not queue.is_empty() then
+		local executed, err = queue.execute_all()
+		if err then
+			vim.notify("Hermes: Queued operation failed: " .. err, vim.log.levels.ERROR)
+		end
+	end
 end
 
 -- Handle load failure (sync state update)
@@ -240,6 +261,17 @@ end
 local function handle_load_failure(err_msg, context)
 	_loading_state = "FAILED"
 	_loading_error = err_msg
+
+	-- Clear any queued calls since binary won't load
+	local queue = require("hermes.queue")
+	local cleared = queue.clear()
+	if cleared > 0 then
+		vim.notify(
+			string.format("Hermes: Cleared %d queued operations due to load failure", cleared),
+			vim.log.levels.WARN
+		)
+	end
+
 	vim.notify("Hermes: " .. context .. ". Run :Hermes status for details.", vim.log.levels.ERROR)
 end
 
@@ -461,7 +493,7 @@ local function execute_async(fn)
 	end
 
 	if is_loading() then
-		return handle_loading_state()
+		return handle_loading_state(fn)
 	end
 
 	if is_failed() then
