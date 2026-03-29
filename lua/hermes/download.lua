@@ -1,6 +1,8 @@
+-- luacov: disable
 ---HTTP download utilities
 ---@module hermes.download
 ---Provides a clean wrapper around HTTP download functionality with cross-platform support
+-- luacov: enable
 ---Uses curl (Unix), wget (Unix fallback), or PowerShell (Windows)
 
 local M = {}
@@ -9,26 +11,34 @@ local USER_AGENT = "hermes.nvim/0.1"
 M.USER_AGENT = USER_AGENT
 
 ---Check if curl is available on the system
+-- luacov: disable
 ---@return boolean available
+-- luacov: enable
 function M.is_curl_available()
   return vim.fn.executable("curl") == 1
 end
 
 ---Check if wget is available on the system
+-- luacov: disable
 ---@return boolean available
+-- luacov: enable
 function M.is_wget_available()
   return vim.fn.executable("wget") == 1
 end
 
 ---Check if PowerShell is available (Windows)
+-- luacov: disable
 ---@return boolean available
+-- luacov: enable
 function M.is_powershell_available()
   return vim.fn.executable("powershell") == 1
 end
 
 ---Get available download tool
 ---Priority: curl (Unix) > wget (Unix) > PowerShell (Windows)
+-- luacov: disable
 ---@return string|nil tool_name Name of available tool, or nil if none
+-- luacov: enable
 function M.get_available_tool()
   if M.is_curl_available() then
     return "curl"
@@ -42,10 +52,12 @@ end
 
 ---Download file from URL using available tool
 ---Cross-platform: curl (Unix), wget (Unix fallback), PowerShell (Windows)
+-- luacov: disable
 ---@param url string URL to download
 ---@param dest_path string Destination path
 ---@return boolean success Whether download succeeded
 ---@return table|nil error Error info table if failed, containing:
+-- luacov: enable
 ---   - message: Human readable error message
 ---   - url: URL that was attempted
 ---   - http_code: HTTP status code (if available)
@@ -132,9 +144,11 @@ end
 
 ---Execute a shell command and return result
 ---Simple wrapper around vim.fn.system for consistency
+-- luacov: disable
 ---@param cmd table|string Command as array or string
 ---@return string output Command output
 ---@return number exit_code Exit code (0 = success)
+-- luacov: enable
 function M.system(cmd)
   local output = vim.fn.system(cmd)
   return output, vim.v.shell_error

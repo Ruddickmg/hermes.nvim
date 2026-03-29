@@ -1,11 +1,15 @@
+-- luacov: disable
 ---Version management for Hermes binaries
 ---@module hermes.version
+-- luacov: enable
 
 local M = {}
 
 ---Get the version to use
 ---Returns either user-specified version or "latest" as default
+-- luacov: disable
 ---@return string version Version string (e.g., "v0.1.0" or "latest")
+-- luacov: enable
 function M.get_wanted()
 	local config = require("hermes.config")
 	local wanted = config.get_version()
@@ -23,7 +27,9 @@ function M.get_wanted()
 end
 
 ---Fetch latest release version from GitHub
+-- luacov: disable
 ---@return string version Latest version tag (e.g., "v0.1.0")
+-- luacov: enable
 function M.fetch_latest()
 	local logging = require("hermes.logging")
 	local fallback_version = "v0.1.0"
