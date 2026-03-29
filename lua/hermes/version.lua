@@ -5,10 +5,11 @@
 
 local M = {}
 
+-- luacov: disable
 ---Get the version to use
 ---Returns either user-specified version or "latest" as default
--- luacov: disable
 ---@return string version Version string (e.g., "v0.1.0" or "latest")
+---@private
 -- luacov: enable
 function M.get_wanted()
 	local config = require("hermes.config")
@@ -26,9 +27,10 @@ function M.get_wanted()
 	return wanted
 end
 
----Fetch latest release version from GitHub
 -- luacov: disable
+---Fetch latest release version from GitHub
 ---@return string version Latest version tag (e.g., "v0.1.0")
+---@private
 -- luacov: enable
 function M.fetch_latest()
 	local logging = require("hermes.logging")

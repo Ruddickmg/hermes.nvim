@@ -154,12 +154,18 @@ local _download_timeout = 60
 -- Pure Sync State Management (fully testable)
 -- ============================================================================
 
--- Get current loading state
+-- luacov: disable
+---Get current loading state
+---@private
+-- luacov: enable
 function M.get_loading_state()
 	return _loading_state
 end
 
--- Get loading error if any
+-- luacov: disable
+---Get loading error if any
+---@private
+-- luacov: enable
 function M.get_loading_error()
 	return _loading_error
 end
@@ -373,7 +379,10 @@ end
 -- Binary Loading (sync version for testing, async wrapper for production)
 -- ============================================================================
 
--- Load native module synchronously (can be tested with mocked deps)
+-- luacov: disable
+---Load native module synchronously (can be tested with mocked deps)
+---@private
+-- luacov: enable
 function M._load_native_sync()
 	if not _native then
 		local binary = require("hermes.binary")
@@ -720,21 +729,56 @@ end, {
 })
 
 -- ============================================================================
--- Export internal functions for testing
+-- Export internal functions for testing (marked private to hide from LSP)
+-- ============================================================================
+
+-- luacov: disable
+
+---@private
 M._is_ready = is_ready
+
+---@private
 M._is_loading = is_loading
+
+---@private
 M._is_failed = is_failed
+
+---@private
 M._set_loading_state = set_loading_state
+
+---@private
 M._set_loading_error = set_loading_error
+
+---@private
 M._handle_ready_state = handle_ready_state
+
+---@private
 M._handle_loading_state = handle_loading_state
+
+---@private
 M._handle_failed_state = handle_failed_state
+
+---@private
 M._handle_load_success = handle_load_success
+
+---@private
 M._handle_load_failure = handle_load_failure
+
+---@private
 M._should_auto_download = should_auto_download
+
+---@private
 M._format_error_for_display = format_error_for_display
+
+---@private
 M._get_error_suggestion = get_error_suggestion
+
+---@private
 M._show_status = show_status
+
+---@private
 M._build_status_content = build_status_content
+
+-- luacov: enable
 
 return M

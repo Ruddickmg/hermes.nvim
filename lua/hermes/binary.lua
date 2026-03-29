@@ -37,17 +37,19 @@ M.SUPPORTED_PLATFORMS = {
   ["windows-x86_64"] = true,
 }
 
----Get the data directory for Hermes
 -- luacov: disable
+---Get the data directory for Hermes
 ---@return string data_dir Path to data directory
+---@private
 -- luacov: enable
 function M.get_data_dir()
   return vim.fn.stdpath("data") .. "/hermes"
 end
 
----Get the binary name for current platform
 -- luacov: disable
+---Get the binary name for current platform
 ---@return string binary_name Name of the binary file
+---@private
 -- luacov: enable
 function M.get_binary_name()
   local platform = require("hermes.platform")
@@ -57,28 +59,31 @@ function M.get_binary_name()
   return string.format("libhermes-%s-%s.%s", os, arch, ext)
 end
 
----Get the full path to the binary
 -- luacov: disable
+---Get the full path to the binary
 ---@return string binary_path Full path to binary
+---@private
 -- luacov: enable
 function M.get_binary_path()
   return M.get_data_dir() .. "/" .. M.get_binary_name()
 end
 
----Get the version file path
 -- luacov: disable
+---Get the version file path
 ---@return string version_file_path Path to version file
+---@private
 -- luacov: enable
 function M.get_version_file()
   return M.get_data_dir() .. "/version.txt"
 end
 
----Download binary for platform
 -- luacov: disable
+---Download binary for platform
 ---@param dest_path string Destination path for binary
 ---@param ver string Version to download
 ---@return boolean success Whether download succeeded
 ---@return table|nil error Error info table if failed (structured error from download module)
+---@private
 -- luacov: enable
 function M.download(dest_path, ver)
   local platform = require("hermes.platform")
@@ -129,10 +134,11 @@ function M.download(dest_path, ver)
   return true
 end
 
----Build from source
 -- luacov: disable
+---Build from source
 ---@param dest_dir string Destination directory
 ---@return boolean success Whether build succeeded
+---@private
 -- luacov: enable
 function M.build_from_source(dest_dir)
   local logging = require("hermes.logging")
@@ -193,10 +199,11 @@ function M.build_from_source(dest_dir)
   return true
 end
 
+-- luacov: disable
 ---Ensure binary is available (synchronous)
 ---Downloads binary only if it doesn't exist or version differs from config
--- luacov: disable
 ---@return string path Path to binary
+---@private
 -- luacov: enable
 function M.ensure_binary()
   local bin_path = M.get_binary_path()
@@ -307,10 +314,11 @@ function M.ensure_binary()
   return bin_path
 end
 
+-- luacov: disable
 ---Load existing binary without downloading
 ---Checks if binary exists at expected path, errors if not found
--- luacov: disable
 ---@return string path Path to existing binary
+---@private
 -- luacov: enable
 function M.load_existing_binary()
   local bin_path = M.get_binary_path()
@@ -342,10 +350,11 @@ function M.load_existing_binary()
   return bin_path
 end
 
+-- luacov: disable
 ---Load native module
 ---Ensures binary is available and loads it
--- luacov: disable
 ---@return table native_module The loaded native module
+---@private
 -- luacov: enable
 function M.load_or_build()
   local bin_path = M.ensure_binary()
@@ -362,11 +371,12 @@ function M.load_or_build()
   return lib()
 end
 
+-- luacov: disable
 ---Ensure binary is available asynchronously
 ---Downloads binary if needed, then calls on_complete with the binary path
--- luacov: disable
 ---@param timeout number Timeout in seconds
 ---@param on_complete function Callback function(success: boolean, result: string)
+---@private
 -- luacov: enable
 function M.ensure_binary_async(timeout, on_complete)
   timeout = timeout or 60

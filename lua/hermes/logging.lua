@@ -32,11 +32,12 @@ local function normalize_level(level)
 end
 
 ---Internal notify wrapper that filters based on configured log level
----Only messages with level >= configured minimum level are shown
 -- luacov: disable
+---Only messages with level >= configured minimum level are shown
 ---@param message string Message to display
 ---@param level? number|string Log level (vim.log.levels.* or string), defaults to ERROR
 ---@param opts? table Additional options for vim.notify
+---@private
 -- luacov: enable
 function M.notify(message, level, opts)
   level = level or vim.log.levels.ERROR
