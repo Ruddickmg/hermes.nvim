@@ -529,7 +529,7 @@ describe("Hermes Binary Download E2E", function()
 	it("downloads pre-release version v0.3.0-beta.5 successfully", function()
 		local platform = require("hermes.platform")
 		local download = require("hermes.download")
-		local binary = require("hermes.binary")
+		local binary_module = require("hermes.binary")
 		
 		-- Create temp directory for download
 		local temp_dir = vim.fn.tempname() .. "_hermes_test"
@@ -537,7 +537,7 @@ describe("Hermes Binary Download E2E", function()
 		
 		-- Construct actual URL for pre-release v0.3.0-beta.5
 		local platform_key = platform.get_platform_key()
-		local binary_name = binary.get_binary_name()
+		local binary_name = binary_module.get_binary_name()
 		local url = string.format(
 			"https://github.com/Ruddickmg/hermes.nvim/releases/download/v0.3.0-beta.5/%s",
 			binary_name
