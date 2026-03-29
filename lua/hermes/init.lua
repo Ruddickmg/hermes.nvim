@@ -249,7 +249,7 @@ local function handle_load_success(loaded_module, fn)
 	-- Execute any queued calls
 	local queue = require("hermes.queue")
 	if not queue.is_empty() then
-		local executed, err = queue.execute_all()
+		local _, err = queue.execute_all()
 		if err then
 			vim.notify("Hermes: Queued operation failed: " .. err, vim.log.levels.ERROR)
 		end

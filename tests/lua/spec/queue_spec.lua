@@ -156,12 +156,12 @@ describe("hermes.queue", function()
 
 	describe("edge cases", function()
 		it("handles many push/pop operations", function()
-			for i = 1, 100 do
+			for _ = 1, 100 do
 				queue.push(function() end)
 			end
 			assert.equals(100, queue.size())
 
-			for i = 1, 100 do
+			for _ = 1, 100 do
 				queue.pop()
 			end
 			assert.is_true(queue.is_empty())
@@ -179,13 +179,13 @@ describe("hermes.queue", function()
 
 		it("pop after many operations still works correctly", function()
 			-- Simulate usage pattern: push many, pop many, push again
-			for i = 1, 50 do
+			for _ = 1, 50 do
 				queue.push(function() end)
 			end
-			for i = 1, 40 do
+			for _ = 1, 40 do
 				queue.pop()
 			end
-			for i = 1, 10 do
+			for _ = 1, 10 do
 				queue.push(function() end)
 			end
 
