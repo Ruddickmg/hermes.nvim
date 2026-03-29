@@ -42,6 +42,36 @@ describe("hermes.version", function()
 
 			config_stub:revert()
 		end)
+
+		it("handles version with just v prefix", function()
+			local config_stub = stub(require("hermes.config"), "get_version").returns("v")
+
+			local result = version.get_wanted()
+
+			assert.equals("v", result)
+
+			config_stub:revert()
+		end)
+
+		it("handles empty version string", function()
+			local config_stub = stub(require("hermes.config"), "get_version").returns("")
+
+			local result = version.get_wanted()
+
+			assert.equals("v", result)
+
+			config_stub:revert()
+		end)
+
+		it("handles version with complex semver", function()
+			local config_stub = stub(require("hermes.config"), "get_version").returns("1.0.0-alpha.1")
+
+			local result = version.get_wanted()
+
+			assert.equals("v1.0.0-alpha.1", result)
+
+			config_stub:revert()
+		end)
 	end)
 
 	describe("fetch_latest()", function()
@@ -134,6 +164,67 @@ describe("hermes.version", function()
 
 			-- Should return fallback version (v0.1.0)
 			assert.equals("v0.1.0", result)
+
+			download_stub:revert()
+			notify_stub:revert()
+		end)
+
+		it("handles download error with structured error table", function()
+			local download_stub = stub(require("hermes.download"), "download").returns(false, {
+				message = "Connection timeout",
+				http_code = 504,
+				tool = "curl"
+			})
+			local notify_stub = stub(vim, "notify")
+
+			local result = version.fetch_latest()
+
+			-- Should return fallback version
+			assert.equals("v0.1.0", result)
+
+			download_stub:revert()
+			notify_stub:revert()
+		end)
+
+		it("handles download error with nil error message", function()
+			local download_stub = stub(require("hermes.download"), "download").returns(false, nil)
+			local notify_stub = stub(vim, "notify")
+
+			local result = version.fetch_latest()
+
+			-- Should return fallback version
+			assert.equals("v0.1.0", result)
+
+			download_stub:revert()
+			notify_stub:revert()
+		end)
+
+		it("parses version from GitHub API with additional fields", function()
+			-- Create a mock temp file with complete GitHub API response
+			local mock_file = os.tmpname()
+			local f = io.open(mock_file, "w")
+			f:write('{"tag_name": "v1.5.0", "name": "Release v1.5.0", "body": "Test release", "created_at": "2024-01-01"}')
+			f:close()
+
+			local captured_path
+			local download_stub = stub(require("hermes.download"), "download").invokes(function(_url, path)
+				captured_path = path
+				local uv = vim.uv or vim.loop
+				uv.fs_copyfile(mock_file, path)
+				return true, nil
+			end)
+			local notify_stub = stub(vim, "notify")
+
+			local result = version.fetch_latest()
+
+			-- Cleanup
+			os.remove(mock_file)
+			if captured_path then
+				os.remove(captured_path)
+			end
+
+			-- Should parse v1.5.0
+			assert.equals("v1.5.0", result)
 
 			download_stub:revert()
 			notify_stub:revert()

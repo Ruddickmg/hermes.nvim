@@ -1,13 +1,17 @@
+-- luacov: disable
 ---Logging utilities with level filtering for internal use
 ---@module hermes.logging
 ---Provides vim.notify wrapper that respects config.log.notification.level
+-- luacov: enable
 
 local M = {}
 
 ---Normalize log level to numeric value for comparison
 ---Supports both vim.log.levels constants and string values
+-- luacov: disable
 ---@param level number|string Log level
 ---@return number numeric_level Normalized numeric level (0-5)
+-- luacov: enable
 local function normalize_level(level)
   if type(level) == "number" then
     return level
@@ -29,9 +33,11 @@ end
 
 ---Internal notify wrapper that filters based on configured log level
 ---Only messages with level >= configured minimum level are shown
+-- luacov: disable
 ---@param message string Message to display
 ---@param level? number|string Log level (vim.log.levels.* or string), defaults to ERROR
 ---@param opts? table Additional options for vim.notify
+-- luacov: enable
 function M.notify(message, level, opts)
   level = level or vim.log.levels.ERROR
   opts = opts or {}

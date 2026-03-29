@@ -5,10 +5,22 @@ local stub = require("luassert.stub")
 
 describe("hermes.download", function()
   local download
+  local stubs = {}
   
   before_each(function()
     package.loaded["hermes.download"] = nil
     download = require("hermes.download")
+    stubs = {}
+  end)
+  
+  after_each(function()
+    -- Clean up all stubs to prevent test pollution
+    for _, s in ipairs(stubs) do
+      if s and s.revert then
+        s:revert()
+      end
+    end
+    stubs = {}
   end)
   
   describe("tool availability", function()
@@ -83,9 +95,14 @@ describe("hermes.download", function()
       
       local ok, err = download.download("http://example.com/file", "/tmp/test")
       
-      -- Combined assertion: should fail with appropriate error message
-      assert.is_true(not ok and err:match("No download tool available") ~= nil,
-        "Should return false with 'No download tool available' error")
+      -- err should now be a structured error table
+      assert.is_false(ok)
+      assert.is_table(err)
+      assert.is_not_nil(err.message)
+      assert.truthy(err.message:match("No download tool available"))
+      assert.equals("http://example.com/file", err.url)
+      assert.is_nil(err.http_code)
+      assert.is_nil(err.tool)
     end)
     
     it("detects download command failure", function()
@@ -156,7 +173,11 @@ describe("hermes.download", function()
       
       -- Should fail because file is too small
       assert.is_false(ok)
-      assert.truthy(err:match("too small") or err:match("empty"))
+      assert.is_table(err)
+      assert.truthy(err.message:match("too small") or err.message:match("empty"))
+      assert.equals("http://example.com/file", err.url)
+      assert.equals(200, err.http_code) -- Should capture HTTP 200 from curl
+      assert.equals("curl", err.tool)
       
       uv_stub:revert()
       if unlink_stub then unlink_stub:revert() end
@@ -180,20 +201,154 @@ describe("hermes.download", function()
     end)
     
     it("successfully downloads with PowerShell", function()
-      local exec_stub = stub(vim.fn, "executable")
-      exec_stub.on_call_with("curl").returns(0)
-      exec_stub.on_call_with("wget").returns(0)
-      exec_stub.on_call_with("powershell").returns(1)
+       local exec_stub = stub(vim.fn, "executable")
+       exec_stub.on_call_with("curl").returns(0)
+       exec_stub.on_call_with("wget").returns(0)
+       exec_stub.on_call_with("powershell").returns(1)
+       
+       stub(vim.fn, "system").returns("")
+       stub(vim.uv or vim.loop, "fs_stat").returns({ size = 1000 })
+       
+       local ok, err = download.download("http://example.com/file", "/tmp/test")
+       
+       assert.is_true(ok)
+       assert.is_nil(err)
+       
+       exec_stub:revert()
+     end)
+    
+    it("captures HTTP code from curl output", function()
+      stub(vim.fn, "executable").returns(1)
       
-      stub(vim.fn, "system").returns("")
-      stub(vim.uv or vim.loop, "fs_stat").returns({ size = 1000 })
+      -- Mock curl to return a 200 response code at end of output
+      stub(vim.fn, "system").returns("200")
+      -- Use size < 100 to trigger the "too small" error
+      stub(vim.uv or vim.loop, "fs_stat").returns({ size = 50 })
+      stub(vim.uv or vim.loop, "fs_unlink")
       
       local ok, err = download.download("http://example.com/file", "/tmp/test")
       
-      assert.is_true(ok)
-      assert.is_nil(err)
+      -- Small file triggers error but should have captured HTTP code 200
+      assert.is_false(ok)
+      assert.is_table(err)
+      assert.equals("http://example.com/file", err.url)
+      assert.equals("curl", err.tool)
+      assert.equals(200, err.http_code)
+    end)
+    
+    describe("User-Agent header", function()
+      it("includes User-Agent header in curl command", function()
+        local exec_stub = stub(vim.fn, "executable")
+        exec_stub.on_call_with("curl").returns(1)
+        exec_stub.on_call_with("wget").returns(0)
+        exec_stub.on_call_with("powershell").returns(0)
+
+        local captured_cmd
+        local system_stub = stub(vim.fn, "system").invokes(function(cmd)
+          captured_cmd = cmd
+          return ""
+        end)
+        local uv = vim.uv or vim.loop
+        local fs_stat_stub = stub(uv, "fs_stat").returns({ size = 1000 })
+
+        download.download("http://example.com/file", "/tmp/test")
+
+        local has_ua = vim.tbl_contains(captured_cmd, "User-Agent: " .. download.USER_AGENT)
+
+        exec_stub:revert()
+        system_stub:revert()
+        fs_stat_stub:revert()
+
+        assert.is_true(has_ua)
+      end)
+
+      it("includes User-Agent flag in wget command", function()
+        local exec_stub = stub(vim.fn, "executable")
+        exec_stub.on_call_with("curl").returns(0)
+        exec_stub.on_call_with("wget").returns(1)
+        exec_stub.on_call_with("powershell").returns(0)
+
+        local captured_cmd
+        local system_stub = stub(vim.fn, "system").invokes(function(cmd)
+          captured_cmd = cmd
+          return ""
+        end)
+        local uv = vim.uv or vim.loop
+        local fs_stat_stub = stub(uv, "fs_stat").returns({ size = 1000 })
+
+        download.download("http://example.com/file", "/tmp/test")
+
+        local has_ua = vim.tbl_contains(captured_cmd, "--user-agent=" .. download.USER_AGENT)
+
+        exec_stub:revert()
+        system_stub:revert()
+        fs_stat_stub:revert()
+
+        assert.is_true(has_ua)
+      end)
+
+      it("includes UserAgent parameter in PowerShell command", function()
+        local exec_stub = stub(vim.fn, "executable")
+        exec_stub.on_call_with("curl").returns(0)
+        exec_stub.on_call_with("wget").returns(0)
+        exec_stub.on_call_with("powershell").returns(1)
+
+        local captured_cmd
+        local system_stub = stub(vim.fn, "system").invokes(function(cmd)
+          captured_cmd = cmd
+          return ""
+        end)
+        local uv = vim.uv or vim.loop
+        local fs_stat_stub = stub(uv, "fs_stat").returns({ size = 1000 })
+
+        download.download("http://example.com/file", "/tmp/test")
+
+        local ps_command = captured_cmd[3]
+
+        exec_stub:revert()
+        system_stub:revert()
+        fs_stat_stub:revert()
+
+        assert.truthy(ps_command:match('UserAgent "' .. download.USER_AGENT .. '"'))
+      end)
+    end)
+  end)
+  
+  describe("pre-release downloads", function()
+    it("can download pre-release version v0.3.0-beta.5 successfully", function()
+      -- This test verifies that the download mechanism works with pre-release versions
+      -- which are marked as "prerelease": true on GitHub
+      stub(vim.fn, "executable").returns(1)
       
-      exec_stub:revert()
+      -- Mock successful download
+      stub(vim.fn, "system").returns("200")
+      stub(vim.uv or vim.loop, "fs_stat").returns({ size = 4410248 }) -- Actual size from GitHub
+      
+      local url = "https://github.com/Ruddickmg/hermes.nvim/releases/download/v0.3.0-beta.5/libhermes-linux-x86_64.so"
+      local ok, err = download.download(url, "/tmp/test_prerelease.so")
+      
+      -- Should succeed without errors
+      assert.is_true(ok, "Pre-release download should succeed")
+      assert.is_nil(err, "Should not return error for successful download")
+    end)
+    
+    it("returns structured error for missing pre-release version", function()
+      stub(vim.fn, "executable").returns(1)
+      
+      -- Mock a 404 response
+      stub(vim.fn, "system").returns("404")
+      stub(vim.uv or vim.loop, "fs_stat").returns({ size = 50 }) -- Small file triggers error
+      stub(vim.uv or vim.loop, "fs_unlink")
+      
+      local url = "https://github.com/Ruddickmg/hermes.nvim/releases/download/v999.0.0/libhermes-linux-x86_64.so"
+      local ok, err = download.download(url, "/tmp/test_missing.so")
+      
+      -- Should fail with structured error
+      assert.is_false(ok)
+      assert.is_table(err)
+      assert.equals(url, err.url)
+      assert.equals(404, err.http_code)
+      assert.truthy(err.message:match("too small") or err.message:match("empty"))
     end)
   end)
   

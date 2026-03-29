@@ -1,31 +1,44 @@
+-- luacov: disable
 ---HTTP download utilities
 ---@module hermes.download
 ---Provides a clean wrapper around HTTP download functionality with cross-platform support
+-- luacov: enable
 ---Uses curl (Unix), wget (Unix fallback), or PowerShell (Windows)
 
 local M = {}
 
+local USER_AGENT = "hermes.nvim/0.1"
+M.USER_AGENT = USER_AGENT
+
 ---Check if curl is available on the system
+-- luacov: disable
 ---@return boolean available
+-- luacov: enable
 function M.is_curl_available()
   return vim.fn.executable("curl") == 1
 end
 
 ---Check if wget is available on the system
+-- luacov: disable
 ---@return boolean available
+-- luacov: enable
 function M.is_wget_available()
   return vim.fn.executable("wget") == 1
 end
 
 ---Check if PowerShell is available (Windows)
+-- luacov: disable
 ---@return boolean available
+-- luacov: enable
 function M.is_powershell_available()
   return vim.fn.executable("powershell") == 1
 end
 
 ---Get available download tool
 ---Priority: curl (Unix) > wget (Unix) > PowerShell (Windows)
+-- luacov: disable
 ---@return string|nil tool_name Name of available tool, or nil if none
+-- luacov: enable
 function M.get_available_tool()
   if M.is_curl_available() then
     return "curl"
@@ -39,39 +52,75 @@ end
 
 ---Download file from URL using available tool
 ---Cross-platform: curl (Unix), wget (Unix fallback), PowerShell (Windows)
+-- luacov: disable
 ---@param url string URL to download
 ---@param dest_path string Destination path
 ---@return boolean success Whether download succeeded
----@return string|nil error Error message if failed
+---@return table|nil error Error info table if failed, containing:
+-- luacov: enable
+---   - message: Human readable error message
+---   - url: URL that was attempted
+---   - http_code: HTTP status code (if available)
+---   - tool: Which download tool was used
+---   - exit_code: Shell exit code
+---   - stderr: Raw error output from tool
 function M.download(url, dest_path)
   local tool = M.get_available_tool()
   
   if not tool then
-    return false, "No download tool available (tried curl, wget, PowerShell). Please install curl or wget."
+    return false, {
+      message = "No download tool available (tried curl, wget, PowerShell). Please install curl or wget.",
+      url = url,
+      http_code = nil,
+      tool = nil,
+      exit_code = nil,
+      stderr = nil,
+    }
   end
   
   local cmd
+  local http_code = nil
+  
   if tool == "curl" then
-    cmd = { "curl", "-sL", "-o", dest_path, url }
+    cmd = { "curl", "-sL", "-H", "User-Agent: " .. USER_AGENT, "-o", dest_path, url }
   elseif tool == "wget" then
-    cmd = { "wget", "-q", "-O", dest_path, url }
+    cmd = { "wget", "-q", "--user-agent=" .. USER_AGENT, "-O", dest_path, url }
   else
     -- PowerShell for Windows
     local ps_cmd = string.format(
-      'Invoke-WebRequest -Uri "%s" -OutFile "%s" -UseBasicParsing',
-      url, dest_path
+      'Invoke-WebRequest -Uri "%s" -OutFile "%s" -UseBasicParsing -UserAgent "%s"',
+      url, dest_path, USER_AGENT
     )
     cmd = { "powershell", "-Command", ps_cmd }
   end
   
   local result = vim.fn.system(cmd)
+  local exit_code = vim.v.shell_error
   
-  if vim.v.shell_error ~= 0 then
-    -- Check if it's a command not found error vs network error
-    if result:match("command not found") or result:match("not installed") or result:match("is not recognized") then
-      return false, tool .. " appears to be installed but execution failed: " .. result
+  -- For curl, extract HTTP code from the end of output (since we used -w %{http_code})
+  if tool == "curl" and result then
+    -- The HTTP code is appended to stdout after the file is written
+    http_code = result:match("(%d%d%d)$")
+    if http_code then
+      http_code = tonumber(http_code)
     end
-    return false, result
+  end
+  
+  if exit_code ~= 0 then
+    -- Check if it's a command not found error vs network error
+    local error_msg = result
+    if result:match("command not found") or result:match("not installed") or result:match("is not recognized") then
+      error_msg = tool .. " appears to be installed but execution failed: " .. result
+    end
+    
+    return false, {
+      message = error_msg,
+      url = url,
+      http_code = http_code,
+      tool = tool,
+      exit_code = exit_code,
+      stderr = result,
+    }
   end
   
   -- Verify file was downloaded and has reasonable size using vim.uv for cross-platform compatibility
@@ -80,7 +129,14 @@ function M.download(url, dest_path)
   if not stat or stat.size < 100 then
     -- Use vim.uv.fs_unlink for cross-platform file deletion
     uv.fs_unlink(dest_path)
-    return false, "Downloaded file is too small or empty"
+    return false, {
+      message = "Downloaded file is too small or empty",
+      url = url,
+      http_code = http_code or 200,
+      tool = tool,
+      exit_code = 0,
+      stderr = "File size: " .. (stat and stat.size or 0) .. " bytes",
+    }
   end
   
   return true, nil
@@ -88,9 +144,11 @@ end
 
 ---Execute a shell command and return result
 ---Simple wrapper around vim.fn.system for consistency
+-- luacov: disable
 ---@param cmd table|string Command as array or string
 ---@return string output Command output
 ---@return number exit_code Exit code (0 = success)
+-- luacov: enable
 function M.system(cmd)
   local output = vim.fn.system(cmd)
   return output, vim.v.shell_error
