@@ -5,10 +5,22 @@ local stub = require("luassert.stub")
 
 describe("hermes.download", function()
   local download
+  local stubs = {}
   
   before_each(function()
     package.loaded["hermes.download"] = nil
     download = require("hermes.download")
+    stubs = {}
+  end)
+  
+  after_each(function()
+    -- Clean up all stubs to prevent test pollution
+    for _, s in ipairs(stubs) do
+      if s and s.revert then
+        s:revert()
+      end
+    end
+    stubs = {}
   end)
   
   describe("tool availability", function()

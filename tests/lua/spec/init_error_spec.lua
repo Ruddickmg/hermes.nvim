@@ -9,7 +9,26 @@ describe("hermes.init error handling", function()
   before_each(function()
     -- Clear module cache and reload
     package.loaded["hermes.init"] = nil
+    package.loaded["hermes.config"] = nil
+    
+    -- Setup config first to avoid conflicts
+    local config = require("hermes.config")
+    config.setup({
+      download = { version = "latest", auto = false },
+    })
+    
     init = require("hermes.init")
+  end)
+  
+  after_each(function()
+    -- Reset loading state to prevent test pollution
+    if init then
+      init._set_loading_state("NOT_LOADED")
+      init._set_loading_error(nil)
+    end
+    -- Clear module cache to ensure fresh state for next test
+    package.loaded["hermes.init"] = nil
+    package.loaded["hermes.config"] = nil
   end)
   
   describe("error formatting", function()

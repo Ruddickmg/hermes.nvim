@@ -13,7 +13,8 @@ describe("hermes.init (main API)", function()
 	before_each(function()
 		temp_dir = helpers.create_temp_dir()
 		stdpath_stub = stub(vim.fn, "stdpath").returns(temp_dir)
-		filereadable_stub = stub(vim.fn, "filereadable").returns(1)
+		-- Note: We intentionally don't stub filereadable here - let it check actual files
+		-- This ensures the binary detection works correctly
 
 		-- Copy actual built binary to test directory using cross-platform API
 		local platform = require("hermes.platform")
@@ -40,6 +41,15 @@ describe("hermes.init (main API)", function()
 		-- Note: Do NOT clear package.loaded["hermes"] - it will auto-reload 
 		-- the submodules above when required, but keeps the main module reference stable
 
+		-- Setup config with correct version BEFORE requiring hermes
+		local config = require("hermes.config")
+		config.setup({
+			download = {
+				version = "latest",
+				auto = false,  -- Don't auto-download during tests
+			},
+		})
+
 		hermes = require("hermes")
 	end)
 
@@ -51,6 +61,12 @@ describe("hermes.init (main API)", function()
 		end
 		if filereadable_stub then
 			filereadable_stub:revert()
+		end
+		
+		-- Reset state to prevent test pollution
+		if hermes then
+			hermes._set_loading_state("NOT_LOADED")
+			hermes._set_loading_error(nil)
 		end
 	end)
 
@@ -115,14 +131,31 @@ describe("hermes.init (main API)", function()
 		local native
 		
 		before_each(function()
+			-- Force write correct version to version file
+			-- This prevents version mismatch from previous tests
+			local binary = require("hermes.binary")
+			local ver_file = binary.get_version_file()
+			local wanted_ver = require("hermes.version").get_wanted()
+			
+			-- Always write version file to ensure it matches wanted version
+			vim.fn.writefile({wanted_ver}, ver_file)
+			
+			-- Verify it was written correctly
+			local verify_ver = vim.fn.filereadable(ver_file) == 1 and vim.fn.readfile(ver_file)[1] or "NONE"
+			
 			-- Load native module via _load_native_sync
-			-- The outer before_each already ensured binary is at the expected path
 			local ok, result = pcall(function()
 				return hermes._load_native_sync()
 			end)
 			
 			if not ok then
-				error("Failed to load native module: " .. tostring(result))
+				error(string.format(
+					"Failed to load native module: %s\nVersion file: %s\nWanted: %s, Written: %s",
+					tostring(result),
+					tostring(ver_file),
+					tostring(wanted_ver),
+					tostring(verify_ver)
+				))
 			end
 			
 			native = result
