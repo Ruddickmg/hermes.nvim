@@ -936,4 +936,66 @@ describe("hermes.init (main API)", function()
 			assert.is_true(found_error_highlight, "Should have DiagnosticError highlight for FAILED state")
 		end)
 	end)
+
+	describe("show_status", function()
+		it("is exported and callable", function()
+			assert.is_function(hermes._show_status)
+		end)
+	end)
+
+	describe(":Hermes command", function()
+		it("command is registered", function()
+			-- Check that the Hermes command exists by looking for it in vim.api
+			local commands = vim.api.nvim_get_commands({})
+			local found = false
+			for name, _ in pairs(commands) do
+				if name:lower() == "hermes" then
+					found = true
+					break
+				end
+			end
+			assert.is_true(found, "Hermes command should be registered")
+		end)
+		
+		it("build subcommand shows notification", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, {msg = msg, level = level})
+			end
+			
+			-- Execute the command
+			vim.cmd("Hermes build")
+			
+			-- Wait a bit for vim.schedule
+			vim.wait(10)
+			
+			vim.notify = original_notify
+			
+			assert.is_true(#notify_calls > 0, "Hermes build should show notification")
+		end)
+		
+		it("unknown subcommand shows error", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, {msg = msg, level = level})
+			end
+			
+			-- Execute with unknown command
+			vim.cmd("Hermes unknowncommand")
+			
+			vim.notify = original_notify
+			
+			local found_error = false
+			for _, call in ipairs(notify_calls) do
+				if call.msg:match("Unknown command") then
+					found_error = true
+					break
+				end
+			end
+			
+			assert.is_true(found_error, "Unknown command should show error")
+		end)
+	end)
 end)
