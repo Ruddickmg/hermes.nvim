@@ -938,8 +938,152 @@ describe("hermes.init (main API)", function()
 	end)
 
 	describe("show_status", function()
-		it("is exported and callable", function()
-			assert.is_function(hermes._show_status)
+		it("executes without error when called", function()
+			-- Set up test state
+			hermes._set_loading_state("READY")
+			hermes._set_loading_error(nil)
+			
+			-- Mock all vim.api functions that show_status uses
+			local stubs = {}
+			
+			-- Mock nvim_create_buf
+			stubs.create_buf = vim.api.nvim_create_buf
+			vim.api.nvim_create_buf = function(_listed, _scratch)
+				return 999  -- Return a mock buffer ID
+			end
+			
+			-- Mock nvim_buf_set_lines
+			stubs.buf_set_lines = vim.api.nvim_buf_set_lines
+			vim.api.nvim_buf_set_lines = function(_buf, _start_line, _end_line, _strict, _lines)
+				-- Accept the call silently
+			end
+			
+			-- Mock nvim_buf_add_highlight
+			stubs.buf_add_highlight = vim.api.nvim_buf_add_highlight
+			vim.api.nvim_buf_add_highlight = function(_buf, _ns_id, _hl_group, _line, _col_start, _col_end)
+				-- Accept the call silently
+			end
+			
+			-- Mock nvim_open_win
+			stubs.open_win = vim.api.nvim_open_win
+			vim.api.nvim_open_win = function(_buf, _enter, _opts)
+				return 888  -- Return a mock window ID
+			end
+			
+			-- Mock nvim_win_close (used by keymaps)
+			stubs.win_close = vim.api.nvim_win_close
+			vim.api.nvim_win_close = function(_win, _force)
+				-- Accept the call silently
+			end
+			
+			-- Mock vim.keymap.set
+			stubs.keymap_set = vim.keymap.set
+			vim.keymap.set = function(_mode, _lhs, _rhs, _opts)
+				-- Accept the call silently
+			end
+			
+			-- Mock vim.bo (buffer options)
+			stubs.bo = vim.bo
+			vim.bo = setmetatable({}, {
+				__index = function(_t, _k)
+					-- Return a table that accepts __newindex for any buffer ID
+					return setmetatable({}, {
+						__newindex = function() end
+					})
+				end,
+				__newindex = function(_t, _k, _v)
+					-- Silently accept any buffer option assignment
+				end
+			})
+			
+			-- Call the function
+			local ok, err = pcall(function()
+				hermes._show_status()
+			end)
+			
+			-- Restore all stubs
+			vim.api.nvim_create_buf = stubs.create_buf
+			vim.api.nvim_buf_set_lines = stubs.buf_set_lines
+			vim.api.nvim_buf_add_highlight = stubs.buf_add_highlight
+			vim.api.nvim_open_win = stubs.open_win
+			vim.api.nvim_win_close = stubs.win_close
+			vim.keymap.set = stubs.keymap_set
+			vim.bo = stubs.bo
+			
+			-- Reset state
+			hermes._set_loading_state("NOT_LOADED")
+			hermes._set_loading_error(nil)
+			
+			-- Assert it executed without error
+			assert.is_true(ok, "show_status should execute without error: " .. tostring(err))
+		end)
+		
+		it("creates a buffer and window when called", function()
+			hermes._set_loading_state("READY")
+			hermes._set_loading_error(nil)
+			
+			local create_buf_called = false
+			local open_win_called = false
+			local buf_set_lines_called = false
+			
+			-- Mock functions to track calls
+			local stubs = {}
+			
+			stubs.create_buf = vim.api.nvim_create_buf
+			vim.api.nvim_create_buf = function(_listed, _scratch)
+				create_buf_called = true
+				return 999
+			end
+			
+			stubs.buf_set_lines = vim.api.nvim_buf_set_lines
+			vim.api.nvim_buf_set_lines = function(_buf, _start_line, _end_line, _strict, _lines)
+				buf_set_lines_called = true
+			end
+			
+			stubs.open_win = vim.api.nvim_open_win
+			vim.api.nvim_open_win = function(_buf, _enter, _opts)
+				open_win_called = true
+				return 888
+			end
+			
+			stubs.buf_add_highlight = vim.api.nvim_buf_add_highlight
+			vim.api.nvim_buf_add_highlight = function() end
+			
+			stubs.win_close = vim.api.nvim_win_win_close
+			vim.api.nvim_win_close = function() end
+			
+			stubs.keymap_set = vim.keymap.set
+			vim.keymap.set = function() end
+			
+			stubs.bo = vim.bo
+			vim.bo = setmetatable({}, {
+				__index = function(_t, _k)
+					return setmetatable({}, {__newindex = function() end})
+				end
+			})
+			
+			-- Call the function
+			pcall(function()
+				hermes._show_status()
+			end)
+			
+			-- Restore stubs
+			vim.api.nvim_create_buf = stubs.create_buf
+			vim.api.nvim_buf_set_lines = stubs.buf_set_lines
+			vim.api.nvim_open_win = stubs.open_win
+			vim.api.nvim_buf_add_highlight = stubs.buf_add_highlight
+			vim.api.nvim_win_close = stubs.win_close
+			vim.keymap.set = stubs.keymap_set
+			vim.bo = stubs.bo
+			
+			-- Reset state
+			hermes._set_loading_state("NOT_LOADED")
+			hermes._set_loading_error(nil)
+			
+			-- Assert expected API calls were made
+			assert.is_true(create_buf_called, "show_status should call nvim_create_buf")
+			assert.is_true(buf_set_lines_called, "show_status should call nvim_buf_set_lines")
+			assert.is_true(open_win_called, "show_status should call nvim_open_win")
 		end)
 	end)
 
