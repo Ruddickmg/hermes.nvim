@@ -399,6 +399,59 @@ end
 
 -- Main async executor - minimal async code, delegates to sync functions
 local function execute_async(fn)
+	-- EARLY CHECK: If binary already exists and matches config, load silently
+	local binary = require("hermes.binary")
+	local bin_path = binary.get_binary_path()
+	
+	if vim.fn.filereadable(bin_path) == 1 then
+		local ver_file = binary.get_version_file()
+		local version = require("hermes.version")
+		local configured_ver = version.get_wanted()
+		
+		-- Check if we can use existing binary
+		local should_use_existing = false
+		
+		if vim.fn.filereadable(ver_file) == 1 then
+			local installed_ver = vim.fn.readfile(ver_file)[1]
+			-- Use existing if configured version matches installed version
+			if configured_ver == installed_ver then
+				should_use_existing = true
+			end
+		end
+		
+		if should_use_existing then
+			-- Binary exists and version matches - try to load it
+			-- Use pcall to handle load failures gracefully
+			local ok, result = pcall(function()
+				local lib, err = package.loadlib(bin_path, "luaopen_hermes")
+				if not lib then
+					error("Failed to load: " .. tostring(err))
+				end
+				return lib()
+			end)
+			
+			if ok then
+				-- Successfully loaded existing binary
+				-- Use vim.schedule for consistency with other loading paths
+				vim.schedule(function()
+					_native = result
+					_loading_state = "READY"
+					vim.notify("Hermes: Ready", vim.log.levels.INFO)
+					fn() -- Execute the callback
+				end)
+				return
+			else
+				-- Loading failed - binary might be corrupted
+				-- Remove the invalid binary and version file to force re-download
+				pcall(function()
+					vim.fn.delete(bin_path)
+					vim.fn.delete(ver_file)
+				end)
+				-- Fall through to download flow
+			end
+		end
+	end
+	
 	-- Check states in priority order (all sync checks)
 	if is_ready() then
 		return handle_ready_state(fn)
@@ -421,11 +474,10 @@ local function execute_async(fn)
 		return handle_auto_download_disabled(fn)
 	end
 
-	-- Start async download
+	-- Start async download (NOW we show the notification)
 	_loading_state = "DOWNLOADING"
 	vim.notify("Hermes: Downloading binary...", vim.log.levels.INFO)
 
-	local binary = require("hermes.binary")
 	binary.ensure_binary_async(_download_timeout, function(success, result)
 		handle_download_complete(success, result, fn)
 	end)
