@@ -1,4 +1,4 @@
--- luacode: disable
+-- luacov: disable
 ---@brief [[
 --- Hermes - ACP (Agent Client Protocol) client for Neovim
 --- Provides APIs for communicating with AI assistants
@@ -134,7 +134,7 @@
 ---@field mimeType string MIME type (e.g., "audio/wav", "audio/mpeg")
 
 ---@alias PromptContent TextContent|LinkContent|EmbeddedContent|ImageContent|AudioContent|table
--- luacode: inable
+-- luacov: enable
 
 local M = {}
 
