@@ -737,4 +737,203 @@ describe("hermes.init (main API)", function()
 			hermes._set_loading_error(nil)
 		end)
 	end)
+
+	describe("_show_status", function()
+		it("is exported as internal function", function()
+			assert.is_function(hermes._show_status)
+		end)
+	end)
+
+	describe("_build_status_content", function()
+		it("is exported as internal function", function()
+			assert.is_function(hermes._build_status_content)
+		end)
+
+		it("returns lines and highlights tables", function()
+			local lines, highlights = hermes._build_status_content("READY", nil)
+			assert.is_table(lines)
+			assert.is_table(highlights)
+			assert.is_true(#lines > 0)
+			assert.is_true(#highlights > 0)
+		end)
+
+		it("includes header in output", function()
+			local lines = hermes._build_status_content("READY", nil)
+			local found_header = false
+			for _, line in ipairs(lines) do
+				if line:match("Hermes Status") then
+					found_header = true
+					break
+				end
+			end
+			assert.is_true(found_header, "Should include 'Hermes Status' header")
+		end)
+
+		it("includes state information", function()
+			local lines = hermes._build_status_content("READY", nil)
+			local found_state = false
+			for _, line in ipairs(lines) do
+				if line:match("State: READY") then
+					found_state = true
+					break
+				end
+			end
+			assert.is_true(found_state, "Should include READY state")
+		end)
+
+		it("includes binary information for READY state", function()
+			local lines = hermes._build_status_content("READY", nil)
+			local found_binary = false
+			local found_version = false
+			for _, line in ipairs(lines) do
+				if line:match("Binary Path:") then
+					found_binary = true
+				end
+				if line:match("Version:") then
+					found_version = true
+				end
+			end
+			assert.is_true(found_binary, "Should include Binary Path")
+			assert.is_true(found_version, "Should include Version")
+		end)
+
+		it("includes platform information", function()
+			local lines = hermes._build_status_content("READY", nil)
+			local found_os = false
+			local found_arch = false
+			local found_platform = false
+			for _, line in ipairs(lines) do
+				if line:match("OS:") then
+					found_os = true
+				end
+				if line:match("Architecture:") then
+					found_arch = true
+				end
+				if line:match("Platform Key:") then
+					found_platform = true
+				end
+			end
+			assert.is_true(found_os, "Should include OS")
+			assert.is_true(found_arch, "Should include Architecture")
+			assert.is_true(found_platform, "Should include Platform Key")
+		end)
+
+		it("includes download tool information", function()
+			local lines = hermes._build_status_content("READY", nil)
+			local found_curl = false
+			local found_wget = false
+			local found_ps = false
+			for _, line in ipairs(lines) do
+				if line:match("curl:") then
+					found_curl = true
+				end
+				if line:match("wget:") then
+					found_wget = true
+				end
+				if line:match("PowerShell:") then
+					found_ps = true
+				end
+			end
+			assert.is_true(found_curl, "Should include curl info")
+			assert.is_true(found_wget, "Should include wget info")
+			assert.is_true(found_ps, "Should include PowerShell info")
+		end)
+
+		it("includes error details for FAILED state", function()
+			local error_info = {
+				message = "Download failed",
+				url = "http://example.com",
+				tool = "curl"
+			}
+			local lines = hermes._build_status_content("FAILED", error_info)
+			local found_error_header = false
+			local found_suggestion = false
+			local found_troubleshooting = false
+			for _, line in ipairs(lines) do
+				if line:match("Error Details:") then
+					found_error_header = true
+				end
+				if line:match("Suggested Fix:") then
+					found_suggestion = true
+				end
+				if line:match("Troubleshooting:") then
+					found_troubleshooting = true
+				end
+			end
+			assert.is_true(found_error_header, "Should include Error Details header")
+			assert.is_true(found_suggestion, "Should include Suggested Fix")
+			assert.is_true(found_troubleshooting, "Should include Troubleshooting")
+		end)
+
+		it("includes state line for FAILED state", function()
+			local lines = hermes._build_status_content("FAILED", { message = "test" })
+			local found_state = false
+			for _, line in ipairs(lines) do
+				if line:match("State: FAILED") then
+					found_state = true
+					break
+				end
+			end
+			assert.is_true(found_state, "Should include FAILED state")
+		end)
+
+		it("includes state line for DOWNLOADING state", function()
+			local lines = hermes._build_status_content("DOWNLOADING", nil)
+			local found_state = false
+			for _, line in ipairs(lines) do
+				if line:match("State: DOWNLOADING") then
+					found_state = true
+					break
+				end
+			end
+			assert.is_true(found_state, "Should include DOWNLOADING state")
+		end)
+
+		it("includes state line for LOADING state", function()
+			local lines = hermes._build_status_content("LOADING", nil)
+			local found_state = false
+			for _, line in ipairs(lines) do
+				if line:match("State: LOADING") then
+					found_state = true
+					break
+				end
+			end
+			assert.is_true(found_state, "Should include LOADING state")
+		end)
+
+		it("returns highlights with appropriate highlight groups", function()
+			local _, highlights = hermes._build_status_content("READY", nil)
+			-- Check that highlights have the expected format
+			assert.is_true(#highlights > 0)
+			for _, hl in ipairs(highlights) do
+				assert.is_table(hl)
+				assert.equals(5, #hl) -- {group, line, col_start, col_end, ...}
+				assert.is_string(hl[1]) -- highlight group name
+				assert.equals("number", type(hl[2])) -- line number
+			end
+		end)
+
+		it("applies DiagnosticOk highlight for READY state", function()
+			local _, highlights = hermes._build_status_content("READY", nil)
+			local found_ok_highlight = false
+			for _, hl in ipairs(highlights) do
+				if hl[1] == "DiagnosticOk" then
+					found_ok_highlight = true
+					break
+				end
+			end
+			assert.is_true(found_ok_highlight, "Should have DiagnosticOk highlight for READY state")
+		end)
+
+		it("applies DiagnosticError highlight for FAILED state", function()
+			local _, highlights = hermes._build_status_content("FAILED", { message = "test" })
+			local found_error_highlight = false
+			for _, hl in ipairs(highlights) do
+				if hl[1] == "DiagnosticError" then
+					found_error_highlight = true
+				end
+			end
+			assert.is_true(found_error_highlight, "Should have DiagnosticError highlight for FAILED state")
+		end)
+	end)
 end)
