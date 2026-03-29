@@ -3,68 +3,68 @@
 -- Run tests with: vusted tests/lua/spec/
 
 return {
-  -- Default settings for all test runs
-  _all = {
-    -- Root directory for tests
-    ROOT = {'tests/lua/spec/'},
-    
-    -- Pattern for test files
-    pattern = '_spec%.lua$',
-    
-    -- Verbose output
-    verbose = true,
-    
-    -- Enable coverage reporting (use --coverage flag)
-    coverage = false,
-    
-    -- Auto-insulate tests (isolate each test file)
-    ['auto-insulate'] = true,
-    
-    -- Lua path for loading test helpers and modules
-    lpath = "tests/lua/spec/?.lua;tests/lua/spec/?/init.lua;lua/?.lua;lua/?/init.lua;./?.lua",
-  },
-  
-  -- Unit tests - fast, isolated
-  unit = {
-    ROOT = {'tests/lua/spec/'},
-    tags = {'unit'},
-    verbose = true,
-  },
-  
-  -- Platform tests only
-  platform = {
-    ROOT = {'tests/lua/spec/platform_spec.lua'},
-    verbose = true,
-  },
-  
-  -- Config tests only  
-  config = {
-    ROOT = {'tests/lua/spec/config_spec.lua'},
-    verbose = true,
-  },
-  
-  -- Binary tests only
-  binary = {
-    ROOT = {'tests/lua/spec/binary_spec.lua'},
-    verbose = true,
-  },
-  
-  -- API tests only
-  api = {
-    ROOT = {'tests/lua/spec/init_spec.lua'},
-    verbose = true,
-  },
-  
-  -- Plugin tests only
-  plugin = {
-    ROOT = {'tests/lua/spec/plugin_spec.lua'},
-    verbose = true,
-  },
-  
-  -- Full test suite with coverage
-  full = {
-    ROOT = {'tests/lua/spec/'},
-    verbose = true,
-    coverage = true,
-  },
+	-- Default settings for all test runs
+	_all = {
+		-- Root directory for tests
+		ROOT = { "tests/lua/spec/" },
+
+		-- Pattern for test files
+		pattern = "_spec%.lua$",
+
+		-- Verbose output
+		verbose = true,
+
+		-- Enable coverage reporting (use --coverage flag)
+		coverage = false,
+
+		-- Auto-insulate tests (isolate each test file)
+		["auto-insulate"] = true,
+
+		-- Lua path for loading test helpers and modules
+		lpath = "tests/lua/spec/?.lua;tests/lua/spec/?/init.lua;lua/?.lua;lua/?/init.lua;./?.lua",
+	},
+
+	-- Unit tests - fast, isolated
+	unit = {
+		ROOT = { "tests/lua/spec/" },
+		tags = { "unit" },
+		verbose = true,
+	},
+
+	-- Platform tests only
+	platform = {
+		ROOT = { "tests/lua/spec/platform_spec.lua" },
+		verbose = true,
+	},
+
+	-- Config tests only
+	config = {
+		ROOT = { "tests/lua/spec/config_spec.lua" },
+		verbose = true,
+	},
+
+	-- Binary tests only
+	binary = {
+		ROOT = { "tests/lua/spec/binary_spec.lua" },
+		verbose = true,
+	},
+
+	-- API tests only
+	api = {
+		ROOT = { "tests/lua/spec/init_spec.lua" },
+		verbose = true,
+	},
+
+	-- Plugin tests only
+	plugin = {
+		ROOT = { "tests/lua/spec/plugin_spec.lua" },
+		verbose = true,
+	},
+
+	-- Full test suite with coverage
+	full = {
+		ROOT = { "tests/lua/spec/" },
+		verbose = true,
+		coverage = true,
+	},
 }

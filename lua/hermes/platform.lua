@@ -1,10 +1,14 @@
+-- luacov: disable
 ---Platform detection utilities
 ---@module hermes.platform
+-- luacov: enable
 
 local M = {}
 
 ---Get operating system
+-- luacov: disable
 ---@return string os_name Operating system: "linux", "macos", or "windows"
+-- luacov: enable
 function M.get_os()
   local uname = vim.loop.os_uname()
   local sysname = uname.sysname
@@ -30,7 +34,9 @@ function M.get_os()
 end
 
 ---Get architecture
+-- luacov: disable
 ---@return string arch Architecture: "x86_64" or "aarch64"
+-- luacov: enable
 function M.get_arch()
   local machine = vim.loop.os_uname().machine
   
@@ -47,7 +53,9 @@ function M.get_arch()
 end
 
 ---Get library extension for current platform
+-- luacov: disable
 ---@return string ext Library extension: "so", "dylib", or "dll"
+-- luacov: enable
 function M.get_ext()
   local os = M.get_os()
   if os == "linux" then
@@ -60,7 +68,9 @@ function M.get_ext()
 end
 
 ---Get binary filename for current platform
+-- luacov: disable
 ---@return string filename Binary filename (e.g., "libhermes-linux-x86_64.so")
+-- luacov: enable
 function M.get_binary_name()
   local os = M.get_os()
   local arch = M.get_arch()
@@ -69,8 +79,10 @@ function M.get_binary_name()
 end
 
 ---Check if current platform is supported
+-- luacov: disable
 ---@return boolean supported Whether platform is supported
 ---@return string|nil error Error message if not supported
+-- luacov: enable
 function M.is_supported()
   local ok, err = pcall(function()
     M.get_os()
@@ -80,7 +92,9 @@ function M.is_supported()
 end
 
 ---Get platform string for display
+-- luacov: disable
 ---@return string platform Platform string (e.g., "Linux x86_64")
+-- luacov: enable
 function M.get_display_string()
   local ok, os, arch = pcall(function()
     return M.get_os(), M.get_arch()
@@ -93,7 +107,9 @@ function M.get_display_string()
 end
 
 ---Get platform key for checking against supported platforms
+-- luacov: disable
 ---@return string|nil key Platform key (e.g., "linux-x86_64") or nil if not determinable
+-- luacov: enable
 function M.get_platform_key()
   local ok, os, arch = pcall(function()
     return M.get_os(), M.get_arch()

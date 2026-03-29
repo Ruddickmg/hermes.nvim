@@ -13,7 +13,8 @@ describe("hermes.init (main API)", function()
 	before_each(function()
 		temp_dir = helpers.create_temp_dir()
 		stdpath_stub = stub(vim.fn, "stdpath").returns(temp_dir)
-		filereadable_stub = stub(vim.fn, "filereadable").returns(1)
+		-- Note: We intentionally don't stub filereadable here - let it check actual files
+		-- This ensures the binary detection works correctly
 
 		-- Copy actual built binary to test directory using cross-platform API
 		local platform = require("hermes.platform")
@@ -40,6 +41,15 @@ describe("hermes.init (main API)", function()
 		-- Note: Do NOT clear package.loaded["hermes"] - it will auto-reload 
 		-- the submodules above when required, but keeps the main module reference stable
 
+		-- Setup config with correct version BEFORE requiring hermes
+		local config = require("hermes.config")
+		config.setup({
+			download = {
+				version = "latest",
+				auto = false,  -- Don't auto-download during tests
+			},
+		})
+
 		hermes = require("hermes")
 	end)
 
@@ -51,6 +61,12 @@ describe("hermes.init (main API)", function()
 		end
 		if filereadable_stub then
 			filereadable_stub:revert()
+		end
+		
+		-- Reset state to prevent test pollution
+		if hermes then
+			hermes._set_loading_state("NOT_LOADED")
+			hermes._set_loading_error(nil)
 		end
 	end)
 
@@ -115,14 +131,31 @@ describe("hermes.init (main API)", function()
 		local native
 		
 		before_each(function()
+			-- Force write correct version to version file
+			-- This prevents version mismatch from previous tests
+			local binary = require("hermes.binary")
+			local ver_file = binary.get_version_file()
+			local wanted_ver = require("hermes.version").get_wanted()
+			
+			-- Always write version file to ensure it matches wanted version
+			vim.fn.writefile({wanted_ver}, ver_file)
+			
+			-- Verify it was written correctly
+			local verify_ver = vim.fn.filereadable(ver_file) == 1 and vim.fn.readfile(ver_file)[1] or "NONE"
+			
 			-- Load native module via _load_native_sync
-			-- The outer before_each already ensured binary is at the expected path
 			local ok, result = pcall(function()
 				return hermes._load_native_sync()
 			end)
 			
 			if not ok then
-				error("Failed to load native module: " .. tostring(result))
+				error(string.format(
+					"Failed to load native module: %s\nVersion file: %s\nWanted: %s, Written: %s",
+					tostring(result),
+					tostring(ver_file),
+					tostring(wanted_ver),
+					tostring(verify_ver)
+				))
 			end
 			
 			native = result
@@ -702,6 +735,411 @@ describe("hermes.init (main API)", function()
 			-- Reset for other tests
 			hermes._set_loading_state("NOT_LOADED")
 			hermes._set_loading_error(nil)
+		end)
+	end)
+
+	describe("_show_status", function()
+		it("is exported as internal function", function()
+			assert.is_function(hermes._show_status)
+		end)
+	end)
+
+	describe("_build_status_content", function()
+		it("is exported as internal function", function()
+			assert.is_function(hermes._build_status_content)
+		end)
+
+		it("returns lines and highlights tables", function()
+			local lines, highlights = hermes._build_status_content("READY", nil)
+			assert.is_table(lines)
+			assert.is_table(highlights)
+			assert.is_true(#lines > 0)
+			assert.is_true(#highlights > 0)
+		end)
+
+		it("includes header in output", function()
+			local lines = hermes._build_status_content("READY", nil)
+			local found_header = false
+			for _, line in ipairs(lines) do
+				if line:match("Hermes Status") then
+					found_header = true
+					break
+				end
+			end
+			assert.is_true(found_header, "Should include 'Hermes Status' header")
+		end)
+
+		it("includes state information", function()
+			local lines = hermes._build_status_content("READY", nil)
+			local found_state = false
+			for _, line in ipairs(lines) do
+				if line:match("State: READY") then
+					found_state = true
+					break
+				end
+			end
+			assert.is_true(found_state, "Should include READY state")
+		end)
+
+		it("includes binary information for READY state", function()
+			local lines = hermes._build_status_content("READY", nil)
+			local found_binary = false
+			local found_version = false
+			for _, line in ipairs(lines) do
+				if line:match("Binary Path:") then
+					found_binary = true
+				end
+				if line:match("Version:") then
+					found_version = true
+				end
+			end
+			assert.is_true(found_binary, "Should include Binary Path")
+			assert.is_true(found_version, "Should include Version")
+		end)
+
+		it("includes platform information", function()
+			local lines = hermes._build_status_content("READY", nil)
+			local found_os = false
+			local found_arch = false
+			local found_platform = false
+			for _, line in ipairs(lines) do
+				if line:match("OS:") then
+					found_os = true
+				end
+				if line:match("Architecture:") then
+					found_arch = true
+				end
+				if line:match("Platform Key:") then
+					found_platform = true
+				end
+			end
+			assert.is_true(found_os, "Should include OS")
+			assert.is_true(found_arch, "Should include Architecture")
+			assert.is_true(found_platform, "Should include Platform Key")
+		end)
+
+		it("includes download tool information", function()
+			local lines = hermes._build_status_content("READY", nil)
+			local found_curl = false
+			local found_wget = false
+			local found_ps = false
+			for _, line in ipairs(lines) do
+				if line:match("curl:") then
+					found_curl = true
+				end
+				if line:match("wget:") then
+					found_wget = true
+				end
+				if line:match("PowerShell:") then
+					found_ps = true
+				end
+			end
+			assert.is_true(found_curl, "Should include curl info")
+			assert.is_true(found_wget, "Should include wget info")
+			assert.is_true(found_ps, "Should include PowerShell info")
+		end)
+
+		it("includes error details for FAILED state", function()
+			local error_info = {
+				message = "Download failed",
+				url = "http://example.com",
+				tool = "curl"
+			}
+			local lines = hermes._build_status_content("FAILED", error_info)
+			local found_error_header = false
+			local found_suggestion = false
+			local found_troubleshooting = false
+			for _, line in ipairs(lines) do
+				if line:match("Error Details:") then
+					found_error_header = true
+				end
+				if line:match("Suggested Fix:") then
+					found_suggestion = true
+				end
+				if line:match("Troubleshooting:") then
+					found_troubleshooting = true
+				end
+			end
+			assert.is_true(found_error_header, "Should include Error Details header")
+			assert.is_true(found_suggestion, "Should include Suggested Fix")
+			assert.is_true(found_troubleshooting, "Should include Troubleshooting")
+		end)
+
+		it("includes state line for FAILED state", function()
+			local lines = hermes._build_status_content("FAILED", { message = "test" })
+			local found_state = false
+			for _, line in ipairs(lines) do
+				if line:match("State: FAILED") then
+					found_state = true
+					break
+				end
+			end
+			assert.is_true(found_state, "Should include FAILED state")
+		end)
+
+		it("includes state line for DOWNLOADING state", function()
+			local lines = hermes._build_status_content("DOWNLOADING", nil)
+			local found_state = false
+			for _, line in ipairs(lines) do
+				if line:match("State: DOWNLOADING") then
+					found_state = true
+					break
+				end
+			end
+			assert.is_true(found_state, "Should include DOWNLOADING state")
+		end)
+
+		it("includes state line for LOADING state", function()
+			local lines = hermes._build_status_content("LOADING", nil)
+			local found_state = false
+			for _, line in ipairs(lines) do
+				if line:match("State: LOADING") then
+					found_state = true
+					break
+				end
+			end
+			assert.is_true(found_state, "Should include LOADING state")
+		end)
+
+		it("returns highlights with appropriate highlight groups", function()
+			local _, highlights = hermes._build_status_content("READY", nil)
+			-- Check that highlights have the expected format
+			assert.is_true(#highlights > 0)
+			for _, hl in ipairs(highlights) do
+				assert.is_table(hl)
+				assert.equals(5, #hl) -- {group, line, col_start, col_end, ...}
+				assert.is_string(hl[1]) -- highlight group name
+				assert.equals("number", type(hl[2])) -- line number
+			end
+		end)
+
+		it("applies DiagnosticOk highlight for READY state", function()
+			local _, highlights = hermes._build_status_content("READY", nil)
+			local found_ok_highlight = false
+			for _, hl in ipairs(highlights) do
+				if hl[1] == "DiagnosticOk" then
+					found_ok_highlight = true
+					break
+				end
+			end
+			assert.is_true(found_ok_highlight, "Should have DiagnosticOk highlight for READY state")
+		end)
+
+		it("applies DiagnosticError highlight for FAILED state", function()
+			local _, highlights = hermes._build_status_content("FAILED", { message = "test" })
+			local found_error_highlight = false
+			for _, hl in ipairs(highlights) do
+				if hl[1] == "DiagnosticError" then
+					found_error_highlight = true
+				end
+			end
+			assert.is_true(found_error_highlight, "Should have DiagnosticError highlight for FAILED state")
+		end)
+	end)
+
+	describe("show_status", function()
+		it("executes without error when called", function()
+			-- Set up test state
+			hermes._set_loading_state("READY")
+			hermes._set_loading_error(nil)
+			
+			-- Mock all vim.api functions that show_status uses
+			local stubs = {}
+			
+			-- Mock nvim_create_buf
+			stubs.create_buf = vim.api.nvim_create_buf
+			vim.api.nvim_create_buf = function(_listed, _scratch)
+				return 999  -- Return a mock buffer ID
+			end
+			
+			-- Mock nvim_buf_set_lines
+			stubs.buf_set_lines = vim.api.nvim_buf_set_lines
+			vim.api.nvim_buf_set_lines = function(_buf, _start_line, _end_line, _strict, _lines)
+				-- Accept the call silently
+			end
+			
+			-- Mock nvim_buf_add_highlight
+			stubs.buf_add_highlight = vim.api.nvim_buf_add_highlight
+			vim.api.nvim_buf_add_highlight = function(_buf, _ns_id, _hl_group, _line, _col_start, _col_end)
+				-- Accept the call silently
+			end
+			
+			-- Mock nvim_open_win
+			stubs.open_win = vim.api.nvim_open_win
+			vim.api.nvim_open_win = function(_buf, _enter, _opts)
+				return 888  -- Return a mock window ID
+			end
+			
+			-- Mock nvim_win_close (used by keymaps)
+			stubs.win_close = vim.api.nvim_win_close
+			vim.api.nvim_win_close = function(_win, _force)
+				-- Accept the call silently
+			end
+			
+			-- Mock vim.keymap.set
+			stubs.keymap_set = vim.keymap.set
+			vim.keymap.set = function(_mode, _lhs, _rhs, _opts)
+				-- Accept the call silently
+			end
+			
+			-- Mock vim.bo (buffer options)
+			stubs.bo = vim.bo
+			vim.bo = setmetatable({}, {
+				__index = function(_t, _k)
+					-- Return a table that accepts __newindex for any buffer ID
+					return setmetatable({}, {
+						__newindex = function() end
+					})
+				end,
+				__newindex = function(_t, _k, _v)
+					-- Silently accept any buffer option assignment
+				end
+			})
+			
+			-- Call the function
+			local ok, err = pcall(function()
+				hermes._show_status()
+			end)
+			
+			-- Restore all stubs
+			vim.api.nvim_create_buf = stubs.create_buf
+			vim.api.nvim_buf_set_lines = stubs.buf_set_lines
+			vim.api.nvim_buf_add_highlight = stubs.buf_add_highlight
+			vim.api.nvim_open_win = stubs.open_win
+			vim.api.nvim_win_close = stubs.win_close
+			vim.keymap.set = stubs.keymap_set
+			vim.bo = stubs.bo
+			
+			-- Reset state
+			hermes._set_loading_state("NOT_LOADED")
+			hermes._set_loading_error(nil)
+			
+			-- Assert it executed without error
+			assert.is_true(ok, "show_status should execute without error: " .. tostring(err))
+		end)
+		
+		it("creates a buffer and window when called", function()
+			hermes._set_loading_state("READY")
+			hermes._set_loading_error(nil)
+			
+			local create_buf_called = false
+			local open_win_called = false
+			local buf_set_lines_called = false
+			
+			-- Mock functions to track calls
+			local stubs = {}
+			
+			stubs.create_buf = vim.api.nvim_create_buf
+			vim.api.nvim_create_buf = function(_listed, _scratch)
+				create_buf_called = true
+				return 999
+			end
+			
+			stubs.buf_set_lines = vim.api.nvim_buf_set_lines
+			vim.api.nvim_buf_set_lines = function(_buf, _start_line, _end_line, _strict, _lines)
+				buf_set_lines_called = true
+			end
+			
+			stubs.open_win = vim.api.nvim_open_win
+			vim.api.nvim_open_win = function(_buf, _enter, _opts)
+				open_win_called = true
+				return 888
+			end
+			
+			stubs.buf_add_highlight = vim.api.nvim_buf_add_highlight
+			vim.api.nvim_buf_add_highlight = function() end
+			
+			stubs.win_close = vim.api.nvim_win_win_close
+			vim.api.nvim_win_close = function() end
+			
+			stubs.keymap_set = vim.keymap.set
+			vim.keymap.set = function() end
+			
+			stubs.bo = vim.bo
+			vim.bo = setmetatable({}, {
+				__index = function(_t, _k)
+					return setmetatable({}, {__newindex = function() end})
+				end
+			})
+			
+			-- Call the function
+			pcall(function()
+				hermes._show_status()
+			end)
+			
+			-- Restore stubs
+			vim.api.nvim_create_buf = stubs.create_buf
+			vim.api.nvim_buf_set_lines = stubs.buf_set_lines
+			vim.api.nvim_open_win = stubs.open_win
+			vim.api.nvim_buf_add_highlight = stubs.buf_add_highlight
+			vim.api.nvim_win_close = stubs.win_close
+			vim.keymap.set = stubs.keymap_set
+			vim.bo = stubs.bo
+			
+			-- Reset state
+			hermes._set_loading_state("NOT_LOADED")
+			hermes._set_loading_error(nil)
+			
+			-- Assert expected API calls were made
+			assert.is_true(create_buf_called, "show_status should call nvim_create_buf")
+			assert.is_true(buf_set_lines_called, "show_status should call nvim_buf_set_lines")
+			assert.is_true(open_win_called, "show_status should call nvim_open_win")
+		end)
+	end)
+
+	describe(":Hermes command", function()
+		it("command is registered", function()
+			-- Check that the Hermes command exists by looking for it in vim.api
+			local commands = vim.api.nvim_get_commands({})
+			local found = false
+			for name, _ in pairs(commands) do
+				if name:lower() == "hermes" then
+					found = true
+					break
+				end
+			end
+			assert.is_true(found, "Hermes command should be registered")
+		end)
+		
+		it("build subcommand shows notification", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, {msg = msg, level = level})
+			end
+			
+			-- Execute the command
+			vim.cmd("Hermes build")
+			
+			-- Wait a bit for vim.schedule
+			vim.wait(10)
+			
+			vim.notify = original_notify
+			
+			assert.is_true(#notify_calls > 0, "Hermes build should show notification")
+		end)
+		
+		it("unknown subcommand shows error", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, {msg = msg, level = level})
+			end
+			
+			-- Execute with unknown command
+			vim.cmd("Hermes unknowncommand")
+			
+			vim.notify = original_notify
+			
+			local found_error = false
+			for _, call in ipairs(notify_calls) do
+				if call.msg:match("Unknown command") then
+					found_error = true
+					break
+				end
+			end
+			
+			assert.is_true(found_error, "Unknown command should show error")
 		end)
 	end)
 end)

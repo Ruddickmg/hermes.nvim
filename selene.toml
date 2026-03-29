@@ -8,7 +8,8 @@ std = "vim"
 multiple_statements = "allow"
 
 [config]
-# Exclude test directories from some lints
-exclude = ["tests/lua/xdg/**"]
+# Exclude test directories and node_modules from linting
+# Note: CI runs selene on lua/ and tests/lua/spec/ explicitly
+exclude = ["tests/lua/xdg/**", "node_modules", "node_modules/**", "**/node_modules/**", ".luarocks/**"]
 
 

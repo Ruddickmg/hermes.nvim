@@ -1,3 +1,4 @@
+-- luacov: disable
 ---@brief [[
 --- Hermes - ACP (Agent Client Protocol) client for Neovim
 --- Provides APIs for communicating with AI assistants
@@ -133,6 +134,7 @@
 ---@field mimeType string MIME type (e.g., "audio/wav", "audio/mpeg")
 
 ---@alias PromptContent TextContent|LinkContent|EmbeddedContent|ImageContent|AudioContent|table
+-- luacov: enable
 
 local M = {}
 
@@ -191,7 +193,7 @@ end
 local function should_auto_download()
 	local config = require("hermes.config")
 	local download_cfg = config.get_download()
-	return download_cfg.auto ~= false
+	return not download_cfg or download_cfg.auto ~= false
 end
 
 -- ============================================================================
@@ -228,10 +230,94 @@ local function handle_load_success(loaded_module, fn)
 end
 
 -- Handle load failure (sync state update)
+-- err_msg can be a string or a structured error table from download module
 local function handle_load_failure(err_msg, context)
 	_loading_state = "FAILED"
 	_loading_error = err_msg
-	vim.notify("Hermes: " .. context .. ". Run :Hermes status or :Hermes log for details.", vim.log.levels.ERROR)
+	vim.notify("Hermes: " .. context .. ". Run :Hermes status for details.", vim.log.levels.ERROR)
+end
+
+-- Format structured error for display
+-- @param err table|string Error info (structured table or plain string)
+-- @return string formatted error message for display
+local function format_error_for_display(err)
+	if type(err) ~= "table" then
+		return tostring(err)
+	end
+
+	local lines = {}
+
+	-- Main error message
+	if err.message then
+		table.insert(lines, "Error: " .. err.message)
+	end
+
+	-- URL attempted
+	if err.url then
+		table.insert(lines, "URL: " .. err.url)
+	end
+
+	-- HTTP status code with description
+	if err.http_code then
+		local code_desc = {
+			[404] = " (Not Found)",
+			[403] = " (Forbidden)",
+			[401] = " (Unauthorized)",
+			[500] = " (Server Error)",
+			[502] = " (Bad Gateway)",
+			[503] = " (Service Unavailable)",
+			[504] = " (Gateway Timeout)",
+		}
+		local desc = code_desc[err.http_code] or ""
+		table.insert(lines, "HTTP Code: " .. err.http_code .. desc)
+	end
+
+	-- Tool used
+	if err.tool then
+		table.insert(lines, "Download Tool: " .. err.tool)
+	end
+
+	-- Exit code
+	if err.exit_code then
+		table.insert(lines, "Exit Code: " .. err.exit_code)
+	end
+
+	-- Additional error details (stderr)
+	if err.stderr and err.stderr ~= "" and err.stderr ~= err.message then
+		local stderr_preview = err.stderr:sub(1, 200)
+		if #err.stderr > 200 then
+			stderr_preview = stderr_preview .. "..."
+		end
+		table.insert(lines, "Details: " .. stderr_preview)
+	end
+
+	return table.concat(lines, "\n  ")
+end
+
+-- Get suggested fix based on error type
+-- @param err table|string Error info
+-- @return string suggestion
+local function get_error_suggestion(err)
+	if type(err) ~= "table" then
+		return "Try building from source with :Hermes build"
+	end
+
+	-- Suggest based on HTTP code
+	if err.http_code == 404 then
+		return "Version not found. Check available versions at: https://github.com/Ruddickmg/hermes.nvim/releases"
+	elseif err.http_code == 403 then
+		return "Download blocked. This may be due to rate limiting or network restrictions. Try building from source with :Hermes build"
+	elseif err.http_code == 401 then
+		return "Authentication required. Check if this is a private repository or try building from source."
+	elseif err.http_code and err.http_code >= 500 then
+		return "GitHub server error. Wait a moment and try again, or build from source with :Hermes build"
+	elseif err.message and err.message:match("too small") then
+		return "Download incomplete. This may be due to network issues. Try again or build from source with :Hermes build"
+	elseif err.message and err.message:match("No download tool available") then
+		return "Install curl or wget to enable automatic downloads, or build from source with :Hermes build"
+	end
+
+	return "Try building from source with :Hermes build, or check your internet connection"
 end
 
 -- Handle download completion and trigger load (async entry point)
@@ -447,8 +533,193 @@ end
 -- User Commands (:Hermes status, :Hermes log)
 -- ============================================================================
 
+-- Build status content (lines and highlights) for display
+-- Pure function - can be tested without Neovim UI
+-- @param state string Current loading state (e.g., "READY", "FAILED")
+-- @param error table|nil Error information if state is "FAILED"
+-- @return table lines Array of strings to display
+-- @return table highlights Array of highlight specifications
+local function build_status_content(state, error)
+	local lines = {}
+	local highlights = {}
+	local line_count = 0
 
+	local function add_line(text, hl)
+		table.insert(lines, text)
+		line_count = line_count + 1
+		if hl then
+			table.insert(highlights, { hl, line_count - 1, 0, -1, -1 })
+		end
+		return line_count
+	end
 
+	-- Header
+	add_line("Hermes Status", "Title")
+	add_line(string.rep("=", 60))
+	add_line("")
+
+	-- Current state with appropriate highlight
+	local state_line = "State: " .. state
+	add_line(state_line)
+	if state == "READY" then
+		table.insert(highlights, { "DiagnosticOk", line_count - 1, 7, -1, -1 })
+	elseif state == "FAILED" then
+		table.insert(highlights, { "DiagnosticError", line_count - 1, 7, -1, -1 })
+	elseif state == "DOWNLOADING" or state == "LOADING" then
+		table.insert(highlights, { "DiagnosticWarn", line_count - 1, 7, -1, -1 })
+	end
+
+	-- Binary information
+	local binary = require("hermes.binary")
+	add_line("Binary Path: " .. binary.get_binary_path())
+
+	local version = require("hermes.version")
+	add_line("Version: " .. version.get_wanted())
+
+	-- Check if binary exists
+	local bin_path = binary.get_binary_path()
+	if vim.fn.filereadable(bin_path) == 1 then
+		local size = vim.fn.getfsize(bin_path)
+		add_line("Binary Size: " .. size .. " bytes")
+	else
+		add_line("Binary Size: Not found")
+	end
+
+	add_line("")
+
+	-- Error details if failed
+	if state == "FAILED" and error then
+		add_line("Error Details:", "DiagnosticError")
+		add_line(string.rep("-", 60))
+
+		local error_text = format_error_for_display(error)
+		-- Split error text into lines and add with indentation
+		for _, err_line in ipairs(vim.split(error_text, "\n")) do
+			add_line("  " .. err_line)
+		end
+
+		add_line("")
+		add_line("Suggested Fix:", "DiagnosticWarn")
+		add_line("  " .. get_error_suggestion(error))
+
+		add_line("")
+		add_line("Troubleshooting:")
+		add_line("  1. Check your internet connection")
+		add_line("  2. Verify the version exists at:")
+		add_line("     https://github.com/Ruddickmg/hermes.nvim/releases")
+		add_line("  3. Try building manually: :Hermes build")
+		add_line("  4. Check logs: :Hermes log")
+	end
+
+	-- Platform info
+	add_line("")
+	add_line("Platform Information:")
+	add_line(string.rep("-", 60))
+	local platform = require("hermes.platform")
+	add_line("  OS: " .. (platform.get_os() or "unknown"))
+	add_line("  Architecture: " .. (platform.get_arch() or "unknown"))
+	add_line("  Platform Key: " .. (platform.get_platform_key() or "unknown"))
+
+	-- Download tool info
+	add_line("")
+	add_line("Download Tools:")
+	add_line(string.rep("-", 60))
+	local download = require("hermes.download")
+	add_line("  curl: " .. (download.is_curl_available() and "available" or "not found"))
+	add_line("  wget: " .. (download.is_wget_available() and "available" or "not found"))
+	add_line("  PowerShell: " .. (download.is_powershell_available() and "available" or "not found"))
+
+	return lines, highlights
+end
+
+-- Show detailed status information including any download errors
+-- Creates a formatted buffer with status details
+local function show_status()
+	local lines, highlights = build_status_content(_loading_state, _loading_error)
+
+	-- Create floating window
+	local buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+
+	-- Apply highlights
+	for _, hl in ipairs(highlights) do
+		vim.api.nvim_buf_add_highlight(buf, -1, hl[1], hl[2], hl[3], hl[4])
+	end
+
+	-- Calculate window size
+	local width = 70
+	local height = math.min(#lines + 2, vim.o.lines - 4)
+
+	-- Center window
+	local col = math.floor((vim.o.columns - width) / 2)
+	local row = math.floor((vim.o.lines - height) / 2)
+
+	local win = vim.api.nvim_open_win(buf, true, {
+		relative = "editor",
+		width = width,
+		height = height,
+		col = col,
+		row = row,
+		style = "minimal",
+		border = "rounded",
+		title = " Hermes Status ",
+		title_pos = "center",
+	})
+
+	-- Set buffer options
+	vim.bo[buf].modifiable = false
+	vim.bo[buf].buftype = "nofile"
+
+	-- Add keymaps to close
+	vim.keymap.set("n", "q", function()
+		vim.api.nvim_win_close(win, true)
+	end, { buffer = buf, silent = true })
+	vim.keymap.set("n", "<Esc>", function()
+		vim.api.nvim_win_close(win, true)
+	end, { buffer = buf, silent = true })
+end
+
+-- Register :Hermes user command
+vim.api.nvim_create_user_command("Hermes", function(opts)
+	local args = opts.args:lower()
+
+	if args == "status" then
+		show_status()
+	elseif args == "build" then
+		-- Trigger build from source
+		vim.notify("Hermes: Building from source...", vim.log.levels.INFO)
+		vim.schedule(function()
+			local binary = require("hermes.binary")
+			local data_dir = binary.get_data_dir()
+			local ok, err = binary.build_from_source(data_dir)
+			if ok then
+				vim.notify("Hermes: Build successful! Restart Neovim to load the new binary.", vim.log.levels.INFO)
+			else
+				vim.notify("Hermes: Build failed: " .. tostring(err), vim.log.levels.ERROR)
+			end
+		end)
+	elseif args == "log" then
+		-- Open log file
+		local config = require("hermes.config")
+		local log_config = config.get_log and config.get_log() or {}
+		local log_path = log_config.path
+		if log_path and vim.fn.filereadable(log_path) == 1 then
+			vim.cmd("vsplit " .. vim.fn.fnameescape(log_path))
+		else
+			vim.notify("Hermes: No log file found", vim.log.levels.WARN)
+		end
+	else
+		vim.notify("Hermes: Unknown command '" .. opts.args .. "'. Available: status, build, log", vim.log.levels.ERROR)
+	end
+end, {
+	nargs = 1,
+	complete = function()
+		return { "status", "build", "log" }
+	end,
+	desc = "Hermes commands: status, build, log",
+})
+
+-- ============================================================================
 -- Export internal functions for testing
 M._is_ready = is_ready
 M._is_loading = is_loading
@@ -461,5 +732,9 @@ M._handle_failed_state = handle_failed_state
 M._handle_load_success = handle_load_success
 M._handle_load_failure = handle_load_failure
 M._should_auto_download = should_auto_download
+M._format_error_for_display = format_error_for_display
+M._get_error_suggestion = get_error_suggestion
+M._show_status = show_status
+M._build_status_content = build_status_content
 
 return M

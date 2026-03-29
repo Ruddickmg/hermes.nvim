@@ -33,6 +33,12 @@ describe("hermes.binary", function()
     if filereadable_stub then filereadable_stub:revert() end
     if download_stub then download_stub:revert() end
     if version_stub then version_stub:revert() end
+    
+    -- Clean up any inline stubs of vim.fn functions that tests may have created
+    -- These are not tracked by the variables above and can cause test pollution
+    pcall(function() if vim.fn.readfile.revert then vim.fn.readfile:revert() end end)
+    pcall(function() if vim.fn.writefile.revert then vim.fn.writefile:revert() end end)
+    pcall(function() if vim.fn.executable.revert then vim.fn.executable:revert() end end)
   end)
 
   describe("get_data_dir()", function()
