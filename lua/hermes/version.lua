@@ -40,7 +40,12 @@ function M.fetch_latest()
 	local success, err = download.download(url, temp_file)
 	
 	if not success then
-		logging.notify("Failed to fetch latest version: " .. (err or "Unknown error") .. ". Using fallback.", vim.log.levels.WARN)
+		-- Handle both structured error tables and plain strings
+		local err_msg = err
+		if type(err) == "table" and err.message then
+			err_msg = err.message
+		end
+		logging.notify("Failed to fetch latest version: " .. (err_msg or "Unknown error") .. ". Using fallback.", vim.log.levels.WARN)
 		os.remove(temp_file)
 		return fallback_version
 	end

@@ -302,6 +302,44 @@ describe("hermes.download", function()
     end)
   end)
   
+  describe("pre-release downloads", function()
+    it("can download pre-release version v0.3.0-beta.5 successfully", function()
+      -- This test verifies that the download mechanism works with pre-release versions
+      -- which are marked as "prerelease": true on GitHub
+      stub(vim.fn, "executable").returns(1)
+      
+      -- Mock successful download
+      stub(vim.fn, "system").returns("200")
+      stub(vim.uv or vim.loop, "fs_stat").returns({ size = 4410248 }) -- Actual size from GitHub
+      
+      local url = "https://github.com/Ruddickmg/hermes.nvim/releases/download/v0.3.0-beta.5/libhermes-linux-x86_64.so"
+      local ok, err = download.download(url, "/tmp/test_prerelease.so")
+      
+      -- Should succeed without errors
+      assert.is_true(ok, "Pre-release download should succeed")
+      assert.is_nil(err, "Should not return error for successful download")
+    end)
+    
+    it("returns structured error for missing pre-release version", function()
+      stub(vim.fn, "executable").returns(1)
+      
+      -- Mock a 404 response
+      stub(vim.fn, "system").returns("404")
+      stub(vim.uv or vim.loop, "fs_stat").returns({ size = 50 }) -- Small file triggers error
+      stub(vim.uv or vim.loop, "fs_unlink")
+      
+      local url = "https://github.com/Ruddickmg/hermes.nvim/releases/download/v999.0.0/libhermes-linux-x86_64.so"
+      local ok, err = download.download(url, "/tmp/test_missing.so")
+      
+      -- Should fail with structured error
+      assert.is_false(ok)
+      assert.is_table(err)
+      assert.equals(url, err.url)
+      assert.equals(404, err.http_code)
+      assert.truthy(err.message:match("too small") or err.message:match("empty"))
+    end)
+  end)
+  
   describe("system()", function()
     it("executes command and returns output", function()
       local system_stub = stub(vim.fn, "system").returns("output text")
