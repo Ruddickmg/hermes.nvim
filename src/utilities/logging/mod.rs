@@ -6,7 +6,7 @@ use tracing_subscriber::{
     reload::{self},
 };
 
-use crate::utilities::logging::writer::{FileWriter, Filtered};
+use crate::utilities::logging::writer::{FileWriter, Filtered, StdoutWriter};
 use crate::utilities::writer::MessageWriter;
 use crate::{
     acp::{Result, error::Error},
@@ -62,7 +62,8 @@ impl Logger {
     }
 
     fn stdio_layer(config: LogTargetConfig) -> BoxedLayer {
-        Self::base_layer(fmt::Layer::new(), config.format)
+        let writer = StdoutWriter::new().filtered(config.level);
+        Self::base_layer(fmt::layer().with_writer(writer), config.format)
     }
 
     fn notification_layer(config: LogTargetConfig) -> BoxedLayer {

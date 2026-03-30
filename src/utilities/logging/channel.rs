@@ -5,6 +5,7 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
+use tracing::error;
 
 use super::sink::LogSink;
 
@@ -147,7 +148,7 @@ impl<S: LogSink> Worker<S> {
                             // Channel empty or disconnected, flush and exit
                             if !message_buffer.is_empty() {
                                 if let Err(e) = sink.write_batch(&message_buffer) {
-                                    eprintln!("Failed to write final batch: {}", e);
+                                    error!("Failed to write final batch: {}", e);
                                 }
                                 message_buffer.clear();
                             }
@@ -163,7 +164,7 @@ impl<S: LogSink> Worker<S> {
                             // Timeout occurred - check if we need to flush
                             if !message_buffer.is_empty() {
                                 if let Err(e) = sink.write_batch(&message_buffer) {
-                                    eprintln!("Failed to write batch on timeout: {}", e);
+                                    error!("Failed to write batch on timeout: {}", e);
                                 }
                                 message_buffer.clear();
                             }
@@ -173,7 +174,7 @@ impl<S: LogSink> Worker<S> {
                             // Sender dropped, flush and exit
                             if !message_buffer.is_empty() {
                                 if let Err(e) = sink.write_batch(&message_buffer) {
-                                    eprintln!("Failed to write final batch: {}", e);
+                                    error!("Failed to write final batch: {}", e);
                                 }
                                 message_buffer.clear();
                             }
@@ -191,7 +192,7 @@ impl<S: LogSink> Worker<S> {
                         // Check if we should flush (buffer full)
                         if message_buffer.len() >= flush_interval {
                             if let Err(e) = sink.write_batch(&message_buffer) {
-                                eprintln!("Failed to write batch: {}", e);
+                                error!("Failed to write batch: {}", e);
                             }
                             message_buffer.clear();
                         }
@@ -200,12 +201,12 @@ impl<S: LogSink> Worker<S> {
                         // Flush immediately
                         if !message_buffer.is_empty() {
                             if let Err(e) = sink.write_batch(&message_buffer) {
-                                eprintln!("Failed to write batch on flush: {}", e);
+                                error!("Failed to write batch on flush: {}", e);
                             }
                             message_buffer.clear();
                         }
                         if let Err(e) = sink.flush() {
-                            eprintln!("Failed to flush sink: {}", e);
+                            error!("Failed to flush sink: {}", e);
                         }
                     }
                     LogMessage::Shutdown => {
@@ -218,10 +219,10 @@ impl<S: LogSink> Worker<S> {
             if !message_buffer.is_empty()
                 && let Err(e) = sink.write_batch(&message_buffer)
             {
-                eprintln!("Failed to write final batch: {}", e);
+                error!("Failed to write final batch: {}", e);
             }
             if let Err(e) = sink.flush() {
-                eprintln!("Failed final flush: {}", e);
+                error!("Failed final flush: {}", e);
             }
         });
 

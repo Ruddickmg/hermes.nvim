@@ -1,10 +1,12 @@
 mod file;
 mod message;
 mod notification;
+mod stdio;
 
 pub use file::*;
 pub use message::*;
 pub use notification::*;
+pub use stdio::*;
 
 use std::io::{self, Write};
 use tracing::Metadata;
