@@ -5,9 +5,10 @@
 
 local M = {}
 
----Get operating system
 -- luacov: disable
+---Get operating system
 ---@return string os_name Operating system: "linux", "macos", or "windows"
+---@private
 -- luacov: enable
 function M.get_os()
   local uname = vim.loop.os_uname()
@@ -33,9 +34,10 @@ function M.get_os()
   end
 end
 
----Get architecture
 -- luacov: disable
+---Get architecture
 ---@return string arch Architecture: "x86_64" or "aarch64"
+---@private
 -- luacov: enable
 function M.get_arch()
   local machine = vim.loop.os_uname().machine
@@ -52,9 +54,10 @@ function M.get_arch()
   end
 end
 
----Get library extension for current platform
 -- luacov: disable
+---Get library extension for current platform
 ---@return string ext Library extension: "so", "dylib", or "dll"
+---@private
 -- luacov: enable
 function M.get_ext()
   local os = M.get_os()
@@ -67,9 +70,10 @@ function M.get_ext()
   end
 end
 
----Get binary filename for current platform
 -- luacov: disable
+---Get binary filename for current platform
 ---@return string filename Binary filename (e.g., "libhermes-linux-x86_64.so")
+---@private
 -- luacov: enable
 function M.get_binary_name()
   local os = M.get_os()
@@ -78,10 +82,11 @@ function M.get_binary_name()
   return string.format("libhermes-%s-%s.%s", os, arch, ext)
 end
 
----Check if current platform is supported
 -- luacov: disable
+---Check if current platform is supported
 ---@return boolean supported Whether platform is supported
 ---@return string|nil error Error message if not supported
+---@private
 -- luacov: enable
 function M.is_supported()
   local ok, err = pcall(function()
@@ -91,9 +96,10 @@ function M.is_supported()
   return ok, err
 end
 
----Get platform string for display
 -- luacov: disable
+---Get platform string for display
 ---@return string platform Platform string (e.g., "Linux x86_64")
+---@private
 -- luacov: enable
 function M.get_display_string()
   local ok, os, arch = pcall(function()
@@ -106,9 +112,10 @@ function M.get_display_string()
   end
 end
 
----Get platform key for checking against supported platforms
 -- luacov: disable
+---Get platform key for checking against supported platforms
 ---@return string|nil key Platform key (e.g., "linux-x86_64") or nil if not determinable
+---@private
 -- luacov: enable
 function M.get_platform_key()
   local ok, os, arch = pcall(function()

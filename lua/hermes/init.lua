@@ -138,6 +138,9 @@
 
 local M = {}
 
+-- Import logging module for notifications
+local logging = require("hermes.logging")
+
 -- ============================================================================
 -- Module State (all testable sync operations)
 -- ============================================================================
@@ -154,12 +157,18 @@ local _download_timeout = 60
 -- Pure Sync State Management (fully testable)
 -- ============================================================================
 
--- Get current loading state
+-- luacov: disable
+---Get current loading state
+---@private
+-- luacov: enable
 function M.get_loading_state()
 	return _loading_state
 end
 
--- Get loading error if any
+-- luacov: disable
+---Get loading error if any
+---@private
+-- luacov: enable
 function M.get_loading_error()
 	return _loading_error
 end
@@ -206,18 +215,28 @@ local function handle_ready_state(fn)
 	return true
 end
 
--- Handle loading states: show warning and return
-local function handle_loading_state()
-	vim.notify("Hermes: Binary is still loading. Check :Hermes status for progress.", vim.log.levels.WARN)
+-- Handle loading states: queue the request and return
+local function handle_loading_state(fn)
+	if type(fn) == "function" then
+		local queue = require("hermes.queue")
+		queue.push(fn)
+		logging.notify("Request queued, will execute when ready", vim.log.levels.DEBUG)
+	else
+		logging.notify("Invalid function provided to execute_async", vim.log.levels.WARN)
+	end
 	return false
 end
 
--- Handle FAILED state: show error and return
+-- Handle FAILED state: show error, clear queue, and return
 local function handle_failed_state()
-	vim.notify(
-		"Hermes: Failed to load. Run :Hermes status for details or :Hermes log for errors.",
-		vim.log.levels.ERROR
-	)
+	-- Clear any queued calls since binary won't load
+	local queue = require("hermes.queue")
+	local cleared = queue.clear()
+	if cleared > 0 then
+		logging.notify(string.format("Cleared %d queued operations due to load failure", cleared), vim.log.levels.WARN)
+	end
+
+	logging.notify("Failed to load. Run :Hermes status for details or :Hermes log for errors.", vim.log.levels.ERROR)
 	return false
 end
 
@@ -225,8 +244,17 @@ end
 local function handle_load_success(loaded_module, fn)
 	_native = loaded_module
 	_loading_state = "READY"
-	vim.notify("Hermes: Ready", vim.log.levels.INFO)
+	logging.notify("Successfully Loaded", vim.log.levels.INFO)
 	fn()
+
+	-- Execute any queued calls
+	local queue = require("hermes.queue")
+	if not queue.is_empty() then
+		local _, err = queue.execute_all()
+		if err then
+			logging.notify("Queued operation failed: " .. err, vim.log.levels.ERROR)
+		end
+	end
 end
 
 -- Handle load failure (sync state update)
@@ -234,7 +262,15 @@ end
 local function handle_load_failure(err_msg, context)
 	_loading_state = "FAILED"
 	_loading_error = err_msg
-	vim.notify("Hermes: " .. context .. ". Run :Hermes status for details.", vim.log.levels.ERROR)
+
+	-- Clear any queued calls since binary won't load
+	local queue = require("hermes.queue")
+	local cleared = queue.clear()
+	if cleared > 0 then
+		logging.notify(string.format("Cleared %d queued operations due to load failure", cleared), vim.log.levels.WARN)
+	end
+
+	logging.notify(context .. ". Run :Hermes status for details.", vim.log.levels.ERROR)
 end
 
 -- Format structured error for display
@@ -346,7 +382,7 @@ end
 -- Handle auto-download disabled path (async entry point)
 local function handle_auto_download_disabled(fn)
 	_loading_state = "LOADING"
-	vim.notify("Hermes: Loading binary...", vim.log.levels.INFO)
+	logging.notify("Loading binary...", vim.log.levels.INFO)
 
 	-- Use vim.schedule for the actual loading (only async part)
 	vim.schedule(function()
@@ -373,14 +409,17 @@ end
 -- Binary Loading (sync version for testing, async wrapper for production)
 -- ============================================================================
 
--- Load native module synchronously (can be tested with mocked deps)
+-- luacov: disable
+---Load native module synchronously (can be tested with mocked deps)
+---@private
+-- luacov: enable
 function M._load_native_sync()
 	if not _native then
 		local binary = require("hermes.binary")
-		local ok, result = pcall(binary.load_or_build)
+		local ok, result = pcall(binary.load)
 
 		if not ok then
-			error("Hermes: Failed to load or build native binary: " .. tostring(result))
+			error("Failed to load or build native binary: " .. tostring(result))
 		end
 
 		_native = result
@@ -396,7 +435,7 @@ local function execute_async(fn)
 	end
 
 	if is_loading() then
-		return handle_loading_state()
+		return handle_loading_state(fn)
 	end
 
 	if is_failed() then
@@ -405,16 +444,16 @@ local function execute_async(fn)
 
 	-- NOT_LOADED: Need to start loading
 	local config = require("hermes.config")
-	local download_cfg = config.get_download and config.get_download() or { auto_download_binary = true, timeout = 60 }
+	local download_cfg = config.get_download and config.get_download() or { auto = true, timeout = 60 }
 	_download_timeout = download_cfg.timeout or 60
 
 	if not should_auto_download() then
 		return handle_auto_download_disabled(fn)
 	end
 
-	-- Start async download
+	-- Start async download (NOW we show the notification)
 	_loading_state = "DOWNLOADING"
-	vim.notify("Hermes: Downloading binary...", vim.log.levels.INFO)
+	logging.notify("Downloading binary...", vim.log.levels.INFO)
 
 	local binary = require("hermes.binary")
 	binary.ensure_binary_async(_download_timeout, function(success, result)
@@ -437,6 +476,34 @@ function M.setup(opts)
 		download = opts.download,
 		log = opts.log,
 	})
+
+	-- Check if version changed and we need to re-download
+	local version = require("hermes.version")
+	local configured_ver = version.get_wanted()
+	local binary = require("hermes.binary")
+	local ver_file = binary.get_version_file()
+	local bin_path = binary.get_binary_path()
+
+	if is_ready() and vim.fn.filereadable(ver_file) == 1 then
+		local ok, installed_ver = pcall(function()
+			return vim.fn.readfile(ver_file)[1]
+		end)
+
+		if ok and installed_ver ~= configured_ver then
+			-- Version changed! Delete old binary and reset state
+			pcall(function()
+				vim.fn.delete(bin_path)
+				vim.fn.delete(ver_file)
+			end)
+
+			_loading_state = "NOT_LOADED"
+			_native = nil
+			logging.notify(
+				string.format("Version changed from %s to %s, downloading...", installed_ver, configured_ver),
+				vim.log.levels.INFO
+			)
+		end
+	end
 
 	-- Execute async with loading state management
 	execute_async(function()
@@ -687,15 +754,15 @@ vim.api.nvim_create_user_command("Hermes", function(opts)
 		show_status()
 	elseif args == "build" then
 		-- Trigger build from source
-		vim.notify("Hermes: Building from source...", vim.log.levels.INFO)
+		logging.notify("Building from source...", vim.log.levels.INFO)
 		vim.schedule(function()
 			local binary = require("hermes.binary")
 			local data_dir = binary.get_data_dir()
 			local ok, err = binary.build_from_source(data_dir)
 			if ok then
-				vim.notify("Hermes: Build successful! Restart Neovim to load the new binary.", vim.log.levels.INFO)
+				logging.notify("Build successful! Restart Neovim to load the new binary.", vim.log.levels.INFO)
 			else
-				vim.notify("Hermes: Build failed: " .. tostring(err), vim.log.levels.ERROR)
+				logging.notify("Build failed: " .. tostring(err), vim.log.levels.ERROR)
 			end
 		end)
 	elseif args == "log" then
@@ -706,10 +773,10 @@ vim.api.nvim_create_user_command("Hermes", function(opts)
 		if log_path and vim.fn.filereadable(log_path) == 1 then
 			vim.cmd("vsplit " .. vim.fn.fnameescape(log_path))
 		else
-			vim.notify("Hermes: No log file found", vim.log.levels.WARN)
+			logging.notify("No log file found", vim.log.levels.WARN)
 		end
 	else
-		vim.notify("Hermes: Unknown command '" .. opts.args .. "'. Available: status, build, log", vim.log.levels.ERROR)
+		logging.notify("Unknown command '" .. opts.args .. "'. Available: status, build, log", vim.log.levels.ERROR)
 	end
 end, {
 	nargs = 1,
@@ -720,21 +787,95 @@ end, {
 })
 
 -- ============================================================================
--- Export internal functions for testing
+-- Export internal functions for testing (marked private to hide from LSP)
+-- ============================================================================
+
+-- luacov: disable
+
+---@private
 M._is_ready = is_ready
+
+---@private
 M._is_loading = is_loading
+
+---@private
 M._is_failed = is_failed
+
+---@private
 M._set_loading_state = set_loading_state
+
+---@private
 M._set_loading_error = set_loading_error
+
+---@private
 M._handle_ready_state = handle_ready_state
+
+---@private
 M._handle_loading_state = handle_loading_state
+
+---@private
 M._handle_failed_state = handle_failed_state
+
+---@private
 M._handle_load_success = handle_load_success
+
+---@private
 M._handle_load_failure = handle_load_failure
+
+---@private
 M._should_auto_download = should_auto_download
+
+---@private
 M._format_error_for_display = format_error_for_display
+
+---@private
 M._get_error_suggestion = get_error_suggestion
+
+---@private
 M._show_status = show_status
+
+---@private
 M._build_status_content = build_status_content
+
+-- luacov: enable
+
+-- Eagerly load binary at startup if it exists
+-- No version check here - we just load whatever binary is present
+-- Version validation happens in setup()
+local function eager_load_binary()
+	if _loading_state ~= "NOT_LOADED" then
+		return
+	end
+
+	local binary = require("hermes.binary")
+	local bin_path = binary.get_binary_path()
+	local ver_file = binary.get_version_file()
+
+	if vim.fn.filereadable(bin_path) == 1 then
+		local ok, result = pcall(function()
+			local lib, err = package.loadlib(bin_path, "luaopen_hermes")
+			if not lib then
+				error("Failed to load: " .. tostring(err))
+			end
+			return lib()
+		end)
+
+		if ok then
+			_native = result
+			_loading_state = "READY"
+			logging.notify("Binary loaded successfully", vim.log.levels.DEBUG)
+		else
+			-- Failed to load - delete corrupted binary
+			pcall(function()
+				vim.fn.delete(bin_path)
+				vim.fn.delete(ver_file)
+			end)
+			logging.notify("Removed corrupted binary", vim.log.levels.DEBUG)
+		end
+	end
+end
+
+-- Call eager load immediately
+eager_load_binary()
 
 return M
