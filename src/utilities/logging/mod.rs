@@ -62,7 +62,7 @@ impl Logger {
     }
 
     fn stdio_layer(config: LogTargetConfig) -> BoxedLayer {
-        let writer = StdoutWriter::new().filtered(config.level);
+        let writer = StdoutWriter::default().filtered(config.level);
         Self::base_layer(fmt::layer().with_writer(writer), config.format)
     }
 
