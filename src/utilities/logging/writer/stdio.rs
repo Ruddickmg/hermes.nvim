@@ -75,9 +75,10 @@ mod tests {
         use crate::utilities::logging::writer::LevelFilterWriter;
 
         let writer = StdoutWriter::new();
-        let filtered_writer = writer.filtered(LogLevel::Debug);
-        // Filtered writer should be a LevelFilterWriter wrapping StdoutWriter
-        // We can't directly access inner, but we can verify it was created
-        let _ = filtered_writer; // Just verify it compiles and creates successfully
+        let mut filtered_writer = writer.filtered(LogLevel::Debug);
+
+        // Verify that we can write through the filtered writer successfully.
+        let result = write!(filtered_writer, "test through filtered writer");
+        assert!(result.is_ok());
     }
 }
