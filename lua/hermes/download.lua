@@ -89,7 +89,7 @@ function M.download(url, dest_path)
 	local http_code = nil
 
 	if tool == "curl" then
-		cmd = { "curl", "-sL", "-H", "User-Agent: " .. USER_AGENT, "-o", dest_path, url }
+		cmd = { "curl", "-sL", "-H", "User-Agent: " .. USER_AGENT, "-o", dest_path, "-w", "%{http_code}", url }
 	elseif tool == "wget" then
 		cmd = { "wget", "-q", "--user-agent=" .. USER_AGENT, "-O", dest_path, url }
 	else

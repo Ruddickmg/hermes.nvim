@@ -18,18 +18,31 @@ describe("hermes.queue", function()
 	describe("basic operations", function()
 		it("push adds item to queue", function()
 			local result = queue.push(function() end)
-			assert.is_true(result)
-			assert.equals(1, queue.size())
+			local state = {
+				result = result,
+				size = queue.size(),
+			}
+			assert.same({
+				result = true,
+				size = 1,
+			}, state)
 		end)
 
 		it("pop removes and returns item from front", function()
 			local called = false
 			queue.push(function() called = true end)
 			local fn = queue.pop()
-			assert.is_function(fn)
+			local state = {
+				is_function = type(fn) == "function",
+			}
 			fn()
-			assert.is_true(called)
-			assert.is_true(queue.is_empty())
+			state.called = called
+			state.is_empty = queue.is_empty()
+			assert.same({
+				is_function = true,
+				called = true,
+				is_empty = true,
+			}, state)
 		end)
 
 		it("pop returns nil when queue is empty", function()

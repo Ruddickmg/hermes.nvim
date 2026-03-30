@@ -460,60 +460,80 @@ describe("hermes.init (main API)", function()
 		it("_handle_load_success handles errors from queued functions", function()
 			local queue = require("hermes.queue")
 			queue.clear()
-			
+
 			local notify_calls = {}
 			local original_notify = vim.notify
 			vim.notify = function(msg, level)
 				table.insert(notify_calls, { msg = msg, level = level })
 			end
-			
+
 			queue.push(function() error("queued function failed") end)
 			queue.push(function() end) -- This should not execute due to error
-			
+
 			hermes._handle_load_success({}, function() end)
-			
+
 			vim.notify = original_notify
-			
+
 			-- Should show error notification for queued function failure
-			local found_error = false
+			local error_call = nil
 			for _, call in ipairs(notify_calls) do
 				if call.msg:find("queued function failed") then
-					found_error = true
+					error_call = call
 					break
 				end
 			end
-			assert.is_true(found_error, "Should show error for queued function failure")
-			assert.is_true(queue.is_empty()) -- Queue should be cleared on error
+			assert.is_not_nil(error_call, "Should show error for queued function failure")
 		end)
 
+		it("_handle_load_success clears queue on error", function()
+			local queue = require("hermes.queue")
+			queue.clear()
+
+			queue.push(function() error("queued function failed") end)
+			queue.push(function() end)
+
+			hermes._handle_load_success({}, function() end)
+
+			assert.is_true(queue.is_empty()) -- Queue should be cleared on error
+		end)
 		it("_handle_failed_state clears queued functions", function()
 			local queue = require("hermes.queue")
 			queue.clear()
-			
+
+			queue.push(function() end)
+			queue.push(function() end)
+
+			hermes._handle_failed_state()
+
+			assert.is_true(queue.is_empty())
+		end)
+
+		it("_handle_failed_state notifies about cleared queued operations", function()
+			local queue = require("hermes.queue")
+			queue.clear()
+
 			local notify_calls = {}
 			local original_notify = vim.notify
 			vim.notify = function(msg, level)
 				table.insert(notify_calls, { msg = msg, level = level })
 			end
-			
+
 			queue.push(function() end)
 			queue.push(function() end)
-			assert.equals(2, queue.size())
-			
+
 			hermes._handle_failed_state()
-			
+
 			vim.notify = original_notify
-			
-			assert.is_true(queue.is_empty())
+
 			-- Should show warning about cleared operations
-			local found_warning = false
+			local warning_call = nil
 			for _, call in ipairs(notify_calls) do
 				if call.msg:find("2 queued operations") then
-					found_warning = true
+					warning_call = call
 					break
 				end
 			end
-			assert.is_true(found_warning, "Should show warning about cleared queued operations")
+			assert.is_not_nil(warning_call, "Should show warning about cleared queued operations")
 		end)
 
 		it("_handle_load_failure clears queued functions", function()

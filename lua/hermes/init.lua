@@ -469,10 +469,8 @@ local function execute_async(fn)
 				-- Successfully loaded existing binary
 				-- Use vim.schedule for consistency with other loading paths
 				vim.schedule(function()
-					_native = result
-					_loading_state = "READY"
-					vim.notify("Hermes: Ready", vim.log.levels.INFO)
-					fn() -- Execute the callback
+					-- Reuse the common success handler so queued operations are executed
+					handle_load_success(result, fn)
 				end)
 				return
 			else
