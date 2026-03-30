@@ -354,6 +354,10 @@ describe("hermes.init (main API)", function()
 			vim.notify = function(msg, level)
 				table.insert(notify_calls, { msg = msg, level = level })
 			end
+			
+			-- Set notification level to debug so all messages show
+			local config = require("hermes.config")
+			config.setup({ log = { notification = { level = "debug" } } })
 
 			hermes._handle_loading_state(function() end)
 
@@ -410,11 +414,15 @@ describe("hermes.init (main API)", function()
 				table.insert(notify_calls, { msg = msg, level = level })
 			end
 			
+			-- Set notification level to debug so all messages show
+			local config = require("hermes.config")
+			config.setup({ log = { notification = { level = "debug" } } })
+			
 			hermes._handle_load_success({}, function() end)
 			
 			vim.notify = original_notify
 			
-			assert.is_not_nil(notify_calls[1].msg:find("Ready"), "Should show ready notification")
+			assert.is_not_nil(notify_calls[1].msg:find("Successfully Loaded"), "Should show ready notification")
 		end)
 
 		it("_handle_load_failure sets state to FAILED", function()
@@ -518,6 +526,10 @@ describe("hermes.init (main API)", function()
 				table.insert(notify_calls, { msg = msg, level = level })
 			end
 
+			-- Set notification level to debug so all messages show
+			local config = require("hermes.config")
+			config.setup({ log = { notification = { level = "debug" } } })
+
 			queue.push(function() end)
 			queue.push(function() end)
 
@@ -545,6 +557,10 @@ describe("hermes.init (main API)", function()
 			vim.notify = function(msg, level)
 				table.insert(notify_calls, { msg = msg, level = level })
 			end
+			
+			-- Set notification level to debug so all messages show
+			local config = require("hermes.config")
+			config.setup({ log = { notification = { level = "debug" } } })
 			
 			queue.push(function() end)
 			queue.push(function() end)

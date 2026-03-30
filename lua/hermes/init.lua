@@ -138,6 +138,9 @@
 
 local M = {}
 
+-- Import logging module for notifications
+local logging = require("hermes.logging")
+
 -- ============================================================================
 -- Module State (all testable sync operations)
 -- ============================================================================
@@ -216,7 +219,7 @@ end
 local function handle_loading_state(fn)
 	local queue = require("hermes.queue")
 	queue.push(fn)
-	vim.notify("Hermes: Request queued, will execute when ready", vim.log.levels.DEBUG)
+	logging.notify("Request queued, will execute when ready", vim.log.levels.DEBUG)
 	return false
 end
 
@@ -226,14 +229,14 @@ local function handle_failed_state()
 	local queue = require("hermes.queue")
 	local cleared = queue.clear()
 	if cleared > 0 then
-		vim.notify(
-			string.format("Hermes: Cleared %d queued operations due to load failure", cleared),
+		logging.notify(
+			string.format("Cleared %d queued operations due to load failure", cleared),
 			vim.log.levels.WARN
 		)
 	end
 
-	vim.notify(
-		"Hermes: Failed to load. Run :Hermes status for details or :Hermes log for errors.",
+	logging.notify(
+		"Failed to load. Run :Hermes status for details or :Hermes log for errors.",
 		vim.log.levels.ERROR
 	)
 	return false
@@ -243,7 +246,7 @@ end
 local function handle_load_success(loaded_module, fn)
 	_native = loaded_module
 	_loading_state = "READY"
-	vim.notify("Hermes: Ready", vim.log.levels.INFO)
+	logging.notify("Successfully Loaded", vim.log.levels.INFO)
 	fn()
 
 	-- Execute any queued calls
@@ -251,7 +254,7 @@ local function handle_load_success(loaded_module, fn)
 	if not queue.is_empty() then
 		local _, err = queue.execute_all()
 		if err then
-			vim.notify("Hermes: Queued operation failed: " .. err, vim.log.levels.ERROR)
+		logging.notify("Queued operation failed: " .. err, vim.log.levels.ERROR)
 		end
 	end
 end
@@ -266,13 +269,13 @@ local function handle_load_failure(err_msg, context)
 	local queue = require("hermes.queue")
 	local cleared = queue.clear()
 	if cleared > 0 then
-		vim.notify(
-			string.format("Hermes: Cleared %d queued operations due to load failure", cleared),
+		logging.notify(
+			string.format("Cleared %d queued operations due to load failure", cleared),
 			vim.log.levels.WARN
 		)
 	end
 
-	vim.notify("Hermes: " .. context .. ". Run :Hermes status for details.", vim.log.levels.ERROR)
+	logging.notify(context .. ". Run :Hermes status for details.", vim.log.levels.ERROR)
 end
 
 -- Format structured error for display
@@ -384,7 +387,7 @@ end
 -- Handle auto-download disabled path (async entry point)
 local function handle_auto_download_disabled(fn)
 	_loading_state = "LOADING"
-	vim.notify("Hermes: Loading binary...", vim.log.levels.INFO)
+	logging.notify("Loading binary...", vim.log.levels.INFO)
 
 	-- Use vim.schedule for the actual loading (only async part)
 	vim.schedule(function()
@@ -418,10 +421,10 @@ end
 function M._load_native_sync()
 	if not _native then
 		local binary = require("hermes.binary")
-		local ok, result = pcall(binary.load_or_build)
+		local ok, result = pcall(binary.load)
 
 		if not ok then
-			error("Hermes: Failed to load or build native binary: " .. tostring(result))
+			error("Failed to load or build native binary: " .. tostring(result))
 		end
 
 		_native = result
@@ -509,7 +512,7 @@ local function execute_async(fn)
 
 	-- Start async download (NOW we show the notification)
 	_loading_state = "DOWNLOADING"
-	vim.notify("Hermes: Downloading binary...", vim.log.levels.INFO)
+	logging.notify("Downloading binary...", vim.log.levels.INFO)
 
 	binary.ensure_binary_async(_download_timeout, function(success, result)
 		handle_download_complete(success, result, fn)
@@ -781,15 +784,15 @@ vim.api.nvim_create_user_command("Hermes", function(opts)
 		show_status()
 	elseif args == "build" then
 		-- Trigger build from source
-		vim.notify("Hermes: Building from source...", vim.log.levels.INFO)
+		logging.notify("Building from source...", vim.log.levels.INFO)
 		vim.schedule(function()
 			local binary = require("hermes.binary")
 			local data_dir = binary.get_data_dir()
 			local ok, err = binary.build_from_source(data_dir)
 			if ok then
-				vim.notify("Hermes: Build successful! Restart Neovim to load the new binary.", vim.log.levels.INFO)
+				logging.notify("Build successful! Restart Neovim to load the new binary.", vim.log.levels.INFO)
 			else
-				vim.notify("Hermes: Build failed: " .. tostring(err), vim.log.levels.ERROR)
+				logging.notify("Build failed: " .. tostring(err), vim.log.levels.ERROR)
 			end
 		end)
 	elseif args == "log" then
@@ -800,10 +803,10 @@ vim.api.nvim_create_user_command("Hermes", function(opts)
 		if log_path and vim.fn.filereadable(log_path) == 1 then
 			vim.cmd("vsplit " .. vim.fn.fnameescape(log_path))
 		else
-			vim.notify("Hermes: No log file found", vim.log.levels.WARN)
+			logging.notify("No log file found", vim.log.levels.WARN)
 		end
 	else
-		vim.notify("Hermes: Unknown command '" .. opts.args .. "'. Available: status, build, log", vim.log.levels.ERROR)
+		logging.notify("Unknown command '" .. opts.args .. "'. Available: status, build, log", vim.log.levels.ERROR)
 	end
 end, {
 	nargs = 1,
