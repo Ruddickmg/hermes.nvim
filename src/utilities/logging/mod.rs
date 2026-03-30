@@ -7,6 +7,8 @@ use tracing_subscriber::{
 };
 
 use crate::utilities::logging::writer::{FileWriter, Filtered, StdoutWriter};
+use crate::utilities::notification_messenger::NotificationMessenger;
+use crate::utilities::message_messenger::MessageMessenger;
 use crate::utilities::writer::MessageWriter;
 use crate::{
     acp::{Result, error::Error},
@@ -66,14 +68,22 @@ impl Logger {
         Self::base_layer(fmt::layer().with_writer(writer), config.format)
     }
 
-    fn notification_layer(config: LogTargetConfig) -> BoxedLayer {
-        let writer = NotifyWriter::new(config.level).filtered(config.level);
-        Self::base_layer(fmt::layer().with_writer(writer), config.format)
+    fn notification_layer(config: LogTargetConfig) -> Result<BoxedLayer> {
+        let messenger = NotificationMessenger::initialize()?;
+        let writer = NotifyWriter::new(config.level, messenger).filtered(config.level);
+        Ok(Self::base_layer(
+            fmt::layer().with_writer(writer),
+            config.format,
+        ))
     }
 
-    fn message_layer(config: LogTargetConfig) -> BoxedLayer {
-        let writer = MessageWriter.filtered(config.level);
-        Self::base_layer(fmt::layer().with_writer(writer.clone()), config.format)
+    fn message_layer(config: LogTargetConfig) -> Result<BoxedLayer> {
+        let messenger = MessageMessenger::initialize()?;
+        let writer = MessageWriter::new(messenger).filtered(config.level);
+        Ok(Self::base_layer(
+            fmt::layer().with_writer(writer.clone()),
+            config.format,
+        ))
     }
 
     fn file_layer(config: LogFileConfig) -> io::Result<Option<BoxedLayer>> {
@@ -106,11 +116,11 @@ impl Logger {
         }
 
         if message.level != LogLevel::Off {
-            layers.push(Self::message_layer(message));
+            layers.push(Self::message_layer(message)?);
         }
 
         if notification.level != LogLevel::Off {
-            layers.push(Self::notification_layer(notification));
+            layers.push(Self::notification_layer(notification)?);
         }
 
         if file.level != LogLevel::Off
