@@ -1,4 +1,4 @@
-use nvim_oxi::{Dictionary, api};
+use nvim_oxi::{api, Dictionary};
 use std::io::{self, Write};
 use tracing_subscriber::fmt::writer::MakeWriter;
 
@@ -30,9 +30,16 @@ impl Write for NotifyWriter {
         // Convert bytes to string (ignore invalid UTF-8)
         let s = String::from_utf8_lossy(buf);
 
+        // Skip empty strings
+        if s.trim().is_empty() {
+            return Ok(buf.len());
+        }
+
         let escaped = s.replace('"', "\\\"");
-        api::notify(&escaped, self.level.into(), &self.config)
-            .map_err(|e| std::io::Error::other(format!("Failed to send notification: {e}")))?;
+
+        // Send notification but don't crash on failure
+        // This prevents Neovim from crashing when notification system is overwhelmed
+        api::notify(&escaped, self.level.into(), &self.config).ok();
 
         Ok(buf.len())
     }
