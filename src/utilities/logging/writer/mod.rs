@@ -1,10 +1,12 @@
 mod file;
 mod message;
 mod notification;
+mod stdio;
 
 pub use file::*;
 pub use message::*;
 pub use notification::*;
+pub use stdio::*;
 
 use std::io::{self, Write};
 use tracing::Metadata;
@@ -98,3 +100,115 @@ pub trait Filtered: Clone + Write + 'static {
 
 // Implement Filtered for any type that is Clone + Write + 'static
 impl<T> Filtered for T where T: Clone + Write + 'static {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    /// A test writer that tracks what was written
+    #[derive(Clone)]
+    struct TrackingWriter {
+        data: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl TrackingWriter {
+        fn new() -> Self {
+            Self {
+                data: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn get_data(&self) -> Vec<u8> {
+            self.data.lock().unwrap().clone()
+        }
+
+        fn is_empty(&self) -> bool {
+            self.data.lock().unwrap().is_empty()
+        }
+    }
+
+    impl Write for TrackingWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.data.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_maybe_writer_discards_when_inner_is_none() {
+        let mut writer = MaybeWriter::<TrackingWriter> { inner: None };
+
+        // Write should succeed but discard data
+        let result = writer.write(b"test data");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 9); // Returns length as if written
+
+        // Flush should succeed
+        assert!(writer.flush().is_ok());
+    }
+
+    #[test]
+    fn test_maybe_writer_writes_when_inner_is_some() {
+        let tracking = TrackingWriter::new();
+        let mut writer = MaybeWriter {
+            inner: Some(tracking.clone()),
+        };
+
+        // Write should succeed and store data
+        assert!(writer.write(b"test data").is_ok());
+        assert_eq!(tracking.get_data(), b"test data");
+    }
+
+    #[test]
+    fn test_filtered_trait_creates_level_filter_writer() {
+        use crate::utilities::logging::LogLevel;
+
+        let tracking = TrackingWriter::new();
+        let filtered = tracking.filtered(LogLevel::Info);
+
+        // Verify the writer was created with correct level
+        assert_eq!(filtered.level, tracing::Level::INFO);
+    }
+
+    #[test]
+    fn test_make_writer_returns_valid_writer() {
+        // Test that make_writer always returns a writer with inner set
+        let tracking = TrackingWriter::new();
+        let filter_writer = LevelFilterWriter::new(tracking.clone(), tracing::Level::INFO);
+
+        // make_writer should always return Some inner
+        let mut writer = filter_writer.make_writer();
+        assert!(writer.write(b"test").is_ok());
+
+        // Data should be written
+        assert_eq!(tracking.get_data(), b"test");
+    }
+
+    #[test]
+    fn test_maybe_writer_with_none_discards_all_data() {
+        // This test confirms the core filtering behavior:
+        // When MaybeWriter has inner=None (which happens when log level is filtered out),
+        // all data is silently discarded
+
+        // Create a MaybeWriter directly with None inner
+        // This simulates what happens when make_writer_for blocks a log level
+        let mut blocked_writer = MaybeWriter::<TrackingWriter> { inner: None };
+
+        // Try to write data - should succeed but not actually write anywhere
+        let data = b"this should be blocked";
+        let result = blocked_writer.write(data);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), data.len()); // Pretends to write all bytes
+
+        // Flush should also succeed but do nothing
+        assert!(blocked_writer.flush().is_ok());
+
+        // The key assertion: data was "written" (returned Ok) but actually discarded
+        // This demonstrates the filtering behavior - logs are silently dropped
+    }
+}

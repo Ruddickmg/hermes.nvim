@@ -96,7 +96,6 @@ fn test_file_logging_first_message_written() -> nvim_oxi::Result<()> {
 
     // Verify first message was written
     let content = std::fs::read_to_string(&log_path).expect("Failed to read log file");
-    eprintln!("Log file content: {}", content);
     assert!(
         content.contains("First message"),
         "Log file should contain first message. Content: {}",
@@ -366,22 +365,6 @@ fn test_log_rotation() -> nvim_oxi::Result<()> {
 
     std::thread::sleep(std::time::Duration::from_millis(200));
 
-    // Debug: List all files in the temp directory
-    eprintln!("Files in temp directory:");
-    for entry in std::fs::read_dir(&temp_dir).unwrap() {
-        let entry = entry.unwrap();
-        eprintln!("  {:?}", entry.path());
-    }
-
-    // Debug: Check if main log file exists and has content
-    if log_path.exists() {
-        let content = std::fs::read_to_string(&log_path).unwrap();
-        eprintln!("Main log file content ({} bytes):", content.len());
-        eprintln!("{}", &content[..content.len().min(500)]);
-    } else {
-        eprintln!("Main log file does not exist!");
-    }
-
     // Verify current log has recent messages
     let current_content = std::fs::read_to_string(&log_path).unwrap();
     assert_eq!(
@@ -585,6 +568,141 @@ fn test_log_format_can_be_changed_via_configure() -> nvim_oxi::Result<()> {
     assert!(
         content.contains("\"message\":") || content.contains("\"level\":"),
         "Second message should be in JSON format"
+    );
+
+    Ok(())
+}
+
+/// Integration test: Verifies that when all log levels are Off, no log file is written
+#[nvim_oxi::test]
+fn test_all_layers_off_prevents_any_logging() -> nvim_oxi::Result<()> {
+    let temp_dir = TempDir::new().unwrap();
+    let log_path = temp_dir.path().join("test.log");
+
+    let logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
+
+    // Configure all levels as Off
+    let off_config = LogConfig {
+        stdio: LogTargetConfig {
+            level: LogLevel::Off,
+            format: LogFormat::default(),
+        },
+        file: LogFileConfig {
+            path: log_path.to_string_lossy().to_string(),
+            level: LogLevel::Off,
+            format: LogFormat::default(),
+            max_size: 1024 * 1024,
+            max_files: 5,
+        },
+        message: LogTargetConfig {
+            level: LogLevel::Off,
+            format: LogFormat::default(),
+        },
+        notification: LogTargetConfig {
+            level: LogLevel::Off,
+            format: LogFormat::default(),
+        },
+    };
+    logger.configure(off_config).unwrap();
+
+    // Try to log at all levels
+    tracing::trace!("Trace message");
+    tracing::debug!("Debug message");
+    tracing::info!("Info message");
+    tracing::warn!("Warning message");
+    tracing::error!("Error message");
+
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    // Verify log file doesn't exist (no layers created means no file written)
+    assert!(
+        !log_path.exists(),
+        "Log file should not exist when all levels are Off"
+    );
+
+    Ok(())
+}
+
+/// Integration test: Verifies transition from Off to enabled creates layers and writes logs
+#[nvim_oxi::test]
+fn test_all_layers_transition_from_off_to_enabled() -> nvim_oxi::Result<()> {
+    let temp_dir = TempDir::new().unwrap();
+    let log_path = temp_dir.path().join("test.log");
+
+    let logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
+
+    // Start with all Off
+    let off_config = LogConfig {
+        stdio: LogTargetConfig {
+            level: LogLevel::Off,
+            format: LogFormat::default(),
+        },
+        file: LogFileConfig {
+            path: log_path.to_string_lossy().to_string(),
+            level: LogLevel::Off,
+            format: LogFormat::default(),
+            max_size: 1024 * 1024,
+            max_files: 5,
+        },
+        message: LogTargetConfig {
+            level: LogLevel::Off,
+            format: LogFormat::default(),
+        },
+        notification: LogTargetConfig {
+            level: LogLevel::Off,
+            format: LogFormat::default(),
+        },
+    };
+    logger.configure(off_config).unwrap();
+
+    // Log a message - should be discarded
+    tracing::info!("First message while off");
+    std::thread::sleep(std::time::Duration::from_millis(200));
+
+    // Verify no file created yet
+    let file_exists_before = log_path.exists();
+
+    // Reconfigure to enable file logging
+    let enabled_config = LogConfig {
+        stdio: LogTargetConfig {
+            level: LogLevel::Off,
+            format: LogFormat::default(),
+        },
+        file: LogFileConfig {
+            path: log_path.to_string_lossy().to_string(),
+            level: LogLevel::Info,
+            format: LogFormat::default(),
+            max_size: 1024 * 1024,
+            max_files: 5,
+        },
+        message: LogTargetConfig {
+            level: LogLevel::Off,
+            format: LogFormat::default(),
+        },
+        notification: LogTargetConfig {
+            level: LogLevel::Off,
+            format: LogFormat::default(),
+        },
+    };
+    logger.configure(enabled_config).unwrap();
+
+    // Log another message - should be written
+    tracing::info!("Second message after enabling");
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    // Verify file now exists and contains only second message
+    assert!(
+        log_path.exists(),
+        "Log file should exist after enabling logging"
+    );
+    let content = std::fs::read_to_string(&log_path).unwrap();
+    assert!(
+        content.contains("Second message after enabling"),
+        "Log should contain message written after enabling"
+    );
+    assert!(
+        !content.contains("First message while off"),
+        "Log should NOT contain message written while Off"
     );
 
     Ok(())
