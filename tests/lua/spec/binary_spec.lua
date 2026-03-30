@@ -366,7 +366,7 @@ describe("hermes.binary", function()
     end)
   end)
 
-  describe("load_or_build()", function()
+  describe("load()", function()
     it("returns native module when binary exists and loads successfully", function()
       -- Use the real binary from target/release
       local platform = require("hermes.platform")
@@ -387,14 +387,14 @@ describe("hermes.binary", function()
       -- Also need to mock readfile for version check
       stub(vim.fn, "readfile").returns({"v0.0.1"})
       
-      -- Call load_or_build - should use real binary
+      -- Call load - should use real binary
       local ok, result = pcall(function()
-        return binary.load_or_build()
+        return binary.load()
       end)
       
       -- Should succeed and return a table (the native module) - combined assertion
       assert.is_true(ok and type(result) == "table", 
-        "load_or_build should succeed and return native module table: " .. tostring(result))
+        "load should succeed and return native module table: " .. tostring(result))
     end)
   end)
 

@@ -434,60 +434,6 @@ end
 
 -- Main async executor - minimal async code, delegates to sync functions
 local function execute_async(fn)
-	-- EARLY CHECK: If binary already exists and matches config, load silently
-	local binary = require("hermes.binary")
-	local bin_path = binary.get_binary_path()
-
-	if vim.fn.filereadable(bin_path) == 1 then
-		local ver_file = binary.get_version_file()
-		local version = require("hermes.version")
-		local configured_ver = version.get_wanted()
-
-		-- Check if we can use existing binary
-		local should_use_existing = false
-
-		if vim.fn.filereadable(ver_file) == 1 then
-			-- Use pcall in case file becomes unreadable between check and read
-			local ok, installed_ver = pcall(function()
-				return vim.fn.readfile(ver_file)[1]
-			end)
-			-- Use existing if configured version matches installed version
-			if ok and configured_ver == installed_ver then
-				should_use_existing = true
-			end
-		end
-
-		if should_use_existing then
-			-- Binary exists and version matches - try to load it
-			-- Use pcall to handle load failures gracefully
-			local ok, result = pcall(function()
-				local lib, err = package.loadlib(bin_path, "luaopen_hermes")
-				if not lib then
-					error("Failed to load: " .. tostring(err))
-				end
-				return lib()
-			end)
-
-			if ok then
-				-- Successfully loaded existing binary
-				-- Use vim.schedule for consistency with other loading paths
-				vim.schedule(function()
-					-- Reuse the common success handler so queued operations are executed
-					handle_load_success(result, fn)
-				end)
-				return
-			else
-				-- Loading failed - binary might be corrupted
-				-- Remove the invalid binary and version file to force re-download
-				pcall(function()
-					vim.fn.delete(bin_path)
-					vim.fn.delete(ver_file)
-				end)
-				-- Fall through to download flow
-			end
-		end
-	end
-
 	-- Check states in priority order (all sync checks)
 	if is_ready() then
 		return handle_ready_state(fn)
@@ -503,7 +449,7 @@ local function execute_async(fn)
 
 	-- NOT_LOADED: Need to start loading
 	local config = require("hermes.config")
-	local download_cfg = config.get_download and config.get_download() or { auto_download_binary = true, timeout = 60 }
+	local download_cfg = config.get_download and config.get_download() or { auto = true, timeout = 60 }
 	_download_timeout = download_cfg.timeout or 60
 
 	if not should_auto_download() then
@@ -514,6 +460,7 @@ local function execute_async(fn)
 	_loading_state = "DOWNLOADING"
 	logging.notify("Downloading binary...", vim.log.levels.INFO)
 
+	local binary = require("hermes.binary")
 	binary.ensure_binary_async(_download_timeout, function(success, result)
 		handle_download_complete(success, result, fn)
 	end)
@@ -534,6 +481,34 @@ function M.setup(opts)
 		download = opts.download,
 		log = opts.log,
 	})
+
+	-- Check if version changed and we need to re-download
+	local version = require("hermes.version")
+	local configured_ver = version.get_wanted()
+	local binary = require("hermes.binary")
+	local ver_file = binary.get_version_file()
+	local bin_path = binary.get_binary_path()
+
+	if is_ready() and vim.fn.filereadable(ver_file) == 1 then
+		local ok, installed_ver = pcall(function()
+			return vim.fn.readfile(ver_file)[1]
+		end)
+
+		if ok and installed_ver ~= configured_ver then
+			-- Version changed! Delete old binary and reset state
+			pcall(function()
+				vim.fn.delete(bin_path)
+				vim.fn.delete(ver_file)
+			end)
+
+			_loading_state = "NOT_LOADED"
+			_native = nil
+			logging.notify(
+				string.format("Version changed from %s to %s, downloading...", installed_ver, configured_ver),
+				vim.log.levels.INFO
+			)
+		end
+	end
 
 	-- Execute async with loading state management
 	execute_async(function()
@@ -868,5 +843,44 @@ M._show_status = show_status
 M._build_status_content = build_status_content
 
 -- luacov: enable
+
+-- Eagerly load binary at startup if it exists
+-- No version check here - we just load whatever binary is present
+-- Version validation happens in setup()
+local function eager_load_binary()
+	if _loading_state ~= "NOT_LOADED" then
+		return
+	end
+
+	local binary = require("hermes.binary")
+	local bin_path = binary.get_binary_path()
+	local ver_file = binary.get_version_file()
+
+	if vim.fn.filereadable(bin_path) == 1 then
+		local ok, result = pcall(function()
+			local lib, err = package.loadlib(bin_path, "luaopen_hermes")
+			if not lib then
+				error("Failed to load: " .. tostring(err))
+			end
+			return lib()
+		end)
+
+		if ok then
+			_native = result
+			_loading_state = "READY"
+			logging.notify("Binary loaded successfully", vim.log.levels.DEBUG)
+		else
+			-- Failed to load - delete corrupted binary
+			pcall(function()
+				vim.fn.delete(bin_path)
+				vim.fn.delete(ver_file)
+			end)
+			logging.notify("Removed corrupted binary", vim.log.levels.DEBUG)
+		end
+	end
+end
+
+-- Call eager load immediately
+eager_load_binary()
 
 return M
