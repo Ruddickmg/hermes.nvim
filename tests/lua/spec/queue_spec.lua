@@ -18,31 +18,32 @@ describe("hermes.queue", function()
 	describe("basic operations", function()
 		it("push adds item to queue", function()
 			local result = queue.push(function() end)
-			local state = {
+			-- Single assertion comparing both return value and side effect
+			assert.same({
 				result = result,
 				size = queue.size(),
-			}
-			assert.same({
+			}, {
 				result = true,
 				size = 1,
-			}, state)
+			})
 		end)
 
 		it("pop removes and returns item from front", function()
 			local called = false
 			queue.push(function() called = true end)
 			local fn = queue.pop()
-			local state = {
-				is_function = type(fn) == "function",
-			}
+			local is_function = type(fn) == "function"
 			fn()
-			state.called = called
-			state.is_empty = queue.is_empty()
+			-- Single assertion comparing all related values
 			assert.same({
+				is_function = is_function,
+				called = called,
+				is_empty = queue.is_empty(),
+			}, {
 				is_function = true,
 				called = true,
 				is_empty = true,
-			}, state)
+			})
 		end)
 
 		it("pop returns nil when queue is empty", function()
@@ -92,9 +93,16 @@ describe("hermes.queue", function()
 			queue.push(function() end)
 			queue.push(function() end)
 			local cleared = queue.clear()
-			assert.equals(2, cleared)
-			assert.is_true(queue.is_empty())
-			assert.equals(0, queue.size())
+			-- Single assertion comparing all related values
+			assert.same({
+				cleared = 2,
+				is_empty = queue.is_empty(),
+				size = queue.size(),
+			}, {
+				cleared = cleared,
+				is_empty = true,
+				size = 0,
+			})
 		end)
 
 		it("clear returns 0 for empty queue", function()
@@ -119,16 +127,24 @@ describe("hermes.queue", function()
 
 			local executed, err = queue.execute_all()
 
-			assert.equals(3, executed)
-			assert.is_nil(err)
-			assert.same({ "a", "b", "c" }, order)
-			assert.is_true(queue.is_empty())
+			-- Single assertion comparing all related values
+			assert.same({
+				executed = executed,
+				err = err,
+				order = order,
+				is_empty = queue.is_empty(),
+			}, {
+				executed = 3,
+				err = nil,
+				order = { "a", "b", "c" },
+				is_empty = true,
+			})
 		end)
 
 		it("returns 0 for empty queue", function()
 			local executed, err = queue.execute_all()
-			assert.equals(0, executed)
-			assert.is_nil(err)
+			-- Single assertion comparing both return values
+			assert.same({ executed = executed, err = err }, { executed = 0, err = nil })
 		end)
 
 		it("stops on first error and returns error message", function()
@@ -139,10 +155,18 @@ describe("hermes.queue", function()
 
 			local executed, err = queue.execute_all()
 
-			assert.equals(1, executed)
-			assert.is_not_nil(err)
-			assert.truthy(err:match("test error"))
-			assert.same({ 1 }, order)
+			-- Single assertion comparing all related values
+			assert.same({
+				executed = executed,
+				has_error = err ~= nil,
+				is_test_error = err and err:match("test error") ~= nil,
+				order = order,
+			}, {
+				executed = 1,
+				has_error = true,
+				is_test_error = true,
+				order = { 1 },
+			})
 		end)
 
 		it("clears queue on error", function()
@@ -151,8 +175,14 @@ describe("hermes.queue", function()
 
 			queue.execute_all()
 
-			assert.is_true(queue.is_empty())
-			assert.equals(0, queue.size())
+			-- Single assertion comparing both queue state values
+			assert.same({
+				is_empty = queue.is_empty(),
+				size = queue.size(),
+			}, {
+				is_empty = true,
+				size = 0,
+			})
 		end)
 
 		it("handles single item queue", function()
@@ -161,9 +191,16 @@ describe("hermes.queue", function()
 
 			local executed, err = queue.execute_all()
 
-			assert.equals(1, executed)
-			assert.is_nil(err)
-			assert.is_true(called)
+			-- Single assertion comparing all related values
+			assert.same({
+				executed = executed,
+				err = err,
+				called = called,
+			}, {
+				executed = 1,
+				err = nil,
+				called = true,
+			})
 		end)
 	end)
 
@@ -172,12 +209,21 @@ describe("hermes.queue", function()
 			for _ = 1, 100 do
 				queue.push(function() end)
 			end
-			assert.equals(100, queue.size())
+			local size_after_push = queue.size()
 
 			for _ = 1, 100 do
 				queue.pop()
 			end
-			assert.is_true(queue.is_empty())
+			local is_empty_after_pop = queue.is_empty()
+
+			-- Single assertion comparing final state
+			assert.same({
+				size_after_push = size_after_push,
+				is_empty_after_pop = is_empty_after_pop,
+			}, {
+				size_after_push = 100,
+				is_empty_after_pop = true,
+			})
 		end)
 
 		it("handles alternating push and pop", function()
@@ -202,7 +248,7 @@ describe("hermes.queue", function()
 				queue.push(function() end)
 			end
 
-			assert.equals(20, queue.size())
+			local size_after_operations = queue.size()
 
 			-- All remaining items should be executable
 			local count = 0
@@ -212,7 +258,15 @@ describe("hermes.queue", function()
 					count = count + 1
 				end
 			end
-			assert.equals(20, count)
+
+			-- Single assertion comparing both values
+			assert.same({
+				size_after_operations = size_after_operations,
+				count = count,
+			}, {
+				size_after_operations = 20,
+				count = 20,
+			})
 		end)
 	end)
 end)

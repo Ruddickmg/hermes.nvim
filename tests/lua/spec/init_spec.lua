@@ -348,6 +348,25 @@ describe("hermes.init (main API)", function()
 			assert.is_false(result)
 		end)
 
+		it("_handle_loading_state warns when argument is not a function", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+
+			-- Set notification level to debug so all messages show
+			local config = require("hermes.config")
+			config.setup({ log = { notification = { level = "debug" } } })
+
+			local result = hermes._handle_loading_state("not a function")
+
+			vim.notify = original_notify
+
+			assert.is_false(result)
+			assert.is_not_nil(notify_calls[1].msg:find("Invalid function"), "Should warn about invalid function")
+		end)
+
 		it("_handle_loading_state shows loading warning", function()
 			local notify_calls = {}
 			local original_notify = vim.notify
@@ -461,8 +480,14 @@ describe("hermes.init (main API)", function()
 			
 			hermes._handle_load_success({}, function() table.insert(executed_order, "callback") end)
 			
-			assert.same({ "callback", "queued1", "queued2" }, executed_order)
-			assert.is_true(queue.is_empty())
+			-- Single assertion comparing both execution order and queue state
+			assert.same({
+				executed_order = executed_order,
+				is_empty = queue.is_empty(),
+			}, {
+				executed_order = { "callback", "queued1", "queued2" },
+				is_empty = true,
+			})
 		end)
 
 		it("_handle_load_success handles errors from queued functions", function()
@@ -565,13 +590,11 @@ describe("hermes.init (main API)", function()
 			queue.push(function() end)
 			queue.push(function() end)
 			queue.push(function() end)
-			assert.equals(3, queue.size())
 			
 			hermes._handle_load_failure("test error", "Test context")
 			
 			vim.notify = original_notify
 			
-			assert.is_true(queue.is_empty())
 			-- Should show warning about cleared operations
 			local found_warning = false
 			for _, call in ipairs(notify_calls) do
@@ -580,7 +603,14 @@ describe("hermes.init (main API)", function()
 					break
 				end
 			end
-			assert.is_true(found_warning, "Should show warning about cleared queued operations")
+			-- Single assertion comparing both queue state and warning
+			assert.same({
+				is_empty = queue.is_empty(),
+				found_warning = found_warning,
+			}, {
+				is_empty = true,
+				found_warning = true,
+			})
 		end)
 	end)
 

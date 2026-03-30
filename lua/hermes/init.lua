@@ -217,9 +217,13 @@ end
 
 -- Handle loading states: queue the request and return
 local function handle_loading_state(fn)
-	local queue = require("hermes.queue")
-	queue.push(fn)
-	logging.notify("Request queued, will execute when ready", vim.log.levels.DEBUG)
+	if type(fn) == "function" then
+		local queue = require("hermes.queue")
+		queue.push(fn)
+		logging.notify("Request queued, will execute when ready", vim.log.levels.DEBUG)
+	else
+		logging.notify("Invalid function provided to execute_async", vim.log.levels.WARN)
+	end
 	return false
 end
 
@@ -229,16 +233,10 @@ local function handle_failed_state()
 	local queue = require("hermes.queue")
 	local cleared = queue.clear()
 	if cleared > 0 then
-		logging.notify(
-			string.format("Cleared %d queued operations due to load failure", cleared),
-			vim.log.levels.WARN
-		)
+		logging.notify(string.format("Cleared %d queued operations due to load failure", cleared), vim.log.levels.WARN)
 	end
 
-	logging.notify(
-		"Failed to load. Run :Hermes status for details or :Hermes log for errors.",
-		vim.log.levels.ERROR
-	)
+	logging.notify("Failed to load. Run :Hermes status for details or :Hermes log for errors.", vim.log.levels.ERROR)
 	return false
 end
 
@@ -254,7 +252,7 @@ local function handle_load_success(loaded_module, fn)
 	if not queue.is_empty() then
 		local _, err = queue.execute_all()
 		if err then
-		logging.notify("Queued operation failed: " .. err, vim.log.levels.ERROR)
+			logging.notify("Queued operation failed: " .. err, vim.log.levels.ERROR)
 		end
 	end
 end
@@ -269,10 +267,7 @@ local function handle_load_failure(err_msg, context)
 	local queue = require("hermes.queue")
 	local cleared = queue.clear()
 	if cleared > 0 then
-		logging.notify(
-			string.format("Cleared %d queued operations due to load failure", cleared),
-			vim.log.levels.WARN
-		)
+		logging.notify(string.format("Cleared %d queued operations due to load failure", cleared), vim.log.levels.WARN)
 	end
 
 	logging.notify(context .. ". Run :Hermes status for details.", vim.log.levels.ERROR)
