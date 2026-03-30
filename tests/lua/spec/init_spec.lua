@@ -12,14 +12,18 @@ describe("hermes.init (main API)", function()
 
 	before_each(function()
 		temp_dir = helpers.create_temp_dir()
-		stdpath_stub = stub(vim.fn, "stdpath").returns(temp_dir)
+		-- create_temp_dir returns temp_path/hermes, but we need stdpath("data") to return
+		-- the parent directory (temp_path), so that binary.get_data_dir() returns temp_path/hermes
+		local temp_path = temp_dir:gsub("/hermes$", "")
+		stdpath_stub = stub(vim.fn, "stdpath").returns(temp_path)
 		-- Note: We intentionally don't stub filereadable here - let it check actual files
 		-- This ensures the binary detection works correctly
 
 		-- Copy actual built binary to test directory using cross-platform API
 		local platform = require("hermes.platform")
 		local bin_name = "libhermes-" .. platform.get_platform_key() .. "." .. platform.get_ext()
-		local bin_dir = temp_dir .. "/hermes"
+		-- binary.get_data_dir() will return temp_path/hermes (same as temp_dir)
+		local bin_dir = temp_dir
 		vim.fn.mkdir(bin_dir, "p")
 
 		-- Copy the real built binary from target/release using vim.uv.fs_copyfile
@@ -29,6 +33,7 @@ describe("hermes.init (main API)", function()
 		uv.fs_copyfile(source_bin, dest_bin)
 		
 		-- Write version file so binary is recognized as valid
+		-- version file path is bin_dir/version.txt (temp_path/hermes/version.txt)
 		vim.fn.writefile({"latest"}, bin_dir .. "/version.txt")
 
 		-- Only clear modules and load binary on first test
@@ -343,6 +348,25 @@ describe("hermes.init (main API)", function()
 			assert.is_false(result)
 		end)
 
+		it("_handle_loading_state warns when argument is not a function", function()
+			local notify_calls = {}
+			local original_notify = vim.notify
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+
+			-- Set notification level to debug so all messages show
+			local config = require("hermes.config")
+			config.setup({ log = { notification = { level = "debug" } } })
+
+			local result = hermes._handle_loading_state("not a function")
+
+			vim.notify = original_notify
+
+			assert.is_false(result)
+			assert.is_not_nil(notify_calls[1].msg:find("Invalid function"), "Should warn about invalid function")
+		end)
+
 		it("_handle_loading_state shows loading warning", function()
 			local notify_calls = {}
 			local original_notify = vim.notify
@@ -350,11 +374,15 @@ describe("hermes.init (main API)", function()
 				table.insert(notify_calls, { msg = msg, level = level })
 			end
 			
-			hermes._handle_loading_state()
-			
+			-- Set notification level to debug so all messages show
+			local config = require("hermes.config")
+			config.setup({ log = { notification = { level = "debug" } } })
+
+			hermes._handle_loading_state(function() end)
+
 			vim.notify = original_notify
-			
-			assert.is_not_nil(notify_calls[1].msg:find("still loading"), "Should show loading warning notification")
+
+			assert.is_not_nil(notify_calls[1].msg:find("queued"), "Should show queue notification")
 		end)
 
 		it("_handle_failed_state returns false", function()
@@ -405,11 +433,15 @@ describe("hermes.init (main API)", function()
 				table.insert(notify_calls, { msg = msg, level = level })
 			end
 			
+			-- Set notification level to debug so all messages show
+			local config = require("hermes.config")
+			config.setup({ log = { notification = { level = "debug" } } })
+			
 			hermes._handle_load_success({}, function() end)
 			
 			vim.notify = original_notify
 			
-			assert.is_not_nil(notify_calls[1].msg:find("Ready"), "Should show ready notification")
+			assert.is_not_nil(notify_calls[1].msg:find("Successfully Loaded"), "Should show ready notification")
 		end)
 
 		it("_handle_load_failure sets state to FAILED", function()
@@ -436,6 +468,149 @@ describe("hermes.init (main API)", function()
 			vim.notify = original_notify
 			
 			assert.is_not_nil(notify_calls[1].msg:find("Test context"), "Should show custom error notification")
+		end)
+
+		it("_handle_load_success executes queued functions when queue is not empty", function()
+			local queue = require("hermes.queue")
+			queue.clear()
+			
+			local executed_order = {}
+			queue.push(function() table.insert(executed_order, "queued1") end)
+			queue.push(function() table.insert(executed_order, "queued2") end)
+			
+			hermes._handle_load_success({}, function() table.insert(executed_order, "callback") end)
+			
+			-- Single assertion comparing both execution order and queue state
+			assert.same({
+				executed_order = executed_order,
+				is_empty = queue.is_empty(),
+			}, {
+				executed_order = { "callback", "queued1", "queued2" },
+				is_empty = true,
+			})
+		end)
+
+		it("_handle_load_success handles errors from queued functions", function()
+			local queue = require("hermes.queue")
+			queue.clear()
+
+			local notify_calls = {}
+			local original_notify = vim.notify
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+
+			queue.push(function() error("queued function failed") end)
+			queue.push(function() end) -- This should not execute due to error
+
+			hermes._handle_load_success({}, function() end)
+
+			vim.notify = original_notify
+
+			-- Should show error notification for queued function failure
+			local error_call = nil
+			for _, call in ipairs(notify_calls) do
+				if call.msg:find("queued function failed") then
+					error_call = call
+					break
+				end
+			end
+			assert.is_not_nil(error_call, "Should show error for queued function failure")
+		end)
+
+		it("_handle_load_success clears queue on error", function()
+			local queue = require("hermes.queue")
+			queue.clear()
+
+			queue.push(function() error("queued function failed") end)
+			queue.push(function() end)
+
+			hermes._handle_load_success({}, function() end)
+
+			assert.is_true(queue.is_empty()) -- Queue should be cleared on error
+		end)
+		it("_handle_failed_state clears queued functions", function()
+			local queue = require("hermes.queue")
+			queue.clear()
+
+			queue.push(function() end)
+			queue.push(function() end)
+
+			hermes._handle_failed_state()
+
+			assert.is_true(queue.is_empty())
+		end)
+
+		it("_handle_failed_state notifies about cleared queued operations", function()
+			local queue = require("hermes.queue")
+			queue.clear()
+
+			local notify_calls = {}
+			local original_notify = vim.notify
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+
+			-- Set notification level to debug so all messages show
+			local config = require("hermes.config")
+			config.setup({ log = { notification = { level = "debug" } } })
+
+			queue.push(function() end)
+			queue.push(function() end)
+
+			hermes._handle_failed_state()
+
+			vim.notify = original_notify
+
+			-- Should show warning about cleared operations
+			local warning_call = nil
+			for _, call in ipairs(notify_calls) do
+				if call.msg:find("2 queued operations") then
+					warning_call = call
+					break
+				end
+			end
+			assert.is_not_nil(warning_call, "Should show warning about cleared queued operations")
+		end)
+
+		it("_handle_load_failure clears queued functions", function()
+			local queue = require("hermes.queue")
+			queue.clear()
+			
+			local notify_calls = {}
+			local original_notify = vim.notify
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+			
+			-- Set notification level to debug so all messages show
+			local config = require("hermes.config")
+			config.setup({ log = { notification = { level = "debug" } } })
+			
+			queue.push(function() end)
+			queue.push(function() end)
+			queue.push(function() end)
+			
+			hermes._handle_load_failure("test error", "Test context")
+			
+			vim.notify = original_notify
+			
+			-- Should show warning about cleared operations
+			local found_warning = false
+			for _, call in ipairs(notify_calls) do
+				if call.msg:find("3 queued operations") then
+					found_warning = true
+					break
+				end
+			end
+			-- Single assertion comparing both queue state and warning
+			assert.same({
+				is_empty = queue.is_empty(),
+				found_warning = found_warning,
+			}, {
+				is_empty = true,
+				found_warning = true,
+			})
 		end)
 	end)
 
@@ -480,7 +655,17 @@ describe("hermes.init (main API)", function()
 	end)
 
 	describe("E2E async download and load flow", function()
+		local e2e_temp_dir
+		local e2e_stdpath_stub
+
 		before_each(function()
+			-- Create temp dir for E2E tests (returns temp_path/hermes)
+			e2e_temp_dir = helpers.create_temp_dir()
+			-- Extract parent path for stdpath stub
+			local e2e_temp_path = e2e_temp_dir:gsub("/hermes$", "")
+			-- Stub stdpath before any modules are loaded
+			e2e_stdpath_stub = stub(vim.fn, "stdpath").returns(e2e_temp_path)
+			
 			-- Clear all module caches for fresh start
 			package.loaded["hermes"] = nil
 			package.loaded["hermes.init"] = nil
@@ -488,7 +673,7 @@ describe("hermes.init (main API)", function()
 			package.loaded["hermes.config"] = nil
 			package.loaded["hermes.version"] = nil
 			
-			-- Clear binary cache
+			-- Clear binary cache (now uses the stubbed path)
 			local binary = require("hermes.binary")
 			local data_dir = binary.get_data_dir()
 			if vim.fn.isdirectory(data_dir) == 1 then
@@ -509,6 +694,11 @@ describe("hermes.init (main API)", function()
 			local ver_file = binary.get_version_file()
 			if vim.fn.filereadable(ver_file) == 1 then
 				vim.fn.delete(ver_file)
+			end
+			
+			-- Revert the stdpath stub
+			if e2e_stdpath_stub then
+				e2e_stdpath_stub:revert()
 			end
 		end)
 
