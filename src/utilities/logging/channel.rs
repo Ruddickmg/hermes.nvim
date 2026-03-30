@@ -146,9 +146,9 @@ impl<S: LogSink> Worker<S> {
                         Err(_) => {
                             // Channel empty or disconnected, flush and exit
                             if !message_buffer.is_empty() {
-                                if let Err(e) = sink.write_batch(&message_buffer) {
-                                    eprintln!("Failed to write final batch: {}", e);
-                                }
+                                // INFO: errors here are ignored because we don't want to log to stdout in Neovim, and we can't write logs
+                                //  since that would potentially result in infinite recursion
+                                sink.write_batch(&message_buffer).ok();
                                 message_buffer.clear();
                             }
                             let _ = sink.flush();
@@ -162,9 +162,7 @@ impl<S: LogSink> Worker<S> {
                         Err(RecvTimeoutError::Timeout) => {
                             // Timeout occurred - check if we need to flush
                             if !message_buffer.is_empty() {
-                                if let Err(e) = sink.write_batch(&message_buffer) {
-                                    eprintln!("Failed to write batch on timeout: {}", e);
-                                }
+                                sink.write_batch(&message_buffer).ok();
                                 message_buffer.clear();
                             }
                             continue;
@@ -172,9 +170,7 @@ impl<S: LogSink> Worker<S> {
                         Err(RecvTimeoutError::Disconnected) => {
                             // Sender dropped, flush and exit
                             if !message_buffer.is_empty() {
-                                if let Err(e) = sink.write_batch(&message_buffer) {
-                                    eprintln!("Failed to write final batch: {}", e);
-                                }
+                                sink.write_batch(&message_buffer).ok();
                                 message_buffer.clear();
                             }
                             let _ = sink.flush();
@@ -190,18 +186,14 @@ impl<S: LogSink> Worker<S> {
 
                         // Check if we should flush (buffer full)
                         if message_buffer.len() >= flush_interval {
-                            if let Err(e) = sink.write_batch(&message_buffer) {
-                                eprintln!("Failed to write batch: {}", e);
-                            }
+                            sink.write_batch(&message_buffer).ok();
                             message_buffer.clear();
                         }
                     }
                     LogMessage::Flush => {
                         // Flush immediately
                         if !message_buffer.is_empty() {
-                            if let Err(e) = sink.write_batch(&message_buffer) {
-                                eprintln!("Failed to write batch on flush: {}", e);
-                            }
+                            sink.write_batch(&message_buffer).ok();
                             message_buffer.clear();
                         }
                         if let Err(e) = sink.flush() {

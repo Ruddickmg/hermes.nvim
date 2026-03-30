@@ -6,7 +6,7 @@ use tracing_subscriber::{
     reload::{self},
 };
 
-use crate::utilities::logging::writer::{FileWriter, Filtered};
+use crate::utilities::logging::writer::{FileWriter, Filtered, StdoutWriter};
 use crate::utilities::writer::MessageWriter;
 use crate::{
     acp::{Result, error::Error},
@@ -62,7 +62,8 @@ impl Logger {
     }
 
     fn stdio_layer(config: LogTargetConfig) -> BoxedLayer {
-        Self::base_layer(fmt::Layer::new(), config.format)
+        let writer = StdoutWriter::new().filtered(config.level);
+        Self::base_layer(fmt::layer().with_writer(writer), config.format)
     }
 
     fn notification_layer(config: LogTargetConfig) -> BoxedLayer {
@@ -98,15 +99,23 @@ impl Logger {
             file,
         }: LogConfig,
     ) -> Result<Vec<BoxedLayer>> {
-        let mut layers: Vec<BoxedLayer> = vec![
-            Self::stdio_layer(stdio),
-            Self::message_layer(message),
-            Self::notification_layer(notification),
-        ];
+        let mut layers: Vec<BoxedLayer> = vec![];
 
-        // Add file layer only if path is set and logging is enabled
-        if let Some(file_layer) =
-            Self::file_layer(file).map_err(|e| Error::Internal(e.to_string()))?
+        if stdio.level != LogLevel::Off {
+            layers.push(Self::stdio_layer(stdio));
+        }
+
+        if message.level != LogLevel::Off {
+            layers.push(Self::message_layer(message));
+        }
+
+        if notification.level != LogLevel::Off {
+            layers.push(Self::notification_layer(notification));
+        }
+
+        if file.level != LogLevel::Off
+            && let Some(file_layer) =
+                Self::file_layer(file).map_err(|e| Error::Internal(e.to_string()))?
         {
             layers.push(file_layer);
         }
