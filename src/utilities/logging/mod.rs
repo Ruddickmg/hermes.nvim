@@ -62,7 +62,7 @@ impl Logger {
     }
 
     fn stdio_layer(config: LogTargetConfig) -> BoxedLayer {
-        let writer = StdoutWriter::default().filtered(config.level);
+        let writer = StdoutWriter::new().filtered(config.level);
         Self::base_layer(fmt::layer().with_writer(writer), config.format)
     }
 
@@ -99,15 +99,23 @@ impl Logger {
             file,
         }: LogConfig,
     ) -> Result<Vec<BoxedLayer>> {
-        let mut layers: Vec<BoxedLayer> = vec![
-            Self::stdio_layer(stdio),
-            Self::message_layer(message),
-            Self::notification_layer(notification),
-        ];
+        let mut layers: Vec<BoxedLayer> = vec![];
 
-        // Add file layer only if path is set and logging is enabled
-        if let Some(file_layer) =
-            Self::file_layer(file).map_err(|e| Error::Internal(e.to_string()))?
+        if stdio.level != LogLevel::Off {
+            layers.push(Self::stdio_layer(stdio));
+        }
+
+        if message.level != LogLevel::Off {
+            layers.push(Self::message_layer(message));
+        }
+
+        if notification.level != LogLevel::Off {
+            layers.push(Self::notification_layer(notification));
+        }
+
+        if file.level != LogLevel::Off
+            && let Some(file_layer) =
+                Self::file_layer(file).map_err(|e| Error::Internal(e.to_string()))?
         {
             layers.push(file_layer);
         }
@@ -214,5 +222,109 @@ mod tests {
         let expected: Vec<LevelFilter> = vec![LevelFilter::TRACE, LevelFilter::OFF];
 
         assert_eq!(results, expected);
+    }
+
+    #[test]
+    fn test_all_layers_returns_empty_when_all_levels_off() {
+        // This test verifies that when all log levels are Off,
+        // the all_layers function returns an empty Vec (no layers created)
+        let config = LogConfig {
+            stdio: LogTargetConfig {
+                level: LogLevel::Off,
+                format: LogFormat::Full,
+            },
+            message: LogTargetConfig {
+                level: LogLevel::Off,
+                format: LogFormat::Full,
+            },
+            notification: LogTargetConfig {
+                level: LogLevel::Off,
+                format: LogFormat::Full,
+            },
+            file: LogFileConfig {
+                path: String::new(),
+                level: LogLevel::Off,
+                format: LogFormat::Full,
+                max_size: 0,
+                max_files: 0,
+            },
+        };
+
+        // all_layers should return an empty vector when all are Off
+        let layers = Logger::all_layers(config).unwrap();
+        assert!(
+            layers.is_empty(),
+            "Expected 0 layers when all levels are Off, got {}",
+            layers.len()
+        );
+    }
+
+    #[test]
+    fn test_all_layers_returns_layers_when_levels_enabled() {
+        // This test verifies that when log levels are not Off,
+        // the all_layers function creates the appropriate layers
+        let config = LogConfig {
+            stdio: LogTargetConfig {
+                level: LogLevel::Error,
+                format: LogFormat::Full,
+            },
+            message: LogTargetConfig {
+                level: LogLevel::Error,
+                format: LogFormat::Full,
+            },
+            notification: LogTargetConfig {
+                level: LogLevel::Error,
+                format: LogFormat::Full,
+            },
+            file: LogFileConfig {
+                path: String::new(),
+                level: LogLevel::Off,
+                format: LogFormat::Full,
+                max_size: 0,
+                max_files: 0,
+            },
+        };
+
+        // all_layers should return 3 layers (stdio, message, notification)
+        let layers = Logger::all_layers(config).unwrap();
+        assert_eq!(
+            layers.len(),
+            3,
+            "Expected 3 layers when levels are enabled (excluding file which needs path)"
+        );
+    }
+
+    #[test]
+    fn test_all_layers_partial_off_configuration() {
+        // Test mixed configuration: some levels Off, some enabled
+        let config = LogConfig {
+            stdio: LogTargetConfig {
+                level: LogLevel::Off,
+                format: LogFormat::Full,
+            },
+            message: LogTargetConfig {
+                level: LogLevel::Info,
+                format: LogFormat::Full,
+            },
+            notification: LogTargetConfig {
+                level: LogLevel::Off,
+                format: LogFormat::Full,
+            },
+            file: LogFileConfig {
+                path: String::new(),
+                level: LogLevel::Off,
+                format: LogFormat::Full,
+                max_size: 0,
+                max_files: 0,
+            },
+        };
+
+        // Only message layer should be created
+        let layers = Logger::all_layers(config).unwrap();
+        assert_eq!(
+            layers.len(),
+            1,
+            "Expected 1 layer when only message is enabled"
+        );
     }
 }
