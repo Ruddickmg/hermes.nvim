@@ -71,8 +71,8 @@ mod tests {
 
     #[test]
     fn test_stdout_writer_implements_filtered() {
-        use crate::utilities::logging::writer::LevelFilterWriter;
         use crate::utilities::logging::LogLevel;
+        use crate::utilities::logging::writer::LevelFilterWriter;
 
         let writer = StdoutWriter::new();
         let filtered_writer = writer.filtered(LogLevel::Debug);
