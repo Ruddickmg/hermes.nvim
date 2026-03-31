@@ -4,7 +4,6 @@ use crossbeam_channel::{Sender, bounded};
 use nvim_oxi::libuv::AsyncHandle;
 use nvim_oxi::{Dictionary, api};
 use std::sync::Arc;
-use tracing::error;
 
 /// A notification message to be delivered to Neovim
 #[derive(Debug, Clone, PartialEq)]
@@ -60,10 +59,7 @@ impl NotificationMessenger {
                 }
             }))
             .inspect_err(|e| {
-                error!(
-                    "Panic occurred in the AsyncHandle callback of NotificationMessenger: {:?}",
-                    e
-                )
+                nvim_oxi::api::err_writeln(&format!("Error processing log notification: {:?}", e))
             })
             .ok(); // Log and ignore panics to prevent process abort
         })

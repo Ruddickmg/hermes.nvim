@@ -660,7 +660,7 @@ fn test_all_layers_transition_from_off_to_enabled() -> nvim_oxi::Result<()> {
     std::thread::sleep(std::time::Duration::from_millis(200));
 
     // Verify no file created yet
-    let file_exists_before = log_path.exists();
+    let _file_exists_before = log_path.exists();
 
     // Reconfigure to enable file logging
     let enabled_config = LogConfig {

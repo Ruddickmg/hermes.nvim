@@ -42,7 +42,8 @@ fn test_send_notification_from_main_thread_succeeds() {
 fn test_send_notification_from_spawned_thread_succeeds() {
     let messenger = NotificationMessenger::initialize().expect("Failed to create messenger");
     let messenger_clone = messenger.clone();
-    let result_from_thread = std::sync::Arc::new(std::sync::Mutex::new(None::<()>));
+    let result_from_thread: std::sync::Arc<std::sync::Mutex<Option<hermes::acp::Result<()>>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(None));
     let result_clone = result_from_thread.clone();
 
     let handle = thread::spawn(move || {
@@ -51,8 +52,11 @@ fn test_send_notification_from_spawned_thread_succeeds() {
     });
 
     handle.join().expect("Thread panicked");
-    let result = result_from_thread.lock().unwrap();
-    assert!(result.is_ok(), "Failed to send from spawned thread");
+    let guard = result_from_thread.lock().unwrap();
+    assert!(
+        guard.as_ref().expect("Should have result").is_ok(),
+        "Failed to send from spawned thread"
+    );
 }
 
 /// Test that sending from spawned thread completes without panic

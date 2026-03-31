@@ -2,7 +2,6 @@ use crate::acp::{Result, error::Error};
 use crossbeam_channel::{Receiver, Sender, bounded};
 use nvim_oxi::libuv::AsyncHandle;
 use std::sync::Arc;
-use tracing::error;
 
 #[derive(Clone)]
 pub struct MessageMessenger {
@@ -17,22 +16,23 @@ impl std::fmt::Debug for MessageMessenger {
 }
 
 impl MessageMessenger {
+    fn send_message(message: String) {
+        let escaped = message.replace('"', "\\\"");
+        let cmd = format!("echomsg \"{}\"", escaped);
+        nvim_oxi::api::command(&cmd).ok();
+    }
+
     pub fn initialize() -> Result<Self> {
         let (sender, receiver): (Sender<String>, Receiver<String>) = bounded(1000);
 
         let handle = AsyncHandle::new(move || {
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 while let Ok(message) = receiver.try_recv() {
-                    let escaped = message.replace('"', "\\\"");
-                    let cmd = format!("echomsg \"{}\"", escaped);
-                    nvim_oxi::api::command(&cmd).ok();
+                    Self::send_message(message);
                 }
             }))
-            .inspect(|e| {
-                error!(
-                    "Panic occurred in async handle for the MessageMessenger: {:?}",
-                    e
-                )
+            .inspect_err(|e| {
+                nvim_oxi::api::err_writeln(&format!("Error processing log message: {:?}", e))
             })
             .ok();
         })
