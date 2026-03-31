@@ -7,8 +7,8 @@ use tracing_subscriber::{
 };
 
 use crate::utilities::logging::writer::{FileWriter, Filtered, StdoutWriter};
-use crate::utilities::notification_messenger::NotificationMessenger;
 use crate::utilities::message_messenger::MessageMessenger;
+use crate::utilities::notification_messenger::NotificationMessenger;
 use crate::utilities::writer::MessageWriter;
 use crate::{
     acp::{Result, error::Error},

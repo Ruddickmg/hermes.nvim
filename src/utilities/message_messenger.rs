@@ -1,5 +1,5 @@
-use crate::acp::{error::Error, Result};
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crate::acp::{Result, error::Error};
+use crossbeam_channel::{Receiver, Sender, bounded};
 use nvim_oxi::libuv::AsyncHandle;
 use std::sync::Arc;
 

@@ -1,8 +1,8 @@
-use crate::acp::{error::Error, Result};
+use crate::acp::{Result, error::Error};
 use crate::utilities::LogLevel;
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, bounded};
 use nvim_oxi::libuv::AsyncHandle;
-use nvim_oxi::{api, Dictionary};
+use nvim_oxi::{Dictionary, api};
 use std::sync::Arc;
 use tracing::error;
 
