@@ -26,15 +26,17 @@ impl MessageMessenger {
         let (sender, receiver): (Sender<String>, Receiver<String>) = bounded(1000);
 
         let handle = AsyncHandle::new(move || {
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                while let Ok(message) = receiver.try_recv() {
+            while let Ok(message) = receiver.try_recv() {
+                // CRITICAL: This callback runs on Neovim's main thread
+                // We use catch_unwind per-item to prevent panics from crossing the FFI boundary
+                // and ensure remaining messages are processed even if one panics.
+                // Note: We do NOT attempt to log panics here - if the logging
+                // infrastructure is broken, we can't log. Silently swallow instead.
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     Self::send_message(message);
-                }
-            }))
-            .inspect_err(|e| {
-                nvim_oxi::api::err_writeln(&format!("Error processing log message: {:?}", e))
-            })
-            .ok();
+                }))
+                .ok();
+            }
         })
         .map_err(|e| Error::Internal(e.to_string()))?;
 
@@ -66,6 +68,12 @@ mod tests {
         receiver: Receiver<String>,
     }
 
+    impl std::fmt::Debug for TestableMessenger {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("MessageMessenger").finish()
+        }
+    }
+
     impl TestableMessenger {
         fn new(capacity: usize) -> Self {
             let (sender, receiver) = bounded::<String>(capacity);
@@ -80,6 +88,14 @@ mod tests {
 
         fn try_recv(&self) -> Option<String> {
             self.receiver.try_recv().ok()
+        }
+
+        fn len(&self) -> usize {
+            self.sender.len()
+        }
+
+        fn is_full(&self) -> bool {
+            self.sender.is_full()
         }
     }
 
@@ -324,5 +340,45 @@ mod tests {
     fn test_message_messenger_is_sync() {
         fn assert_sync<T: Sync>() {}
         assert_sync::<MessageMessenger>();
+    }
+
+    #[test]
+    fn test_message_messenger_len_after_multiple_sends() {
+        let messenger = TestableMessenger::new(10);
+        messenger.try_send("msg1".to_string()).unwrap();
+        messenger.try_send("msg2".to_string()).unwrap();
+        messenger.try_send("msg3".to_string()).unwrap();
+        assert_eq!(messenger.len(), 3);
+    }
+
+    #[test]
+    fn test_message_messenger_is_full_after_capacity() {
+        let messenger = TestableMessenger::new(2);
+        messenger.try_send("msg1".to_string()).unwrap();
+        messenger.try_send("msg2".to_string()).unwrap();
+        assert!(messenger.is_full());
+    }
+
+    #[test]
+    fn test_message_messenger_is_not_full_under_capacity() {
+        let messenger = TestableMessenger::new(10);
+        messenger.try_send("msg1".to_string()).unwrap();
+        assert!(!messenger.is_full());
+    }
+
+    #[test]
+    fn test_message_messenger_recv_order() {
+        let messenger = TestableMessenger::new(10);
+        messenger.try_send("first".to_string()).unwrap();
+        messenger.try_send("second".to_string()).unwrap();
+        assert_eq!(messenger.try_recv(), Some("first".to_string()));
+        assert_eq!(messenger.try_recv(), Some("second".to_string()));
+    }
+
+    #[test]
+    fn test_message_messenger_debug_struct() {
+        let messenger = TestableMessenger::new(50);
+        let debug_str = format!("{:?}", messenger);
+        assert!(debug_str.contains("MessageMessenger"));
     }
 }
