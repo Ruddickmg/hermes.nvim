@@ -18,22 +18,22 @@ impl<T> NvimMessenger<T> {
         R::Error: std::error::Error + 'static,
     {
         let (sender, mut receiver) = tokio::sync::mpsc::channel::<T>(100);
-        let handle =
-            AsyncHandle::new(move || {
-                // CRITICAL: This callback is invoked from C code via FFI.
-                // ANY panic that crosses this boundary will abort the process.
-                // We use catch_unwind to prevent this.
-                // Note: We do NOT attempt to log panics here - if the logging
-                // infrastructure is broken, we can't log. Silently swallow instead.
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    while let Ok(data) = receiver.try_recv() {
-                        if let Err(err) = callback(data).into_result() {
-                            error!("Error in NvimHandler callback: {}", err);
-                        }
+        let handle = AsyncHandle::new(move || {
+            // CRITICAL: This callback is invoked from C code via FFI.
+            // ANY panic that crosses this boundary will abort the process.
+            // We use catch_unwind to prevent this.
+            // Note: We do NOT attempt to log panics here - if the logging
+            // infrastructure is broken, we can't log. Silently swallow instead.
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                while let Ok(data) = receiver.try_recv() {
+                    if let Err(err) = callback(data).into_result() {
+                        error!("Error in NvimHandler callback: {}", err);
                     }
-                })).ok();
-            })
-            .map_err(|e| Error::Internal(e.to_string()))?;
+                }
+            }))
+            .ok();
+        })
+        .map_err(|e| Error::Internal(e.to_string()))?;
         Ok(Self {
             handle: Arc::new(handle),
             sender: Arc::new(sender),

@@ -1,8 +1,8 @@
-use crate::acp::{error::Error, Result};
+use crate::acp::{Result, error::Error};
 use crate::utilities::LogLevel;
-use crossbeam_channel::{bounded, Sender};
+use crossbeam_channel::{Sender, bounded};
 use nvim_oxi::libuv::AsyncHandle;
-use nvim_oxi::{api, Dictionary};
+use nvim_oxi::{Dictionary, api};
 use std::sync::Arc;
 
 /// A notification message to be delivered to Neovim
