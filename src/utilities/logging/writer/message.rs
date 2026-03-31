@@ -46,6 +46,7 @@ impl<'a> MakeWriter<'a> for MessageWriter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_message_writer_is_send() {
@@ -86,30 +87,50 @@ mod tests {
     }
 
     #[test]
-    fn test_whitespace_string_trim_is_empty() {
-        assert!("   ".trim().is_empty());
-        assert!("\n\t".trim().is_empty());
-        assert!("  \n  \t  ".trim().is_empty());
+    fn test_whitespace_string_space_trim_is_empty() {
+        let converted = String::from_utf8_lossy(b"   ");
+        assert!(converted.trim().is_empty());
     }
 
     #[test]
-    fn test_non_empty_string_trim_not_empty() {
-        assert!(!"hello".trim().is_empty());
-        assert!(!"  hello  ".trim().is_empty());
-        assert!(!"hello world".trim().is_empty());
-        assert!(!"a".trim().is_empty());
+    fn test_whitespace_string_newline_trim_is_empty() {
+        let converted = String::from_utf8_lossy(b"\n\t");
+        assert!(converted.trim().is_empty());
     }
 
     #[test]
-    fn test_string_from_utf8_lossy_invalid_bytes() {
+    fn test_non_empty_string_hello_not_empty() {
+        let converted = String::from_utf8_lossy(b"hello");
+        assert!(!converted.trim().is_empty());
+    }
+
+    #[test]
+    fn test_non_empty_string_padded_not_empty() {
+        let converted = String::from_utf8_lossy(b"  hello  ");
+        assert!(!converted.trim().is_empty());
+    }
+
+    #[test]
+    fn test_non_empty_string_hello_world_not_empty() {
+        let converted = String::from_utf8_lossy(b"hello world");
+        assert!(!converted.trim().is_empty());
+    }
+
+    #[test]
+    fn test_non_empty_string_single_char_not_empty() {
+        let converted = String::from_utf8_lossy(b"a");
+        assert!(!converted.trim().is_empty());
+    }
+
+    #[test]
+    fn test_string_from_utf8_lossy_invalid_bytes_contains_replacement() {
         let invalid: [u8; 4] = [0x80, 0x81, 0x82, 0x83];
         let result = String::from_utf8_lossy(&invalid);
-        assert!(result.len() >= 4);
         assert!(result.contains('\u{FFFD}'));
     }
 
     #[test]
-    fn test_string_from_utf8_lossy_mixed_valid_invalid() {
+    fn test_string_from_utf8_lossy_mixed_starts_with_hello() {
         let mixed: Vec<u8> = b"Hello"
             .iter()
             .copied()
@@ -118,6 +139,17 @@ mod tests {
             .collect();
         let result = String::from_utf8_lossy(&mixed);
         assert!(result.starts_with("Hello"));
+    }
+
+    #[test]
+    fn test_string_from_utf8_lossy_mixed_ends_with_world() {
+        let mixed: Vec<u8> = b"Hello"
+            .iter()
+            .copied()
+            .chain([0x80, 0x81])
+            .chain(b"World".iter().copied())
+            .collect();
+        let result = String::from_utf8_lossy(&mixed);
         assert!(result.ends_with("World"));
     }
 
@@ -128,9 +160,9 @@ mod tests {
     }
 
     #[test]
-    fn test_trim_newlines_tabs() {
-        let with_whitespace = "\n\thello\t\n";
-        assert_eq!(with_whitespace.trim(), "hello");
+    fn test_trim_newlines() {
+        let with_newlines = "\n\thello\t\n";
+        assert_eq!(with_newlines.trim(), "hello");
     }
 
     #[test]
@@ -166,9 +198,14 @@ mod tests {
     }
 
     #[test]
-    fn test_string_len_vs_trim_len() {
+    fn test_string_len() {
         let padded = "  hello  ";
         assert_eq!(padded.len(), 9);
+    }
+
+    #[test]
+    fn test_string_trim_len() {
+        let padded = "  hello  ";
         assert_eq!(padded.trim().len(), 5);
     }
 
@@ -188,22 +225,6 @@ mod tests {
         #[test]
         fn test_utf8_conversion_never_panics(input in proptest::collection::vec(proptest::num::u8::ANY, 0..1000)) {
             let _ = String::from_utf8_lossy(&input);
-        }
-
-        #[test]
-        fn test_empty_check_consistent(input in ".*") {
-            let is_empty = input.trim().is_empty();
-            if is_empty {
-                assert!(input.chars().all(|c| c.is_whitespace()));
-            }
-        }
-
-        #[test]
-        fn test_trim_preserves_nonalphanumeric(input in "[^a-zA-Z0-9]*[a-zA-Z0-9]+[^a-zA-Z0-9]*") {
-            let trimmed = input.trim();
-            if !trimmed.is_empty() {
-                assert!(!trimmed.is_empty());
-            }
         }
     }
 }

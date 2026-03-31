@@ -122,10 +122,6 @@ mod tests {
         fn get_data(&self) -> Vec<u8> {
             self.data.lock().unwrap().clone()
         }
-
-        fn is_empty(&self) -> bool {
-            self.data.lock().unwrap().is_empty()
-        }
     }
 
     impl Write for TrackingWriter {

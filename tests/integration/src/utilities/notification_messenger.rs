@@ -10,7 +10,7 @@ use std::time::Duration;
 /// Test that NotificationMessenger initializes successfully
 #[nvim_oxi::test]
 fn test_notification_messenger_initializes() {
-    let result = NotificationMessenger::default();
+    let result = NotificationMessenger::initialize();
     assert!(
         result.is_ok(),
         "Failed to initialize NotificationMessenger: {:?}",
@@ -21,7 +21,7 @@ fn test_notification_messenger_initializes() {
 /// Test that sending a notification from the main thread works
 #[nvim_oxi::test]
 fn test_send_notification_from_main_thread() {
-    let messenger = NotificationMessenger::default().expect("Failed to create messenger");
+    let messenger = NotificationMessenger::initialize().expect("Failed to create messenger");
 
     let result = messenger.send(
         "Test notification from main thread".to_string(),
@@ -40,7 +40,7 @@ fn test_send_notification_from_main_thread() {
 /// Test that sending from a spawned thread works
 #[nvim_oxi::test]
 fn test_send_notification_from_spawned_thread() {
-    let messenger = NotificationMessenger::default().expect("Failed to create messenger");
+    let messenger = NotificationMessenger::initialize().expect("Failed to create messenger");
     let messenger_clone = messenger.clone();
 
     let handle = thread::spawn(move || {
@@ -57,7 +57,7 @@ fn test_send_notification_from_spawned_thread() {
 /// Test concurrent sends from multiple threads
 #[nvim_oxi::test]
 fn test_concurrent_sends_from_multiple_threads() {
-    let messenger = NotificationMessenger::default().expect("Failed to create messenger");
+    let messenger = NotificationMessenger::initialize().expect("Failed to create messenger");
     let num_threads = 5;
     let messages_per_thread = 10;
 
@@ -88,7 +88,7 @@ fn test_concurrent_sends_from_multiple_threads() {
 /// Test sending notifications with various log levels
 #[nvim_oxi::test]
 fn test_send_with_various_log_levels() {
-    let messenger = NotificationMessenger::default().expect("Failed to create messenger");
+    let messenger = NotificationMessenger::initialize().expect("Failed to create messenger");
 
     let levels = vec![
         (LogLevel::Trace, "Trace message"),
@@ -110,7 +110,7 @@ fn test_send_with_various_log_levels() {
 /// Test sending notifications with special characters and unicode
 #[nvim_oxi::test]
 fn test_send_with_special_characters() {
-    let messenger = NotificationMessenger::default().expect("Failed to create messenger");
+    let messenger = NotificationMessenger::initialize().expect("Failed to create messenger");
 
     let test_messages = vec![
         r#"Special chars: <>&"'"#,
@@ -137,7 +137,7 @@ fn test_send_with_special_characters() {
 /// Test that NotificationMessenger can be cloned and used from multiple references
 #[nvim_oxi::test]
 fn test_messenger_clone() {
-    let messenger1 = NotificationMessenger::default().expect("Failed to create messenger");
+    let messenger1 = NotificationMessenger::initialize().expect("Failed to create messenger");
     let messenger2 = messenger1.clone();
     let messenger3 = messenger1.clone();
 
@@ -159,7 +159,7 @@ fn test_messenger_clone() {
 /// Test that empty messages are handled gracefully
 #[nvim_oxi::test]
 fn test_send_empty_message() {
-    let messenger = NotificationMessenger::default().expect("Failed to create messenger");
+    let messenger = NotificationMessenger::initialize().expect("Failed to create messenger");
 
     let result = messenger.send("".to_string(), LogLevel::Info);
     assert!(result.is_ok(), "Empty message should not fail");
@@ -173,7 +173,7 @@ fn test_send_empty_message() {
 /// we can send many messages rapidly
 #[nvim_oxi::test]
 fn test_channel_full_behavior() {
-    let messenger = NotificationMessenger::default().expect("Failed to create messenger");
+    let messenger = NotificationMessenger::initialize().expect("Failed to create messenger");
 
     // Send messages rapidly to potentially fill the channel
     let mut success_count = 0;

@@ -1,6 +1,6 @@
 use crate::acp::{Result, error::Error};
 use crate::utilities::LogLevel;
-use crossbeam_channel::{Receiver, Sender, bounded};
+use crossbeam_channel::{Sender, bounded};
 use nvim_oxi::libuv::AsyncHandle;
 use nvim_oxi::{Dictionary, api};
 use std::sync::Arc;
@@ -32,7 +32,7 @@ impl NotificationMessenger {
     /// Create a new NotificationMessenger with the given sender and AsyncHandle
     ///
     /// This is the low-level constructor for testing and custom initialization.
-    /// For standard use, prefer `NotificationMessenger::default()`.
+    /// For standard use, prefer `NotificationMessenger::initialize()`.
     pub fn new(sender: Sender<NotificationMessage>, handle: AsyncHandle) -> Self {
         Self {
             handle: Arc::new(handle),
@@ -91,12 +91,6 @@ impl NotificationMessenger {
     pub fn queue_len(&self) -> usize {
         self.sender.len()
     }
-
-    /// Check if the queue is empty
-    #[cfg(test)]
-    pub fn is_empty(&self) -> bool {
-        self.sender.is_empty()
-    }
 }
 
 #[cfg(test)]
@@ -104,60 +98,25 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
-    // Mock AsyncHandle for testing - implements the signal behavior
-    #[derive(Debug, Clone)]
-    struct MockAsyncHandle {
-        signal_count: std::sync::Arc<std::sync::atomic::AtomicUsize>,
-    }
-
-    impl MockAsyncHandle {
-        fn new() -> Self {
-            Self {
-                signal_count: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
-            }
-        }
-
-        fn send(&self) -> Result<()> {
-            self.signal_count
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            Ok(())
-        }
-
-        fn signal_count(&self) -> usize {
-            self.signal_count.load(std::sync::atomic::Ordering::SeqCst)
-        }
-    }
-
-    // Wrapper to make MockAsyncHandle work with our API
     struct TestableMessenger {
         sender: Sender<NotificationMessage>,
-        receiver: Receiver<NotificationMessage>,
-        mock_handle: MockAsyncHandle,
+        receiver: crossbeam_channel::Receiver<NotificationMessage>,
     }
 
     impl TestableMessenger {
         fn new(capacity: usize) -> Self {
             let (sender, receiver) = bounded::<NotificationMessage>(capacity);
-            Self {
-                sender,
-                receiver,
-                mock_handle: MockAsyncHandle::new(),
-            }
+            Self { sender, receiver }
         }
 
-        fn send(&self, message: String, level: LogLevel) -> Result<()> {
+        fn try_send(&self, message: String, level: LogLevel) -> Result<()> {
             self.sender
                 .try_send(NotificationMessage { message, level })
-                .map_err(|e| Error::Internal(format!("Failed to queue notification: {}", e)))?;
-            self.mock_handle.send()
+                .map_err(|e| Error::Internal(format!("Failed to queue notification: {}", e)))
         }
 
         fn try_recv(&self) -> Option<NotificationMessage> {
             self.receiver.try_recv().ok()
-        }
-
-        fn is_full(&self) -> bool {
-            self.sender.is_full()
         }
     }
 
@@ -222,7 +181,7 @@ mod tests {
     fn test_notification_messenger_send_success() {
         let messenger = TestableMessenger::new(10);
 
-        let result = messenger.send("Test message".to_string(), LogLevel::Info);
+        let result = messenger.try_send("Test message".to_string(), LogLevel::Info);
         assert!(result.is_ok());
 
         // Verify message is in queue
@@ -236,7 +195,7 @@ mod tests {
         let messenger = TestableMessenger::new(10);
 
         for i in 0..5 {
-            let result = messenger.send(format!("Message {}", i), LogLevel::Info);
+            let result = messenger.try_send(format!("Message {}", i), LogLevel::Info);
             assert!(result.is_ok());
         }
 
@@ -253,11 +212,15 @@ mod tests {
         let messenger = TestableMessenger::new(2);
 
         // Fill the channel
-        messenger.send("msg1".to_string(), LogLevel::Info).unwrap();
-        messenger.send("msg2".to_string(), LogLevel::Info).unwrap();
+        messenger
+            .try_send("msg1".to_string(), LogLevel::Info)
+            .unwrap();
+        messenger
+            .try_send("msg2".to_string(), LogLevel::Info)
+            .unwrap();
 
         // Third send should fail
-        let result = messenger.send("msg3".to_string(), LogLevel::Info);
+        let result = messenger.try_send("msg3".to_string(), LogLevel::Info);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Failed to queue"));
     }
@@ -274,7 +237,7 @@ mod tests {
         ];
 
         for level in levels {
-            let result = messenger.send(format!("{:?}", level), level);
+            let result = messenger.try_send(format!("{:?}", level), level);
             assert!(result.is_ok());
         }
     }
@@ -283,7 +246,7 @@ mod tests {
     fn test_notification_messenger_send_empty_message() {
         let messenger = TestableMessenger::new(10);
 
-        let result = messenger.send("".to_string(), LogLevel::Info);
+        let result = messenger.try_send("".to_string(), LogLevel::Info);
         assert!(result.is_ok());
 
         let msg = messenger.try_recv();
@@ -296,7 +259,7 @@ mod tests {
         let messenger = TestableMessenger::new(10);
 
         let special = r#"Special chars: <>&"' and unicode: 🎉"#;
-        let result = messenger.send(special.to_string(), LogLevel::Info);
+        let result = messenger.try_send(special.to_string(), LogLevel::Info);
         assert!(result.is_ok());
 
         let msg = messenger.try_recv();
@@ -309,7 +272,7 @@ mod tests {
         let messenger = TestableMessenger::new(10);
 
         let long_message = "a".repeat(10000);
-        let result = messenger.send(long_message.clone(), LogLevel::Info);
+        let result = messenger.try_send(long_message.clone(), LogLevel::Info);
         assert!(result.is_ok());
 
         let msg = messenger.try_recv();
@@ -332,14 +295,14 @@ mod tests {
             let messenger = TestableMessenger::new(100);
             let level = LogLevel::Info;
             // Should never panic regardless of input
-            let _ = messenger.send(msg, level);
+            let _ = messenger.try_send(msg, level);
         }
 
         #[test]
         fn test_send_never_panics_with_any_level(level in 0i64..6) {
             let messenger = TestableMessenger::new(100);
             let level = LogLevel::from(level);
-            let _ = messenger.send("test".to_string(), level);
+            let _ = messenger.try_send("test".to_string(), level);
         }
 
         #[test]
@@ -347,7 +310,7 @@ mod tests {
             let messenger = TestableMessenger::new(100);
             let level = LogLevel::Debug;
 
-            messenger.send(msg.clone(), level).ok();
+            messenger.try_send(msg.clone(), level).ok();
 
             let received = messenger.try_recv();
             if let Some(received_msg) = received {
