@@ -39,6 +39,8 @@ type BoxedLayer = Box<dyn tracing_subscriber::layer::Layer<Registry> + Send + Sy
 pub struct Logger {
     handle: reload::Handle<Vec<BoxedLayer>, Registry>,
     storage_path: String,
+    nvim_messages_messenger: MessageMessenger,
+    nvim_notifications_messenger: NotificationMessenger,
 }
 
 impl Logger {
@@ -68,8 +70,10 @@ impl Logger {
         Self::base_layer(fmt::layer().with_writer(writer), config.format)
     }
 
-    fn notification_layer(config: LogTargetConfig) -> Result<BoxedLayer> {
-        let messenger = NotificationMessenger::initialize()?;
+    fn notification_layer(
+        config: LogTargetConfig,
+        messenger: NotificationMessenger,
+    ) -> Result<BoxedLayer> {
         let writer = NotifyWriter::new(config.level, messenger).filtered(config.level);
         Ok(Self::base_layer(
             fmt::layer().with_writer(writer),
@@ -77,8 +81,7 @@ impl Logger {
         ))
     }
 
-    fn message_layer(config: LogTargetConfig) -> Result<BoxedLayer> {
-        let messenger = MessageMessenger::initialize()?;
+    fn message_layer(config: LogTargetConfig, messenger: MessageMessenger) -> Result<BoxedLayer> {
         let writer = MessageWriter::new(messenger).filtered(config.level);
         Ok(Self::base_layer(
             fmt::layer().with_writer(writer.clone()),
@@ -108,6 +111,8 @@ impl Logger {
             notification,
             file,
         }: LogConfig,
+        notifications_messenger: NotificationMessenger,
+        messages_messenger: MessageMessenger,
     ) -> Result<Vec<BoxedLayer>> {
         let mut layers: Vec<BoxedLayer> = vec![];
 
@@ -116,11 +121,14 @@ impl Logger {
         }
 
         if message.level != LogLevel::Off {
-            layers.push(Self::message_layer(message)?);
+            layers.push(Self::message_layer(message, messages_messenger)?);
         }
 
         if notification.level != LogLevel::Off {
-            layers.push(Self::notification_layer(notification)?);
+            layers.push(Self::notification_layer(
+                notification,
+                notifications_messenger,
+            )?);
         }
 
         if file.level != LogLevel::Off
@@ -134,7 +142,13 @@ impl Logger {
     }
 
     pub fn inititalize(storage_path: &str) -> Result<&'static Self> {
-        let layers: Vec<BoxedLayer> = Self::all_layers(Default::default())?;
+        let nvim_notifications_messenger = NotificationMessenger::initialize()?;
+        let nvim_messages_messenger = MessageMessenger::initialize()?;
+        let layers: Vec<BoxedLayer> = Self::all_layers(
+            Default::default(),
+            nvim_notifications_messenger.clone(),
+            nvim_messages_messenger.clone(),
+        )?;
         let (reload_layer, handle) = reload::Layer::new(layers);
 
         let subscriber = tracing_subscriber::registry().with(reload_layer);
@@ -148,6 +162,8 @@ impl Logger {
             Self {
                 handle,
                 storage_path: storage_path.to_string(),
+                nvim_messages_messenger,
+                nvim_notifications_messenger,
             }
         }))
     }
@@ -158,7 +174,11 @@ impl Logger {
         if config.file.path.is_empty() && config.file.level < LogLevel::Off {
             config.file.path = self.storage_path.to_string();
         }
-        let layers = Self::all_layers(config)?;
+        let layers = Self::all_layers(
+            config,
+            self.nvim_notifications_messenger.clone(),
+            self.nvim_messages_messenger.clone(),
+        )?;
         self.handle
             .reload(layers)
             .map_err(|e| Error::Internal(e.to_string()))
