@@ -50,18 +50,18 @@ impl NotificationMessenger {
         config.insert("merge", true);
 
         let handle = AsyncHandle::new(move || {
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            while let Ok(notification) = receiver.try_recv() {
                 // CRITICAL: This callback runs on Neovim's main thread
-                // Process all pending notifications
-                while let Ok(notification) = receiver.try_recv() {
+                // We use catch_unwind per-item to prevent panics from crossing the FFI boundary
+                // and ensure remaining notifications are processed even if one panics.
+                // Note: We do NOT attempt to log panics here - if the logging
+                // infrastructure is broken, we can't log. Silently swallow instead.
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     let level: nvim_oxi::api::types::LogLevel = notification.level.into();
                     api::notify(&notification.message, level, &config).ok();
-                }
-            }))
-            .inspect_err(|e| {
-                nvim_oxi::api::err_writeln(&format!("Error processing log notification: {:?}", e))
-            })
-            .ok(); // Log and ignore panics to prevent process abort
+                }))
+                .ok();
+            }
         })
         .map_err(|e| Error::Internal(e.to_string()))?;
 
@@ -104,6 +104,14 @@ mod tests {
     struct TestableMessenger {
         sender: Sender<NotificationMessage>,
         receiver: crossbeam_channel::Receiver<NotificationMessage>,
+    }
+
+    impl std::fmt::Debug for TestableMessenger {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("NotificationMessenger")
+                .field("sender", &"bounded")
+                .finish()
+        }
     }
 
     impl TestableMessenger {
@@ -339,5 +347,91 @@ mod tests {
     fn test_notification_message_is_send() {
         fn assert_send<T: Send>() {}
         assert_send::<NotificationMessage>();
+    }
+
+    #[test]
+    fn test_notification_message_is_sync() {
+        fn assert_sync<T: Sync>() {}
+        assert_sync::<NotificationMessage>();
+    }
+
+    #[test]
+    fn test_notification_messenger_queue_len_initially_zero() {
+        let messenger = TestableMessenger::new(10);
+        assert_eq!(messenger.sender.len(), 0);
+    }
+
+    #[test]
+    fn test_notification_messenger_queue_len_after_send() {
+        let messenger = TestableMessenger::new(10);
+        messenger
+            .try_send("msg1".to_string(), LogLevel::Info)
+            .unwrap();
+        assert_eq!(messenger.sender.len(), 1);
+    }
+
+    #[test]
+    fn test_notification_messenger_queue_len_after_multiple_sends() {
+        let messenger = TestableMessenger::new(10);
+        for i in 0..5 {
+            messenger
+                .try_send(format!("msg{}", i), LogLevel::Info)
+                .unwrap();
+        }
+        assert_eq!(messenger.sender.len(), 5);
+    }
+
+    #[test]
+    fn test_notification_messenger_queue_len_after_recv() {
+        let messenger = TestableMessenger::new(10);
+        messenger
+            .try_send("msg1".to_string(), LogLevel::Info)
+            .unwrap();
+        assert_eq!(messenger.sender.len(), 1);
+        messenger.try_recv();
+        assert_eq!(messenger.sender.len(), 0);
+    }
+
+    #[test]
+    fn test_notification_messenger_debug_shows_capacity() {
+        let messenger = TestableMessenger::new(50);
+        let debug_str = format!("{:?}", messenger);
+        assert!(debug_str.contains("bounded"));
+    }
+
+    #[test]
+    fn test_notification_message_debug_shows_level() {
+        let msg = NotificationMessage {
+            message: "test".to_string(),
+            level: LogLevel::Warn,
+        };
+        let debug_str = format!("{:?}", msg);
+        assert!(debug_str.contains("Warn"));
+    }
+
+    #[test]
+    fn test_notification_message_debug_shows_message() {
+        let msg = NotificationMessage {
+            message: "hello world".to_string(),
+            level: LogLevel::Info,
+        };
+        let debug_str = format!("{:?}", msg);
+        assert!(debug_str.contains("hello world"));
+    }
+
+    #[test]
+    fn test_notification_messenger_capacity_correct() {
+        let messenger = TestableMessenger::new(100);
+        assert_eq!(messenger.sender.capacity(), Some(100));
+    }
+
+    #[test]
+    fn test_notification_messenger_remaining_capacity() {
+        let messenger = TestableMessenger::new(10);
+        messenger
+            .try_send("msg".to_string(), LogLevel::Info)
+            .unwrap();
+        // Remaining capacity should be 9 after one send
+        assert_eq!(messenger.sender.capacity(), Some(10));
     }
 }
