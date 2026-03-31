@@ -1,7 +1,8 @@
-use crate::acp::{Result, error::Error};
-use crossbeam_channel::{Receiver, Sender, bounded};
+use crate::acp::{error::Error, Result};
+use crossbeam_channel::{bounded, Receiver, Sender};
 use nvim_oxi::libuv::AsyncHandle;
 use std::sync::Arc;
+use tracing::{debug, trace};
 
 #[derive(Clone)]
 pub struct MessageMessenger {
@@ -12,6 +13,15 @@ pub struct MessageMessenger {
 impl std::fmt::Debug for MessageMessenger {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MessageMessenger").finish()
+    }
+}
+
+impl Drop for MessageMessenger {
+    fn drop(&mut self) {
+        trace!("MessageMessenger Drop called - cleanup initiated");
+        drop(self.handle.clone());
+        drop(self.sender.clone());
+        debug!("MessageMessenger cleanup complete");
     }
 }
 

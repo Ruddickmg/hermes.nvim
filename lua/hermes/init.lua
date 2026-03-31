@@ -505,6 +505,23 @@ function M.setup(opts)
 		end
 	end
 
+	-- Register cleanup autocmd to disconnect on neovim exit
+	-- This ensures proper cleanup of connection threads when neovim exits
+	vim.api.nvim_create_autocmd("VimLeavePre", {
+		group = "hermes",
+		callback = function()
+			-- Use vim.schedule to ensure we're on the main thread
+			-- Use pcall because Lua state may be partially cleared during shutdown
+			vim.schedule(function()
+				pcall(function()
+					if _native then
+						_native.disconnect(nil)
+					end
+				end)
+			end)
+		end,
+	})
+
 	-- Execute async with loading state management
 	execute_async(function()
 		M._load_native_sync().setup(opts)

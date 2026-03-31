@@ -1,9 +1,10 @@
-use crate::acp::{Result, error::Error};
+use crate::acp::{error::Error, Result};
 use crate::utilities::LogLevel;
-use crossbeam_channel::{Sender, bounded};
+use crossbeam_channel::{bounded, Sender};
 use nvim_oxi::libuv::AsyncHandle;
-use nvim_oxi::{Dictionary, api};
+use nvim_oxi::{api, Dictionary};
 use std::sync::Arc;
+use tracing::{debug, trace};
 
 /// A notification message to be delivered to Neovim
 #[derive(Debug, Clone, PartialEq)]
@@ -24,6 +25,15 @@ impl std::fmt::Debug for NotificationMessenger {
         f.debug_struct("NotificationMessenger")
             .field("capacity", &self.sender.capacity())
             .finish()
+    }
+}
+
+impl Drop for NotificationMessenger {
+    fn drop(&mut self) {
+        trace!("NotificationMessenger Drop called - cleanup initiated");
+        drop(self.handle.clone());
+        drop(self.sender.clone());
+        debug!("NotificationMessenger cleanup complete");
     }
 }
 

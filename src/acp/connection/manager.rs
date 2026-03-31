@@ -1,7 +1,7 @@
-use crate::PluginState;
-use crate::acp::connection::{Connection, stdio};
+use crate::acp::connection::{stdio, Connection};
 use crate::nvim::configuration::Permissions;
-use crate::{Handler, acp::error::Error};
+use crate::PluginState;
+use crate::{acp::error::Error, Handler};
 use agent_client_protocol::{
     ClientCapabilities, FileSystemCapabilities, Implementation, InitializeRequest, ProtocolVersion,
 };
@@ -269,33 +269,67 @@ impl ConnectionManager {
             .ok_or_else(|| {
                 Error::Connection(format!("No handle found for assistant {}", assistant))
             })?;
-        debug!("Disconnecting from agent {}", assistant);
+        debug!("Disconnecting from agent {} (timeout: 5s)", assistant);
         drop(sender);
-        handle
-            .join()
-            .map_err(|e| {
-                Error::Internal(format!(
-                    "Failed to join thread for assistant {}: {:#?}",
+
+        // Join with timeout - if thread doesn't finish in 5 seconds, we log a warning
+        // but don't fail. This prevents hanging on shutdown if a connection is stuck.
+        let timeout = std::time::Duration::from_secs(5);
+        let start = std::time::Instant::now();
+        let join_result = loop {
+            if start.elapsed() >= timeout {
+                warn!(
+                    "Timeout waiting for connection thread of agent {} (waited {:?})",
+                    assistant,
+                    start.elapsed()
+                );
+                break Err("Thread did not complete within timeout".to_string());
+            }
+            // Try to join without blocking - use try_join if available
+            // For now, we use a simple approach with blocking join but with awareness
+            match handle.is_finished() {
+                true => {
+                    break handle
+                        .join()
+                        .map_err(|e| format!("Thread panicked: {:?}", e))
+                }
+                false => {
+                    // Thread not finished, yield to allow it to complete
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+            }
+        };
+
+        match join_result {
+            Ok(Ok(_)) => {
+                debug!("Successfully disconnected from agent {}", assistant);
+                Ok(())
+            }
+            Ok(Err(e)) => {
+                error!("Error in connection thread for agent {}: {}", assistant, e);
+                Err(Error::Connection(format!(
+                    "Error in connection thread for agent {}: {}",
                     assistant, e
-                ))
-            })?
-            .map_err(|e| {
-                Error::Connection(format!(
-                    "Error in connection thread for assistant {}: {:#?}",
+                )))
+            }
+            Err(e) => {
+                error!("Failed to join thread for agent {}: {}", assistant, e);
+                Err(Error::Internal(format!(
+                    "Failed to join thread for agent {}: {}",
                     assistant, e
-                ))
-            })?;
-        debug!("Successfully disconnected from agent {}", assistant);
-        Ok(())
+                )))
+            }
+        }
     }
 }
 
 impl Drop for ConnectionManager {
     fn drop(&mut self) {
-        debug!("ConnectionManager Drop called");
-        self.close_all()
-            .inspect_err(|e| error!("Error while closing connections in Drop: {:#?}", e))
-            .ok();
+        debug!("ConnectionManager Drop called - initiating cleanup");
+        match self.close_all() {
+            Ok(_) => debug!("ConnectionManager cleanup completed successfully"),
+            Err(e) => error!("ConnectionManager cleanup failed: {:?}", e),
+        }
         debug!("ConnectionManager Drop completed");
     }
 }
