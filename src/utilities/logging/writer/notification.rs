@@ -11,10 +11,6 @@ pub struct NotifyWriter {
     messenger: NotificationMessenger,
 }
 
-// SAFETY: NotifyWriter is safe to send across threads since NotificationMessenger is thread-safe
-unsafe impl Send for NotifyWriter {}
-unsafe impl Sync for NotifyWriter {}
-
 impl NotifyWriter {
     pub fn new(level: LogLevel, messenger: NotificationMessenger) -> Self {
         Self { level, messenger }

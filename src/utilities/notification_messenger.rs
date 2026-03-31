@@ -51,14 +51,21 @@ impl NotificationMessenger {
         config.insert("merge", true);
 
         let handle = AsyncHandle::new(move || {
-            // CRITICAL: This callback runs on Neovim's main thread
-            // Process all pending notifications
-            while let Ok(notification) = receiver.try_recv() {
-                let level: nvim_oxi::api::types::LogLevel = notification.level.into();
-                if let Err(e) = api::notify(&notification.message, level, &config) {
-                    error!("Failed to send notification: {}", e);
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                // CRITICAL: This callback runs on Neovim's main thread
+                // Process all pending notifications
+                while let Ok(notification) = receiver.try_recv() {
+                    let level: nvim_oxi::api::types::LogLevel = notification.level.into();
+                    api::notify(&notification.message, level, &config).ok();
                 }
-            }
+            }))
+            .inspect_err(|e| {
+                error!(
+                    "Panic occurred in the AsyncHandle callback of NotificationMessenger: {:?}",
+                    e
+                )
+            })
+            .ok(); // Log and ignore panics to prevent process abort
         })
         .map_err(|e| Error::Internal(e.to_string()))?;
 

@@ -8,9 +8,6 @@ pub struct MessageWriter {
     messenger: MessageMessenger,
 }
 
-unsafe impl Send for MessageWriter {}
-unsafe impl Sync for MessageWriter {}
-
 impl MessageWriter {
     pub fn new(messenger: MessageMessenger) -> Self {
         Self { messenger }
