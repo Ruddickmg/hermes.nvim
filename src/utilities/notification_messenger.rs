@@ -50,17 +50,18 @@ impl NotificationMessenger {
         config.insert("merge", true);
 
         let handle = AsyncHandle::new(move || {
-            // CRITICAL: This callback runs on Neovim's main thread
-            // We use catch_unwind to prevent panics from crossing the FFI boundary.
-            // Note: We do NOT attempt to log panics here - if the logging
-            // infrastructure is broken, we can't log. Silently swallow instead.
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                while let Ok(notification) = receiver.try_recv() {
+            while let Ok(notification) = receiver.try_recv() {
+                // CRITICAL: This callback runs on Neovim's main thread
+                // We use catch_unwind per-item to prevent panics from crossing the FFI boundary
+                // and ensure remaining notifications are processed even if one panics.
+                // Note: We do NOT attempt to log panics here - if the logging
+                // infrastructure is broken, we can't log. Silently swallow instead.
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     let level: nvim_oxi::api::types::LogLevel = notification.level.into();
                     api::notify(&notification.message, level, &config).ok();
-                }
-            }))
-            .ok();
+                }))
+                .ok();
+            }
         })
         .map_err(|e| Error::Internal(e.to_string()))?;
 
@@ -338,28 +339,5 @@ mod tests {
     fn test_notification_message_is_send() {
         fn assert_send<T: Send>() {}
         assert_send::<NotificationMessage>();
-    }
-
-    #[test]
-    fn test_notification_messenger_panic_caught_by_catch_unwind() {
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            panic!("Test panic");
-        }));
-        assert!(result.is_err(), "catch_unwind should catch the panic");
-    }
-
-    #[test]
-    fn test_notification_messenger_panic_result_converted_to_none() {
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            panic!("Test panic");
-        }))
-        .ok();
-        assert!(result.is_none(), "ok() should convert Err to None");
-    }
-
-    #[test]
-    fn test_notification_messenger_no_panic_preserved() {
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| 42)).ok();
-        assert!(result.is_some(), "ok() should preserve Ok result");
     }
 }

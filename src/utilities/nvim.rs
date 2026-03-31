@@ -19,19 +19,20 @@ impl<T> NvimMessenger<T> {
     {
         let (sender, mut receiver) = tokio::sync::mpsc::channel::<T>(100);
         let handle = AsyncHandle::new(move || {
-            // CRITICAL: This callback is invoked from C code via FFI.
-            // ANY panic that crosses this boundary will abort the process.
-            // We use catch_unwind to prevent this.
-            // Note: We do NOT attempt to log panics here - if the logging
-            // infrastructure is broken, we can't log. Silently swallow instead.
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                while let Ok(data) = receiver.try_recv() {
+            while let Ok(data) = receiver.try_recv() {
+                // CRITICAL: This callback is invoked from C code via FFI.
+                // ANY panic that crosses this boundary will abort the process.
+                // We use catch_unwind per-item so a panic on one item does not
+                // prevent remaining queued items from being processed.
+                // Note: We do NOT attempt to log panics here - if the logging
+                // infrastructure is broken, we can't log. Silently swallow instead.
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     if let Err(err) = callback(data).into_result() {
                         error!("Error in NvimHandler callback: {}", err);
                     }
-                }
-            }))
-            .ok();
+                }))
+                .ok();
+            }
         })
         .map_err(|e| Error::Internal(e.to_string()))?;
         Ok(Self {
