@@ -12,6 +12,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct MockClient {
     write_called: Arc<Mutex<bool>>,
     read_called: Arc<Mutex<bool>>,

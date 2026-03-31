@@ -273,7 +273,7 @@ fn test_detect_project_storage_path_uses_xdg_state_home() -> nvim_oxi::Result<()
     }
 
     // Get stdpath from Neovim - should now return {temp_path}/nvim
-    let state_dir =
+    let _state_dir =
         nvim_oxi::api::call_function::<(String,), String>("stdpath", ("state".to_string(),))
             .map_err(|e| nvim_oxi::api::Error::Other(format!("Failed to call stdpath: {}", e)))?;
 

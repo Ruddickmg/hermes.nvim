@@ -1,27 +1,19 @@
-use nvim_oxi::{Dictionary, api};
 use std::io::{self, Write};
 use tracing_subscriber::fmt::writer::MakeWriter;
 
-use crate::utilities::LogLevel;
+use crate::utilities::{LogLevel, NotificationMessenger};
 
 /// A writer that sends lines to Neovim notifications
+/// Uses NotificationMessenger to safely deliver notifications on the main thread
 #[derive(Debug, Clone)]
 pub struct NotifyWriter {
     level: LogLevel,
-    config: Dictionary,
+    messenger: NotificationMessenger,
 }
 
-// SAFETY: NotifyWriter contains Dictionary which has raw pointers, but we
-// only access it through the Mutex, ensuring thread safety
-unsafe impl Send for NotifyWriter {}
-unsafe impl Sync for NotifyWriter {}
-
 impl NotifyWriter {
-    pub fn new(level: LogLevel) -> Self {
-        let mut config = Dictionary::new();
-        config.insert("title", "Hermes");
-        config.insert("merge", true);
-        Self { level, config }
+    pub fn new(level: LogLevel, messenger: NotificationMessenger) -> Self {
+        Self { level, messenger }
     }
 }
 
@@ -30,9 +22,15 @@ impl Write for NotifyWriter {
         // Convert bytes to string (ignore invalid UTF-8)
         let s = String::from_utf8_lossy(buf);
 
+        // Skip empty strings
+        if s.trim().is_empty() {
+            return Ok(buf.len());
+        }
+
         let escaped = s.replace('"', "\\\"");
-        api::notify(&escaped, self.level.into(), &self.config)
-            .map_err(|e| std::io::Error::other(format!("Failed to send notification: {e}")))?;
+
+        // Send notification via messenger (thread-safe, delivers on main thread)
+        self.messenger.send(escaped, self.level).ok();
 
         Ok(buf.len())
     }
@@ -47,5 +45,22 @@ impl<'a> MakeWriter<'a> for NotifyWriter {
 
     fn make_writer(&'a self) -> Self::Writer {
         self.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_notify_writer_is_send() {
+        fn assert_send<T: Send>() {}
+        assert_send::<NotifyWriter>();
+    }
+
+    #[test]
+    fn test_notify_writer_is_sync() {
+        fn assert_sync<T: Sync>() {}
+        assert_sync::<NotifyWriter>();
     }
 }
