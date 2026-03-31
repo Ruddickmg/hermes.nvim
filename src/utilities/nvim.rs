@@ -23,13 +23,15 @@ impl<T> NvimMessenger<T> {
                 // CRITICAL: This callback is invoked from C code via FFI.
                 // ANY panic that crosses this boundary will abort the process.
                 // We use catch_unwind to prevent this.
+                // Note: We do NOT attempt to log panics here - if the logging
+                // infrastructure is broken, we can't log. Silently swallow instead.
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                while let Ok(data) = receiver.try_recv() {
-                    if let Err(err) = callback(data).into_result() {
-                        error!("Error in NvimHandler callback: {}", err);
+                    while let Ok(data) = receiver.try_recv() {
+                        if let Err(err) = callback(data).into_result() {
+                            error!("Error in NvimHandler callback: {}", err);
+                        }
                     }
-                }
-            })).inspect_err(|e|error!("Panic occurred in the AsyncHandle call initialized in the NvimMessenger: {:?}", e)).ok(); // Ignore the result - we just need to catch the panic
+                })).ok();
             })
             .map_err(|e| Error::Internal(e.to_string()))?;
         Ok(Self {
