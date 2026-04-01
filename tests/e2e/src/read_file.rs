@@ -1,7 +1,7 @@
 //! E2E test for ReadTextFile workflow with Copilot
 //!
 //! Tests whether copilot uses ACP read_text_file protocol or internal tools
-use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
+use crate::{TIMEOUT_IN_SECONDS, utilities::autocommand};
 use agent_client_protocol::{
     InitializeResponse, NewSessionResponse, PermissionOption, PromptResponse, ReadTextFileRequest,
     SessionId, ToolCall,
@@ -10,7 +10,7 @@ use hermes::{
     api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
     nvim::{autocommands::Commands, hermes},
 };
-use nvim_oxi::{conversion::FromObject, Dictionary, Function, Object};
+use nvim_oxi::{Dictionary, Function, Object, conversion::FromObject};
 use std::time::Duration;
 use tracing::info;
 
@@ -138,8 +138,7 @@ fn test_copilot_read_text_file_workflow() -> Result<(), nvim_oxi::Error> {
                             // Verify the path matches
                             let path_str = req.path.to_string_lossy().to_string();
                             assert!(
-                                path_str.contains("hermes_test_file")
-                                    || path_str == test_file_path,
+                                path_str.contains("hermes_test_file") || path_str == test_file_path,
                                 "ReadTextFile path should match test file. Got: {:?}, Expected: {:?}",
                                 req.path,
                                 test_file_path

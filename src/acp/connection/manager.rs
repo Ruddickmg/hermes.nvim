@@ -1,5 +1,5 @@
 use crate::PluginState;
-use crate::acp::connection::{Connection, stdio};
+use crate::acp::connection::{Connection, socket, stdio};
 use crate::nvim::configuration::Permissions;
 use crate::{Handler, acp::error::Error};
 use agent_client_protocol::{
@@ -16,7 +16,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 
 type ConnectionHandles = Rc<RefCell<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>;
 
-#[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
+#[derive(PartialEq, Eq, Clone, Copy, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
 pub enum Protocol {
     Socket,
     Http,
@@ -57,10 +57,15 @@ pub enum Assistant {
     Copilot,
     Opencode,
     Gemini,
-    Custom {
+    CustomStdio {
         name: String,
         command: String,
         args: Vec<String>,
+    },
+    CustomUrl {
+        name: String,
+        host: String,
+        port: u16,
     },
 }
 
@@ -70,7 +75,8 @@ impl std::fmt::Display for Assistant {
             Assistant::Copilot => write!(f, "copilot"),
             Assistant::Opencode => write!(f, "opencode"),
             Assistant::Gemini => write!(f, "gemini"),
-            Assistant::Custom { name, .. } => write!(f, "{}", name),
+            Assistant::CustomStdio { name, .. } => write!(f, "{}", name),
+            Assistant::CustomUrl { name, host, port } => write!(f, "{} ({}:{})", name, host, port),
         }
     }
 }
@@ -80,7 +86,7 @@ impl From<&str> for Assistant {
         match s.to_lowercase().as_str() {
             "copilot" => Assistant::Copilot,
             "opencode" => Assistant::Opencode,
-            _ => Assistant::Custom {
+            _ => Assistant::CustomStdio {
                 name: s.to_string(),
                 command: String::new(),
                 args: Vec::new(),
@@ -216,11 +222,7 @@ impl ConnectionManager {
                                             ))
                                         }
                                         Protocol::Socket => {
-                                            error!("Socket protocol is not yet implemented");
-                                            Err(Error::Internal(
-                                                "Socket protocol is not yet implemented"
-                                                    .to_string(),
-                                            ))
+                                            socket::connect(handler, thread_agent, receiver).await
                                         }
                                     }
                                 })
@@ -407,7 +409,7 @@ mod tests {
         let assistants: Vec<Assistant> = vec![
             Assistant::Copilot,
             Assistant::Opencode,
-            Assistant::Custom {
+            Assistant::CustomStdio {
                 name: String::from("my-claude"),
                 command: String::from("claude-acp"),
                 args: vec![String::from("--socket")],
@@ -442,6 +444,6 @@ mod tests {
     #[test]
     fn test_assistant_from_str_unknown_creates_custom() {
         let result = Assistant::from("unknown-agent");
-        assert!(matches!(result, Assistant::Custom { name, .. } if name == "unknown-agent"));
+        assert!(matches!(result, Assistant::CustomStdio { name, .. } if name == "unknown-agent"));
     }
 }

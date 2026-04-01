@@ -284,6 +284,15 @@ hermes.connect(
     args = { "--socket", "/tmp/claude.sock" },
   }
 )
+
+-- connect to TCP socket
+hermes.connect(
+    "copilot",
+    {
+        host = "localhost",
+        port = 8080,
+    }
+)
 ```
 
 > **Triggers:** [ConnectionInitialized](#connectioninitialized) autocommand upon completion.
@@ -1646,7 +1655,7 @@ Available formats:
 - [x] Allow connecting to Agents
   - [x] Via stdio
   - [ ] Via http
-  - [ ] Via linux socket
+  - [x] Via tcp socket
 - [ ] Add autocommand that triggers on all events
 - [ ] Support "unstable" ACP methods
   - [ ] model selection
@@ -1655,7 +1664,7 @@ Available formats:
     - [ ] Fork sessions
 
 -- testing
-- [ ] Create fake/mock Agent used to test agent functionality that is not currently supported by any/many ai agents
+- [x] Create fake/mock Agent used to test agent functionality that is not currently supported by any/many ai agents
 - [ ] Only test "required" methods against actual agents
   - [ ] initialize
   - [ ] authenticate

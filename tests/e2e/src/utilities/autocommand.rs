@@ -1,14 +1,14 @@
 use hermes::nvim::autocommands::Commands;
 use nvim_oxi::api::{self, opts::CreateAutocmdOpts, types::AutocmdCallbackArgs};
-use nvim_oxi::{serde::Deserializer, Object};
+use nvim_oxi::{Object, serde::Deserializer};
 use serde::de::DeserializeOwned;
-use tracing::error;
 use std::sync::mpsc;
 use std::{
     fmt::Debug,
     rc::Rc,
     time::{Duration, Instant},
 };
+use tracing::error;
 
 pub fn nvim_object_to_struct<T>(obj: Object) -> Result<T, nvim_oxi::Error>
 where
@@ -32,8 +32,8 @@ where
         .patterns(vec![pattern.as_str()])
         .callback(move |v: AutocmdCallbackArgs| {
             match nvim_object_to_struct(v.data) {
-               Ok(parsed) => sender.send(parsed).unwrap(),
-               Err(e) => error!("Error occurred while parsing: {:#?}", e),
+                Ok(parsed) => sender.send(parsed).unwrap(),
+                Err(e) => error!("Error occurred while parsing: {:#?}", e),
             };
             false
         })

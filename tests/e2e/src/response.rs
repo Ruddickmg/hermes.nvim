@@ -1,6 +1,13 @@
-use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
+use crate::{
+    TIMEOUT_IN_SECONDS,
+    utilities::{
+        autocommand,
+        mock_agent::MockAgent,
+        mock_config::{MockConfig, create_test_permission_request},
+    },
+};
 use agent_client_protocol::{
-    InitializeResponse, NewSessionResponse, PermissionOption, PromptResponse, SessionId, ToolCall,
+    InitializeResponse, NewSessionResponse, PermissionOption, SessionId, ToolCallUpdate,
 };
 use hermes::{
     api::{
@@ -8,7 +15,7 @@ use hermes::{
     },
     nvim::{autocommands::Commands, hermes},
 };
-use nvim_oxi::{conversion::FromObject, Dictionary, Function};
+use nvim_oxi::{Dictionary, Function, Object, conversion::FromObject};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tracing::info;
@@ -19,72 +26,85 @@ fn create_func<A>(plugin: Dictionary, name: &str) -> Function<A, ()> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct Permissions {
+#[serde(rename_all = "camelCase")]
+struct PermissionRequestData {
     session_id: SessionId,
     request_id: String,
-    tool_call: ToolCall,
+    tool_call: ToolCallUpdate,
     options: Vec<PermissionOption>,
 }
 
-// TODO: I can't get opencode to send a permission request, I will need to figure out another way to test this.
-#[ignore]
+/// Test that the mock agent triggers a PermissionRequest autocommand in Hermes.
+///
+/// This verifies:
+/// 1. Mock agent connects via socket protocol
+/// 2. Mock agent handles initialize + new_session
+/// 3. When prompted, mock agent sends a RequestPermissionRequest to Hermes
+/// 4. Hermes fires the PermissionRequest autocommand
 #[nvim_oxi::test]
-fn can_chose_a_response_to_a_permission_request() -> Result<(), nvim_oxi::Error> {
+fn test_permission_request_fires_with_mock_agent() -> Result<(), nvim_oxi::Error> {
+    // 1. Create mock agent configured to request permission
+    let (agent, conn_rx) = MockAgent::new();
+    {
+        let mut config = agent.config().lock().unwrap();
+        *config = MockConfig::new()
+            .set_permission_request(create_test_permission_request("mock-session"));
+    }
+    let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
+
     let dict: Dictionary = hermes()?;
     let connect = create_func::<ConnectionArgs>(dict.clone(), "connect");
     let disconnect = create_func::<DisconnectArgs>(dict.clone(), "disconnect");
     let create_session = create_func::<CreateSessionArgs>(dict.clone(), "create_session");
     let prompt = create_func::<PromptArgs>(dict.clone(), "prompt");
-    let respond = create_func::<RespondArgs>(dict.clone(), "respond");
 
+    // Set up autocommand listeners
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
         autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
     let wait_for_permission_request =
-        autocommand::listen_for_autocommand::<Permissions>(Commands::PermissionRequest);
-    let wait_for_prompt_finish =
-        autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
+        autocommand::listen_for_autocommand::<PermissionRequestData>(Commands::PermissionRequest);
 
-    connect.call((nvim_oxi::String::from("opencode"), None))?;
+    // 2. Connect to mock agent via socket protocol
+    let mut options = Dictionary::new();
+    options.insert("protocol", "socket");
+    options.insert("host", "localhost");
+    options.insert("port", mock_handle.port() as i64);
 
-    wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+    connect.call((nvim_oxi::String::from("mock-agent"), Some(options)))?;
 
+    let init_response = wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+    info!("Mock agent initialized: {:?}", init_response);
+
+    // 3. Create a session
     create_session.call(CreateSessionArgs::Default)?;
-
     let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
     let session_id = session.session_id;
-    prompt.call((
-        session_id.to_string(),
-        PromptContent::Single(hermes::api::ContentBlockType::Text {
-            text: "look up the time in france online".to_string(),
-        }),
-    ))?;
+    info!("Mock agent session created: {}", session_id);
 
-    let mut permission_request =
-        wait_for_permission_request(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
-    info!("Making permission request: {:?}", permission_request);
+    // 4. Send a prompt - mock agent is configured to request permission
+    let mut content_dict = Dictionary::new();
+    content_dict.insert("type", "text");
+    content_dict.insert("text", "Run a tool that needs permission");
+    let content = PromptContent::Single(FromObject::from_object(Object::from(content_dict))?);
 
-    let response = respond.call((
-        permission_request.request_id,
+    prompt.call((session_id.to_string(), content))?;
+
+    // 5. Wait for PermissionRequest autocommand
+    let permission_request = wait_for_permission_request(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+    info!(
+        "Received PermissionRequest autocommand: {:?}",
         permission_request
-            .options
-            .pop()
-            .unwrap()
-            .option_id
-            .to_string()
-            .into(),
-    ));
-    info!("Responded to permission request: {:?}", response);
-    let finished_prompt = wait_for_prompt_finish(Duration::from_secs(TIMEOUT_IN_SECONDS));
+    );
 
-    info!("Finished prompt response: {:?}", finished_prompt);
-
+    // 6. Cleanup - disconnect without responding to permission request
     disconnect.call(DisconnectArgs::All)?;
+    mock_handle.close();
 
     assert!(
-        finished_prompt.is_ok(),
-        "Respond autocommand should fire after set_mode call"
+        !permission_request.request_id.is_empty(),
+        "PermissionRequest should have a request_id"
     );
 
     Ok(())

@@ -35,6 +35,12 @@ impl<T> From<SendError<T>> for Error {
     }
 }
 
+impl From<nvim_oxi::conversion::Error> for Error {
+    fn from(e: nvim_oxi::conversion::Error) -> Self {
+        Error::InvalidInput(e.to_string())
+    }
+}
+
 impl From<Error> for agent_client_protocol::Error {
     fn from(e: Error) -> Self {
         match e {

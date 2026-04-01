@@ -8,7 +8,7 @@ use hermes::nvim::state::PluginState;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 
 /// Helper function to create a WriteTextFileRequest
 fn create_write_request(path: &Path, content: &str) -> WriteTextFileRequest {
@@ -24,10 +24,11 @@ fn open_buffer_marked_modified() -> nvim_oxi::Result<()> {
     nvim_oxi::api::command(&format!("edit {}", temp_file.path().display()))?;
 
     // Create Requests handler and add a write file request
-    let requests =
-        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+    let requests = Arc::new(
+        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?);
+        })?,
+    );
     let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
         sender,
@@ -75,10 +76,11 @@ fn open_buffer_disk_content_unchanged() -> nvim_oxi::Result<()> {
     nvim_oxi::api::command(&format!("edit {}", temp_file.path().display()))?;
 
     // Create Requests handler and add a write file request
-    let requests =
-        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+    let requests = Arc::new(
+        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?);
+        })?,
+    );
     let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
         sender,
@@ -107,10 +109,11 @@ fn new_file_created() -> nvim_oxi::Result<()> {
     let new_file = temp_dir.child("new_file.txt");
 
     // Create Requests handler and add a write file request
-    let requests =
-        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+    let requests = Arc::new(
+        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?);
+        })?,
+    );
     let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
         sender,
@@ -137,10 +140,11 @@ fn file_exists_but_closed() -> nvim_oxi::Result<()> {
     temp_file.write_str("old content").unwrap();
 
     // Create Requests handler and add a write file request
-    let requests =
-        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+    let requests = Arc::new(
+        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?);
+        })?,
+    );
     let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
         sender,
@@ -167,10 +171,11 @@ fn responder_send_failure_returns_error() -> nvim_oxi::Result<()> {
     let temp_file = NamedTempFile::new("send_fail.txt").unwrap();
 
     // Create Requests handler and add a write file request
-    let requests =
-        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+    let requests = Arc::new(
+        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?);
+        })?,
+    );
     let (sender, receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder =
         Responder::WriteFileResponse(sender, create_write_request(temp_file.path(), "content"));
@@ -188,10 +193,11 @@ fn responder_send_failure_contains_acp_message() -> nvim_oxi::Result<()> {
     let temp_file = NamedTempFile::new("send_fail.txt").unwrap();
 
     // Create Requests handler and add a write file request
-    let requests =
-        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+    let requests = Arc::new(
+        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?);
+        })?,
+    );
     let (sender, receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder =
         Responder::WriteFileResponse(sender, create_write_request(temp_file.path(), "content"));
@@ -214,10 +220,11 @@ fn buffer_already_open_marked_modified() -> nvim_oxi::Result<()> {
     nvim_oxi::api::command(&format!("edit {}", temp_file.path().display()))?;
 
     // Create Requests handler and add a write file request
-    let requests =
-        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+    let requests = Arc::new(
+        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?);
+        })?,
+    );
     let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
         sender,
@@ -261,10 +268,11 @@ fn buffer_already_open_disk_unchanged() -> nvim_oxi::Result<()> {
     nvim_oxi::api::command(&format!("edit {}", temp_file.path().display()))?;
 
     // Create Requests handler and add a write file request
-    let requests =
-        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+    let requests = Arc::new(
+        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?);
+        })?,
+    );
     let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
         sender,
@@ -296,10 +304,11 @@ fn buffer_already_open_response_sent() -> nvim_oxi::Result<()> {
     nvim_oxi::api::command(&format!("edit {}", temp_file.path().display()))?;
 
     // Create Requests handler and add a write file request
-    let requests =
-        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+    let requests = Arc::new(
+        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?);
+        })?,
+    );
     let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
         sender,
@@ -326,10 +335,11 @@ fn write_file_cleanup_request_exists_before_response() -> nvim_oxi::Result<()> {
     let temp_file = NamedTempFile::new("default_cleanup.txt").unwrap();
 
     // Use Requests handler to verify cleanup
-    let requests =
-        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+    let requests = Arc::new(
+        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?);
+        })?,
+    );
 
     let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
@@ -349,10 +359,11 @@ fn write_file_cleanup_default_response_succeeds() -> nvim_oxi::Result<()> {
     let temp_file = NamedTempFile::new("default_cleanup.txt").unwrap();
 
     // Use Requests handler to verify cleanup
-    let requests =
-        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+    let requests = Arc::new(
+        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?);
+        })?,
+    );
 
     let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
@@ -373,10 +384,11 @@ fn write_file_cleanup_request_removed_after_response() -> nvim_oxi::Result<()> {
     let temp_file = NamedTempFile::new("default_cleanup.txt").unwrap();
 
     // Use Requests handler to verify cleanup
-    let requests =
-        Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+    let requests = Arc::new(
+        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?);
+        })?,
+    );
 
     let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(

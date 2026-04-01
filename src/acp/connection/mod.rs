@@ -1,4 +1,5 @@
 pub mod manager;
+pub mod socket;
 pub mod stdio;
 pub use manager::*;
 
