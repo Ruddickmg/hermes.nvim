@@ -23,7 +23,10 @@ impl<T> NvimMessenger<T> {
                 // ANY panic that crosses this boundary will abort the process.
                 // We use catch_unwind per-item so a panic on one item does not
                 // prevent remaining queued items from being processed.
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| callback(data))).ok();
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    callback(data).into_result().ok()
+                }))
+                .ok();
             }
         })
         .map_err(|e| Error::Internal(e.to_string()))?;
