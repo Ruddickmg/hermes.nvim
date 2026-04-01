@@ -89,3 +89,43 @@ fn can_chose_a_response_to_a_permission_request() -> Result<(), nvim_oxi::Error>
 
     Ok(())
 }
+
+// Test that respond with invalid UUID doesn't crash
+#[nvim_oxi::test]
+fn respond_with_invalid_uuid_does_not_crash() -> Result<(), nvim_oxi::Error> {
+    let dict: Dictionary = hermes()?;
+    let respond = create_func::<RespondArgs>(dict.clone(), "respond");
+
+    // Call respond with an invalid UUID format - should log error and return Ok
+    let result = respond.call((
+        "invalid-uuid-not-valid".to_string(),
+        nvim_oxi::Object::from("test response data"),
+    ));
+
+    assert!(
+        result.is_ok(),
+        "respond with invalid UUID should return Ok, not crash"
+    );
+
+    Ok(())
+}
+
+// Test that respond with unknown request ID doesn't crash
+#[nvim_oxi::test]
+fn respond_with_unknown_request_id_does_not_crash() -> Result<(), nvim_oxi::Error> {
+    let dict: Dictionary = hermes()?;
+    let respond = create_func::<RespondArgs>(dict.clone(), "respond");
+
+    // Call respond with a valid UUID format but unknown request ID
+    let result = respond.call((
+        "550e8400-e29b-41d4-a716-446655440000".to_string(),
+        nvim_oxi::Object::from("test response data"),
+    ));
+
+    assert!(
+        result.is_ok(),
+        "respond with unknown request ID should return Ok, not crash"
+    );
+
+    Ok(())
+}
