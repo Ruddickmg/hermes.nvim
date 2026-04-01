@@ -2,7 +2,6 @@ use crate::acp::{Result, error::Error};
 use nvim_oxi::IntoResult;
 use nvim_oxi::libuv::AsyncHandle;
 use std::sync::Arc;
-use tracing::error;
 
 #[derive(Clone)]
 pub struct NvimMessenger<T: 'static> {
