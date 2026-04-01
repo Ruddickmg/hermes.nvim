@@ -28,7 +28,7 @@ impl<T> NvimMessenger<T> {
                 // infrastructure is broken, we can't log. Silently swallow instead.
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     if let Err(err) = callback(data).into_result() {
-                        error!("Error in NvimHandler callback: {}", err);
+                        error!("Error in NvimMessenger callback: {}", err);
                     }
                 }))
                 .ok();
