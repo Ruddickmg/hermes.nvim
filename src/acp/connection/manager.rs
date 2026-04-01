@@ -305,11 +305,11 @@ impl ConnectionManager {
 
 impl Drop for ConnectionManager {
     fn drop(&mut self) {
-        debug!("ConnectionManager Drop called");
-        self.close_all()
-            .inspect_err(|e| error!("Error while closing connections in Drop: {:#?}", e))
-            .ok();
-        debug!("ConnectionManager Drop completed");
+        debug!("ConnectionManager Drop called - initiating cleanup");
+        match self.close_all() {
+            Ok(_) => debug!("ConnectionManager cleanup completed successfully"),
+            Err(e) => error!("ConnectionManager cleanup failed: {:?}", e),
+        }
     }
 }
 
