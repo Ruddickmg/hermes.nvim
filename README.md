@@ -175,7 +175,8 @@ Shows current Hermes configuration settings.
 
 Hermes exposes the following functions for sending requests to AI assistants.
 
-Methods marked “Optional” are implemented by Hermes but are not mandatory for agent implementations.
+> [!WARNING]
+> Methods marked “Optional” are implemented by Hermes but are not mandatory for agent implementations.
 
 ### Setup
 
@@ -328,6 +329,83 @@ vim.api.nvim_create_autocmd("User", {
 
 > **Triggers:** [Authenticated](#authenticated) autocommand upon completion.
 
+### Prompt
+
+Send prompts to the agent 
+
+There are five types of prompts you can send to an agent
+ - [text](https://agentclientprotocol.com/protocol/content#text-content): Human readable prompts
+ - [link](https://agentclientprotocol.com/protocol/content#resource-link): Links to resources (url, file path, etc)
+ - [embedded](https://agentclientprotocol.com/protocol/content#embedded-resource): Similar to a link, but including the contents of the resource link (preferred over link if available) 
+ - [image](https://agentclientprotocol.com/protocol/content#image-content): An image (encoded as a base64)
+ - [audio](https://agentclientprotocol.com/protocol/content#audio-content): Audio content for communication (encoded as base64)
+
+```lua
+local hermes = require("hermes")
+local sessionId = "current-session-id";
+
+-- single prompt call signature
+hermes.prompt(sessionId, {
+  type = "text",
+  text = "What time is it?"
+})
+
+-- multiple prompt call signature
+hermes.prompt(sessionId, {
+  {
+  type = "text",
+  text = "What time is it?"
+  },
+  {
+  type = "link",
+  name = "Example file",
+  uri = "/path/to/example.txt"
+  },
+  { -- text
+  type = "embedded",
+  resource = {
+    uri = "file:///home/user/script.py",
+    mimeType = "text/x-python",
+    text = "def hello():\n    print('Hello, world!')"
+  }
+  },
+  { -- blob
+  type = "embedded",
+  resource = {
+    uri = "file:///home/user/script.py",
+    mimeType = "application/pdf",
+    blob = "Base64-encoded binary data"
+  }
+  },
+  {
+  type = "image",
+  data = "base64-encoded-image-data",
+  mimeType = "image/png"
+  },
+  {
+  type = "audio",
+  data = "base64-encoded-audio-data",
+  mimeType = "audio/wav"
+  }
+}
+
+-- example
+vim.api.nvim_create_autocmd("User", {
+  group = "hermes",
+  pattern = "SessionCreated",
+  callback = function(args)
+    local sessionId = args.data.sessionId
+
+    hermes.prompt(sessionId, {
+      type = "text",
+      text = "What time is it?"
+    })
+  end,
+})
+```
+
+> **Triggers:** [Prompted](#prompted) autocommand upon completion.
+
 ### Create Session
 
 Create a new session. If no arguments are provided, the session defaults to either the project root or the current directory. 
@@ -454,83 +532,6 @@ vim.api.nvim_create_autocmd("User", {
 ```
 
 > **Triggers:** [SessionsListed](#sessionslisted) autocommand upon completion
-
-### Prompt
-
-Send prompts to the agent 
-
-There are five types of prompts you can send to an agent
- - [text](https://agentclientprotocol.com/protocol/content#text-content): Human readable prompts
- - [link](https://agentclientprotocol.com/protocol/content#resource-link): Links to resources (url, file path, etc)
- - [embedded](https://agentclientprotocol.com/protocol/content#embedded-resource): Similar to a link, but including the contents of the resource link (preferred over link if available) 
- - [image](https://agentclientprotocol.com/protocol/content#image-content): An image (encoded as a base64)
- - [audio](https://agentclientprotocol.com/protocol/content#audio-content): Audio content for communication (encoded as base64)
-
-```lua
-local hermes = require("hermes")
-local sessionId = "current-session-id";
-
--- single prompt call signature
-hermes.prompt(sessionId, {
-  type = "text",
-  text = "What time is it?"
-})
-
--- multiple prompt call signature
-hermes.prompt(sessionId, {
-  {
-  type = "text",
-  text = "What time is it?"
-  },
-  {
-  type = "link",
-  name = "Example file",
-  uri = "/path/to/example.txt"
-  },
-  { -- text
-  type = "embedded",
-  resource = {
-    uri = "file:///home/user/script.py",
-    mimeType = "text/x-python",
-    text = "def hello():\n    print('Hello, world!')"
-  }
-  },
-  { -- blob
-  type = "embedded",
-  resource = {
-    uri = "file:///home/user/script.py",
-    mimeType = "application/pdf",
-    blob = "Base64-encoded binary data"
-  }
-  },
-  {
-  type = "image",
-  data = "base64-encoded-image-data",
-  mimeType = "image/png"
-  },
-  {
-  type = "audio",
-  data = "base64-encoded-audio-data",
-  mimeType = "audio/wav"
-  }
-}
-
--- example
-vim.api.nvim_create_autocmd("User", {
-  group = "hermes",
-  pattern = "SessionCreated",
-  callback = function(args)
-    local sessionId = args.data.sessionId
-
-    hermes.prompt(sessionId, {
-      type = "text",
-      text = "What time is it?"
-    })
-  end,
-})
-```
-
-> **Triggers:** [Prompted](#prompted) autocommand upon completion.
 
 ### Cancel (**Optional**)
 
@@ -1637,6 +1638,7 @@ Available formats:
 ## TODO:
 
 -- infra
+- [ ] consolidate api generation logic
 - [ ] use smol instead of tokio to reduce build size
 - [ ] use async for all the things
 
@@ -1655,6 +1657,10 @@ Available formats:
 -- testing
 - [ ] Create fake/mock Agent used to test agent functionality that is not currently supported by any/many ai agents
 - [ ] Only test "required" methods against actual agents
+  - [ ] initialize
+  - [ ] authenticate
+  - [ ] create_session
+  - [ ] prompt
 - [ ] Create an e2e test suite for running against each supported agent to confirm integration
 
 -- nice to haves
