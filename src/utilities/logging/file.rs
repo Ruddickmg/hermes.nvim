@@ -155,17 +155,6 @@ impl Write for SizeBasedFileAppender {
     }
 }
 
-/// Make the appender usable with tracing_subscriber
-impl tracing_subscriber::fmt::MakeWriter<'_> for SizeBasedFileAppender {
-    type Writer = Self;
-
-    fn make_writer(&self) -> Self::Writer {
-        // Clone is expensive for files, so we need to handle this differently
-        // For now, return a reference to self (this requires Arc<Mutex<>> wrapper)
-        unimplemented!("Use Arc<Mutex<SizeBasedFileAppender>> for thread-safe access")
-    }
-}
-
 /// Factory function to create a size-based appender
 pub fn size_based(
     path: impl AsRef<Path>,

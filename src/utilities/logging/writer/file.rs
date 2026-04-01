@@ -42,11 +42,15 @@ impl LazyFileWriter {
         })
     }
 
-    fn get_or_init(&self) -> &FileWriter {
-        self.inner.get_or_init(|| {
+    fn get_or_init(&self) -> Option<&FileWriter> {
+        // Use get_or_init but handle the case where FileWriter creation fails.
+        // We store the result in a separate OnceLock to avoid poisoning the init.
+        if self.inner.get().is_none() {
             FileWriter::new(&self.path, self.max_size, self.max_files)
-                .expect("Failed to create file writer")
-        })
+                .ok()
+                .map(|writer| self.inner.set(writer).ok());
+        }
+        self.inner.get()
     }
 
     /// Returns the number of messages dropped due to channel issues
@@ -74,10 +78,12 @@ unsafe impl Send for LazyFileWriter {}
 unsafe impl Sync for LazyFileWriter {}
 
 impl<'writer> MakeWriter<'writer> for LazyFileWriter {
-    type Writer = FileWriter;
+    type Writer = super::MaybeWriter<FileWriter>;
 
     fn make_writer(&self) -> Self::Writer {
-        self.get_or_init().clone()
+        super::MaybeWriter {
+            inner: self.get_or_init().cloned(),
+        }
     }
 }
 

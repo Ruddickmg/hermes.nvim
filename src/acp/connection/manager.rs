@@ -1,7 +1,7 @@
-use crate::acp::connection::{stdio, Connection};
-use crate::nvim::configuration::Permissions;
 use crate::PluginState;
-use crate::{acp::error::Error, Handler};
+use crate::acp::connection::{Connection, stdio};
+use crate::nvim::configuration::Permissions;
+use crate::{Handler, acp::error::Error};
 use agent_client_protocol::{
     ClientCapabilities, FileSystemCapabilities, Implementation, InitializeRequest, ProtocolVersion,
 };
@@ -204,12 +204,25 @@ impl ConnectionManager {
                                     .map_err(|e| Error::Internal(e.to_string()))?;
 
                                 trace!("Starting tokio runtime");
-                                runtime.block_on(match protocol {
-                                    Protocol::Stdio => {
-                                        stdio::connect(handler, thread_agent, receiver)
+                                runtime.block_on(async {
+                                    match protocol {
+                                        Protocol::Stdio => {
+                                            stdio::connect(handler, thread_agent, receiver).await
+                                        }
+                                        Protocol::Http => {
+                                            error!("HTTP protocol is not yet implemented");
+                                            Err(Error::Internal(
+                                                "HTTP protocol is not yet implemented".to_string(),
+                                            ))
+                                        }
+                                        Protocol::Socket => {
+                                            error!("Socket protocol is not yet implemented");
+                                            Err(Error::Internal(
+                                                "Socket protocol is not yet implemented"
+                                                    .to_string(),
+                                            ))
+                                        }
                                     }
-                                    Protocol::Http => unimplemented!(),
-                                    Protocol::Socket => unimplemented!(),
                                 })
                             }))
                             .map_err(|_| {
@@ -291,7 +304,7 @@ impl ConnectionManager {
                 true => {
                     break handle
                         .join()
-                        .map_err(|e| format!("Thread panicked: {:?}", e))
+                        .map_err(|e| format!("Thread panicked: {:?}", e));
                 }
                 false => {
                     // Thread not finished, yield to allow it to complete
@@ -432,5 +445,166 @@ mod tests {
     fn test_assistant_from_str_unknown_creates_custom() {
         let result = Assistant::from("unknown-agent");
         assert!(matches!(result, Assistant::Custom { name, .. } if name == "unknown-agent"));
+    }
+
+    #[test]
+    fn test_connection_manager_new_creates_empty_manager() {
+        let state = Arc::new(Mutex::new(PluginState::new()));
+        let manager = ConnectionManager::new(state);
+
+        assert!(manager.connection.is_empty());
+        assert!(manager.handles.borrow().is_empty());
+    }
+
+    #[test]
+    fn test_get_connection_returns_none_for_nonexistent() {
+        let state = Arc::new(Mutex::new(PluginState::new()));
+        let manager = ConnectionManager::new(state);
+
+        let result = manager.get_connection(&Assistant::Copilot);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_get_current_connection_returns_none_when_no_agent() {
+        let state = Arc::new(Mutex::new(PluginState::new()));
+        let manager = ConnectionManager::new(state);
+
+        let result = manager.get_current_connection();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_get_permissions_returns_default_permissions() {
+        let state = Arc::new(Mutex::new(PluginState::new()));
+        let manager = ConnectionManager::new(state);
+
+        let permissions = manager.get_permissions();
+        assert_eq!(
+            permissions.fs_read_access, true,
+            "Default fs_read_access should be true"
+        );
+        assert_eq!(
+            permissions.fs_write_access, true,
+            "Default fs_write_access should be true"
+        );
+        assert_eq!(
+            permissions.terminal_access, true,
+            "Default terminal_access should be true"
+        );
+    }
+
+    #[test]
+    fn test_close_all_with_no_connections_succeeds() {
+        let state = Arc::new(Mutex::new(PluginState::new()));
+        let mut manager = ConnectionManager::new(state);
+
+        let result = manager.close_all();
+        assert!(
+            result.is_ok(),
+            "close_all should succeed with no connections"
+        );
+    }
+
+    #[test]
+    fn test_disconnect_empty_list_succeeds() {
+        let state = Arc::new(Mutex::new(PluginState::new()));
+        let mut manager = ConnectionManager::new(state);
+
+        let result = manager.disconnect(vec![]);
+        assert!(result.is_ok(), "disconnect with empty list should succeed");
+    }
+
+    #[test]
+    fn test_disconnect_nonexistent_assistant_returns_error() {
+        let state = Arc::new(Mutex::new(PluginState::new()));
+        let mut manager = ConnectionManager::new(state);
+
+        let result = manager.disconnect(vec![Assistant::Copilot]);
+        assert!(
+            result.is_err(),
+            "disconnect should fail for non-existent assistant"
+        );
+    }
+
+    #[test]
+    fn test_disconnect_multiple_nonexistent_returns_partial_error() {
+        let state = Arc::new(Mutex::new(PluginState::new()));
+        let mut manager = ConnectionManager::new(state);
+
+        let result = manager.disconnect(vec![Assistant::Copilot, Assistant::Opencode]);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("copilot") || err_msg.contains("opencode"));
+    }
+
+    #[test]
+    fn test_assistant_display_gemini() {
+        let assistant = Assistant::Gemini;
+        assert_eq!(format!("{}", assistant), "gemini");
+    }
+
+    #[test]
+    fn test_connection_details_default() {
+        let details = ConnectionDetails::default();
+        assert_eq!(details.agent, Assistant::Copilot);
+        assert_eq!(details.protocol, Protocol::Stdio);
+    }
+
+    #[test]
+    fn test_set_and_get_agent() {
+        let state = Arc::new(Mutex::new(PluginState::new()));
+        let manager = ConnectionManager::new(state);
+
+        manager.set_agent(Assistant::Opencode);
+        let agent = manager.get_agent();
+        assert_eq!(agent, Assistant::Opencode);
+    }
+
+    #[test]
+    fn test_get_agent_returns_default_when_not_set() {
+        let state = Arc::new(Mutex::new(PluginState::new()));
+        let manager = ConnectionManager::new(state);
+
+        let agent = manager.get_agent();
+        assert_eq!(agent, Assistant::default());
+    }
+
+    #[test]
+    fn test_set_agent_updates_existing_agent() {
+        let state = Arc::new(Mutex::new(PluginState::new()));
+        let manager = ConnectionManager::new(state);
+
+        manager.set_agent(Assistant::Gemini);
+        assert_eq!(manager.get_agent(), Assistant::Gemini);
+
+        manager.set_agent(Assistant::Copilot);
+        assert_eq!(manager.get_agent(), Assistant::Copilot);
+    }
+
+    #[test]
+    fn test_drop_with_no_connections_completes_successfully() {
+        let state = Arc::new(Mutex::new(PluginState::new()));
+        let manager = ConnectionManager::new(state);
+        drop(manager);
+    }
+
+    #[test]
+    fn test_disconnect_skips_successful_disconnects_in_partial_failure() {
+        let state = Arc::new(Mutex::new(PluginState::new()));
+        let mut manager = ConnectionManager::new(state);
+
+        let result = manager.disconnect(vec![
+            Assistant::Copilot,
+            Assistant::Opencode,
+            Assistant::Gemini,
+        ]);
+        assert!(result.is_err());
+        let err_str = result.unwrap_err().to_string();
+        assert!(
+            err_str.contains("copilot")
+                || err_str.contains("opencode")
+                || err_str.contains("gemini")
+        );
     }
 }

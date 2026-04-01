@@ -1,6 +1,8 @@
 use core::fmt;
 use std::fmt::{Debug, Display};
 
+use crate::acp::error::Error;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Commands {
     // Permission and tool commands
@@ -52,66 +54,70 @@ pub enum Commands {
     AgentTextThought,
 }
 
-impl From<&str> for Commands {
-    fn from(value: &str) -> Self {
+impl TryFrom<&str> for Commands {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
             // Permission and tool commands
-            "CreateTerminal" => Commands::TerminalCreate,
-            "TerminalCreate" => Commands::TerminalCreate,
-            "TerminalRelease" => Commands::TerminalRelease,
-            "TerminalKill" => Commands::TerminalKill,
-            "TerminalExit" => Commands::TerminalExit,
-            "TerminalOutput" => Commands::TerminalOutput,
-            "WriteTextFile" => Commands::WriteTextFile,
-            "ReadTextFile" => Commands::ReadTextFile,
-            "PermissionRequest" => Commands::PermissionRequest,
-            "ToolCall" => Commands::ToolCall,
-            "ToolCallUpdate" => Commands::ToolCallUpdate,
-            "Plan" => Commands::Plan,
-            "AvailableCommands" => Commands::AvailableCommands,
-            "ModeCurrent" => Commands::ModeCurrent,
-            "ConfigurationOption" => Commands::ConfigurationOption,
+            "CreateTerminal" => Ok(Commands::TerminalCreate),
+            "TerminalCreate" => Ok(Commands::TerminalCreate),
+            "TerminalRelease" => Ok(Commands::TerminalRelease),
+            "TerminalKill" => Ok(Commands::TerminalKill),
+            "TerminalExit" => Ok(Commands::TerminalExit),
+            "TerminalOutput" => Ok(Commands::TerminalOutput),
+            "WriteTextFile" => Ok(Commands::WriteTextFile),
+            "ReadTextFile" => Ok(Commands::ReadTextFile),
+            "PermissionRequest" => Ok(Commands::PermissionRequest),
+            "ToolCall" => Ok(Commands::ToolCall),
+            "ToolCallUpdate" => Ok(Commands::ToolCallUpdate),
+            "Plan" => Ok(Commands::Plan),
+            "AvailableCommands" => Ok(Commands::AvailableCommands),
+            "ModeCurrent" => Ok(Commands::ModeCurrent),
+            "ConfigurationOption" => Ok(Commands::ConfigurationOption),
 
             // Session lifecycle commands
-            "ConnectionInitialized" => Commands::ConnectionInitialized,
-            "SessionCreated" => Commands::SessionCreated,
-            "Prompted" => Commands::Prompted,
-            "Authenticated" => Commands::Authenticated,
-            "ConfigurationUpdated" => Commands::ConfigurationUpdated,
-            "ModeUpdated" => Commands::ModeUpdated,
-            "SessionLoaded" => Commands::SessionLoaded,
-            "SessionsListed" => Commands::SessionsListed,
-            "SessionForked" => Commands::SessionForked,
-            "SessionResumed" => Commands::SessionResumed,
-            "SessionModelUpdated" => Commands::SessionModelUpdated,
-            "UsageUpdate" => Commands::UsageUpdate,
+            "ConnectionInitialized" => Ok(Commands::ConnectionInitialized),
+            "SessionCreated" => Ok(Commands::SessionCreated),
+            "Prompted" => Ok(Commands::Prompted),
+            "Authenticated" => Ok(Commands::Authenticated),
+            "ConfigurationUpdated" => Ok(Commands::ConfigurationUpdated),
+            "ModeUpdated" => Ok(Commands::ModeUpdated),
+            "SessionLoaded" => Ok(Commands::SessionLoaded),
+            "SessionsListed" => Ok(Commands::SessionsListed),
+            "SessionForked" => Ok(Commands::SessionForked),
+            "SessionResumed" => Ok(Commands::SessionResumed),
+            "SessionModelUpdated" => Ok(Commands::SessionModelUpdated),
+            "UsageUpdate" => Ok(Commands::UsageUpdate),
 
             // User message commands
-            "UserResourceMessage" => Commands::UserResourceMessage,
-            "UserResourceLinkMessage" => Commands::UserResourceLinkMessage,
-            "UserImageMessage" => Commands::UserImageMessage,
-            "UserTextMessage" => Commands::UserTextMessage,
+            "UserResourceMessage" => Ok(Commands::UserResourceMessage),
+            "UserResourceLinkMessage" => Ok(Commands::UserResourceLinkMessage),
+            "UserImageMessage" => Ok(Commands::UserImageMessage),
+            "UserTextMessage" => Ok(Commands::UserTextMessage),
 
             // Agent message commands
-            "AgentResourceMessage" => Commands::AgentResourceMessage,
-            "AgentResourceLinkMessage" => Commands::AgentResourceLinkMessage,
-            "AgentImageMessage" => Commands::AgentImageMessage,
-            "AgentTextMessage" => Commands::AgentTextMessage,
+            "AgentResourceMessage" => Ok(Commands::AgentResourceMessage),
+            "AgentResourceLinkMessage" => Ok(Commands::AgentResourceLinkMessage),
+            "AgentImageMessage" => Ok(Commands::AgentImageMessage),
+            "AgentTextMessage" => Ok(Commands::AgentTextMessage),
 
             // Agent thought commands
-            "AgentResourceThought" => Commands::AgentResourceThought,
-            "AgentResourceLinkThought" => Commands::AgentResourceLinkThought,
-            "AgentImageThought" => Commands::AgentImageThought,
-            "AgentTextThought" => Commands::AgentTextThought,
+            "AgentResourceThought" => Ok(Commands::AgentResourceThought),
+            "AgentResourceLinkThought" => Ok(Commands::AgentResourceLinkThought),
+            "AgentImageThought" => Ok(Commands::AgentImageThought),
+            "AgentTextThought" => Ok(Commands::AgentTextThought),
 
-            _ => panic!("Unknown command: {}", value),
+            _ => Err(Error::InvalidInput(format!("Unknown command: {}", value))),
         }
     }
 }
 
-impl From<String> for Commands {
-    fn from(value: String) -> Self {
-        Self::from(value.as_str())
+impl TryFrom<String> for Commands {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_str())
     }
 }
 
@@ -130,26 +136,48 @@ mod tests {
     fn test_commands_from_str_basic_variants() {
         // Test predefined variants from different categories
         assert_eq!(
-            Commands::from("PermissionRequest"),
+            Commands::try_from("PermissionRequest").unwrap(),
             Commands::PermissionRequest
         );
-        assert_eq!(Commands::from("ToolCall"), Commands::ToolCall);
+        assert_eq!(Commands::try_from("ToolCall").unwrap(), Commands::ToolCall);
         assert_eq!(
-            Commands::from("ConnectionInitialized"),
+            Commands::try_from("ConnectionInitialized").unwrap(),
             Commands::ConnectionInitialized
         );
-        assert_eq!(Commands::from("UserTextMessage"), Commands::UserTextMessage);
         assert_eq!(
-            Commands::from("AgentImageMessage"),
+            Commands::try_from("UserTextMessage").unwrap(),
+            Commands::UserTextMessage
+        );
+        assert_eq!(
+            Commands::try_from("AgentImageMessage").unwrap(),
             Commands::AgentImageMessage
         );
         // Test UsageUpdate
-        assert_eq!(Commands::from("UsageUpdate"), Commands::UsageUpdate);
+        assert_eq!(
+            Commands::try_from("UsageUpdate").unwrap(),
+            Commands::UsageUpdate
+        );
     }
 
     #[test]
-    #[should_panic(expected = "Unknown command: InvalidCommand")]
-    fn test_commands_from_str_unknown_command_panics() {
-        let _ = Commands::from("InvalidCommand");
+    fn test_commands_from_str_unknown_command_returns_error() {
+        let result = Commands::try_from("InvalidCommand");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Unknown command"));
+    }
+
+    #[test]
+    fn test_commands_from_string_delegates_to_str() {
+        assert_eq!(
+            Commands::try_from("ToolCall".to_string()).unwrap(),
+            Commands::ToolCall
+        );
+    }
+
+    #[test]
+    fn test_commands_from_string_unknown_returns_error() {
+        let result = Commands::try_from("NotARealCommand".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("NotARealCommand"));
     }
 }
