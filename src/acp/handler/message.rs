@@ -23,6 +23,7 @@ pub async fn handle_request(
     while let Some(msg) = receiver.recv().await {
         debug!("Received request from '{}': {:#?}", agent, msg);
         match msg {
+            UserRequest::Close => break,
             UserRequest::Initialize(request) => {
                 let response = connection.initialize(request).await?;
                 client.initialized(agent, response).await?;

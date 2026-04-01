@@ -80,3 +80,111 @@ impl From<Error> for nvim_oxi::Error {
         nvim_oxi::Error::Api(api::Error::Other(e.to_string()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use std::sync::mpsc::channel;
+
+    #[test]
+    fn test_error_display_connection() {
+        let err = Error::Connection("connection failed".to_string());
+        assert_eq!(format!("{}", err), "Connection error: connection failed");
+    }
+
+    #[test]
+    fn test_error_display_permissions() {
+        let err = Error::Permissions("not allowed".to_string());
+        assert_eq!(format!("{}", err), "Permissions error: not allowed");
+    }
+
+    #[test]
+    fn test_error_display_internal() {
+        let err = Error::Internal("something went wrong".to_string());
+        assert_eq!(format!("{}", err), "Internal error: something went wrong");
+    }
+
+    #[test]
+    fn test_error_display_invalid_input() {
+        let err = Error::InvalidInput("bad data".to_string());
+        assert_eq!(format!("{}", err), "Invalid input provided: bad data");
+    }
+
+    #[test]
+    fn test_error_display_no_listener_contains_message() {
+        let err = Error::NoListenerAttached(Commands::ToolCall);
+        let display = format!("{}", err);
+        assert!(display.contains("No listener attached"));
+    }
+
+    #[test]
+    fn test_error_display_no_listener_contains_command() {
+        let err = Error::NoListenerAttached(Commands::ToolCall);
+        let display = format!("{}", err);
+        assert!(display.contains("ToolCall"));
+    }
+
+    #[test]
+    fn test_from_send_error() {
+        let (sender, _receiver) = channel::<String>();
+        drop(_receiver);
+        let result = sender.send("test".to_string());
+        if let Err(send_err) = result {
+            let error: Error = send_err.into();
+            assert!(matches!(error, Error::Internal(_)));
+        }
+    }
+
+    #[test]
+    fn test_from_serde_json_error() {
+        let json_result: Result<serde_json::Value, _> = serde_json::from_str("invalid json");
+        if let Err(json_err) = json_result {
+            let error: Error = json_err.into();
+            assert!(matches!(error, Error::Internal(_)));
+        }
+    }
+
+    #[test]
+    fn test_from_error_to_acp_error_no_listener() {
+        let err = Error::NoListenerAttached(Commands::PermissionRequest);
+        let acp_err: AcpError = err.into();
+        // Just verify it converts successfully (exact message content may vary)
+        let _ = acp_err.to_string();
+    }
+
+    #[test]
+    fn test_from_error_to_acp_error_invalid_input() {
+        let err = Error::InvalidInput("bad".to_string());
+        let acp_err: AcpError = err.into();
+        // Just verify it converts successfully
+        let _ = acp_err.to_string();
+    }
+
+    #[test]
+    fn test_from_error_to_acp_error_internal() {
+        let err = Error::Internal("test".to_string());
+        let acp_err: AcpError = err.into();
+        // Just verify it converts successfully
+        let _ = acp_err.to_string();
+    }
+
+    #[test]
+    fn test_from_error_to_lua_error_contains_message() {
+        let err = Error::Internal("test error".to_string());
+        let lua_err: lua::Error = err.into();
+        match lua_err {
+            lua::Error::RuntimeError(msg) => {
+                assert!(msg.contains("test error"));
+            }
+            _ => panic!("Expected RuntimeError"),
+        }
+    }
+
+    #[test]
+    fn test_from_acp_error_to_error() {
+        let acp_err = AcpError::internal_error();
+        let err: Error = acp_err.into();
+        assert!(matches!(err, Error::Internal(_)));
+    }
+}

@@ -30,8 +30,6 @@ impl MessageMessenger {
                 // CRITICAL: This callback runs on Neovim's main thread
                 // We use catch_unwind per-item to prevent panics from crossing the FFI boundary
                 // and ensure remaining messages are processed even if one panics.
-                // Note: We do NOT attempt to log panics here - if the logging
-                // infrastructure is broken, we can't log. Silently swallow instead.
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     Self::send_message(message);
                 }))

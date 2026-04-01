@@ -121,3 +121,277 @@ impl nvim_oxi::conversion::FromObject for LogLevel {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    // Display trait tests
+    #[test]
+    fn test_log_level_display_trace() {
+        assert_eq!(format!("{}", LogLevel::Trace), "trace");
+    }
+
+    #[test]
+    fn test_log_level_display_debug() {
+        assert_eq!(format!("{}", LogLevel::Debug), "debug");
+    }
+
+    #[test]
+    fn test_log_level_display_info() {
+        assert_eq!(format!("{}", LogLevel::Info), "info");
+    }
+
+    #[test]
+    fn test_log_level_display_warn() {
+        assert_eq!(format!("{}", LogLevel::Warn), "warn");
+    }
+
+    #[test]
+    fn test_log_level_display_error() {
+        assert_eq!(format!("{}", LogLevel::Error), "error");
+    }
+
+    #[test]
+    fn test_log_level_display_off() {
+        assert_eq!(format!("{}", LogLevel::Off), "off");
+    }
+
+    // From<i64> tests
+    #[test]
+    fn test_log_level_from_i64_trace() {
+        assert_eq!(LogLevel::from(0i64), LogLevel::Trace);
+    }
+
+    #[test]
+    fn test_log_level_from_i64_debug() {
+        assert_eq!(LogLevel::from(1i64), LogLevel::Debug);
+    }
+
+    #[test]
+    fn test_log_level_from_i64_info() {
+        assert_eq!(LogLevel::from(2i64), LogLevel::Info);
+    }
+
+    #[test]
+    fn test_log_level_from_i64_warn() {
+        assert_eq!(LogLevel::from(3i64), LogLevel::Warn);
+    }
+
+    #[test]
+    fn test_log_level_from_i64_error() {
+        assert_eq!(LogLevel::from(4i64), LogLevel::Error);
+    }
+
+    #[test]
+    fn test_log_level_from_i64_off() {
+        assert_eq!(LogLevel::from(5i64), LogLevel::Off);
+    }
+
+    #[test]
+    fn test_log_level_from_i64_negative_is_off() {
+        assert_eq!(LogLevel::from(-1i64), LogLevel::Off);
+    }
+
+    #[test]
+    fn test_log_level_from_i64_large_is_off() {
+        assert_eq!(LogLevel::from(100i64), LogLevel::Off);
+    }
+
+    // From<&str> tests
+    #[test]
+    fn test_log_level_from_str_trace() {
+        assert_eq!(LogLevel::from("trace"), LogLevel::Trace);
+    }
+
+    #[test]
+    fn test_log_level_from_str_debug() {
+        assert_eq!(LogLevel::from("debug"), LogLevel::Debug);
+    }
+
+    #[test]
+    fn test_log_level_from_str_info() {
+        assert_eq!(LogLevel::from("info"), LogLevel::Info);
+    }
+
+    #[test]
+    fn test_log_level_from_str_warn() {
+        assert_eq!(LogLevel::from("warn"), LogLevel::Warn);
+    }
+
+    #[test]
+    fn test_log_level_from_str_error() {
+        assert_eq!(LogLevel::from("error"), LogLevel::Error);
+    }
+
+    #[test]
+    fn test_log_level_from_str_off() {
+        assert_eq!(LogLevel::from("off"), LogLevel::Off);
+    }
+
+    #[test]
+    fn test_log_level_from_str_unknown() {
+        assert_eq!(LogLevel::from("unknown"), LogLevel::Off);
+    }
+
+    #[test]
+    fn test_log_level_from_str_invalid() {
+        assert_eq!(LogLevel::from("invalid"), LogLevel::Off);
+    }
+
+    #[test]
+    fn test_log_level_from_str_empty() {
+        assert_eq!(LogLevel::from(""), LogLevel::Off);
+    }
+
+    // From<String> tests
+    #[test]
+    fn test_log_level_from_string_info() {
+        assert_eq!(LogLevel::from("info".to_string()), LogLevel::Info);
+    }
+
+    #[test]
+    fn test_log_level_from_string_error() {
+        assert_eq!(LogLevel::from("error".to_string()), LogLevel::Error);
+    }
+
+    // Default test
+    #[test]
+    fn test_log_level_default_is_off() {
+        assert_eq!(LogLevel::default(), LogLevel::Off);
+    }
+
+    // From<LogLevel> for LevelFilter tests
+    #[test]
+    fn test_log_level_into_level_filter_trace() {
+        let filter: LevelFilter = LogLevel::Trace.into();
+        assert_eq!(filter, LevelFilter::TRACE);
+    }
+
+    #[test]
+    fn test_log_level_into_level_filter_debug() {
+        let filter: LevelFilter = LogLevel::Debug.into();
+        assert_eq!(filter, LevelFilter::DEBUG);
+    }
+
+    #[test]
+    fn test_log_level_into_level_filter_info() {
+        let filter: LevelFilter = LogLevel::Info.into();
+        assert_eq!(filter, LevelFilter::INFO);
+    }
+
+    #[test]
+    fn test_log_level_into_level_filter_warn() {
+        let filter: LevelFilter = LogLevel::Warn.into();
+        assert_eq!(filter, LevelFilter::WARN);
+    }
+
+    #[test]
+    fn test_log_level_into_level_filter_error() {
+        let filter: LevelFilter = LogLevel::Error.into();
+        assert_eq!(filter, LevelFilter::ERROR);
+    }
+
+    #[test]
+    fn test_log_level_into_level_filter_off() {
+        let filter: LevelFilter = LogLevel::Off.into();
+        assert_eq!(filter, LevelFilter::OFF);
+    }
+
+    // From<LogLevel> for tracing::Level tests
+    #[test]
+    fn test_log_level_into_tracing_level_trace() {
+        let level: tracing::Level = LogLevel::Trace.into();
+        assert_eq!(level, tracing::Level::TRACE);
+    }
+
+    #[test]
+    fn test_log_level_into_tracing_level_debug() {
+        let level: tracing::Level = LogLevel::Debug.into();
+        assert_eq!(level, tracing::Level::DEBUG);
+    }
+
+    #[test]
+    fn test_log_level_into_tracing_level_info() {
+        let level: tracing::Level = LogLevel::Info.into();
+        assert_eq!(level, tracing::Level::INFO);
+    }
+
+    #[test]
+    fn test_log_level_into_tracing_level_warn() {
+        let level: tracing::Level = LogLevel::Warn.into();
+        assert_eq!(level, tracing::Level::WARN);
+    }
+
+    #[test]
+    fn test_log_level_into_tracing_level_error() {
+        let level: tracing::Level = LogLevel::Error.into();
+        assert_eq!(level, tracing::Level::ERROR);
+    }
+
+    #[test]
+    fn test_log_level_into_tracing_level_off() {
+        let level: tracing::Level = LogLevel::Off.into();
+        assert_eq!(level, tracing::Level::ERROR);
+    }
+
+    // From<LogLevel> for EnvFilter tests
+    #[test]
+    fn test_log_level_into_env_filter_trace() {
+        let filter: EnvFilter = LogLevel::Trace.into();
+        let filter_str = filter.to_string();
+        assert!(filter_str.contains("trace"));
+    }
+
+    #[test]
+    fn test_log_level_into_env_filter_info() {
+        let filter: EnvFilter = LogLevel::Info.into();
+        let filter_str = filter.to_string();
+        assert!(filter_str.contains("info"));
+    }
+
+    #[test]
+    fn test_log_level_into_env_filter_off() {
+        let filter: EnvFilter = LogLevel::Off.into();
+        let filter_str = filter.to_string();
+        assert!(filter_str.contains("off"));
+    }
+
+    // From<LogLevel> for NvimLogLevel tests
+    #[test]
+    fn test_log_level_into_nvim_log_level_trace() {
+        let level: NvimLogLevel = LogLevel::Trace.into();
+        assert_eq!(level, NvimLogLevel::Trace);
+    }
+
+    #[test]
+    fn test_log_level_into_nvim_log_level_debug() {
+        let level: NvimLogLevel = LogLevel::Debug.into();
+        assert_eq!(level, NvimLogLevel::Debug);
+    }
+
+    #[test]
+    fn test_log_level_into_nvim_log_level_info() {
+        let level: NvimLogLevel = LogLevel::Info.into();
+        assert_eq!(level, NvimLogLevel::Info);
+    }
+
+    #[test]
+    fn test_log_level_into_nvim_log_level_warn() {
+        let level: NvimLogLevel = LogLevel::Warn.into();
+        assert_eq!(level, NvimLogLevel::Warn);
+    }
+
+    #[test]
+    fn test_log_level_into_nvim_log_level_error() {
+        let level: NvimLogLevel = LogLevel::Error.into();
+        assert_eq!(level, NvimLogLevel::Error);
+    }
+
+    #[test]
+    fn test_log_level_into_nvim_log_level_off() {
+        let level: NvimLogLevel = LogLevel::Off.into();
+        assert_eq!(level, NvimLogLevel::Off);
+    }
+}

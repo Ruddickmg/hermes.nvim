@@ -416,7 +416,10 @@ impl Request {
         } else {
             match self.get_responder()? {
                 Responder::PermissionResponse(..) => {
-                    panic!("Permission requests should have been handled in the if branch above")
+                    error!("Permission requests should have been handled in the if branch above");
+                    return Err(Error::Internal(
+                        "Permission request reached default handler unexpectedly".to_string(),
+                    ));
                 }
                 Responder::ReadFileResponse(responder, data) => {
                     responder.send(Self::read_file(data)).map_err(|e| {
