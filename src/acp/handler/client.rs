@@ -48,11 +48,23 @@ impl Client for Handler {
         }
         let command = match session_notification.update.clone() {
             SessionUpdate::UserMessageChunk(chunk) => parse::communication(chunk.content)
-                .map(|s| Commands::from(format!("User{}Message", s))),
+                .map_err(Error::into_internal_error)
+                .and_then(|s| {
+                    Commands::try_from(format!("User{}Message", s))
+                        .map_err(Error::into_internal_error)
+                }),
             SessionUpdate::AgentMessageChunk(chunk) => parse::communication(chunk.content)
-                .map(|s| Commands::from(format!("Agent{}Message", s))),
+                .map_err(Error::into_internal_error)
+                .and_then(|s| {
+                    Commands::try_from(format!("Agent{}Message", s))
+                        .map_err(Error::into_internal_error)
+                }),
             SessionUpdate::AgentThoughtChunk(chunk) => parse::communication(chunk.content)
-                .map(|s| Commands::from(format!("Agent{}Thought", s))),
+                .map_err(Error::into_internal_error)
+                .and_then(|s| {
+                    Commands::try_from(format!("Agent{}Thought", s))
+                        .map_err(Error::into_internal_error)
+                }),
             SessionUpdate::ToolCall(_) => Ok(Commands::ToolCall),
             SessionUpdate::ToolCallUpdate(_) => Ok(Commands::ToolCallUpdate),
             SessionUpdate::Plan(_) => Ok(Commands::Plan),

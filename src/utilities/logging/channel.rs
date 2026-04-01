@@ -196,9 +196,7 @@ impl<S: LogSink> Worker<S> {
                             sink.write_batch(&message_buffer).ok();
                             message_buffer.clear();
                         }
-                        if let Err(e) = sink.flush() {
-                            eprintln!("Failed to flush sink: {}", e);
-                        }
+                        sink.flush().ok();
                     }
                     LogMessage::Shutdown => {
                         shutdown_requested = true;
@@ -207,14 +205,8 @@ impl<S: LogSink> Worker<S> {
             }
 
             // Final flush before exit
-            if !message_buffer.is_empty()
-                && let Err(e) = sink.write_batch(&message_buffer)
-            {
-                eprintln!("Failed to write final batch: {}", e);
-            }
-            if let Err(e) = sink.flush() {
-                eprintln!("Failed final flush: {}", e);
-            }
+            sink.write_batch(&message_buffer).ok();
+            sink.flush().ok();
         });
 
         Self {
