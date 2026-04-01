@@ -11,13 +11,13 @@ use crate::{
     acp::connection::ConnectionManager,
     utilities::{Logger, detect_project_storage_path},
 };
-use tracing::error;
 use nvim_oxi::{
     Dictionary,
     api::opts::{CreateAugroupOpts, CreateAutocmdOpts},
 };
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
+use tracing::error;
 
 pub const GROUP: &str = "hermes";
 
