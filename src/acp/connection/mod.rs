@@ -13,6 +13,7 @@ use tokio::sync::mpsc::Sender;
 
 #[derive(Debug, Clone)]
 pub enum UserRequest {
+    Close,
     Initialize(InitializeRequest),
     Cancel(CancelNotification),
     CreateSession(NewSessionRequest),
