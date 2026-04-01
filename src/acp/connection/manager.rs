@@ -1,7 +1,7 @@
-use crate::PluginState;
-use crate::acp::connection::{Connection, stdio};
+use crate::acp::connection::{stdio, Connection};
 use crate::nvim::configuration::Permissions;
-use crate::{Handler, acp::error::Error};
+use crate::PluginState;
+use crate::{acp::error::Error, Handler};
 use agent_client_protocol::{
     ClientCapabilities, FileSystemCapabilities, Implementation, InitializeRequest, ProtocolVersion,
 };
@@ -204,12 +204,25 @@ impl ConnectionManager {
                                     .map_err(|e| Error::Internal(e.to_string()))?;
 
                                 trace!("Starting tokio runtime");
-                                runtime.block_on(match protocol {
-                                    Protocol::Stdio => {
-                                        stdio::connect(handler, thread_agent, receiver)
+                                runtime.block_on(async {
+                                    match protocol {
+                                        Protocol::Stdio => {
+                                            stdio::connect(handler, thread_agent, receiver).await
+                                        }
+                                        Protocol::Http => {
+                                            error!("HTTP protocol is not yet implemented");
+                                            Err(Error::Internal(
+                                                "HTTP protocol is not yet implemented".to_string(),
+                                            ))
+                                        }
+                                        Protocol::Socket => {
+                                            error!("Socket protocol is not yet implemented");
+                                            Err(Error::Internal(
+                                                "Socket protocol is not yet implemented"
+                                                    .to_string(),
+                                            ))
+                                        }
                                     }
-                                    Protocol::Http => unimplemented!(),
-                                    Protocol::Socket => unimplemented!(),
                                 })
                             }))
                             .map_err(|_| {
