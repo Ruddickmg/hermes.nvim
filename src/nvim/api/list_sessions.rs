@@ -5,7 +5,7 @@ use nvim_oxi::{
     lua::{Error as LuaError, Poppable, Pushable},
 };
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
-use tracing::{debug, instrument};
+use tracing::{debug, error, instrument};
 
 use crate::acp::connection::ConnectionManager;
 
@@ -83,15 +83,17 @@ pub fn list_sessions(connection: Rc<RefCell<ConnectionManager>>) -> Object {
                 request = request.cursor(cursor);
             }
 
-            connection
-                .borrow()
-                .get_current_connection()
-                .ok_or_else(|| {
-                    LuaError::RuntimeError(
-                        "No connection found, call the connect function".to_string(),
-                    )
-                })?
-                .list_sessions(request)?;
+            let conn = match connection.borrow().get_current_connection() {
+                Some(c) => c,
+                None => {
+                    error!("No connection found, call the connect function");
+                    return Ok(());
+                }
+            };
+
+            if let Err(e) = conn.list_sessions(request) {
+                error!("Error listing sessions: {:?}", e);
+            }
             Ok(())
         });
     function.into()

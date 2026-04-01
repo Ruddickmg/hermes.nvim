@@ -1,6 +1,6 @@
 use nvim_oxi::{Function, Object};
 use std::rc::Rc;
-use tracing::{debug, instrument};
+use tracing::{debug, error, instrument};
 use uuid::Uuid;
 
 use crate::nvim::requests::RequestHandler;
@@ -14,16 +14,22 @@ pub fn respond<H: RequestHandler + 'static>(requests: Rc<H>) -> Object {
             debug!("Respond function called with request_id: {}", request_id);
 
             // Parse the request ID as UUID
-            let request_uuid = Uuid::parse_str(&request_id).map_err(|e| {
-                nvim_oxi::lua::Error::RuntimeError(format!(
-                    "Invalid request ID format '{}': {}",
+            let request_uuid = match Uuid::parse_str(&request_id) {
+                Ok(uuid) => uuid,
+                Err(e) => {
+                    error!("Invalid request ID format '{}': {}", request_id, e);
+                    return Ok(());
+                }
+            };
+
+            if let Err(e) = requests.handle_response(&request_uuid, response_data) {
+                error!(
+                    "Error handling response for request {}: {:?}",
                     request_id, e
-                ))
-            })?;
+                );
+            }
 
-            requests.handle_response(&request_uuid, response_data)?;
-
-            debug!("Successfully sent response for request {}", request_id);
+            debug!("Respond completed for request {}", request_id);
             Ok(())
         },
     );

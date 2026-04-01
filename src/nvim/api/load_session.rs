@@ -103,15 +103,17 @@ pub fn load_session(
             )
             .mcp_servers(config.mcp_servers);
 
-            connection
-                .borrow()
-                .get_current_connection()
-                .ok_or_else(|| {
-                    LuaError::RuntimeError(
-                        "No connection found, call the connect function".to_string(),
-                    )
-                })?
-                .load_session(request)?;
+            let conn = match connection.borrow().get_current_connection() {
+                Some(c) => c,
+                None => {
+                    error!("No connection found, call the connect function");
+                    return Ok(());
+                }
+            };
+
+            if let Err(e) = conn.load_session(request) {
+                error!("Error loading session: {:?}", e);
+            }
             Ok(())
         });
     function.into()

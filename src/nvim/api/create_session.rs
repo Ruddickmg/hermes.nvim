@@ -6,7 +6,7 @@ use nvim_oxi::{
 };
 use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
-use tracing::{debug, instrument};
+use tracing::{debug, error, instrument};
 
 use crate::{
     PluginState, acp::connection::ConnectionManager, api::mcp_servers::parse_mcp_servers, utilities,
@@ -163,15 +163,17 @@ pub fn create_session(
                         .mcp_servers(mcp_servers.unwrap_or_default())
                 }
             };
-            connection
-                .borrow()
-                .get_current_connection()
-                .ok_or_else(|| {
-                    nvim_oxi::lua::Error::RuntimeError(
-                        "No connection found, call the connect function".to_string(),
-                    )
-                })?
-                .create_session(request)?;
+            let conn = match connection.borrow().get_current_connection() {
+                Some(c) => c,
+                None => {
+                    error!("No connection found, call the connect function");
+                    return Ok(());
+                }
+            };
+
+            if let Err(e) = conn.create_session(request) {
+                error!("Error creating session: {:?}", e);
+            }
             Ok(())
         });
     function.into()

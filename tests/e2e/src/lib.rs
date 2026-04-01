@@ -1,5 +1,6 @@
 pub const TIMEOUT_IN_SECONDS: u64 = 30; // seconds
 
+pub mod error_handling;
 pub mod response;
 pub mod connection;
 pub mod mode;
