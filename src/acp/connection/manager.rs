@@ -274,12 +274,14 @@ impl ConnectionManager {
         let sender = self.connection.remove(assistant).ok_or_else(|| {
             Error::Connection(format!("No connection found for assistant {}", assistant))
         })?;
-        sender.send(crate::acp::connection::UserRequest::Close).map_err(|e| {
-            Error::Connection(format!(
-                "Failed to send close message to assistant {}: {}",
-                assistant, e
-            ))
-        })?;
+        sender
+            .send(crate::acp::connection::UserRequest::Close)
+            .map_err(|e| {
+                Error::Connection(format!(
+                    "Failed to send close message to assistant {}: {}",
+                    assistant, e
+                ))
+            })?;
         let handle = self
             .handles
             .try_borrow_mut()
