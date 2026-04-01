@@ -56,8 +56,8 @@ fn test_prompt_single_content() -> Result<(), nvim_oxi::Error> {
 
     prompt.call((session_id.to_string(), content))?;
 
-    // Wait longer for agent to process prompt and respond
-    let response = wait_for_prompt(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+    // Wait for agent response with extended timeout (60 seconds for slow agents)
+    let response = wait_for_prompt(Duration::from_secs(60))?;
 
     disconnect.call(DisconnectArgs::All)?;
 
@@ -147,8 +147,8 @@ fn test_prompt_multiple_content() -> Result<(), nvim_oxi::Error> {
 
     prompt.call((session_id.to_string(), content))?;
 
-    // Wait longer for agent to process multiple content blocks and respond
-    let response = wait_for_prompt(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+    // Wait for agent response with extended timeout (60 seconds for slow agents)
+    let response = wait_for_prompt(Duration::from_secs(60))?;
 
     disconnect.call(DisconnectArgs::All)?;
 
