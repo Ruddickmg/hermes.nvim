@@ -1,7 +1,7 @@
-use crate::acp::connection::{stdio, Connection};
-use crate::nvim::configuration::Permissions;
 use crate::PluginState;
-use crate::{acp::error::Error, Handler};
+use crate::acp::connection::{Connection, stdio};
+use crate::nvim::configuration::Permissions;
+use crate::{Handler, acp::error::Error};
 use agent_client_protocol::{
     ClientCapabilities, FileSystemCapabilities, Implementation, InitializeRequest, ProtocolVersion,
 };
