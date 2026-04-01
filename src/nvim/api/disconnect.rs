@@ -5,7 +5,7 @@ use nvim_oxi::{
     serde::SerializeError,
 };
 use std::{cell::RefCell, rc::Rc};
-use tracing::{debug, instrument};
+use tracing::{debug, error, instrument};
 
 use crate::acp::connection::{Assistant, ConnectionManager};
 
@@ -111,14 +111,21 @@ pub fn disconnect(connection: Rc<RefCell<ConnectionManager>>) -> Object {
     let function: Function<DisconnectArgs, Result<(), Error>> =
         Function::from_fn(move |args: DisconnectArgs| -> Result<(), Error> {
             debug!("Disconnect function called with {:#?}", args);
-            let mut manager = connection.try_borrow_mut().map_err(|e| {
-                Error::RuntimeError(format!("Failed to borrow connection manager: {}", e))
-            })?;
-            match args {
+            let mut manager = match connection.try_borrow_mut() {
+                Ok(m) => m,
+                Err(e) => {
+                    error!("Failed to borrow connection manager: {}", e);
+                    return Ok(());
+                }
+            };
+            let result = match args {
                 DisconnectArgs::Multiple(agents) => manager.disconnect(agents),
                 DisconnectArgs::Single(agent) => manager.disconnect(vec![agent.clone()]),
                 DisconnectArgs::All => manager.close_all(),
-            }?;
+            };
+            if let Err(e) = result {
+                error!("Error during disconnect: {:?}", e);
+            }
             drop(manager);
             Ok(())
         });

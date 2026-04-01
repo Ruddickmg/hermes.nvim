@@ -8,7 +8,7 @@ use nvim_oxi::{
     lua::{Error, Poppable, Pushable},
 };
 use std::{cell::RefCell, rc::Rc};
-use tracing::{debug, instrument};
+use tracing::{debug, error, instrument};
 
 use crate::acp::connection::ConnectionManager;
 
@@ -333,16 +333,17 @@ pub fn prompt(connection: Rc<RefCell<ConnectionManager>>) -> Object {
 
             let request = PromptRequest::new(session_id, content_blocks);
 
-            connection
-                .borrow()
-                .get_current_connection()
-                .ok_or_else(|| {
-                    Error::RuntimeError(
-                        "No connection found, call the connect function first".to_string(),
-                    )
-                })?
-                .prompt(request)
-                .map_err(|e| Error::RuntimeError(e.to_string()))?;
+            let conn = match connection.borrow().get_current_connection() {
+                Some(c) => c,
+                None => {
+                    error!("No connection found, call the connect function first");
+                    return Ok(());
+                }
+            };
+
+            if let Err(e) = conn.prompt(request) {
+                error!("Error sending prompt: {:?}", e);
+            }
 
             Ok(())
         });

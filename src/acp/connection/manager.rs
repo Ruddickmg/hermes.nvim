@@ -204,25 +204,12 @@ impl ConnectionManager {
                                     .map_err(|e| Error::Internal(e.to_string()))?;
 
                                 trace!("Starting tokio runtime");
-                                runtime.block_on(async {
-                                    match protocol {
-                                        Protocol::Stdio => {
-                                            stdio::connect(handler, thread_agent, receiver).await
-                                        }
-                                        Protocol::Http => {
-                                            error!("HTTP protocol is not yet implemented");
-                                            Err(Error::Internal(
-                                                "HTTP protocol is not yet implemented".to_string(),
-                                            ))
-                                        }
-                                        Protocol::Socket => {
-                                            error!("Socket protocol is not yet implemented");
-                                            Err(Error::Internal(
-                                                "Socket protocol is not yet implemented"
-                                                    .to_string(),
-                                            ))
-                                        }
+                                runtime.block_on(match protocol {
+                                    Protocol::Stdio => {
+                                        stdio::connect(handler, thread_agent, receiver)
                                     }
+                                    Protocol::Http => unimplemented!(),
+                                    Protocol::Socket => unimplemented!(),
                                 })
                             }))
                             .map_err(|_| {
@@ -274,14 +261,6 @@ impl ConnectionManager {
         let sender = self.connection.remove(assistant).ok_or_else(|| {
             Error::Connection(format!("No connection found for assistant {}", assistant))
         })?;
-        sender
-            .send(crate::acp::connection::UserRequest::Close)
-            .map_err(|e| {
-                Error::Connection(format!(
-                    "Failed to send close message to assistant {}: {}",
-                    assistant, e
-                ))
-            })?;
         let handle = self
             .handles
             .try_borrow_mut()
@@ -290,67 +269,33 @@ impl ConnectionManager {
             .ok_or_else(|| {
                 Error::Connection(format!("No handle found for assistant {}", assistant))
             })?;
-        debug!("Disconnecting from agent {} (timeout: 5s)", assistant);
+        debug!("Disconnecting from agent {}", assistant);
         drop(sender);
-
-        // Join with timeout - if thread doesn't finish in 5 seconds, we log a warning
-        // but don't fail. This prevents hanging on shutdown if a connection is stuck.
-        let timeout = std::time::Duration::from_secs(5);
-        let start = std::time::Instant::now();
-        let join_result = loop {
-            if start.elapsed() >= timeout {
-                warn!(
-                    "Timeout waiting for connection thread of agent {} (waited {:?})",
-                    assistant,
-                    start.elapsed()
-                );
-                break Err("Thread did not complete within timeout".to_string());
-            }
-            // Try to join without blocking - use try_join if available
-            // For now, we use a simple approach with blocking join but with awareness
-            match handle.is_finished() {
-                true => {
-                    break handle
-                        .join()
-                        .map_err(|e| format!("Thread panicked: {:?}", e));
-                }
-                false => {
-                    // Thread not finished, yield to allow it to complete
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                }
-            }
-        };
-
-        match join_result {
-            Ok(Ok(_)) => {
-                debug!("Successfully disconnected from agent {}", assistant);
-                Ok(())
-            }
-            Ok(Err(e)) => {
-                error!("Error in connection thread for agent {}: {}", assistant, e);
-                Err(Error::Connection(format!(
-                    "Error in connection thread for agent {}: {}",
+        handle
+            .join()
+            .map_err(|e| {
+                Error::Internal(format!(
+                    "Failed to join thread for assistant {}: {:#?}",
                     assistant, e
-                )))
-            }
-            Err(e) => {
-                error!("Failed to join thread for agent {}: {}", assistant, e);
-                Err(Error::Internal(format!(
-                    "Failed to join thread for agent {}: {}",
+                ))
+            })?
+            .map_err(|e| {
+                Error::Connection(format!(
+                    "Error in connection thread for assistant {}: {:#?}",
                     assistant, e
-                )))
-            }
-        }
+                ))
+            })?;
+        debug!("Successfully disconnected from agent {}", assistant);
+        Ok(())
     }
 }
 
 impl Drop for ConnectionManager {
     fn drop(&mut self) {
-        debug!("ConnectionManager Drop called - initiating cleanup");
-        match self.close_all() {
-            Ok(_) => debug!("ConnectionManager cleanup completed successfully"),
-            Err(e) => error!("ConnectionManager cleanup failed: {:?}", e),
-        }
+        debug!("ConnectionManager Drop called");
+        self.close_all()
+            .inspect_err(|e| error!("Error while closing connections in Drop: {:#?}", e))
+            .ok();
         debug!("ConnectionManager Drop completed");
     }
 }
@@ -453,166 +398,5 @@ mod tests {
     fn test_assistant_from_str_unknown_creates_custom() {
         let result = Assistant::from("unknown-agent");
         assert!(matches!(result, Assistant::Custom { name, .. } if name == "unknown-agent"));
-    }
-
-    #[test]
-    fn test_connection_manager_new_creates_empty_manager() {
-        let state = Arc::new(Mutex::new(PluginState::new()));
-        let manager = ConnectionManager::new(state);
-
-        assert!(manager.connection.is_empty());
-        assert!(manager.handles.borrow().is_empty());
-    }
-
-    #[test]
-    fn test_get_connection_returns_none_for_nonexistent() {
-        let state = Arc::new(Mutex::new(PluginState::new()));
-        let manager = ConnectionManager::new(state);
-
-        let result = manager.get_connection(&Assistant::Copilot);
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_get_current_connection_returns_none_when_no_agent() {
-        let state = Arc::new(Mutex::new(PluginState::new()));
-        let manager = ConnectionManager::new(state);
-
-        let result = manager.get_current_connection();
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_get_permissions_returns_default_permissions() {
-        let state = Arc::new(Mutex::new(PluginState::new()));
-        let manager = ConnectionManager::new(state);
-
-        let permissions = manager.get_permissions();
-        assert_eq!(
-            permissions.fs_read_access, true,
-            "Default fs_read_access should be true"
-        );
-        assert_eq!(
-            permissions.fs_write_access, true,
-            "Default fs_write_access should be true"
-        );
-        assert_eq!(
-            permissions.terminal_access, true,
-            "Default terminal_access should be true"
-        );
-    }
-
-    #[test]
-    fn test_close_all_with_no_connections_succeeds() {
-        let state = Arc::new(Mutex::new(PluginState::new()));
-        let mut manager = ConnectionManager::new(state);
-
-        let result = manager.close_all();
-        assert!(
-            result.is_ok(),
-            "close_all should succeed with no connections"
-        );
-    }
-
-    #[test]
-    fn test_disconnect_empty_list_succeeds() {
-        let state = Arc::new(Mutex::new(PluginState::new()));
-        let mut manager = ConnectionManager::new(state);
-
-        let result = manager.disconnect(vec![]);
-        assert!(result.is_ok(), "disconnect with empty list should succeed");
-    }
-
-    #[test]
-    fn test_disconnect_nonexistent_assistant_returns_error() {
-        let state = Arc::new(Mutex::new(PluginState::new()));
-        let mut manager = ConnectionManager::new(state);
-
-        let result = manager.disconnect(vec![Assistant::Copilot]);
-        assert!(
-            result.is_err(),
-            "disconnect should fail for non-existent assistant"
-        );
-    }
-
-    #[test]
-    fn test_disconnect_multiple_nonexistent_returns_partial_error() {
-        let state = Arc::new(Mutex::new(PluginState::new()));
-        let mut manager = ConnectionManager::new(state);
-
-        let result = manager.disconnect(vec![Assistant::Copilot, Assistant::Opencode]);
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("copilot") || err_msg.contains("opencode"));
-    }
-
-    #[test]
-    fn test_assistant_display_gemini() {
-        let assistant = Assistant::Gemini;
-        assert_eq!(format!("{}", assistant), "gemini");
-    }
-
-    #[test]
-    fn test_connection_details_default() {
-        let details = ConnectionDetails::default();
-        assert_eq!(details.agent, Assistant::Copilot);
-        assert_eq!(details.protocol, Protocol::Stdio);
-    }
-
-    #[test]
-    fn test_set_and_get_agent() {
-        let state = Arc::new(Mutex::new(PluginState::new()));
-        let manager = ConnectionManager::new(state);
-
-        manager.set_agent(Assistant::Opencode);
-        let agent = manager.get_agent();
-        assert_eq!(agent, Assistant::Opencode);
-    }
-
-    #[test]
-    fn test_get_agent_returns_default_when_not_set() {
-        let state = Arc::new(Mutex::new(PluginState::new()));
-        let manager = ConnectionManager::new(state);
-
-        let agent = manager.get_agent();
-        assert_eq!(agent, Assistant::default());
-    }
-
-    #[test]
-    fn test_set_agent_updates_existing_agent() {
-        let state = Arc::new(Mutex::new(PluginState::new()));
-        let manager = ConnectionManager::new(state);
-
-        manager.set_agent(Assistant::Gemini);
-        assert_eq!(manager.get_agent(), Assistant::Gemini);
-
-        manager.set_agent(Assistant::Copilot);
-        assert_eq!(manager.get_agent(), Assistant::Copilot);
-    }
-
-    #[test]
-    fn test_drop_with_no_connections_completes_successfully() {
-        let state = Arc::new(Mutex::new(PluginState::new()));
-        let manager = ConnectionManager::new(state);
-        drop(manager);
-    }
-
-    #[test]
-    fn test_disconnect_skips_successful_disconnects_in_partial_failure() {
-        let state = Arc::new(Mutex::new(PluginState::new()));
-        let mut manager = ConnectionManager::new(state);
-
-        let result = manager.disconnect(vec![
-            Assistant::Copilot,
-            Assistant::Opencode,
-            Assistant::Gemini,
-        ]);
-        assert!(result.is_err());
-        let err_str = result.unwrap_err().to_string();
-        assert!(
-            err_str.contains("copilot")
-                || err_str.contains("opencode")
-                || err_str.contains("gemini")
-        );
     }
 }

@@ -4,7 +4,7 @@ use crate::{
 };
 use nvim_oxi::{Dictionary, Function, Object, ObjectKind, lua::Error};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
-use tracing::{debug, instrument};
+use tracing::{debug, error, instrument};
 
 pub type ConnectionArgs = (nvim_oxi::String, Option<Dictionary>);
 
@@ -27,19 +27,25 @@ pub fn connect(connection: Rc<RefCell<ConnectionManager>>, handler: Arc<Handler>
             if let Some(dict) = options {
                 // Parse protocol
                 if let Some(obj) = dict.get("protocol") {
-                    let s: nvim_oxi::String = obj
-                        .clone()
-                        .try_into()
-                        .map_err(|e| Error::RuntimeError(format!("Invalid protocol: {}", e)))?;
+                    let s: nvim_oxi::String = match obj.clone().try_into() {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("Invalid protocol: {}", e);
+                            return Ok(());
+                        }
+                    };
                     protocol = Some(Protocol::from(s.to_string()));
                 }
 
                 // Parse command
                 if let Some(obj) = dict.get("command") {
-                    let s: nvim_oxi::String = obj
-                        .clone()
-                        .try_into()
-                        .map_err(|e| Error::RuntimeError(format!("Invalid command: {}", e)))?;
+                    let s: nvim_oxi::String = match obj.clone().try_into() {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("Invalid command: {}", e);
+                            return Ok(());
+                        }
+                    };
                     command = Some(s.to_string());
                 }
 
@@ -69,20 +75,29 @@ pub fn connect(connection: Rc<RefCell<ConnectionManager>>, handler: Arc<Handler>
             if let Assistant::Custom { ref command, .. } = agent
                 && command.is_empty()
             {
-                return Err(Error::RuntimeError(
-                    "Unknown agent name; please provide 'command' (and optionally 'args') when connecting to a custom assistant".into(),
-                ));
+                error!(
+                    "Unknown agent name; please provide 'command' (and optionally 'args') when connecting to a custom assistant"
+                );
+                return Ok(());
             }
             let details = ConnectionDetails {
                 agent,
                 protocol: protocol.unwrap_or_default(),
             };
-            connection
-                .try_borrow_mut()
-                .map_err(|e| {
-                    Error::RuntimeError(format!("Failed to borrow connection manager: {}", e))
-                })?
-                .connect(handler.clone(), details)?;
+
+            let mut conn = match connection.try_borrow_mut() {
+                Ok(c) => c,
+                Err(e) => {
+                    error!("Failed to borrow connection manager: {}", e);
+                    return Ok(());
+                }
+            };
+
+            if let Err(e) = conn.connect(handler.clone(), details) {
+                error!("Error connecting: {:?}", e);
+            }
+
+            drop(conn);
             Ok(())
         },
     );

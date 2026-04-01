@@ -3,7 +3,7 @@ use nvim_oxi::lua::{self, Poppable};
 use nvim_oxi::{Function, Object, lua::Error};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{debug, instrument};
+use tracing::{debug, error, instrument};
 
 use crate::nvim::configuration::ClientConfigPartial;
 use crate::nvim::state::PluginState;
@@ -57,7 +57,9 @@ pub fn setup(plugin_state: Arc<Mutex<PluginState>>, logger: &'static Logger) -> 
             config_update.apply_to(&mut state.config);
             let log_config = state.config.log.clone();
             drop(state);
-            logger.configure(log_config)?;
+            if let Err(e) = logger.configure(log_config) {
+                error!("Error configuring logger: {:?}", e);
+            }
 
             Ok(())
         });
