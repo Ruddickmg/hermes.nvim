@@ -2,7 +2,7 @@
 use crate::nvim::autocommands::Commands;
 use agent_client_protocol::Error as AcpError;
 use nvim_oxi::{api, lua};
-use std::sync::{mpsc::SendError, PoisonError};
+use std::sync::{PoisonError, mpsc::SendError};
 
 #[derive(Debug, Clone)]
 pub enum Error {
