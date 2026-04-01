@@ -17,7 +17,7 @@ use nvim_oxi::{
 };
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
-use tracing::error;
+use tracing::{info, debug, error};
 
 pub const GROUP: &str = "hermes";
 
@@ -45,11 +45,11 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
         &CreateAutocmdOpts::builder()
             .group(group)
             .callback(move |_| {
-                connection
-                    .borrow_mut()
-                    .close_all()
-                    .inspect_err(|e| error!("Error occurred while exiting neovim: {:?}", e))
-                    .ok();
+                debug!("Exiting neovim, closing all connections...");
+                match connection.borrow_mut().close_all() {
+                    Err(e) => error!("Error occurred while exiting neovim: {:?}", e),
+                    Ok(_) => info!("All agent connections were closed"),
+                };
                 true
             })
             .build(),
