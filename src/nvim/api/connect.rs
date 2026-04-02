@@ -6,6 +6,7 @@ use crate::{
         error::Error,
     },
 };
+use agent_client_protocol::PermissionOptionKind;
 use nvim_oxi::{Dictionary, Function, Object, ObjectKind};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use tracing::{debug, error, instrument};
@@ -36,8 +37,17 @@ pub fn parse_agent_connection(
                     };
                     let parsed_args: Vec<String> = args_arr
                         .into_iter()
-                        .filter_map(|v| v.try_into().ok().map(|s: nvim_oxi::String| s.to_string()))
-                        .collect();
+                        .map(|v| {
+                            v.try_into()
+                                .map_err(|e| {
+                                    Error::InvalidInput(format!(
+                                        "Error occurred parsing stdio arguments: {:?}",
+                                        e
+                                    ))
+                                })
+                                .map(|s: nvim_oxi::String| s.to_string())
+                        })
+                        .collect::<Result<Vec<String>>>()?;
                     if command_str.is_empty() {
                         return Err(Error::InvalidInput(
                             "Command cannot be empty for custom stdio connections".into(),
@@ -70,7 +80,14 @@ pub fn parse_agent_connection(
             }
         })
     } else {
-        Ok(Assistant::from(name))
+        Ok(match Assistant::from(name) {
+            Assistant::CustomStdio { .. } => {
+                return Err(Error::InvalidInput(
+                    "Custom stdio connections require options with a 'command' field".into(),
+                ));
+            }
+            assistant => assistant,
+        })
     }
 }
 
@@ -233,8 +250,7 @@ mod tests {
         dict.insert("host", "localhost");
         dict.insert("port", 8080i64);
 
-        let result =
-            parse_agent_connection("socket-agent".to_string(), Protocol::Socket, Some(dict));
+        let result = parse_agent_connection("socket-agent".to_string(), Protocol::Tcp, Some(dict));
         assert!(result.is_ok());
 
         let assistant = result.unwrap();
@@ -265,8 +281,7 @@ mod tests {
         let mut dict = Dictionary::new();
         dict.insert("port", 8080i64);
 
-        let result =
-            parse_agent_connection("socket-agent".to_string(), Protocol::Socket, Some(dict));
+        let result = parse_agent_connection("socket-agent".to_string(), Protocol::Tcp, Some(dict));
         assert!(result.is_err());
         assert!(
             result
@@ -281,8 +296,7 @@ mod tests {
         let mut dict = Dictionary::new();
         dict.insert("host", "localhost");
 
-        let result =
-            parse_agent_connection("socket-agent".to_string(), Protocol::Socket, Some(dict));
+        let result = parse_agent_connection("socket-agent".to_string(), Protocol::Tcp, Some(dict));
         assert!(result.is_err());
         assert!(
             result
@@ -333,8 +347,8 @@ mod tests {
 
     #[test]
     fn test_protocol_from_str_socket() {
-        assert!(matches!(Protocol::from("socket"), Protocol::Socket));
-        assert!(matches!(Protocol::from("SOCKET"), Protocol::Socket));
+        assert!(matches!(Protocol::from("socket"), Protocol::Tcp));
+        assert!(matches!(Protocol::from("SOCKET"), Protocol::Tcp));
     }
 
     #[test]
@@ -357,7 +371,7 @@ mod tests {
 
     #[test]
     fn test_protocol_display_socket() {
-        assert_eq!(format!("{}", Protocol::Socket), "socket");
+        assert_eq!(format!("{}", Protocol::Tcp), "socket");
     }
 
     #[test]
@@ -386,7 +400,7 @@ mod tests {
             variant in "(socket|SOCKET|Socket|SoCkEt)"
         ) {
             let protocol = Protocol::from(variant.as_str());
-            prop_assert!(matches!(protocol, Protocol::Socket));
+            prop_assert!(matches!(protocol, Protocol::Tcp));
         }
 
         #[test]

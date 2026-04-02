@@ -55,14 +55,16 @@ Binaries are available for:
 > It will:
 > 1. Check if your platform is supported
 > 2. Download the appropriate pre-built binary from GitHub releases
-> 3. Load the native module
+> 3. Load the binary
 >
 > This happens automatically on first API call.
 >
 > ```lua
 > -- sets up pre-built binary for your system
 > require("hermes").setup({ 
+>   download = {
 >     version = "latest",
+>   }
 > })
 > ```
 >
@@ -70,9 +72,9 @@ Binaries are available for:
 > ```lua
 > -- Will have to set up manually with `:Hermes build` or build manually from source
 > require("hermes").setup({ 
->     download = {
->         auto = false,
->     },
+>   download = {
+>     auto = false,
+>   },
 > })
 > ```
 
@@ -287,11 +289,12 @@ hermes.connect(
 
 -- connect to TCP socket
 hermes.connect(
-    "copilot",
-    {
-        host = "localhost",
-        port = 8080,
-    }
+  "copilot",
+  {
+    protocol = "tcp",
+    host = "localhost",
+    port = 8080,
+  }
 )
 ```
 

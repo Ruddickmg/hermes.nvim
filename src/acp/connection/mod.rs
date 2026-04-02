@@ -1,6 +1,6 @@
 pub mod manager;
-pub mod socket;
 pub mod stdio;
+pub mod tcp;
 pub use manager::*;
 
 use crate::acp::{Result, error::Error};

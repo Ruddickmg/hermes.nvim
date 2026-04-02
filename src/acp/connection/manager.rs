@@ -1,5 +1,5 @@
 use crate::PluginState;
-use crate::acp::connection::{Connection, socket, stdio};
+use crate::acp::connection::{Connection, stdio, tcp};
 use crate::nvim::configuration::Permissions;
 use crate::{Handler, acp::error::Error};
 use agent_client_protocol::{
@@ -18,8 +18,9 @@ type ConnectionHandles = Rc<RefCell<HashMap<Assistant, JoinHandle<Result<(), Err
 
 #[derive(PartialEq, Eq, Clone, Copy, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
 pub enum Protocol {
-    Socket,
+    Tcp,
     Http,
+    Socket,
     #[default]
     Stdio,
 }
@@ -27,6 +28,7 @@ pub enum Protocol {
 impl std::fmt::Display for Protocol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Protocol::Tcp => write!(f, "tcp"),
             Protocol::Socket => write!(f, "socket"),
             Protocol::Http => write!(f, "http"),
             Protocol::Stdio => write!(f, "stdio"),
@@ -37,6 +39,7 @@ impl std::fmt::Display for Protocol {
 impl From<&str> for Protocol {
     fn from(s: &str) -> Self {
         match s.to_lowercase().as_str() {
+            "tcp" => Protocol::Tcp,
             "socket" => Protocol::Socket,
             "http" => Protocol::Http,
             "stdio" => Protocol::Stdio,
@@ -222,7 +225,14 @@ impl ConnectionManager {
                                             ))
                                         }
                                         Protocol::Socket => {
-                                            socket::connect(handler, thread_agent, receiver).await
+                                            error!("Socket protocol is not yet implemented");
+                                            Err(Error::Internal(
+                                                "Socket protocol is not yet implemented"
+                                                    .to_string(),
+                                            ))
+                                        }
+                                        Protocol::Tcp => {
+                                            tcp::connect(handler, thread_agent, receiver).await
                                         }
                                     }
                                 })
@@ -370,7 +380,7 @@ mod tests {
     #[test]
     fn test_protocol_display() {
         // Test Display for all Protocol variants using slice comparison
-        let protocols: Vec<Protocol> = vec![Protocol::Socket, Protocol::Http, Protocol::Stdio];
+        let protocols: Vec<Protocol> = vec![Protocol::Tcp, Protocol::Http, Protocol::Stdio];
         let results: Vec<String> = protocols.iter().map(|p| format!("{}", p)).collect();
 
         let expected: Vec<String> = vec![
@@ -391,13 +401,13 @@ mod tests {
         let results: Vec<Protocol> = inputs.iter().map(|&s| Protocol::from(s)).collect();
 
         let expected: Vec<Protocol> = vec![
-            Protocol::Socket, // socket
-            Protocol::Http,   // http
-            Protocol::Stdio,  // stdio
-            Protocol::Socket, // SOCKET (case-insensitive)
-            Protocol::Http,   // HTTP (case-insensitive)
-            Protocol::Stdio,  // STDIO (case-insensitive)
-            Protocol::Stdio,  // unknown defaults to Stdio
+            Protocol::Tcp,   // socket
+            Protocol::Http,  // http
+            Protocol::Stdio, // stdio
+            Protocol::Tcp,   // SOCKET (case-insensitive)
+            Protocol::Http,  // HTTP (case-insensitive)
+            Protocol::Stdio, // STDIO (case-insensitive)
+            Protocol::Stdio, // unknown defaults to Stdio
         ];
 
         assert_eq!(results, expected);

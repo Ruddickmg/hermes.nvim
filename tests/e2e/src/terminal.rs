@@ -106,7 +106,7 @@ fn test_terminal_create_fires_with_mock_agent() -> Result<(), nvim_oxi::Error> {
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 
@@ -188,7 +188,7 @@ fn test_terminal_output_fires_with_mock_agent() -> Result<(), nvim_oxi::Error> {
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 
@@ -280,7 +280,7 @@ fn test_terminal_exit_fires_with_mock_agent() -> Result<(), nvim_oxi::Error> {
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 
@@ -374,7 +374,7 @@ fn test_terminal_full_workflow_with_mock_agent() -> Result<(), nvim_oxi::Error> 
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 
@@ -461,7 +461,7 @@ fn test_terminal_release_fires_with_mock_agent() -> Result<(), nvim_oxi::Error> 
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 

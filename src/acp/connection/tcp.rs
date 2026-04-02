@@ -12,7 +12,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::{debug, error, info, instrument, trace};
 
-/// Connect to an agent via TCP socket
+/// Connect to an agent via TCP tcp
 ///
 /// # Arguments
 /// * `receiver` - Channel to receive user requests (prompts, cancellations, etc.)
@@ -21,7 +21,7 @@ use tracing::{debug, error, info, instrument, trace};
 /// * `host` - Host address (e.g., "localhost")
 /// * `port` - TCP port number
 #[instrument(level = "trace", skip(client, receiver))]
-pub async fn socket_connection(
+pub async fn tcp_connection(
     receiver: Receiver<UserRequest>,
     client: Arc<Handler>,
     agent: &Assistant,
@@ -31,12 +31,12 @@ pub async fn socket_connection(
     let address = format!("{}:{}", host, port);
     debug!("Connecting to agent at {}", address);
 
-    // Connect to the TCP socket
+    // Connect to the TCP tcp
     let stream = TcpStream::connect(&address)
         .await
         .map_err(|e| Error::Connection(format!("Failed to connect to {}: {}", address, e)))?;
 
-    info!("Connected to agent '{}' via socket at {}", agent, address);
+    info!("Connected to agent '{}' via tcp at {}", agent, address);
 
     // Split the stream into read and write halves
     let (reader, writer) = tokio::io::split(stream);
@@ -64,13 +64,13 @@ pub async fn socket_connection(
         })
         .await?;
 
-    info!("Disconnected from '{}' via socket", agent);
+    info!("Disconnected from '{}' via tcp", agent);
     Ok::<(), Error>(())
 }
 
-/// Connect to an agent using socket protocol
+/// Connect to an agent using tcp protocol
 ///
-/// This is the entry point for socket-based connections, matching the
+/// This is the entry point for tcp-based connections, matching the
 /// signature of stdio::connect for consistency.
 #[instrument(level = "trace", skip(client, receiver))]
 pub async fn connect(
@@ -81,10 +81,10 @@ pub async fn connect(
     match agent.clone() {
         Assistant::CustomUrl { host, port, .. } => {
             trace!("Starting custom agent connection: {}", agent);
-            socket_connection(receiver, client, &agent, &host, port).await
+            tcp_connection(receiver, client, &agent, &host, port).await
         }
         _ => {
-            error!("Unsupported agent type for socket connection: {}", agent);
+            error!("Unsupported agent type for tcp connection: {}", agent);
             Ok(())
         }
     }

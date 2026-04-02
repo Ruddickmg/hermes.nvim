@@ -33,7 +33,7 @@ fn test_mock_agent_connection() -> Result<(), nvim_oxi::Error> {
     // 2. Connect to mock agent using socket protocol
     let connect: Function<ConnectionArgs, ()> = create_func(dict.clone(), "connect");
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 
@@ -66,7 +66,7 @@ fn test_mock_agent_prompt() -> Result<(), nvim_oxi::Error> {
     // Connect
     let connect: Function<ConnectionArgs, ()> = create_func(dict.clone(), "connect");
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 

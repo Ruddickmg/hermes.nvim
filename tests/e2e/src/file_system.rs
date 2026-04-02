@@ -86,7 +86,7 @@ fn test_read_file_fires_with_mock_agent() -> Result<(), nvim_oxi::Error> {
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 
@@ -161,7 +161,7 @@ fn test_write_file_fires_with_mock_agent() -> Result<(), nvim_oxi::Error> {
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 
@@ -235,7 +235,7 @@ fn test_write_file_default_handler_writes_to_disk() -> Result<(), nvim_oxi::Erro
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 
@@ -305,7 +305,7 @@ fn test_read_file_default_handler_reads_from_disk() -> Result<(), nvim_oxi::Erro
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 

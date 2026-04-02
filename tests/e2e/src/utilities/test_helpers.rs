@@ -41,7 +41,7 @@ pub fn setup_mock_agent() -> Result<MockAgentSetup, nvim_oxi::Error> {
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
 
     // Connect to mock agent
-    let connect: Function<ConnectionArgs, ()> =
+    let connect: Function<ConnectionArgs, deny()> =
         FromObject::from_object(dict.get("connect").unwrap().clone())?;
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
@@ -49,7 +49,7 @@ pub fn setup_mock_agent() -> Result<MockAgentSetup, nvim_oxi::Error> {
         FromObject::from_object(dict.get("create_session").unwrap().clone())?;
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 

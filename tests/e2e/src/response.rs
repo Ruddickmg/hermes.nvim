@@ -68,7 +68,7 @@ fn test_permission_request_fires_with_mock_agent() -> Result<(), nvim_oxi::Error
 
     // 2. Connect to mock agent via socket protocol
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 

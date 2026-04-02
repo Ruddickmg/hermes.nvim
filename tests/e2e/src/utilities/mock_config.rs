@@ -207,9 +207,9 @@ pub fn create_test_permission_request(session_id: &str) -> RequestPermissionRequ
                 PermissionOptionKind::AllowOnce,
             ),
             PermissionOption::new(
-                PermissionOptionId::new("deny"),
-                "Deny",
-                PermissionOptionKind::AllowOnce,
+                PermissionOptionId::new("reject-once"),
+                "Reject Once",
+                PermissionOptionKind::RejectOnce,
             ),
         ],
     )

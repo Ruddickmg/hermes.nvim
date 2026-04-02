@@ -49,7 +49,7 @@ fn test_default_session_creation() -> Result<(), nvim_oxi::Error> {
     let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 
@@ -89,7 +89,7 @@ fn test_custom_session_creation() -> Result<(), nvim_oxi::Error> {
     let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 
@@ -139,7 +139,7 @@ fn test_cancel_during_prompt() -> Result<(), nvim_oxi::Error> {
     let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 
@@ -213,7 +213,7 @@ fn test_load_session() -> Result<(), nvim_oxi::Error> {
     let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 
@@ -271,7 +271,7 @@ fn test_list_sessions_no_filter() -> Result<(), nvim_oxi::Error> {
     let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 
@@ -327,7 +327,7 @@ fn test_list_sessions_with_cwd_filter() -> Result<(), nvim_oxi::Error> {
     let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 

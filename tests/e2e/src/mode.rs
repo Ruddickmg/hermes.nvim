@@ -47,7 +47,7 @@ fn test_set_mode_success() -> Result<(), nvim_oxi::Error> {
     let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
 
     let mut options = Dictionary::new();
-    options.insert("protocol", "socket");
+    options.insert("protocol", "tcp");
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 
