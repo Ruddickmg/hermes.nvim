@@ -5,11 +5,7 @@
 #![allow(clippy::arc_with_non_send_sync)]
 
 use hermes::acp::handler::Handler;
-use hermes::nvim::{
-    autocommands::Commands,
-    requests::Requests,
-    state::PluginState,
-};
+use hermes::nvim::{autocommands::Commands, requests::Requests, state::PluginState};
 use nvim_oxi::api::opts::{CreateAugroupOpts, CreateAutocmdOpts};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -73,7 +69,7 @@ fn test_handler_new_creates_valid_instance() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let requests = Rc::new(Requests::new(state.clone())?);
     let handler = Handler::new(state, requests).expect("Handler creation should succeed");
-    
+
     // If we get here without error, the integration worked
     // The instance is valid and ready to use
     drop(handler);
@@ -88,7 +84,7 @@ fn test_execute_autocommand_sends_to_channel() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let requests = Rc::new(Requests::new(state.clone())?);
     let handler = Handler::new(state, requests).expect("Handler creation should succeed");
-    
+
     // Execute an autocommand with test data
     let test_data = serde_json::json!({"test": "data"});
     tokio_test::block_on(async {
@@ -96,7 +92,7 @@ fn test_execute_autocommand_sends_to_channel() -> nvim_oxi::Result<()> {
             .execute_autocommand(Commands::ToolCall, test_data)
             .await
     })?;
-    
+
     // If no error occurred, the message was successfully sent to the channel
     // and AsyncHandle was triggered
     Ok(())

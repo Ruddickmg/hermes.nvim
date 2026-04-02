@@ -55,14 +55,16 @@ Binaries are available for:
 > It will:
 > 1. Check if your platform is supported
 > 2. Download the appropriate pre-built binary from GitHub releases
-> 3. Load the native module
+> 3. Load the binary
 >
 > This happens automatically on first API call.
 >
 > ```lua
 > -- sets up pre-built binary for your system
 > require("hermes").setup({ 
+>   download = {
 >     version = "latest",
+>   }
 > })
 > ```
 >
@@ -70,9 +72,9 @@ Binaries are available for:
 > ```lua
 > -- Will have to set up manually with `:Hermes build` or build manually from source
 > require("hermes").setup({ 
->     download = {
->         auto = false,
->     },
+>   download = {
+>     auto = false,
+>   },
 > })
 > ```
 
@@ -175,7 +177,8 @@ Shows current Hermes configuration settings.
 
 Hermes exposes the following functions for sending requests to AI assistants.
 
-Methods marked “Optional” are implemented by Hermes but are not mandatory for agent implementations.
+> [!WARNING]
+> Methods marked “Optional” are implemented by Hermes but are not mandatory for agent implementations.
 
 ### Setup
 
@@ -283,6 +286,16 @@ hermes.connect(
     args = { "--socket", "/tmp/claude.sock" },
   }
 )
+
+-- connect to TCP socket
+hermes.connect(
+  "copilot",
+  {
+    protocol = "tcp",
+    host = "localhost",
+    port = 8080,
+  }
+)
 ```
 
 > **Triggers:** [ConnectionInitialized](#connectioninitialized) autocommand upon completion.
@@ -327,6 +340,83 @@ vim.api.nvim_create_autocmd("User", {
 ```
 
 > **Triggers:** [Authenticated](#authenticated) autocommand upon completion.
+
+### Prompt
+
+Send prompts to the agent 
+
+There are five types of prompts you can send to an agent
+ - [text](https://agentclientprotocol.com/protocol/content#text-content): Human readable prompts
+ - [link](https://agentclientprotocol.com/protocol/content#resource-link): Links to resources (url, file path, etc)
+ - [embedded](https://agentclientprotocol.com/protocol/content#embedded-resource): Similar to a link, but including the contents of the resource link (preferred over link if available) 
+ - [image](https://agentclientprotocol.com/protocol/content#image-content): An image (encoded as a base64)
+ - [audio](https://agentclientprotocol.com/protocol/content#audio-content): Audio content for communication (encoded as base64)
+
+```lua
+local hermes = require("hermes")
+local sessionId = "current-session-id";
+
+-- single prompt call signature
+hermes.prompt(sessionId, {
+  type = "text",
+  text = "What time is it?"
+})
+
+-- multiple prompt call signature
+hermes.prompt(sessionId, {
+  {
+  type = "text",
+  text = "What time is it?"
+  },
+  {
+  type = "link",
+  name = "Example file",
+  uri = "/path/to/example.txt"
+  },
+  { -- text
+  type = "embedded",
+  resource = {
+    uri = "file:///home/user/script.py",
+    mimeType = "text/x-python",
+    text = "def hello():\n    print('Hello, world!')"
+  }
+  },
+  { -- blob
+  type = "embedded",
+  resource = {
+    uri = "file:///home/user/script.py",
+    mimeType = "application/pdf",
+    blob = "Base64-encoded binary data"
+  }
+  },
+  {
+  type = "image",
+  data = "base64-encoded-image-data",
+  mimeType = "image/png"
+  },
+  {
+  type = "audio",
+  data = "base64-encoded-audio-data",
+  mimeType = "audio/wav"
+  }
+}
+
+-- example
+vim.api.nvim_create_autocmd("User", {
+  group = "hermes",
+  pattern = "SessionCreated",
+  callback = function(args)
+    local sessionId = args.data.sessionId
+
+    hermes.prompt(sessionId, {
+      type = "text",
+      text = "What time is it?"
+    })
+  end,
+})
+```
+
+> **Triggers:** [Prompted](#prompted) autocommand upon completion.
 
 ### Create Session
 
@@ -454,83 +544,6 @@ vim.api.nvim_create_autocmd("User", {
 ```
 
 > **Triggers:** [SessionsListed](#sessionslisted) autocommand upon completion
-
-### Prompt
-
-Send prompts to the agent 
-
-There are five types of prompts you can send to an agent
- - [text](https://agentclientprotocol.com/protocol/content#text-content): Human readable prompts
- - [link](https://agentclientprotocol.com/protocol/content#resource-link): Links to resources (url, file path, etc)
- - [embedded](https://agentclientprotocol.com/protocol/content#embedded-resource): Similar to a link, but including the contents of the resource link (preferred over link if available) 
- - [image](https://agentclientprotocol.com/protocol/content#image-content): An image (encoded as a base64)
- - [audio](https://agentclientprotocol.com/protocol/content#audio-content): Audio content for communication (encoded as base64)
-
-```lua
-local hermes = require("hermes")
-local sessionId = "current-session-id";
-
--- single prompt call signature
-hermes.prompt(sessionId, {
-  type = "text",
-  text = "What time is it?"
-})
-
--- multiple prompt call signature
-hermes.prompt(sessionId, {
-  {
-  type = "text",
-  text = "What time is it?"
-  },
-  {
-  type = "link",
-  name = "Example file",
-  uri = "/path/to/example.txt"
-  },
-  { -- text
-  type = "embedded",
-  resource = {
-    uri = "file:///home/user/script.py",
-    mimeType = "text/x-python",
-    text = "def hello():\n    print('Hello, world!')"
-  }
-  },
-  { -- blob
-  type = "embedded",
-  resource = {
-    uri = "file:///home/user/script.py",
-    mimeType = "application/pdf",
-    blob = "Base64-encoded binary data"
-  }
-  },
-  {
-  type = "image",
-  data = "base64-encoded-image-data",
-  mimeType = "image/png"
-  },
-  {
-  type = "audio",
-  data = "base64-encoded-audio-data",
-  mimeType = "audio/wav"
-  }
-}
-
--- example
-vim.api.nvim_create_autocmd("User", {
-  group = "hermes",
-  pattern = "SessionCreated",
-  callback = function(args)
-    local sessionId = args.data.sessionId
-
-    hermes.prompt(sessionId, {
-      type = "text",
-      text = "What time is it?"
-    })
-  end,
-})
-```
-
-> **Triggers:** [Prompted](#prompted) autocommand upon completion.
 
 ### Cancel (**Optional**)
 
@@ -1635,8 +1648,13 @@ Available formats:
 - **json** - Machine-readable JSON format
 
 ## TODO:
+-- before v1
+- [ ] disable capabilities that the agent does not have
+  - [ ] report error (or warning?) to user if a method called is Unsupported by the agent
+  - [ ] filter unsupported method calls
 
 -- infra
+- [ ] consolidate api generation logic
 - [ ] use smol instead of tokio to reduce build size
 - [ ] use async for all the things
 
@@ -1644,18 +1662,13 @@ Available formats:
 - [x] Allow connecting to Agents
   - [x] Via stdio
   - [ ] Via http
-  - [ ] Via linux socket
+  - [x] Via tcp socket
 - [ ] Add autocommand that triggers on all events
 - [ ] Support "unstable" ACP methods
   - [ ] model selection
   - [ ] session methods
     - [ ] Merge sessions
     - [ ] Fork sessions
-
--- testing
-- [ ] Create fake/mock Agent used to test agent functionality that is not currently supported by any/many ai agents
-- [ ] Only test "required" methods against actual agents
-- [ ] Create an e2e test suite for running against each supported agent to confirm integration
 
 -- nice to haves
 - [ ] Status bar integration

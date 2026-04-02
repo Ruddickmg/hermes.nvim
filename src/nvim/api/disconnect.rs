@@ -199,7 +199,7 @@ mod tests {
                 }
                 DisconnectArgs::Single(ref assistant) => {
                     prop_assert!(
-                        matches!(assistant, Assistant::Copilot | Assistant::Opencode | Assistant::Custom { .. }),
+                        matches!(assistant, Assistant::Copilot | Assistant::Opencode | Assistant::CustomStdio { .. }),
                         "Single variant should contain valid assistant"
                     );
                 }
@@ -210,7 +210,7 @@ mod tests {
                     );
                     for assistant in assistants {
                         prop_assert!(
-                            matches!(assistant, Assistant::Copilot | Assistant::Opencode | Assistant::Custom { .. }),
+                            matches!(assistant, Assistant::Copilot | Assistant::Opencode | Assistant::CustomStdio { .. }),
                             "Each assistant in Multiple should be valid"
                         );
                     }

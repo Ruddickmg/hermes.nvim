@@ -16,6 +16,7 @@ agent-client-protocol = { version = "0.10.2", features = [
   "unstable_session_resume",
   "unstable_session_usage"
 ] }
+async-trait = "0.1"
 hermes = { path = "../.." }
 nvim-oxi = { version = "0.6.0", features = ["neovim-0-10", "test"] }
 tokio = { version = "1.49", features = ["full"] }
@@ -26,6 +27,7 @@ serde_json = "1"
 tracing = "0.1.44"
 pretty_assertions = "1.4"
 tempfile = "3.14"
+uuid = { version = "1", features = ["v4"] }
 
 [build-dependencies]
 nvim-oxi = { version = "0.6.0", features = ["neovim-0-10", "test"] }

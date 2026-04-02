@@ -6,7 +6,7 @@ use hermes::acp::Result;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
 use std::sync::Arc;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 use uuid::Uuid;
 
 fn create_terminal_request(command: &str, args: Vec<String>) -> CreateTerminalRequest {

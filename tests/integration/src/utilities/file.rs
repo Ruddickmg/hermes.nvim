@@ -1,6 +1,6 @@
 //! Integration tests for file utilities
-use assert_fs::prelude::*;
 use assert_fs::NamedTempFile;
+use assert_fs::prelude::*;
 use hermes::utilities::{
     acquire_or_create_buffer, detect_project_storage_path, find_existing_buffer,
     mark_buffer_modified, refresh_view, save_buffer_to_disk, update_buffer_content,

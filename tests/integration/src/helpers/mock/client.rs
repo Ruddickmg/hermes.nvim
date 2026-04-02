@@ -2,10 +2,10 @@
 use agent_client_protocol::{
     Client, CreateTerminalRequest, CreateTerminalResponse, ReadTextFileRequest,
     ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
-    RequestPermissionRequest, RequestPermissionResponse, RequestPermissionOutcome,
-    Result, SessionNotification, TerminalExitStatus, TerminalOutputRequest,
-    TerminalOutputResponse, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
-    WriteTextFileRequest, WriteTextFileResponse,
+    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Result,
+    SessionNotification, TerminalExitStatus, TerminalOutputRequest, TerminalOutputResponse,
+    WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
+    WriteTextFileResponse,
 };
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -47,10 +47,7 @@ impl MockClient {
 
 #[async_trait(?Send)]
 impl Client for MockClient {
-    async fn write_text_file(
-        &self,
-        _args: WriteTextFileRequest,
-    ) -> Result<WriteTextFileResponse> {
+    async fn write_text_file(&self, _args: WriteTextFileRequest) -> Result<WriteTextFileResponse> {
         *self.write_called.lock().await = true;
         Ok(WriteTextFileResponse::new())
     }

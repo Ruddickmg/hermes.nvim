@@ -1,5 +1,5 @@
 use crate::PluginState;
-use crate::acp::connection::{Connection, stdio};
+use crate::acp::connection::{Connection, stdio, tcp};
 use crate::nvim::configuration::Permissions;
 use crate::{Handler, acp::error::Error};
 use agent_client_protocol::{
@@ -16,10 +16,11 @@ use tracing::{debug, error, info, instrument, trace, warn};
 
 type ConnectionHandles = Rc<RefCell<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>;
 
-#[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
+#[derive(PartialEq, Eq, Clone, Copy, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
 pub enum Protocol {
-    Socket,
+    Tcp,
     Http,
+    Socket,
     #[default]
     Stdio,
 }
@@ -27,6 +28,7 @@ pub enum Protocol {
 impl std::fmt::Display for Protocol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Protocol::Tcp => write!(f, "tcp"),
             Protocol::Socket => write!(f, "socket"),
             Protocol::Http => write!(f, "http"),
             Protocol::Stdio => write!(f, "stdio"),
@@ -37,6 +39,7 @@ impl std::fmt::Display for Protocol {
 impl From<&str> for Protocol {
     fn from(s: &str) -> Self {
         match s.to_lowercase().as_str() {
+            "tcp" => Protocol::Tcp,
             "socket" => Protocol::Socket,
             "http" => Protocol::Http,
             "stdio" => Protocol::Stdio,
@@ -57,10 +60,15 @@ pub enum Assistant {
     Copilot,
     Opencode,
     Gemini,
-    Custom {
+    CustomStdio {
         name: String,
         command: String,
         args: Vec<String>,
+    },
+    CustomUrl {
+        name: String,
+        host: String,
+        port: u16,
     },
 }
 
@@ -70,7 +78,8 @@ impl std::fmt::Display for Assistant {
             Assistant::Copilot => write!(f, "copilot"),
             Assistant::Opencode => write!(f, "opencode"),
             Assistant::Gemini => write!(f, "gemini"),
-            Assistant::Custom { name, .. } => write!(f, "{}", name),
+            Assistant::CustomStdio { name, .. } => write!(f, "{}", name),
+            Assistant::CustomUrl { name, host, port } => write!(f, "{} ({}:{})", name, host, port),
         }
     }
 }
@@ -80,7 +89,7 @@ impl From<&str> for Assistant {
         match s.to_lowercase().as_str() {
             "copilot" => Assistant::Copilot,
             "opencode" => Assistant::Opencode,
-            _ => Assistant::Custom {
+            _ => Assistant::CustomStdio {
                 name: s.to_string(),
                 command: String::new(),
                 args: Vec::new(),
@@ -221,6 +230,9 @@ impl ConnectionManager {
                                                 "Socket protocol is not yet implemented"
                                                     .to_string(),
                                             ))
+                                        }
+                                        Protocol::Tcp => {
+                                            tcp::connect(handler, thread_agent, receiver).await
                                         }
                                     }
                                 })
@@ -368,10 +380,16 @@ mod tests {
     #[test]
     fn test_protocol_display() {
         // Test Display for all Protocol variants using slice comparison
-        let protocols: Vec<Protocol> = vec![Protocol::Socket, Protocol::Http, Protocol::Stdio];
+        let protocols: Vec<Protocol> = vec![
+            Protocol::Tcp,
+            Protocol::Socket,
+            Protocol::Http,
+            Protocol::Stdio,
+        ];
         let results: Vec<String> = protocols.iter().map(|p| format!("{}", p)).collect();
 
         let expected: Vec<String> = vec![
+            "tcp".to_string(),
             "socket".to_string(),
             "http".to_string(),
             "stdio".to_string(),
@@ -384,18 +402,20 @@ mod tests {
     fn test_protocol_from_str() {
         // Test FromStr for known protocols using slice comparison
         let inputs: Vec<&str> = vec![
-            "socket", "http", "stdio", "SOCKET", "HTTP", "STDIO", "unknown",
+            "tcp", "socket", "http", "stdio", "TCP", "SOCKET", "HTTP", "STDIO", "unknown",
         ];
         let results: Vec<Protocol> = inputs.iter().map(|&s| Protocol::from(s)).collect();
 
         let expected: Vec<Protocol> = vec![
+            Protocol::Tcp,    // tcp
             Protocol::Socket, // socket
             Protocol::Http,   // http
             Protocol::Stdio,  // stdio
+            Protocol::Tcp,    // TCP (case-insensitive)
             Protocol::Socket, // SOCKET (case-insensitive)
             Protocol::Http,   // HTTP (case-insensitive)
             Protocol::Stdio,  // STDIO (case-insensitive)
-            Protocol::Stdio,  // unknown defaults to Stdio
+            Protocol::Stdio,  // unknown (defaults to Stdio)
         ];
 
         assert_eq!(results, expected);
@@ -407,7 +427,7 @@ mod tests {
         let assistants: Vec<Assistant> = vec![
             Assistant::Copilot,
             Assistant::Opencode,
-            Assistant::Custom {
+            Assistant::CustomStdio {
                 name: String::from("my-claude"),
                 command: String::from("claude-acp"),
                 args: vec![String::from("--socket")],
@@ -442,6 +462,6 @@ mod tests {
     #[test]
     fn test_assistant_from_str_unknown_creates_custom() {
         let result = Assistant::from("unknown-agent");
-        assert!(matches!(result, Assistant::Custom { name, .. } if name == "unknown-agent"));
+        assert!(matches!(result, Assistant::CustomStdio { name, .. } if name == "unknown-agent"));
     }
 }

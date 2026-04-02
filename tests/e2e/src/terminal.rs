@@ -1,214 +1,499 @@
 use std::time::Duration;
 
-use crate::{TIMEOUT_IN_SECONDS, utilities::autocommand};
+use crate::{
+    utilities::{
+        autocommand,
+        mock_agent::MockAgent,
+        mock_config::{
+            create_test_create_terminal_request, create_test_terminal_output_request,
+            create_test_wait_for_terminal_exit_request, MockConfig,
+        },
+    },
+    TIMEOUT_IN_SECONDS,
+};
 use agent_client_protocol::{
-    CreateTerminalRequest, InitializeResponse, NewSessionResponse, PermissionOption,
-    PromptResponse, SessionId, StopReason, TerminalOutputRequest,
-    ToolCallUpdate, WaitForTerminalExitRequest,
+    InitializeResponse, NewSessionResponse, PromptResponse, ReleaseTerminalRequest, SessionId,
+    StopReason, TerminalId,
 };
 use hermes::{
     api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
     nvim::{autocommands::Commands, hermes},
 };
-use nvim_oxi::{Dictionary, Function, Object, conversion::FromObject};
+use nvim_oxi::{conversion::FromObject, Dictionary, Function, Object};
 use pretty_assertions::assert_eq;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+/// Data received from the TerminalCreate autocommand.
+/// Includes the requestId injected by Hermes for responding.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct PermissionRequest {
+struct TerminalCreateData {
     pub request_id: String,
     pub session_id: SessionId,
-    pub tool_call: ToolCallUpdate,
-    pub options: Vec<PermissionOption>,
+    pub command: String,
+    pub args: Vec<String>,
 }
-/// Test that verifies the default terminal workflow handles a simple echo command
-/// This test validates the complete terminal lifecycle:
-/// 1. TerminalCreate - Agent requests terminal creation
-/// 2. TerminalOutput - Agent requests terminal output
-/// 3. TerminalExit - Agent requests notification when terminal exits
-/// 4. TerminalRelease - Agent requests terminal release
-#[ignore = "I can't find an agent that uses the ACP terminal/* commands, I won't be able to test until agent's use the functionality"]
-#[nvim_oxi::test]
-fn test_default_terminal_echo_workflow() -> Result<(), nvim_oxi::Error> {
-    let dict: Dictionary = hermes()?;
-    let connect: Function<ConnectionArgs, ()> =
-        FromObject::from_object(dict.get("connect").unwrap().clone())?;
-    let disconnect: Function<DisconnectArgs, ()> =
-        FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
-    let create_session: Function<CreateSessionArgs, ()> =
-        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
-    let prompt: Function<PromptArgs, ()> =
-        FromObject::from_object(dict.get("prompt").unwrap().clone())?;
-    let respond: Function<(String, String), ()> =
-        FromObject::from_object(dict.get("respond").unwrap().clone())?;
 
-    let wait_for_initialization =
+/// Data received from the TerminalOutput autocommand.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TerminalOutputData {
+    pub request_id: String,
+    pub session_id: SessionId,
+    pub terminal_id: TerminalId,
+}
+
+/// Data received from the TerminalExit (WaitForTerminalExit) autocommand.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TerminalExitData {
+    pub request_id: String,
+    pub session_id: SessionId,
+    pub terminal_id: TerminalId,
+}
+
+/// Data received from the TerminalRelease autocommand.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TerminalReleaseData {
+    pub request_id: String,
+    pub session_id: SessionId,
+    pub terminal_id: TerminalId,
+}
+
+fn create_func<A>(plugin: Dictionary, name: &str) -> Function<A, ()> {
+    FromObject::from_object(plugin.get(name).unwrap().clone())
+        .unwrap_or_else(|_| panic!("Failed to create function for {}", name))
+}
+
+fn make_err(msg: &str) -> nvim_oxi::Error {
+    nvim_oxi::Error::Api(nvim_oxi::api::Error::Other(msg.to_string()))
+}
+
+/// Test that the TerminalCreate autocommand fires with the correct command.
+///
+/// Configures the mock agent to send a CreateTerminalRequest during prompt.
+/// The test responds with a terminal ID so the mock agent can proceed.
+#[nvim_oxi::test]
+fn test_terminal_create_fires_with_mock_agent() -> Result<(), nvim_oxi::Error> {
+    let session_placeholder = SessionId::from("placeholder");
+
+    let (agent, conn_rx) = MockAgent::new();
+    {
+        let mut config = agent.config().lock().unwrap();
+        *config =
+            MockConfig::new().set_create_terminal_request(create_test_create_terminal_request(
+                session_placeholder.clone(),
+                "echo",
+                vec!["success".to_string()],
+            ));
+    }
+    let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
+
+    let dict: Dictionary = hermes()?;
+    let connect = create_func::<ConnectionArgs>(dict.clone(), "connect");
+    let disconnect = create_func::<DisconnectArgs>(dict.clone(), "disconnect");
+    let create_session = create_func::<CreateSessionArgs>(dict.clone(), "create_session");
+    let prompt = create_func::<PromptArgs>(dict.clone(), "prompt");
+    let respond: Function<(String, Object), ()> = create_func(dict.clone(), "respond");
+
+    let wait_for_init =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
         autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
     let wait_for_terminal_create =
-        autocommand::listen_for_autocommand::<CreateTerminalRequest>(Commands::TerminalCreate);
-    let wait_for_terminal_output =
-        autocommand::listen_for_autocommand::<TerminalOutputRequest>(Commands::TerminalOutput);
-    let wait_for_terminal_exit =
-        autocommand::listen_for_autocommand::<WaitForTerminalExitRequest>(Commands::TerminalExit);
-    let wait_for_permission_request =
-        autocommand::listen_for_autocommand::<PermissionRequest>(Commands::PermissionRequest);
+        autocommand::listen_for_autocommand::<TerminalCreateData>(Commands::TerminalCreate);
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
-    // Step 1: Connect to agent
-    connect.call((nvim_oxi::String::from("copilot"), None))?;
-    let _init_response = wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
-    // Step 2: Create session
-    create_session.call(CreateSessionArgs::Default)?;
-    let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
-    let session_id = session.session_id;
+    let mut options = Dictionary::new();
+    options.insert("protocol", "tcp");
+    options.insert("host", "localhost");
+    options.insert("port", mock_handle.port() as i64);
 
-    // Step 3: Send prompt requesting terminal execution
+    connect.call((nvim_oxi::String::from("mock-agent"), Some(options)))?;
+    wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS)).map_err(|_| make_err("init timeout"))?;
+
+    create_session.call(CreateSessionArgs::Default)?;
+    let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("session timeout"))?;
+
     let mut content_dict = Dictionary::new();
     content_dict.insert("type", "text");
-    // Explicitly request ACP terminal protocol
-    content_dict.insert(
-        "text",
-        "Run 'echo success && exit 0' in a terminal and tell me when it completes",
-    );
+    content_dict.insert("text", "Run echo in a terminal");
     let content = PromptContent::Single(FromObject::from_object(Object::from(content_dict))?);
 
-    prompt.call((session_id.to_string(), content))?;
+    prompt.call((session.session_id.to_string(), content))?;
 
-    let permission_request = wait_for_permission_request(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
-    let permission_id = permission_request
-        .clone()
-        .options
-        .into_iter()
-        .find(|option| option.option_id.to_string().as_str() == "allow_always")
-        .unwrap()
-        .option_id;
+    let terminal_create = wait_for_terminal_create(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("TerminalCreate autocommand did not fire"))?;
 
-    let request_id = permission_request.request_id;
-    // Step 4: Wait for TerminalCreate autocommand
-    respond.call((request_id.to_string(), permission_id.to_string()))?;
+    // Respond with a terminal ID so the mock agent can proceed
+    respond.call((
+        terminal_create.request_id.clone(),
+        Object::from("test-term-1"),
+    ))?;
 
-    let terminal_create = wait_for_terminal_create(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+    let _prompt_response = wait_for_prompt(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("Prompt did not complete after terminal workflow"))?;
 
-    // Verify TerminalCreate contains expected command data
-    assert!(
-        !terminal_create.session_id.to_string().is_empty(),
-        "TerminalCreate should have a valid session ID"
-    );
-    // The command should contain 'echo' (agent may wrap it in a shell)
-    let command_str = terminal_create.command.to_string();
-    assert!(
-        command_str.contains("echo") || !terminal_create.args.is_empty(),
-        "TerminalCreate should contain echo command or args: got command='{}'",
-        command_str
-    );
+    disconnect.call(DisconnectArgs::All)?;
+    mock_handle.close();
 
-    // Step 5: Wait for TerminalOutput autocommand
-    let terminal_output = wait_for_terminal_output(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+    assert_eq!(terminal_create.command, "echo");
 
-    // Verify TerminalOutput contains the expected output
+    Ok(())
+}
+
+/// Test that TerminalOutput autocommand fires after terminal creation.
+///
+/// Configures the mock agent with both create_terminal and terminal_output requests.
+/// The mock agent uses the terminal_id from the CreateTerminalResponse to send
+/// the TerminalOutputRequest.
+#[nvim_oxi::test]
+fn test_terminal_output_fires_with_mock_agent() -> Result<(), nvim_oxi::Error> {
+    let session_placeholder = SessionId::from("placeholder");
+    let terminal_placeholder = TerminalId::from("placeholder");
+
+    let (agent, conn_rx) = MockAgent::new();
+    {
+        let mut config = agent.config().lock().unwrap();
+        *config = MockConfig::new()
+            .set_create_terminal_request(create_test_create_terminal_request(
+                session_placeholder.clone(),
+                "echo",
+                vec!["success".to_string()],
+            ))
+            .set_terminal_output_request(create_test_terminal_output_request(
+                session_placeholder.clone(),
+                terminal_placeholder.clone(),
+            ));
+    }
+    let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
+
+    let dict: Dictionary = hermes()?;
+    let connect = create_func::<ConnectionArgs>(dict.clone(), "connect");
+    let disconnect = create_func::<DisconnectArgs>(dict.clone(), "disconnect");
+    let create_session = create_func::<CreateSessionArgs>(dict.clone(), "create_session");
+    let prompt = create_func::<PromptArgs>(dict.clone(), "prompt");
+    let respond: Function<(String, Object), ()> = create_func(dict.clone(), "respond");
+
+    let wait_for_init =
+        autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
+    let wait_for_session =
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
+    let wait_for_terminal_create =
+        autocommand::listen_for_autocommand::<TerminalCreateData>(Commands::TerminalCreate);
+    let wait_for_terminal_output =
+        autocommand::listen_for_autocommand::<TerminalOutputData>(Commands::TerminalOutput);
+    let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
+
+    let mut options = Dictionary::new();
+    options.insert("protocol", "tcp");
+    options.insert("host", "localhost");
+    options.insert("port", mock_handle.port() as i64);
+
+    connect.call((nvim_oxi::String::from("mock-agent"), Some(options)))?;
+    wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS)).map_err(|_| make_err("init timeout"))?;
+
+    create_session.call(CreateSessionArgs::Default)?;
+    let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("session timeout"))?;
+
+    let mut content_dict = Dictionary::new();
+    content_dict.insert("type", "text");
+    content_dict.insert("text", "Run echo in a terminal");
+    let content = PromptContent::Single(FromObject::from_object(Object::from(content_dict))?);
+
+    prompt.call((session.session_id.to_string(), content))?;
+
+    // Respond to TerminalCreate with a terminal ID
+    let terminal_create = wait_for_terminal_create(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("TerminalCreate autocommand did not fire"))?;
+    respond.call((
+        terminal_create.request_id.clone(),
+        Object::from("test-term-1"),
+    ))?;
+
+    // Wait for and respond to TerminalOutput
+    let terminal_output = wait_for_terminal_output(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("TerminalOutput autocommand did not fire"))?;
+    respond.call((
+        terminal_output.request_id.clone(),
+        Object::from("command output"),
+    ))?;
+
+    let _prompt_response = wait_for_prompt(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("Prompt did not complete after terminal workflow"))?;
+
+    disconnect.call(DisconnectArgs::All)?;
+    mock_handle.close();
+
     assert_eq!(
         terminal_output.session_id.to_string(),
-        session_id.to_string(),
-        "TerminalOutput session ID should match"
-    );
-    assert!(
-        !terminal_output.terminal_id.to_string().is_empty(),
-        "TerminalOutput should have a valid terminal ID"
-    );
-
-    // Step 6: Wait for TerminalExit autocommand
-    let terminal_exit = wait_for_terminal_exit(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
-
-    // Verify TerminalExit contains expected data
-    assert_eq!(
-        terminal_exit.session_id.to_string(),
-        session_id.to_string(),
-        "TerminalExit session ID should match"
-    );
-    assert!(
-        !terminal_exit.terminal_id.to_string().is_empty(),
-        "TerminalExit should have a valid terminal ID"
-    );
-
-    // Step 7: Wait for prompt completion (the agent should respond after terminal workflow)
-    let prompt_response = wait_for_prompt(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
-
-    // Step 8: Disconnect
-    disconnect.call(DisconnectArgs::All)?;
-
-    // Final assertions
-    assert_eq!(
-        prompt_response.stop_reason,
-        StopReason::EndTurn,
-        "Prompt should complete successfully after terminal workflow"
+        session.session_id.to_string(),
     );
 
     Ok(())
 }
 
-/// Test that verifies specific exit codes are captured correctly
-/// This test runs a command that exits with a specific code and verifies
-/// the exit code is properly communicated back to the agent.
-#[ignore = "I can't find an agent that uses the ACP terminal/* commands, I won't be able to test until agent's use the functionality"]
+/// Test that WaitForTerminalExit autocommand fires after terminal creation.
+///
+/// Configures the mock agent with create_terminal and wait_for_terminal_exit requests.
+/// The mock agent uses the terminal_id from the CreateTerminalResponse to send
+/// the WaitForTerminalExitRequest.
 #[nvim_oxi::test]
-fn test_terminal_exit_code_capture() -> Result<(), nvim_oxi::Error> {
-    let dict: Dictionary = hermes()?;
-    let connect: Function<ConnectionArgs, ()> =
-        FromObject::from_object(dict.get("connect").unwrap().clone())?;
-    let disconnect: Function<DisconnectArgs, ()> =
-        FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
-    let create_session: Function<CreateSessionArgs, ()> =
-        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
-    let prompt: Function<PromptArgs, ()> =
-        FromObject::from_object(dict.get("prompt").unwrap().clone())?;
+fn test_terminal_exit_fires_with_mock_agent() -> Result<(), nvim_oxi::Error> {
+    let session_placeholder = SessionId::from("placeholder");
+    let terminal_placeholder = TerminalId::from("placeholder");
 
-    let wait_for_initialization =
+    let (agent, conn_rx) = MockAgent::new();
+    {
+        let mut config = agent.config().lock().unwrap();
+        *config = MockConfig::new()
+            .set_create_terminal_request(create_test_create_terminal_request(
+                session_placeholder.clone(),
+                "echo",
+                vec!["success".to_string()],
+            ))
+            .set_wait_for_terminal_exit_request(create_test_wait_for_terminal_exit_request(
+                session_placeholder.clone(),
+                terminal_placeholder.clone(),
+            ));
+    }
+    let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
+
+    let dict: Dictionary = hermes()?;
+    let connect = create_func::<ConnectionArgs>(dict.clone(), "connect");
+    let disconnect = create_func::<DisconnectArgs>(dict.clone(), "disconnect");
+    let create_session = create_func::<CreateSessionArgs>(dict.clone(), "create_session");
+    let prompt = create_func::<PromptArgs>(dict.clone(), "prompt");
+    let respond: Function<(String, Object), ()> = create_func(dict.clone(), "respond");
+
+    let wait_for_init =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
         autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
     let wait_for_terminal_create =
-        autocommand::listen_for_autocommand::<CreateTerminalRequest>(Commands::TerminalCreate);
+        autocommand::listen_for_autocommand::<TerminalCreateData>(Commands::TerminalCreate);
     let wait_for_terminal_exit =
-        autocommand::listen_for_autocommand::<WaitForTerminalExitRequest>(Commands::TerminalExit);
+        autocommand::listen_for_autocommand::<TerminalExitData>(Commands::TerminalExit);
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
-    // Connect and create session
-    connect.call((nvim_oxi::String::from("copilot"), None))?;
-    wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+    let mut options = Dictionary::new();
+    options.insert("protocol", "tcp");
+    options.insert("host", "localhost");
+    options.insert("port", mock_handle.port() as i64);
+
+    connect.call((nvim_oxi::String::from("mock-agent"), Some(options)))?;
+    wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS)).map_err(|_| make_err("init timeout"))?;
 
     create_session.call(CreateSessionArgs::Default)?;
-    let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
-    let session_id = session.session_id;
+    let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("session timeout"))?;
 
-    // Send prompt requesting a command that exits with code 0 (success)
     let mut content_dict = Dictionary::new();
     content_dict.insert("type", "text");
-    content_dict.insert(
-        "text",
-        "Run 'echo success && exit 0' in a terminal and tell me when it completes",
-    );
+    content_dict.insert("text", "Run echo in a terminal");
     let content = PromptContent::Single(FromObject::from_object(Object::from(content_dict))?);
 
-    prompt.call((session_id.to_string(), content))?;
+    prompt.call((session.session_id.to_string(), content))?;
 
-    // Wait for TerminalCreate
-    let _terminal_create = wait_for_terminal_create(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+    // Respond to TerminalCreate with a terminal ID
+    let terminal_create = wait_for_terminal_create(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("TerminalCreate autocommand did not fire"))?;
+    respond.call((
+        terminal_create.request_id.clone(),
+        Object::from("test-term-1"),
+    ))?;
 
-    // Wait for TerminalExit
-    let terminal_exit = wait_for_terminal_exit(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+    // Wait for and respond to TerminalExit with exit code 0
+    let terminal_exit = wait_for_terminal_exit(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("TerminalExit autocommand did not fire"))?;
+    respond.call((terminal_exit.request_id.clone(), Object::from(0i64)))?;
 
-    // Wait for prompt completion
-    let _prompt_response = wait_for_prompt(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
+    let _prompt_response = wait_for_prompt(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("Prompt did not complete after terminal workflow"))?;
 
     disconnect.call(DisconnectArgs::All)?;
+    mock_handle.close();
 
-    // Verify the terminal workflow completed with proper IDs
-    assert!(
-        !terminal_exit.terminal_id.to_string().is_empty(),
-        "Terminal ID should be present in exit notification"
+    assert_eq!(
+        terminal_exit.session_id.to_string(),
+        session.session_id.to_string(),
+    );
+
+    Ok(())
+}
+
+/// Test that the full terminal workflow completes: Create, Output, Exit.
+///
+/// This is the comprehensive test that verifies all three terminal operations
+/// fire in sequence and the prompt completes after the workflow.
+#[nvim_oxi::test]
+fn test_terminal_full_workflow_with_mock_agent() -> Result<(), nvim_oxi::Error> {
+    let session_placeholder = SessionId::from("placeholder");
+    let terminal_placeholder = TerminalId::from("placeholder");
+
+    let (agent, conn_rx) = MockAgent::new();
+    {
+        let mut config = agent.config().lock().unwrap();
+        *config = MockConfig::new()
+            .set_create_terminal_request(create_test_create_terminal_request(
+                session_placeholder.clone(),
+                "echo",
+                vec!["success".to_string()],
+            ))
+            .set_terminal_output_request(create_test_terminal_output_request(
+                session_placeholder.clone(),
+                terminal_placeholder.clone(),
+            ))
+            .set_wait_for_terminal_exit_request(create_test_wait_for_terminal_exit_request(
+                session_placeholder.clone(),
+                terminal_placeholder.clone(),
+            ));
+    }
+    let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
+
+    let dict: Dictionary = hermes()?;
+    let connect = create_func::<ConnectionArgs>(dict.clone(), "connect");
+    let disconnect = create_func::<DisconnectArgs>(dict.clone(), "disconnect");
+    let create_session = create_func::<CreateSessionArgs>(dict.clone(), "create_session");
+    let prompt = create_func::<PromptArgs>(dict.clone(), "prompt");
+    let respond: Function<(String, Object), ()> = create_func(dict.clone(), "respond");
+
+    let wait_for_init =
+        autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
+    let wait_for_session =
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
+    let wait_for_terminal_create =
+        autocommand::listen_for_autocommand::<TerminalCreateData>(Commands::TerminalCreate);
+    let wait_for_terminal_output =
+        autocommand::listen_for_autocommand::<TerminalOutputData>(Commands::TerminalOutput);
+    let wait_for_terminal_exit =
+        autocommand::listen_for_autocommand::<TerminalExitData>(Commands::TerminalExit);
+    let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
+
+    let mut options = Dictionary::new();
+    options.insert("protocol", "tcp");
+    options.insert("host", "localhost");
+    options.insert("port", mock_handle.port() as i64);
+
+    connect.call((nvim_oxi::String::from("mock-agent"), Some(options)))?;
+    wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS)).map_err(|_| make_err("init timeout"))?;
+
+    create_session.call(CreateSessionArgs::Default)?;
+    let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("session timeout"))?;
+
+    let mut content_dict = Dictionary::new();
+    content_dict.insert("type", "text");
+    content_dict.insert("text", "Run echo in a terminal");
+    let content = PromptContent::Single(FromObject::from_object(Object::from(content_dict))?);
+
+    prompt.call((session.session_id.to_string(), content))?;
+
+    // Step 1: Respond to TerminalCreate with a terminal ID
+    let terminal_create = wait_for_terminal_create(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("TerminalCreate autocommand did not fire"))?;
+    respond.call((
+        terminal_create.request_id.clone(),
+        Object::from("test-term-1"),
+    ))?;
+
+    // Step 2: Respond to TerminalOutput
+    let _terminal_output = wait_for_terminal_output(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("TerminalOutput autocommand did not fire"))?;
+    respond.call((
+        _terminal_output.request_id.clone(),
+        Object::from("success\n"),
+    ))?;
+
+    // Step 3: Respond to TerminalExit with exit code 0
+    let _terminal_exit = wait_for_terminal_exit(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("TerminalExit autocommand did not fire"))?;
+    respond.call((_terminal_exit.request_id.clone(), Object::from(0i64)))?;
+
+    // Step 4: Wait for prompt to complete
+    let prompt_response = wait_for_prompt(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("Prompt did not complete after terminal workflow"))?;
+
+    disconnect.call(DisconnectArgs::All)?;
+    mock_handle.close();
+
+    assert_eq!(prompt_response.stop_reason, StopReason::EndTurn);
+
+    Ok(())
+}
+
+/// Test that the TerminalRelease autocommand fires when the mock agent sends a release request.
+///
+/// Configures the mock agent to send a ReleaseTerminalRequest during prompt.
+/// Verifies that Hermes fires the TerminalRelease autocommand with the correct
+/// session_id and terminal_id, and that the prompt completes after responding.
+#[nvim_oxi::test]
+fn test_terminal_release_fires_with_mock_agent() -> Result<(), nvim_oxi::Error> {
+    let session_placeholder = SessionId::from("placeholder");
+    let terminal_id = TerminalId::from("test-term-release");
+
+    let (agent, conn_rx) = MockAgent::new();
+    {
+        let mut config = agent.config().lock().unwrap();
+        *config = MockConfig::new().set_release_terminal_request(ReleaseTerminalRequest::new(
+            session_placeholder.clone(),
+            terminal_id.clone(),
+        ));
+    }
+    let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
+
+    let dict: Dictionary = hermes()?;
+    let connect = create_func::<ConnectionArgs>(dict.clone(), "connect");
+    let disconnect = create_func::<DisconnectArgs>(dict.clone(), "disconnect");
+    let create_session = create_func::<CreateSessionArgs>(dict.clone(), "create_session");
+    let prompt = create_func::<PromptArgs>(dict.clone(), "prompt");
+    let respond: Function<(String, Object), ()> = create_func(dict.clone(), "respond");
+
+    let wait_for_init =
+        autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
+    let wait_for_session =
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
+    let wait_for_terminal_release =
+        autocommand::listen_for_autocommand::<TerminalReleaseData>(Commands::TerminalRelease);
+    let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
+
+    let mut options = Dictionary::new();
+    options.insert("protocol", "tcp");
+    options.insert("host", "localhost");
+    options.insert("port", mock_handle.port() as i64);
+
+    connect.call((nvim_oxi::String::from("mock-agent"), Some(options)))?;
+    wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS)).map_err(|_| make_err("init timeout"))?;
+
+    create_session.call(CreateSessionArgs::Default)?;
+    let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("session timeout"))?;
+
+    let mut content_dict = Dictionary::new();
+    content_dict.insert("type", "text");
+    content_dict.insert("text", "Release the terminal");
+    let content = PromptContent::Single(FromObject::from_object(Object::from(content_dict))?);
+
+    prompt.call((session.session_id.to_string(), content))?;
+
+    let terminal_release = wait_for_terminal_release(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("TerminalRelease autocommand did not fire"))?;
+
+    // Respond to complete the release request
+    respond.call((terminal_release.request_id.clone(), Object::from("")))?;
+
+    let _prompt_response = wait_for_prompt(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("Prompt did not complete after terminal release"))?;
+
+    disconnect.call(DisconnectArgs::All)?;
+    mock_handle.close();
+
+    assert_eq!(
+        terminal_release.terminal_id.to_string(),
+        terminal_id.to_string(),
     );
 
     Ok(())

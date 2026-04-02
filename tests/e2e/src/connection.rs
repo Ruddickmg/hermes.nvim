@@ -8,7 +8,10 @@ use pretty_assertions::assert_eq;
 use std::time::Duration;
 use tracing::warn;
 
-use crate::{TIMEOUT_IN_SECONDS, utilities::autocommand};
+use crate::{
+    TIMEOUT_IN_SECONDS,
+    utilities::{autocommand, mock_agent::MockAgent},
+};
 
 #[nvim_oxi::test]
 fn test_setup_returns_connect_function() -> Result<(), nvim_oxi::Error> {
@@ -27,10 +30,24 @@ async fn test_connect_function() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;
 
     let connect_obj = dict.get("connect").expect("connect function not found");
-    let connect: Function<ConnectionArgs, ()> =
-        FromObject::from_object(connect_obj.clone())?;
+    let connect: Function<ConnectionArgs, ()> = FromObject::from_object(connect_obj.clone())?;
 
-    connect.call((nvim_oxi::String::from("opencode"), None))?;
+    // Start mock agent for this test
+    let (agent, conn_rx) = MockAgent::new();
+    let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
+
+    let mut options = Dictionary::new();
+    options.insert("protocol", "tcp");
+    options.insert("host", "localhost");
+    options.insert("port", mock_handle.port() as i64);
+
+    connect.call((nvim_oxi::String::from("mock-agent"), Some(options)))?;
+
+    // Cleanup
+    let disconnect: Function<DisconnectArgs, ()> =
+        FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
+    disconnect.call(DisconnectArgs::All)?;
+    mock_handle.close();
 
     Ok(())
 }
@@ -46,15 +63,26 @@ fn test_initialization() -> Result<(), nvim_oxi::Error> {
     let wait_for_response =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
 
-    connect.call((nvim_oxi::String::from("opencode"), None))?;
+    // Start mock agent for this test
+    let (agent, conn_rx) = MockAgent::new();
+    let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
+
+    let mut options = Dictionary::new();
+    options.insert("protocol", "tcp");
+    options.insert("host", "localhost");
+    options.insert("port", mock_handle.port() as i64);
+
+    connect.call((nvim_oxi::String::from("mock-agent"), Some(options)))?;
 
     let response = wait_for_response(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
     disconnect.call(DisconnectArgs::All)?;
+    mock_handle.close();
 
+    // Mock agent reports itself as "mock-agent"
     assert_eq!(
         response.agent_info.unwrap().name.to_lowercase().as_str(),
-        "opencode"
+        "mock-agent"
     );
 
     Ok(())
@@ -72,11 +100,19 @@ fn test_authenticate_flow() -> Result<(), nvim_oxi::Error> {
 
     let wait_for_init =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
-    let wait_for_authentication = autocommand::listen_for_autocommand::<AuthenticateResponse>(
-        Commands::Authenticated,
-    );
+    let wait_for_authentication =
+        autocommand::listen_for_autocommand::<AuthenticateResponse>(Commands::Authenticated);
 
-    connect.call((nvim_oxi::String::from("copilot"), None))?;
+    // Start mock agent for this test
+    let (agent, conn_rx) = MockAgent::new();
+    let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
+
+    let mut options = Dictionary::new();
+    options.insert("protocol", "tcp");
+    options.insert("host", "localhost");
+    options.insert("port", mock_handle.port() as i64);
+
+    connect.call((nvim_oxi::String::from("mock-agent"), Some(options)))?;
 
     let mut init_response = wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
@@ -87,15 +123,13 @@ fn test_authenticate_flow() -> Result<(), nvim_oxi::Error> {
             "Authentication successful, received response: {:?}",
             auth_response
         );
-        assert!(
-            auth_response.is_ok(),
-            "Authentication should succeed"
-        );
+        assert!(auth_response.is_ok(), "Authentication should succeed");
     } else {
         warn!("No authentication methods available from agent, skipping auth test");
     }
 
     disconnect.call(DisconnectArgs::All)?;
+    mock_handle.close();
 
     Ok(())
 }
