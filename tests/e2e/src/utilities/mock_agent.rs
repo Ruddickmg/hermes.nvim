@@ -16,10 +16,11 @@ use agent_client_protocol::{
     ExtNotification, ExtRequest, ExtResponse, Implementation, InitializeRequest,
     InitializeResponse, ListSessionsRequest, ListSessionsResponse, LoadSessionRequest,
     LoadSessionResponse, NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse,
-    ProtocolVersion, RequestPermissionOutcome, RequestPermissionRequest, SessionNotification,
-    SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
-    SetSessionModeRequest, SetSessionModeResponse, StopReason, TerminalOutputRequest,
-    TerminalOutputResponse, TextContent, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
+    ProtocolVersion, ReadTextFileRequest, ReadTextFileResponse, RequestPermissionOutcome,
+    RequestPermissionRequest, SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, SetSessionModeRequest, SetSessionModeResponse, StopReason,
+    TerminalOutputRequest, TerminalOutputResponse, TextContent, WaitForTerminalExitRequest,
+    WaitForTerminalExitResponse, WriteTextFileRequest, WriteTextFileResponse,
 };
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
@@ -63,6 +64,16 @@ pub(crate) enum AgentToConnection {
     WaitForTerminalExit(
         WaitForTerminalExitRequest,
         oneshot::Sender<agent_client_protocol::Result<WaitForTerminalExitResponse>>,
+    ),
+    /// Send a read text file request to Hermes and return the response
+    ReadTextFile(
+        ReadTextFileRequest,
+        oneshot::Sender<agent_client_protocol::Result<ReadTextFileResponse>>,
+    ),
+    /// Send a write text file request to Hermes and return the response
+    WriteTextFile(
+        WriteTextFileRequest,
+        oneshot::Sender<agent_client_protocol::Result<WriteTextFileResponse>>,
     ),
 }
 
@@ -195,6 +206,14 @@ impl MockAgent {
                                     }
                                     AgentToConnection::WaitForTerminalExit(request, tx) => {
                                         let result = conn.wait_for_terminal_exit(request).await;
+                                        tx.send(result).ok();
+                                    }
+                                    AgentToConnection::ReadTextFile(request, tx) => {
+                                        let result = conn.read_text_file(request).await;
+                                        tx.send(result).ok();
+                                    }
+                                    AgentToConnection::WriteTextFile(request, tx) => {
+                                        let result = conn.write_text_file(request).await;
                                         tx.send(result).ok();
                                     }
                                 }
@@ -366,6 +385,44 @@ impl Agent for MockAgent {
                             internal_error(format!("wait_for_terminal_exit failed: {}", e))
                         })?;
                 }
+            }
+
+            // Read text file (if configured)
+            let read_file_request = {
+                let config = self.config.lock().unwrap();
+                config.read_file_request.clone()
+            };
+
+            if let Some(read_req) = read_file_request {
+                let (tx, rx) = oneshot::channel();
+                self.conn_tx
+                    .send(AgentToConnection::ReadTextFile(read_req, tx))
+                    .map_err(|_| internal_error("failed to send read_text_file request"))?;
+
+                tokio::time::timeout(timeout, rx)
+                    .await
+                    .map_err(|_| internal_error("read_text_file timed out"))?
+                    .map_err(|_| internal_error("read_text_file channel closed"))?
+                    .map_err(|e| internal_error(format!("read_text_file failed: {}", e)))?;
+            }
+
+            // Write text file (if configured)
+            let write_file_request = {
+                let config = self.config.lock().unwrap();
+                config.write_file_request.clone()
+            };
+
+            if let Some(write_req) = write_file_request {
+                let (tx, rx) = oneshot::channel();
+                self.conn_tx
+                    .send(AgentToConnection::WriteTextFile(write_req, tx))
+                    .map_err(|_| internal_error("failed to send write_text_file request"))?;
+
+                tokio::time::timeout(timeout, rx)
+                    .await
+                    .map_err(|_| internal_error("write_text_file timed out"))?
+                    .map_err(|_| internal_error("write_text_file channel closed"))?
+                    .map_err(|e| internal_error(format!("write_text_file failed: {}", e)))?;
             }
 
             // Echo back the prompt content as agent message chunks

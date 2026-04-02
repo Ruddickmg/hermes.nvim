@@ -3,9 +3,10 @@
 use agent_client_protocol::{
     AuthenticateResponse, CreateTerminalRequest, ExtResponse, InitializeResponse,
     ListSessionsResponse, LoadSessionResponse, NewSessionResponse, PermissionOption,
-    PermissionOptionId, PermissionOptionKind, ProtocolVersion, RequestPermissionRequest, SessionId,
-    SessionInfo, SetSessionConfigOptionResponse, SetSessionModeResponse, TerminalOutputRequest,
-    ToolCallId, ToolCallUpdate, ToolCallUpdateFields, WaitForTerminalExitRequest,
+    PermissionOptionId, PermissionOptionKind, ProtocolVersion, ReadTextFileRequest,
+    RequestPermissionRequest, SessionId, SessionInfo, SetSessionConfigOptionResponse,
+    SetSessionModeResponse, TerminalOutputRequest, ToolCallId, ToolCallUpdate,
+    ToolCallUpdateFields, WaitForTerminalExitRequest, WriteTextFileRequest,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -39,6 +40,10 @@ pub struct MockConfig {
     pub terminal_output_request: Option<TerminalOutputRequest>,
     /// Wait for terminal exit request to send during prompt (None = skip)
     pub wait_for_terminal_exit_request: Option<WaitForTerminalExitRequest>,
+    /// Read text file request to send during prompt (None = skip)
+    pub read_file_request: Option<ReadTextFileRequest>,
+    /// Write text file request to send during prompt (None = skip)
+    pub write_file_request: Option<WriteTextFileRequest>,
 }
 
 impl Default for MockConfig {
@@ -58,6 +63,8 @@ impl Default for MockConfig {
             create_terminal_request: None,
             terminal_output_request: None,
             wait_for_terminal_exit_request: None,
+            read_file_request: None,
+            write_file_request: None,
         }
     }
 }
@@ -154,6 +161,18 @@ impl MockConfig {
         request: WaitForTerminalExitRequest,
     ) -> Self {
         self.wait_for_terminal_exit_request = Some(request);
+        self
+    }
+
+    /// Set a read text file request to send during prompt
+    pub fn set_read_file_request(mut self, request: ReadTextFileRequest) -> Self {
+        self.read_file_request = Some(request);
+        self
+    }
+
+    /// Set a write text file request to send during prompt
+    pub fn set_write_file_request(mut self, request: WriteTextFileRequest) -> Self {
+        self.write_file_request = Some(request);
         self
     }
 
