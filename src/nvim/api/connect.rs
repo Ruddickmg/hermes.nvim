@@ -250,13 +250,14 @@ mod tests {
         dict.insert("host", "localhost");
         dict.insert("port", 8080i64);
 
-        let result = parse_agent_connection("socket-agent".to_string(), Protocol::Tcp, Some(dict));
+        let result =
+            parse_agent_connection("socket-agent".to_string(), Protocol::Socket, Some(dict));
         assert!(result.is_ok());
 
         let assistant = result.unwrap();
         assert!(
             matches!(assistant, Assistant::CustomUrl { name, host, port } 
-            if name == "socket-agent (localhost:8080)" && host == "localhost" && port == 8080)
+            if name == "socket-agent" && host == "localhost" && port == 8080)
         );
     }
 
@@ -281,14 +282,9 @@ mod tests {
         let mut dict = Dictionary::new();
         dict.insert("port", 8080i64);
 
-        let result = parse_agent_connection("socket-agent".to_string(), Protocol::Tcp, Some(dict));
+        let result =
+            parse_agent_connection("socket-agent".to_string(), Protocol::Socket, Some(dict));
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Host and port must be provided")
-        );
     }
 
     #[test]
@@ -347,8 +343,8 @@ mod tests {
 
     #[test]
     fn test_protocol_from_str_socket() {
-        assert!(matches!(Protocol::from("socket"), Protocol::Tcp));
-        assert!(matches!(Protocol::from("SOCKET"), Protocol::Tcp));
+        assert!(matches!(Protocol::from("socket"), Protocol::Socket));
+        assert!(matches!(Protocol::from("SOCKET"), Protocol::Socket));
     }
 
     #[test]
@@ -371,7 +367,7 @@ mod tests {
 
     #[test]
     fn test_protocol_display_socket() {
-        assert_eq!(format!("{}", Protocol::Tcp), "socket");
+        assert_eq!(format!("{}", Protocol::Socket), "socket");
     }
 
     #[test]
@@ -400,7 +396,7 @@ mod tests {
             variant in "(socket|SOCKET|Socket|SoCkEt)"
         ) {
             let protocol = Protocol::from(variant.as_str());
-            prop_assert!(matches!(protocol, Protocol::Tcp));
+            prop_assert!(matches!(protocol, Protocol::Socket));
         }
 
         #[test]

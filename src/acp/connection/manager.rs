@@ -380,10 +380,16 @@ mod tests {
     #[test]
     fn test_protocol_display() {
         // Test Display for all Protocol variants using slice comparison
-        let protocols: Vec<Protocol> = vec![Protocol::Tcp, Protocol::Http, Protocol::Stdio];
+        let protocols: Vec<Protocol> = vec![
+            Protocol::Tcp,
+            Protocol::Socket,
+            Protocol::Http,
+            Protocol::Stdio,
+        ];
         let results: Vec<String> = protocols.iter().map(|p| format!("{}", p)).collect();
 
         let expected: Vec<String> = vec![
+            "tcp".to_string(),
             "socket".to_string(),
             "http".to_string(),
             "stdio".to_string(),
@@ -396,18 +402,20 @@ mod tests {
     fn test_protocol_from_str() {
         // Test FromStr for known protocols using slice comparison
         let inputs: Vec<&str> = vec![
-            "socket", "http", "stdio", "SOCKET", "HTTP", "STDIO", "unknown",
+            "tcp", "socket", "http", "stdio", "TCP", "SOCKET", "HTTP", "STDIO", "unknown",
         ];
         let results: Vec<Protocol> = inputs.iter().map(|&s| Protocol::from(s)).collect();
 
         let expected: Vec<Protocol> = vec![
-            Protocol::Tcp,   // socket
-            Protocol::Http,  // http
-            Protocol::Stdio, // stdio
-            Protocol::Tcp,   // SOCKET (case-insensitive)
-            Protocol::Http,  // HTTP (case-insensitive)
-            Protocol::Stdio, // STDIO (case-insensitive)
-            Protocol::Stdio, // unknown defaults to Stdio
+            Protocol::Tcp,    // tcp
+            Protocol::Socket, // socket
+            Protocol::Http,   // http
+            Protocol::Stdio,  // stdio
+            Protocol::Tcp,    // TCP (case-insensitive)
+            Protocol::Socket, // SOCKET (case-insensitive)
+            Protocol::Http,   // HTTP (case-insensitive)
+            Protocol::Stdio,  // STDIO (case-insensitive)
+            Protocol::Stdio,  // unknown (defaults to Stdio)
         ];
 
         assert_eq!(results, expected);

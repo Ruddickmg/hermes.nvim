@@ -1,8 +1,8 @@
 //! Test helpers for working with the MockAgent in E2E tests
 
 use crate::{
-    TIMEOUT_IN_SECONDS,
     utilities::{autocommand, mock_agent::MockAgent, mock_agent_handle::MockAgentHandle},
+    TIMEOUT_IN_SECONDS,
 };
 use agent_client_protocol::{InitializeResponse, NewSessionResponse};
 use hermes::{
@@ -10,7 +10,7 @@ use hermes::{
     nvim::{autocommands::Commands, hermes},
 };
 use nvim_oxi::lua::Pushable;
-use nvim_oxi::{Dictionary, Function, conversion::FromObject};
+use nvim_oxi::{conversion::FromObject, Dictionary, Function};
 use std::time::Duration;
 
 /// Setup result containing all the common test resources
@@ -41,7 +41,7 @@ pub fn setup_mock_agent() -> Result<MockAgentSetup, nvim_oxi::Error> {
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
 
     // Connect to mock agent
-    let connect: Function<ConnectionArgs, deny()> =
+    let connect: Function<ConnectionArgs, ()> =
         FromObject::from_object(dict.get("connect").unwrap().clone())?;
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
