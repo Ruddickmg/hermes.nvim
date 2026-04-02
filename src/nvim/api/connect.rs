@@ -57,7 +57,7 @@ pub fn parse_agent_connection(
                     let host_value: nvim_oxi::String = host.clone().try_into()?;
                     let port_value: u16 = port.clone().try_into()?;
                     Assistant::CustomUrl {
-                        name: format!("{} ({}:{})", name, host_value, port_value),
+                        name,
                         host: host_value.to_string(),
                         port: port_value,
                     }
