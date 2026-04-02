@@ -5,7 +5,7 @@
 
 use hermes::nvim::configuration::{LogConfig, LogFileConfig, LogTargetConfig};
 use hermes::utilities::logging::{LogLevel, Logger};
-use hermes::utilities::{detect_project_storage_path, LogFormat};
+use hermes::utilities::{LogFormat, detect_project_storage_path};
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 use tracing::warn;

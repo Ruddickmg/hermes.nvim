@@ -428,6 +428,7 @@ name = "hermes-e2e"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
+ "async-trait",
  "hermes",
  "nvim-oxi",
  "pretty_assertions",
@@ -438,6 +439,7 @@ dependencies = [
  "tokio-test",
  "tokio-util",
  "tracing",
+ "uuid",
 ]
 
 [[package]]

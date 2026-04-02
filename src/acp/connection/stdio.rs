@@ -10,7 +10,7 @@ use std::fmt::Debug;
 use std::{ffi::OsStr, process::Stdio, sync::Arc};
 use tokio::sync::mpsc::Receiver;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
-use tracing::{info, instrument, trace};
+use tracing::{error, info, instrument, trace};
 
 #[instrument(level = "trace", skip(client, receiver))]
 pub async fn stdio_connection<I, S>(
@@ -88,9 +88,13 @@ pub async fn connect(
             trace!("Starting gemini connection");
             stdio_connection(receiver, client, &agent, "gemini", ["--acp"]).await
         }
-        Assistant::Custom { command, args, .. } => {
+        Assistant::CustomStdio { command, args, .. } => {
             trace!("Starting custom agent connection: {}", agent);
             stdio_connection(receiver, client, &agent, &command, args).await
+        }
+        _ => {
+            error!("Unsupported agent type for stdio connection: {}", agent);
+            Ok(())
         }
     }
 }
