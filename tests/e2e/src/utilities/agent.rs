@@ -1,14 +1,14 @@
 use std::time::Duration;
 
-use agent_client_protocol::{AuthenticateResponse, InitializeResponse, NewSessionResponse, PromptResponse, StopReason};
+use agent_client_protocol::{InitializeResponse, NewSessionResponse, PromptResponse, StopReason};
 use hermes::{
     acp::connection::Assistant,
     api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
-    nvim::{hermes, autocommands::Commands},
+    nvim::{autocommands::Commands, hermes},
 };
-use nvim_oxi::{Dictionary, Function, Object, conversion::FromObject};
+use nvim_oxi::{conversion::FromObject, Dictionary, Function, Object};
 
-use crate::{TIMEOUT_IN_SECONDS, utilities::autocommand};
+use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
 
 pub fn test_agent_prompt(agent: Assistant) -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;

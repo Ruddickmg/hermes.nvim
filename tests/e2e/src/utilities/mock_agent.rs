@@ -1,3 +1,5 @@
+#![allow(private_interfaces)]
+
 use agent_client_protocol::{
     Agent, AgentSideConnection, AuthenticateRequest, AuthenticateResponse, CancelNotification,
     Client, ContentBlock, ContentChunk, CreateTerminalRequest, CreateTerminalResponse,
