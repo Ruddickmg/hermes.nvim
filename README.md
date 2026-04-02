@@ -1649,7 +1649,7 @@ Available formats:
 
 ## TODO:
 -- before v1
-- [ ] disable capabilities that the afent does not have
+- [ ] disable capabilities that the agent does not have
   - [ ] report error (or warning?) to user if a method called is Unsupported by the agent
   - [ ] filter unsupported method calls
 
