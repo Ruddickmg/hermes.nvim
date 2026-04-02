@@ -1,5 +1,7 @@
 pub const TIMEOUT_IN_SECONDS: u64 = 30; // seconds
 
+pub mod copilot;
+pub mod opencode;
 pub mod connection;
 pub mod error_handling;
 pub mod mock_agent_tests;

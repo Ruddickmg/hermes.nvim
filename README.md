@@ -1663,15 +1663,6 @@ Available formats:
     - [ ] Merge sessions
     - [ ] Fork sessions
 
--- testing
-- [x] Create fake/mock Agent used to test agent functionality that is not currently supported by any/many ai agents
-- [ ] Only test "required" methods against actual agents
-  - [ ] initialize
-  - [ ] authenticate
-  - [ ] create_session
-  - [ ] prompt
-- [ ] Create an e2e test suite for running against each supported agent to confirm integration
-
 -- nice to haves
 - [ ] Status bar integration
   - [ ] Configurable

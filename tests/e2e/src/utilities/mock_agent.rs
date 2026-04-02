@@ -1,15 +1,3 @@
-//! Mock ACP Agent for E2E testing
-//!
-//! Runs in a dedicated thread with its own Tokio LocalSet runtime,
-//! listens on a TCP socket, and implements the Agent trait from agent_client_protocol.
-//!
-//! Architecture follows the SDK example at:
-//! https://github.com/agentclientprotocol/rust-sdk/blob/main/src/agent-client-protocol/examples/agent.rs
-//!
-//! The mock agent uses channels to communicate between the Agent trait methods
-//! (called by the ACP protocol) and the AgentSideConnection (which implements
-//! the Client trait for sending requests back to Hermes).
-
 use agent_client_protocol::{
     Agent, AgentSideConnection, AuthenticateRequest, AuthenticateResponse, CancelNotification,
     Client, ContentBlock, ContentChunk, CreateTerminalRequest, CreateTerminalResponse,
