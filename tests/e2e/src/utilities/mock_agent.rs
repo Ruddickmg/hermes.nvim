@@ -16,8 +16,9 @@ use agent_client_protocol::{
     ExtNotification, ExtRequest, ExtResponse, Implementation, InitializeRequest,
     InitializeResponse, ListSessionsRequest, ListSessionsResponse, LoadSessionRequest,
     LoadSessionResponse, NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse,
-    ProtocolVersion, ReadTextFileRequest, ReadTextFileResponse, RequestPermissionOutcome,
-    RequestPermissionRequest, SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
+    ProtocolVersion, ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest,
+    ReleaseTerminalResponse, RequestPermissionOutcome, RequestPermissionRequest,
+    SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
     SetSessionConfigOptionResponse, SetSessionModeRequest, SetSessionModeResponse, StopReason,
     TerminalOutputRequest, TerminalOutputResponse, TextContent, WaitForTerminalExitRequest,
     WaitForTerminalExitResponse, WriteTextFileRequest, WriteTextFileResponse,
@@ -74,6 +75,11 @@ pub(crate) enum AgentToConnection {
     WriteTextFile(
         WriteTextFileRequest,
         oneshot::Sender<agent_client_protocol::Result<WriteTextFileResponse>>,
+    ),
+    /// Send a release terminal request to Hermes and return the response
+    ReleaseTerminal(
+        ReleaseTerminalRequest,
+        oneshot::Sender<agent_client_protocol::Result<ReleaseTerminalResponse>>,
     ),
 }
 
@@ -214,6 +220,10 @@ impl MockAgent {
                                     }
                                     AgentToConnection::WriteTextFile(request, tx) => {
                                         let result = conn.write_text_file(request).await;
+                                        tx.send(result).ok();
+                                    }
+                                    AgentToConnection::ReleaseTerminal(request, tx) => {
+                                        let result = conn.release_terminal(request).await;
                                         tx.send(result).ok();
                                     }
                                 }
@@ -423,6 +433,25 @@ impl Agent for MockAgent {
                     .map_err(|_| internal_error("write_text_file timed out"))?
                     .map_err(|_| internal_error("write_text_file channel closed"))?
                     .map_err(|e| internal_error(format!("write_text_file failed: {}", e)))?;
+            }
+
+            // Release terminal (if configured)
+            let release_terminal_request = {
+                let config = self.config.lock().unwrap();
+                config.release_terminal_request.clone()
+            };
+
+            if let Some(release_req) = release_terminal_request {
+                let (tx, rx) = oneshot::channel();
+                self.conn_tx
+                    .send(AgentToConnection::ReleaseTerminal(release_req, tx))
+                    .map_err(|_| internal_error("failed to send release_terminal request"))?;
+
+                tokio::time::timeout(timeout, rx)
+                    .await
+                    .map_err(|_| internal_error("release_terminal timed out"))?
+                    .map_err(|_| internal_error("release_terminal channel closed"))?
+                    .map_err(|e| internal_error(format!("release_terminal failed: {}", e)))?;
             }
 
             // Echo back the prompt content as agent message chunks

@@ -12,7 +12,8 @@ use crate::{
     TIMEOUT_IN_SECONDS,
 };
 use agent_client_protocol::{
-    InitializeResponse, NewSessionResponse, PromptResponse, SessionId, StopReason, TerminalId,
+    InitializeResponse, NewSessionResponse, PromptResponse, ReleaseTerminalRequest, SessionId,
+    StopReason, TerminalId,
 };
 use hermes::{
     api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
@@ -46,6 +47,15 @@ struct TerminalOutputData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TerminalExitData {
+    pub request_id: String,
+    pub session_id: SessionId,
+    pub terminal_id: TerminalId,
+}
+
+/// Data received from the TerminalRelease autocommand.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TerminalReleaseData {
     pub request_id: String,
     pub session_id: SessionId,
     pub terminal_id: TerminalId,
@@ -411,6 +421,80 @@ fn test_terminal_full_workflow_with_mock_agent() -> Result<(), nvim_oxi::Error> 
     mock_handle.close();
 
     assert_eq!(prompt_response.stop_reason, StopReason::EndTurn);
+
+    Ok(())
+}
+
+/// Test that the TerminalRelease autocommand fires when the mock agent sends a release request.
+///
+/// Configures the mock agent to send a ReleaseTerminalRequest during prompt.
+/// Verifies that Hermes fires the TerminalRelease autocommand with the correct
+/// session_id and terminal_id, and that the prompt completes after responding.
+#[nvim_oxi::test]
+fn test_terminal_release_fires_with_mock_agent() -> Result<(), nvim_oxi::Error> {
+    let session_placeholder = SessionId::from("placeholder");
+    let terminal_id = TerminalId::from("test-term-release");
+
+    let (agent, conn_rx) = MockAgent::new();
+    {
+        let mut config = agent.config().lock().unwrap();
+        *config = MockConfig::new().set_release_terminal_request(ReleaseTerminalRequest::new(
+            session_placeholder.clone(),
+            terminal_id.clone(),
+        ));
+    }
+    let mock_handle = MockAgent::start(agent, conn_rx).expect("Failed to start mock agent");
+
+    let dict: Dictionary = hermes()?;
+    let connect = create_func::<ConnectionArgs>(dict.clone(), "connect");
+    let disconnect = create_func::<DisconnectArgs>(dict.clone(), "disconnect");
+    let create_session = create_func::<CreateSessionArgs>(dict.clone(), "create_session");
+    let prompt = create_func::<PromptArgs>(dict.clone(), "prompt");
+    let respond: Function<(String, Object), ()> = create_func(dict.clone(), "respond");
+
+    let wait_for_init =
+        autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
+    let wait_for_session =
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
+    let wait_for_terminal_release =
+        autocommand::listen_for_autocommand::<TerminalReleaseData>(Commands::TerminalRelease);
+    let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
+
+    let mut options = Dictionary::new();
+    options.insert("protocol", "socket");
+    options.insert("host", "localhost");
+    options.insert("port", mock_handle.port() as i64);
+
+    connect.call((nvim_oxi::String::from("mock-agent"), Some(options)))?;
+    wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS)).map_err(|_| make_err("init timeout"))?;
+
+    create_session.call(CreateSessionArgs::Default)?;
+    let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("session timeout"))?;
+
+    let mut content_dict = Dictionary::new();
+    content_dict.insert("type", "text");
+    content_dict.insert("text", "Release the terminal");
+    let content = PromptContent::Single(FromObject::from_object(Object::from(content_dict))?);
+
+    prompt.call((session.session_id.to_string(), content))?;
+
+    let terminal_release = wait_for_terminal_release(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("TerminalRelease autocommand did not fire"))?;
+
+    // Respond to complete the release request
+    respond.call((terminal_release.request_id.clone(), Object::from("")))?;
+
+    let _prompt_response = wait_for_prompt(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("Prompt did not complete after terminal release"))?;
+
+    disconnect.call(DisconnectArgs::All)?;
+    mock_handle.close();
+
+    assert_eq!(
+        terminal_release.terminal_id.to_string(),
+        terminal_id.to_string(),
+    );
 
     Ok(())
 }

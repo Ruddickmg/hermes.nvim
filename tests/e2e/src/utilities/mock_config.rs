@@ -4,9 +4,9 @@ use agent_client_protocol::{
     AuthenticateResponse, CreateTerminalRequest, ExtResponse, InitializeResponse,
     ListSessionsResponse, LoadSessionResponse, NewSessionResponse, PermissionOption,
     PermissionOptionId, PermissionOptionKind, ProtocolVersion, ReadTextFileRequest,
-    RequestPermissionRequest, SessionId, SessionInfo, SetSessionConfigOptionResponse,
-    SetSessionModeResponse, TerminalOutputRequest, ToolCallId, ToolCallUpdate,
-    ToolCallUpdateFields, WaitForTerminalExitRequest, WriteTextFileRequest,
+    ReleaseTerminalRequest, RequestPermissionRequest, SessionId, SessionInfo,
+    SetSessionConfigOptionResponse, SetSessionModeResponse, TerminalOutputRequest, ToolCallId,
+    ToolCallUpdate, ToolCallUpdateFields, WaitForTerminalExitRequest, WriteTextFileRequest,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -44,6 +44,8 @@ pub struct MockConfig {
     pub read_file_request: Option<ReadTextFileRequest>,
     /// Write text file request to send during prompt (None = skip)
     pub write_file_request: Option<WriteTextFileRequest>,
+    /// Release terminal request to send during prompt (None = skip)
+    pub release_terminal_request: Option<ReleaseTerminalRequest>,
 }
 
 impl Default for MockConfig {
@@ -65,6 +67,7 @@ impl Default for MockConfig {
             wait_for_terminal_exit_request: None,
             read_file_request: None,
             write_file_request: None,
+            release_terminal_request: None,
         }
     }
 }
@@ -173,6 +176,12 @@ impl MockConfig {
     /// Set a write text file request to send during prompt
     pub fn set_write_file_request(mut self, request: WriteTextFileRequest) -> Self {
         self.write_file_request = Some(request);
+        self
+    }
+
+    /// Set a release terminal request to send during prompt
+    pub fn set_release_terminal_request(mut self, request: ReleaseTerminalRequest) -> Self {
+        self.release_terminal_request = Some(request);
         self
     }
 
