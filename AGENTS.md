@@ -566,6 +566,7 @@ mod tests {
   - If a test needs multiple assertions, split it into multiple tests with descriptive names
   - Each test name should clearly indicate what specific behavior it's testing
 - **Debugging:** Run tests locally to verify fixes.
+- **Documentation:** Do not run tests after updating documentation files (e.g., README.md, doc/*.txt). Documentation changes do not require test execution.
 
 ### One Assertion Per Test Rule
 

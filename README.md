@@ -159,7 +159,13 @@ Removes the binary. Run `:Hermes install` or use Hermes API to re-download.
 ```
 :Hermes build
 ```
-Compiles from source (requires Rust toolchain).
+Compiles from source (requires Rust toolchain). Runs asynchronously without blocking Neovim.
+
+**Cancel build:**
+```
+:Hermes cancel
+```
+Cancels an in-progress source build. Shows warning if no build is running.
 
 **View configuration:**
 ```
