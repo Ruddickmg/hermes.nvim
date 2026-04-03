@@ -1,13 +1,16 @@
-use crate::{acp::connection::Assistant, nvim::configuration::ClientConfig};
+use crate::{
+    acp::connection::Assistant,
+    nvim::{configuration::ClientConfig, state::agent::AgentInfo},
+};
 use agent_client_protocol::InitializeResponse;
-use std::collections::HashMap;
 use tracing::{debug, instrument};
+
+pub mod agent;
 
 #[derive(Debug)]
 pub struct PluginState {
     pub config: ClientConfig,
-    pub agent_info: HashMap<Assistant, InitializeResponse>,
-    pub agent: Assistant,
+    pub agent_info: AgentInfo,
 }
 
 impl PluginState {
@@ -20,21 +23,20 @@ impl PluginState {
     pub fn with_config(config: ClientConfig) -> Self {
         Self {
             config,
-            agent_info: HashMap::new(),
-            agent: Assistant::default(),
+            agent_info: AgentInfo::default(),
         }
     }
 
     #[instrument(level = "trace")]
     pub fn set_agent(&mut self, agent: Assistant) -> &mut Self {
-        self.agent = agent.clone();
+        self.agent_info.set_agent(agent.clone());
         debug!("Updated current agent to: '{}'", agent);
         self
     }
 
     #[instrument(level = "trace")]
     pub fn set_agent_info(&mut self, agent: Assistant, info: InitializeResponse) -> &mut Self {
-        self.agent_info.insert(agent.clone(), info.clone());
+        self.agent_info.add_agent(agent.clone(), info.clone());
         debug!("Updated information for '{}': {:#?}", agent, info);
         self
     }

@@ -178,8 +178,10 @@ fn test_set_agent_info_updates_agent_information() -> nvim_oxi::Result<()> {
 
     tokio_test::block_on(handler.set_agent_info(agent.clone(), info.clone()));
 
-    // Verify agent info was set
-    let stored_info = state.blocking_lock().agent_info.get(&agent).cloned();
+    // Verify agent info was set by setting current agent and checking info
+    let mut state_guard = state.blocking_lock();
+    state_guard.agent_info.set_agent(agent.clone());
+    let stored_info = state_guard.agent_info.get_current_info();
     assert!(stored_info.is_some(), "Agent info should be stored");
 
     Ok(())

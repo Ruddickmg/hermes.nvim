@@ -1,17 +1,19 @@
 #![allow(private_interfaces)]
 
 use agent_client_protocol::{
-    Agent, AgentSideConnection, AuthenticateRequest, AuthenticateResponse, CancelNotification,
-    Client, ContentBlock, ContentChunk, CreateTerminalRequest, CreateTerminalResponse,
-    ExtNotification, ExtRequest, ExtResponse, Implementation, InitializeRequest,
-    InitializeResponse, ListSessionsRequest, ListSessionsResponse, LoadSessionRequest,
-    LoadSessionResponse, NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse,
-    ProtocolVersion, ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest,
-    ReleaseTerminalResponse, RequestPermissionOutcome, RequestPermissionRequest,
-    SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
-    SetSessionConfigOptionResponse, SetSessionModeRequest, SetSessionModeResponse, StopReason,
-    TerminalOutputRequest, TerminalOutputResponse, TextContent, WaitForTerminalExitRequest,
-    WaitForTerminalExitResponse, WriteTextFileRequest, WriteTextFileResponse,
+    Agent, AgentCapabilities, AgentSideConnection, AuthenticateRequest, AuthenticateResponse,
+    CancelNotification, Client, ContentBlock, ContentChunk, CreateTerminalRequest,
+    CreateTerminalResponse, ExtNotification, ExtRequest, ExtResponse, Implementation,
+    InitializeRequest, InitializeResponse, ListSessionsRequest, ListSessionsResponse,
+    LoadSessionRequest, LoadSessionResponse, McpCapabilities, NewSessionRequest,
+    NewSessionResponse, PromptCapabilities, PromptRequest, PromptResponse, ProtocolVersion,
+    ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
+    RequestPermissionOutcome, RequestPermissionRequest, SessionCapabilities,
+    SessionForkCapabilities, SessionListCapabilities, SessionNotification, SessionResumeCapabilities,
+    SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
+    SetSessionModeRequest, SetSessionModeResponse, StopReason, TerminalOutputRequest,
+    TerminalOutputResponse, TextContent, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
+    WriteTextFileRequest, WriteTextFileResponse,
 };
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
@@ -254,7 +256,24 @@ impl Agent for MockAgent {
         let timeout = self.config.lock().unwrap().timeout;
         tokio::time::timeout(timeout, async {
             Ok(InitializeResponse::new(ProtocolVersion::V1)
-                .agent_info(Implementation::new("mock-agent", "0.1.0")))
+                .agent_info(Implementation::new("mock-agent", "0.1.0"))
+                .agent_capabilities(
+                    AgentCapabilities::new()
+                        .load_session(true)
+                        .prompt_capabilities(
+                            PromptCapabilities::new()
+                                .image(true)
+                                .audio(true)
+                                .embedded_context(true),
+                        )
+                        .mcp_capabilities(McpCapabilities::new().http(true).sse(true))
+                        .session_capabilities(
+                            SessionCapabilities::new()
+                                .list(Some(SessionListCapabilities::new()))
+                                .fork(Some(SessionForkCapabilities::new()))
+                                .resume(Some(SessionResumeCapabilities::new())),
+                        ),
+                ))
         })
         .await
         .map_err(|_| internal_error("initialize timed out"))?
