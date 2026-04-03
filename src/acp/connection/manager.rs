@@ -137,7 +137,7 @@ impl ConnectionManager {
     #[instrument(level = "trace", skip(self))]
     fn get_agent(&self) -> Assistant {
         let config = self.state.blocking_lock();
-        let agent = config.agent.clone();
+        let agent = config.agent_info.current.clone();
         drop(config);
         agent
     }
@@ -206,6 +206,7 @@ impl ConnectionManager {
                     .insert(
                         agent.clone(),
                         std::thread::spawn(move || {
+                            // TODO: figure out whether this is actually necessary, this should be pure rust, no FFI panics
                             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                                 let runtime = tokio::runtime::Builder::new_current_thread()
                                     .enable_all()
@@ -237,12 +238,17 @@ impl ConnectionManager {
                                     }
                                 })
                             }))
-                            .map_err(|_| {
-                                let err_msg =
-                                    format!("Agent '{}' connection thread panicked", panic_agent);
-                                error!("{}", err_msg);
-                                Error::Internal(err_msg)
-                            })?
+                            .inspect_err(|e| {
+                                error!("Connection thread for '{}' panicked: {:?}", panic_agent, e);
+                            })
+                            .inspect(|result| match result {
+                                Ok(_) => {
+                                    info!("Connection to '{}' successfully closed", panic_agent)
+                                }
+                                Err(e) => error!("Connection error for '{}': {:?}", panic_agent, e),
+                            })
+                            .ok();
+                            Ok::<(), Error>(())
                         }),
                     );
                 self.add_connection(agent.clone(), connection.clone());

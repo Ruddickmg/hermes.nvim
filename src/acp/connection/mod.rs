@@ -5,14 +5,14 @@ pub use manager::*;
 
 use crate::acp::{Result, error::Error};
 use agent_client_protocol::{
-    AuthenticateRequest, CancelNotification, ExtNotification, ExtRequest, ForkSessionRequest,
-    InitializeRequest, ListSessionsRequest, LoadSessionRequest, NewSessionRequest, PromptRequest,
+    AuthenticateRequest, CancelNotification, ForkSessionRequest, InitializeRequest,
+    ListSessionsRequest, LoadSessionRequest, NewSessionRequest, PromptRequest,
     ResumeSessionRequest, SetSessionConfigOptionRequest, SetSessionModeRequest,
     SetSessionModelRequest,
 };
 use tokio::sync::mpsc::Sender;
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum UserRequest {
     Close,
     Initialize(InitializeRequest),
@@ -23,8 +23,6 @@ pub enum UserRequest {
     SetConfigOption(SetSessionConfigOptionRequest),
     SetMode(SetSessionModeRequest),
     LoadSession(LoadSessionRequest),
-    CustomCommand(ExtRequest),
-    CustomNotification(ExtNotification),
     ListSessions(ListSessionsRequest),
     ForkSession(ForkSessionRequest),
     ResumeSession(ResumeSessionRequest),
@@ -75,14 +73,6 @@ impl Connection {
     }
     pub fn load_session(&self, request: LoadSessionRequest) -> Result<()> {
         self.send(UserRequest::LoadSession(request))?;
-        Ok(())
-    }
-    pub fn custom_command(&self, request: ExtRequest) -> Result<()> {
-        self.send(UserRequest::CustomCommand(request))?;
-        Ok(())
-    }
-    pub fn custom_notification(&self, notification: ExtNotification) -> Result<()> {
-        self.send(UserRequest::CustomNotification(notification))?;
         Ok(())
     }
     pub fn list_sessions(&self, request: ListSessionsRequest) -> Result<()> {

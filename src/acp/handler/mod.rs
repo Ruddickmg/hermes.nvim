@@ -135,7 +135,7 @@ impl Handler {
     #[instrument(level = "trace", skip(self))]
     pub async fn get_agent(&self) -> Assistant {
         let state = self.state.lock().await;
-        let agent = state.agent.clone();
+        let agent = state.agent_info.current.clone();
         drop(state);
         agent
     }
@@ -207,7 +207,3 @@ impl Handler {
         Ok(())
     }
 }
-
-// Note: Tests for Handler are in tests/integration/src/request/handler.rs
-// Unit tests here would require nvim-oxi which needs Neovim at link time.
-// The permission methods (can_write, can_read, etc.) are covered by integration tests.

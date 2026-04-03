@@ -153,14 +153,26 @@ pub fn create_session(
             debug!("createSession function called with: {:#?}", session);
             let state = state.blocking_lock();
             let root_markers = state.config.root_markers.clone();
+            let agent_info = state.agent_info.clone();
             drop(state);
             let current_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let root = utilities::get_project_root(current_directory, root_markers);
+            let can_connect_over_http = agent_info.can_connect_to_mcp_over_http();
+            let can_connect_over_sse = agent_info.can_connect_to_mcp_over_sse();
             let request = match session {
                 CreateSessionArgs::Default => NewSessionRequest::new(root),
                 CreateSessionArgs::Configuration { cwd, mcp_servers } => {
-                    NewSessionRequest::new(cwd.unwrap_or(root))
-                        .mcp_servers(mcp_servers.unwrap_or_default())
+                    NewSessionRequest::new(cwd.unwrap_or(root)).mcp_servers(
+                        mcp_servers
+                            .unwrap_or_default()
+                            .into_iter()
+                            .filter(|mcp| match mcp {
+                                McpServer::Http(_) => can_connect_over_http,
+                                McpServer::Sse(_) => can_connect_over_sse,
+                                _ => true,
+                            })
+                            .collect(),
+                    )
                 }
             };
             let conn = match connection.borrow().get_current_connection() {
