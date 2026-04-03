@@ -136,31 +136,25 @@ vim.api.nvim_create_user_command("Hermes", function(args)
 			vim.notify("Update failed: " .. tostring(err), vim.log.levels.ERROR)
 		end
 	elseif subcmd == "build" then
-		-- Force build from source
-		vim.notify("Building Hermes from source...", vim.log.levels.INFO)
-		local ok, err = pcall(function()
-			local binary = require("hermes.binary")
-			local data_dir = binary.get_data_dir()
-
-			-- Remove existing binary
-			local path = binary.get_binary_path()
-			if vim.fn.filereadable(path) == 1 then
-				vim.fn.delete(path)
+		-- Build from source asynchronously (non-blocking)
+		local binary = require("hermes.binary")
+		local data_dir = binary.get_data_dir()
+		local started = binary.build_from_source_async(data_dir, function(success, err)
+			if success then
+				vim.notify("Hermes built from source successfully! Restart Neovim to load the new binary.", vim.log.levels.INFO)
+			else
+				vim.notify("Build failed: " .. tostring(err), vim.log.levels.ERROR)
 			end
-
-			local success = binary.build_from_source(data_dir)
-			if not success then
-				error("Build failed")
-			end
-
-			-- Save version as "built"
-			vim.fn.writefile({ "built" }, binary.get_version_file())
 		end)
-
-		if ok then
-			vim.notify("Hermes built successfully!", vim.log.levels.INFO)
-		else
-			vim.notify("Build failed: " .. tostring(err), vim.log.levels.ERROR)
+		if not started then
+			-- Build already in progress, message already shown by build_from_source_async
+		end
+	elseif subcmd == "cancel" then
+		-- Cancel an in-progress build
+		local binary = require("hermes.binary")
+		local cancelled = binary.cancel_build()
+		if not cancelled then
+			vim.notify("No build in progress to cancel", vim.log.levels.WARN)
 		end
 	elseif subcmd == "version" or subcmd == "info" then
 		-- Show version info
@@ -212,13 +206,14 @@ vim.api.nvim_create_user_command("Hermes", function(args)
 		print(vim.inspect(current))
 	else
 		vim.notify(
-			"Usage: :Hermes {status|log|install|update|build|version|clean|setup}\n\n"
+			"Usage: :Hermes {status|log|install|update|build|cancel|version|clean|setup}\n\n"
 				.. "Commands:\n"
 				.. "  status   - Show loading status and configuration\n"
 				.. "  log      - Show recent log messages\n"
 				.. "  install  - Download and install the binary\n"
 				.. "  update   - Update to the latest version from GitHub\n"
 				.. "  build    - Build binary from source\n"
+				.. "  cancel   - Cancel an in-progress build\n"
 				.. "  version  - Show version information\n"
 				.. "  clean    - Remove binary\n"
 				.. "  setup    - Show current configuration",
@@ -228,7 +223,7 @@ vim.api.nvim_create_user_command("Hermes", function(args)
 end, {
 	nargs = "?",
 	complete = function()
-		return { "status", "log", "install", "update", "build", "version", "clean", "setup" }
+		return { "status", "log", "install", "update", "build", "cancel", "version", "clean", "setup" }
 	end,
 	desc = "Hermes binary management and info",
 })

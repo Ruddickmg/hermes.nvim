@@ -588,10 +588,8 @@ describe("hermes.binary", function()
     end)
 
     it("returns false when build is already in progress", function()
-      -- Stub vim.system to not actually run
-      local system_stub = stub(vim, "system").returns({
-        kill = function() return true end
-      })
+      -- Stub vim.fn.jobstart to return a job ID
+      local jobstart_stub = stub(vim.fn, "jobstart").returns(123)
       
       -- Start a build
       local result1 = binary.build_from_source_async(temp_dir, function() end)
@@ -599,7 +597,7 @@ describe("hermes.binary", function()
       -- Try to start another build while first is in progress
       local result2 = binary.build_from_source_async(temp_dir, function() end)
       
-      system_stub:revert()
+      jobstart_stub:revert()
       
       -- First should succeed (or return true to indicate it started)
       -- Second should fail/return false because build is already in progress
@@ -607,9 +605,7 @@ describe("hermes.binary", function()
     end)
 
     it("shows warning when attempting duplicate build", function()
-      local system_stub = stub(vim, "system").returns({
-        kill = function() return true end
-      })
+      stub(vim.fn, "jobstart").returns(123)
       
       local notify_calls = {}
       local original_notify = vim.notify
@@ -624,7 +620,6 @@ describe("hermes.binary", function()
       binary.build_from_source_async(temp_dir, function() end)
       
       vim.notify = original_notify
-      system_stub:revert()
       
       -- Should have warning about build in progress
       local found_warning = false
@@ -641,9 +636,21 @@ describe("hermes.binary", function()
     it("requires cargo to be available", function()
       stub(vim.fn, "executable").returns(0)  -- cargo not available
       
-      local result = binary.build_from_source_async(temp_dir, function() end)
+      local callback_called = false
+      local callback_success = nil
       
-      assert.is_false(result)
+      local result = binary.build_from_source_async(temp_dir, function(success, err)
+        callback_called = true
+        callback_success = success
+      end)
+      
+      -- Wait for the async work to complete
+      vim.wait(100)
+      
+      -- Should return true (build started) but callback should fail
+      assert.is_true(result)
+      assert.is_true(callback_called)
+      assert.is_false(callback_success)
     end)
 
     it("notifies about missing cargo", function()
@@ -656,6 +663,9 @@ describe("hermes.binary", function()
       end
       
       binary.build_from_source_async(temp_dir, function() end)
+      
+      -- Wait for the async work to complete
+      vim.wait(100)
       
       vim.notify = original_notify
       
@@ -676,10 +686,8 @@ describe("hermes.binary", function()
         binary.cancel_build()
       end
       
-      -- Mock vim.system with proper return value
-      local system_stub = stub(vim, "system").returns({
-        kill = function() return true end
-      })
+      -- Stub vim.fn.jobstart to return a valid job ID
+      local jobstart_stub = stub(vim.fn, "jobstart").returns(123)
       
       -- Mock cargo as available
       stub(vim.fn, "executable").returns(1)
@@ -687,14 +695,14 @@ describe("hermes.binary", function()
       -- Use temp_dir which is a valid directory
       local result = binary.build_from_source_async(temp_dir, function() end)
       
-      system_stub:revert()
+      jobstart_stub:revert()
       
       -- Should accept the custom directory
       assert.is_true(result)
     end)
 
     it("accepts callback function for completion", function()
-      stub(vim, "system").returns({ kill = function() return true end })
+      stub(vim.fn, "jobstart").returns(123)
       stub(vim.fn, "executable").returns(1)
       
       local callback_called = false
@@ -703,13 +711,13 @@ describe("hermes.binary", function()
         callback_called = true
       end)
       
-      -- Since we're stubbing vim.system, the callback won't be called
+      -- Since we're stubbing vim.fn.jobstart, the callback won't be called
       -- but we verify the function accepts the callback parameter
       assert.is_true(true)  -- Test passes if no error
     end)
 
     it("returns true when build starts successfully", function()
-      stub(vim, "system").returns({ kill = function() return true end })
+      stub(vim.fn, "jobstart").returns(123)
       stub(vim.fn, "executable").returns(1)
       
       local result = binary.build_from_source_async(temp_dir, function() end)
@@ -718,7 +726,7 @@ describe("hermes.binary", function()
     end)
 
     it("notifies that build has started", function()
-      stub(vim, "system").returns({ kill = function() return true end })
+      stub(vim.fn, "jobstart").returns(123)
       stub(vim.fn, "executable").returns(1)
       
       local notify_calls = {}
@@ -781,12 +789,13 @@ describe("hermes.binary", function()
 
     it("returns true when build is cancelled", function()
       -- First start a build
-      stub(vim, "system").returns({
-        kill = function() return true end
-      })
+      stub(vim.fn, "jobstart").returns(123)
       stub(vim.fn, "executable").returns(1)
       
       binary.build_from_source_async(temp_dir, function() end)
+      
+      -- Wait for the async build to actually start
+      vim.wait(50)
       
       -- Now cancel it
       local result = binary.cancel_build()
@@ -795,9 +804,7 @@ describe("hermes.binary", function()
     end)
 
     it("notifies when build is cancelled", function()
-      stub(vim, "system").returns({
-        kill = function() return true end
-      })
+      stub(vim.fn, "jobstart").returns(123)
       stub(vim.fn, "executable").returns(1)
       
       local notify_calls = {}
@@ -807,6 +814,10 @@ describe("hermes.binary", function()
       end
       
       binary.build_from_source_async(temp_dir, function() end)
+      
+      -- Wait for the async build to actually start
+      vim.wait(50)
+      
       binary.cancel_build()
       
       vim.notify = original_notify
@@ -823,13 +834,14 @@ describe("hermes.binary", function()
     end)
 
     it("prevents duplicate builds after cancel", function()
-      stub(vim, "system").returns({
-        kill = function() return true end
-      })
+      stub(vim.fn, "jobstart").returns(123)
       stub(vim.fn, "executable").returns(1)
       
       -- Start a build
       binary.build_from_source_async(temp_dir, function() end)
+      
+      -- Wait for the async build to actually start
+      vim.wait(50)
       
       -- Cancel it
       binary.cancel_build()
@@ -848,12 +860,13 @@ describe("hermes.binary", function()
     end)
 
     it("returns true when build is in progress", function()
-      stub(vim, "system").returns({
-        kill = function() return true end
-      })
+      stub(vim.fn, "jobstart").returns(123)
       stub(vim.fn, "executable").returns(1)
       
       binary.build_from_source_async(temp_dir, function() end)
+      
+      -- Wait for the async build to actually start
+      vim.wait(50)
       
       local result = binary.is_build_in_progress()
       
@@ -861,12 +874,14 @@ describe("hermes.binary", function()
     end)
 
     it("returns false after build is cancelled", function()
-      stub(vim, "system").returns({
-        kill = function() return true end
-      })
+      stub(vim.fn, "jobstart").returns(123)
       stub(vim.fn, "executable").returns(1)
       
       binary.build_from_source_async(temp_dir, function() end)
+      
+      -- Wait for the async build to actually start
+      vim.wait(50)
+      
       binary.cancel_build()
       
       local result = binary.is_build_in_progress()
@@ -877,9 +892,7 @@ describe("hermes.binary", function()
 
   describe("async build state tracking", function()
     it("tracks build state correctly through lifecycle", function()
-      stub(vim, "system").returns({
-        kill = function() return true end
-      })
+      stub(vim.fn, "jobstart").returns(123)
       stub(vim.fn, "executable").returns(1)
       
       -- Initial state
@@ -887,6 +900,10 @@ describe("hermes.binary", function()
       
       -- Start build
       binary.build_from_source_async(temp_dir, function() end)
+      
+      -- Wait for the async build to actually start
+      vim.wait(50)
+      
       assert.is_true(binary.is_build_in_progress())
       
       -- Cancel build
@@ -895,9 +912,7 @@ describe("hermes.binary", function()
     end)
 
     it("prevents concurrent builds", function()
-      stub(vim, "system").returns({
-        kill = function() return true end
-      })
+      stub(vim.fn, "jobstart").returns(123)
       stub(vim.fn, "executable").returns(1)
       
       -- First build should succeed
