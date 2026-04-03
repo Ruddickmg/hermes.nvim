@@ -3,17 +3,17 @@
 //! These tests demonstrate how to use the MockAgent for testing
 //! without requiring external agents (opencode, copilot) to be installed.
 
-use agent_client_protocol::NewSessionResponse;
+use agent_client_protocol::{InitializeResponse, NewSessionResponse};
 use hermes::{
     api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
     nvim::{autocommands::Commands, hermes},
 };
-use nvim_oxi::{Dictionary, Function, conversion::FromObject};
+use nvim_oxi::{conversion::FromObject, Dictionary, Function};
 use std::time::Duration;
 
 use crate::{
-    TIMEOUT_IN_SECONDS,
     utilities::{autocommand, mock_agent::MockAgent},
+    TIMEOUT_IN_SECONDS,
 };
 
 fn create_func<A>(plugin: Dictionary, name: &str) -> Function<A, ()> {
@@ -70,11 +70,16 @@ fn test_mock_agent_prompt() -> Result<(), nvim_oxi::Error> {
     options.insert("host", "localhost");
     options.insert("port", mock_handle.port() as i64);
 
-    // Set up autocommand listener to capture session ID
+    // Set up autocommand listeners
+    let wait_for_initialization =
+        autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
     let wait_for_session =
         autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
 
     connect.call((nvim_oxi::String::from("mock"), Some(options)))?;
+
+    // Wait for connection to be fully initialized before creating session
+    wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
     // Create session and capture the session ID
     let create_session: Function<CreateSessionArgs, ()> =
