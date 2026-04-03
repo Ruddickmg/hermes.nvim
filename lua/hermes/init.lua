@@ -753,18 +753,26 @@ vim.api.nvim_create_user_command("Hermes", function(opts)
 	if args == "status" then
 		show_status()
 	elseif args == "build" then
-		-- Trigger build from source
-		logging.notify("Building from source...", vim.log.levels.INFO)
-		vim.schedule(function()
-			local binary = require("hermes.binary")
-			local data_dir = binary.get_data_dir()
-			local ok, err = binary.build_from_source(data_dir)
-			if ok then
+		-- Trigger async build from source
+		local binary = require("hermes.binary")
+		local data_dir = binary.get_data_dir()
+		local started = binary.build_from_source_async(data_dir, function(success, err)
+			if success then
 				logging.notify("Build successful! Restart Neovim to load the new binary.", vim.log.levels.INFO)
 			else
 				logging.notify("Build failed: " .. tostring(err), vim.log.levels.ERROR)
 			end
 		end)
+		if not started then
+			-- Build already in progress, message already shown by build_from_source_async
+		end
+	elseif args == "cancel" then
+		-- Cancel an in-progress build
+		local binary = require("hermes.binary")
+		local cancelled = binary.cancel_build()
+		if not cancelled then
+			logging.notify("No build in progress to cancel", vim.log.levels.WARN)
+		end
 	elseif args == "log" then
 		-- Open log file
 		local config = require("hermes.config")
@@ -776,14 +784,14 @@ vim.api.nvim_create_user_command("Hermes", function(opts)
 			logging.notify("No log file found", vim.log.levels.WARN)
 		end
 	else
-		logging.notify("Unknown command '" .. opts.args .. "'. Available: status, build, log", vim.log.levels.ERROR)
+		logging.notify("Unknown command '" .. opts.args .. "'. Available: status, build, cancel, log", vim.log.levels.ERROR)
 	end
 end, {
 	nargs = 1,
 	complete = function()
-		return { "status", "build", "log" }
+		return { "status", "build", "cancel", "log" }
 	end,
-	desc = "Hermes commands: status, build, log",
+	desc = "Hermes commands: status, build, cancel, log",
 })
 
 -- ============================================================================

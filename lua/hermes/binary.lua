@@ -14,6 +14,16 @@ local REPO_URL = "https://github.com/Ruddickmg/hermes.nvim.git"
 -- luacov: enable
 local download = nil
 
+---Build state tracking for async operations
+-- luacov: disable
+---@type boolean
+-- luacov: enable
+local _build_in_progress = false
+
+---@type vim.SystemObj|nil
+-- luacov: enable
+local _build_job = nil
+
 ---Get download module (lazy-load)
 -- luacov: disable
 ---@return table download_module The download module
@@ -199,6 +209,163 @@ function M.build_from_source(dest_dir)
 
 	logging.notify("Build successful! Hermes has been built from source.", vim.log.levels.INFO)
 	return true
+end
+
+-- luacov: disable
+---Build from source asynchronously
+---Builds from the local source directory without blocking Neovim
+---@param dest_dir string Destination directory
+---@param on_complete function Callback function(success: boolean, err: string|nil)
+---@return boolean started Whether build was started (false if already in progress)
+---@private
+-- luacov: enable
+function M.build_from_source_async(dest_dir, on_complete)
+	local logging = require("hermes.logging")
+
+	-- Check if build already in progress
+	if _build_in_progress then
+		logging.notify("Build already in progress. Use :Hermes cancel to stop.", vim.log.levels.WARN)
+		return false
+	end
+
+	-- Ensure destination directory exists
+	vim.fn.mkdir(dest_dir, "p")
+
+	-- Check for required tools
+	if vim.fn.executable("cargo") ~= 1 then
+		logging.notify("Rust/Cargo is required to build from source", vim.log.levels.ERROR)
+		return false
+	end
+
+	-- Auto-detect source directory from current Lua file location
+	local current_file = debug.getinfo(1).source:sub(2)
+	local source_dir = vim.fn.fnamemodify(current_file, ":h:h:h")
+
+	-- Verify this looks like a Hermes source directory
+	local cargo_toml = source_dir .. "/Cargo.toml"
+	if vim.fn.filereadable(cargo_toml) ~= 1 then
+		logging.notify(
+			"Could not find Hermes source code at: " .. source_dir .. "\n"
+				.. "Expected to find Cargo.toml in that directory",
+			vim.log.levels.ERROR
+		)
+		return false
+	end
+
+	-- Mark build as in progress
+	_build_in_progress = true
+	logging.notify("Building Hermes from source... (this may take a few minutes)", vim.log.levels.INFO)
+
+	-- Start async cargo build
+	local start_time = vim.loop.now()
+	local last_progress = start_time
+	local progress_interval = 60000  -- Show progress every 60 seconds
+
+	_build_job = vim.system(
+		{ "cargo", "build", "--release" },
+		{ cwd = source_dir, timeout = 0 },
+		vim.schedule_wrap(function(obj)
+			_build_in_progress = false
+			_build_job = nil
+
+			if obj.code ~= 0 then
+				-- Build failed
+				local err_msg = obj.stderr or "Unknown error"
+				logging.notify("Build failed:\n" .. err_msg, vim.log.levels.ERROR)
+				on_complete(false, err_msg)
+				return
+			end
+
+			-- Build succeeded - copy binary and write version
+			local platform = require("hermes.platform")
+			local ext = platform.get_ext()
+			local built_lib = source_dir .. "/target/release/libhermes." .. ext
+			local dest_lib = dest_dir .. "/" .. M.get_binary_name()
+
+			local uv = vim.uv or vim.loop
+			local copy_ok = uv.fs_copyfile(built_lib, dest_lib)
+
+			if not copy_ok then
+				local err_msg = "Failed to copy built library from " .. built_lib .. " to " .. dest_lib
+				logging.notify(err_msg, vim.log.levels.ERROR)
+				on_complete(false, err_msg)
+				return
+			end
+
+			-- Write version file
+			local ver_file = M.get_version_file()
+			vim.fn.writefile({ "source" }, ver_file)
+
+			local elapsed = math.floor((vim.loop.now() - start_time) / 1000)
+			logging.notify(
+				"Build successful! Hermes has been built from source in " .. elapsed .. " seconds.",
+				vim.log.levels.INFO
+			)
+			on_complete(true, nil)
+		end)
+	)
+
+	-- Set up progress timer to show periodic updates
+	local progress_timer = vim.loop.new_timer()
+	progress_timer:start(
+		progress_interval,
+		progress_interval,
+		vim.schedule_wrap(function()
+			if not _build_in_progress then
+				progress_timer:stop()
+				progress_timer:close()
+				return
+			end
+			local elapsed = math.floor((vim.loop.now() - start_time) / 1000 / 60)  -- minutes
+			logging.notify("Still building... (" .. elapsed .. " minutes elapsed)", vim.log.levels.INFO)
+		end)
+	)
+
+	return true
+end
+
+-- luacov: disable
+---Cancel an in-progress build
+---@return boolean cancelled Whether a build was cancelled
+---@private
+-- luacov: enable
+function M.cancel_build()
+	local logging = require("hermes.logging")
+
+	if not _build_job or not _build_in_progress then
+		logging.notify("No build in progress to cancel", vim.log.levels.WARN)
+		return false
+	end
+
+	-- Kill the build job with SIGTERM first, then SIGKILL if needed
+	local success = _build_job:kill(15)  -- SIGTERM
+
+	if success then
+		-- Wait a moment for graceful shutdown
+		vim.defer_fn(function()
+			if _build_job then
+				_build_job:kill(9)  -- SIGKILL if still running
+			end
+		end, 2000)
+	else
+		-- Force kill immediately
+		_build_job:kill(9)  -- SIGKILL
+	end
+
+	_build_in_progress = false
+	_build_job = nil
+
+	logging.notify("Build cancelled", vim.log.levels.INFO)
+	return true
+end
+
+-- luacov: disable
+---Check if a build is currently in progress
+---@return boolean in_progress Whether a build is in progress
+---@private
+-- luacov: enable
+function M.is_build_in_progress()
+	return _build_in_progress
 end
 
 -- luacov: disable
