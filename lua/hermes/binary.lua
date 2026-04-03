@@ -134,66 +134,70 @@ end
 
 -- luacov: disable
 ---Build from source
+---Builds from the local source directory where the plugin is installed
 ---@param dest_dir string Destination directory
 ---@return boolean success Whether build succeeded
 ---@private
 -- luacov: enable
 function M.build_from_source(dest_dir)
 	local logging = require("hermes.logging")
-	local download_mod = get_download()
 
 	-- Ensure destination directory exists
 	vim.fn.mkdir(dest_dir, "p")
 
-	-- Check for required tools
-	if vim.fn.executable("git") ~= 1 then
-		logging.notify("Git is required to build from source", vim.log.levels.ERROR)
-		return false
-	end
-
+	-- Check for required tools (cargo only, no git needed)
 	if vim.fn.executable("cargo") ~= 1 then
 		logging.notify("Rust/Cargo is required to build from source", vim.log.levels.ERROR)
 		return false
 	end
 
-	-- Clone repository
-	local clone_dir = dest_dir .. "/build"
-	logging.notify("Cloning repository...", vim.log.levels.INFO)
-	download_mod.system({ "git", "clone", REPO_URL, clone_dir })
+	-- Auto-detect source directory from current Lua file location
+	-- debug.getinfo(1).source returns "@/path/to/lua/hermes/binary.lua"
+	local current_file = debug.getinfo(1).source:sub(2)  -- Remove leading "@"
+	-- Go up 3 levels: binary.lua → hermes/ → lua/ → project_root/
+	local source_dir = vim.fn.fnamemodify(current_file, ":h:h:h")
 
-	if vim.v.shell_error ~= 0 then
-		logging.notify("Failed to clone repository", vim.log.levels.ERROR)
+	-- Verify this looks like a Hermes source directory
+	local cargo_toml = source_dir .. "/Cargo.toml"
+	if vim.fn.filereadable(cargo_toml) ~= 1 then
+		logging.notify(
+			"Could not find Hermes source code at: " .. source_dir .. "\n"
+				.. "Expected to find Cargo.toml in that directory",
+			vim.log.levels.ERROR
+		)
 		return false
 	end
 
-	-- Build with cargo
-	logging.notify("Building with cargo...", vim.log.levels.INFO)
-	local build_cmd = "cd " .. clone_dir .. " && cargo build --release"
-	download_mod.system(build_cmd)
+	logging.notify("Building Hermes from source (this may take a few minutes)...", vim.log.levels.INFO)
+
+	-- Build with cargo from the detected source directory
+	local build_cmd = "cd " .. vim.fn.shellescape(source_dir) .. " && cargo build --release"
+	local output = vim.fn.system(build_cmd)
 
 	if vim.v.shell_error ~= 0 then
-		logging.notify("Cargo build failed", vim.log.levels.ERROR)
+		logging.notify("Cargo build failed:\n" .. output, vim.log.levels.ERROR)
 		return false
 	end
 
 	-- Copy built binary to destination
 	local platform = require("hermes.platform")
 	local ext = platform.get_ext()
-	local built_lib = clone_dir .. "/target/release/libhermes." .. ext
+	local built_lib = source_dir .. "/target/release/libhermes." .. ext
 	local dest_lib = dest_dir .. "/" .. M.get_binary_name()
 
 	local uv = vim.uv or vim.loop
 	local copy_ok = uv.fs_copyfile(built_lib, dest_lib)
 
 	if not copy_ok then
-		logging.notify("Failed to copy built library", vim.log.levels.ERROR)
+		logging.notify("Failed to copy built library from " .. built_lib .. " to " .. dest_lib, vim.log.levels.ERROR)
 		return false
 	end
 
-	-- Clean up build directory
-	vim.fn.delete(clone_dir, "rf")
+	-- Write version file to mark this as a source build
+	local ver_file = M.get_version_file()
+	vim.fn.writefile({ "source" }, ver_file)
 
-	logging.notify("Build successful!", vim.log.levels.INFO)
+	logging.notify("Build successful! Hermes has been built from source.", vim.log.levels.INFO)
 	return true
 end
 
@@ -214,9 +218,26 @@ function M.ensure_binary()
 		-- Binary exists - check if version matches config
 		if vim.fn.filereadable(ver_file) == 1 then
 			local current_ver = vim.fn.readfile(ver_file)[1]
-			-- If versions match, use existing binary
-			if current_ver == wanted_ver then
+			-- If versions match, or it's a source build, use existing binary
+			if current_ver == wanted_ver or current_ver == "source" then
 				return bin_path
+			end
+			-- Versions differ - check if it's a source build
+			if current_ver == "source" then
+				error(
+					"A source-built Hermes binary is installed, but the config requests version "
+						.. wanted_ver
+						.. ".\n\n"
+						.. "You have two options:\n\n"
+						.. "1. Rebuild from source: :Hermes build\n"
+						.. "2. Change your config version to 'source' to use the built binary\n\n"
+						.. "Current config:\n"
+						.. "  download = { version = '"
+						.. wanted_ver
+						.. "' }\n\n"
+						.. "To use source builds:\n"
+						.. "  download = { version = 'source' }"
+				)
 			end
 			-- Versions differ - need to download new version
 		end

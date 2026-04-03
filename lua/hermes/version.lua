@@ -15,6 +15,11 @@ function M.get_wanted()
 	local config = require("hermes.config")
 	local wanted = config.get_version()
 
+	-- Special case: "source" means build from local source
+	if wanted == "source" then
+		return "source"
+	end
+
 	if wanted == "latest" then
 		return "latest"
 	end
