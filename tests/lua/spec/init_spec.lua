@@ -1292,6 +1292,13 @@ describe("hermes.init (main API)", function()
 		end)
 		
 		it("build subcommand shows notification", function()
+			-- Set notification level to INFO so we can see the build notification
+			local config = require("hermes.config")
+			config.setup({
+				download = { version = "latest", auto = false },
+				log = { notification = { level = "info" } },
+			})
+			
 			local notify_calls = {}
 			local original_notify = vim.notify
 			vim.notify = function(msg, level)

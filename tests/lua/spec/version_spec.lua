@@ -72,6 +72,29 @@ describe("hermes.version", function()
 
 			config_stub:revert()
 		end)
+
+		it("returns 'source' when version is 'source'", function()
+			local config_stub = stub(require("hermes.config"), "get_version").returns("source")
+
+			local result = version.get_wanted()
+
+			assert.equals("source", result)
+
+			config_stub:revert()
+		end)
+
+		it("does not add 'v' prefix to 'source'", function()
+			-- This is the critical test - ensure "source" doesn't become "vsource"
+			local config_stub = stub(require("hermes.config"), "get_version").returns("source")
+
+			local result = version.get_wanted()
+
+			-- Must be exactly "source", not "vsource"
+			assert.equals("source", result)
+			assert.is_not.equals("vsource", result)
+
+			config_stub:revert()
+		end)
 	end)
 
 	describe("fetch_latest()", function()
