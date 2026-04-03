@@ -3,7 +3,7 @@ use crate::{
     acp::{
         connection::{Assistant, UserRequest},
         error::Error,
-        handler::message::handle_request,
+        handler::message::{handle_requests},
     },
 };
 use std::sync::Arc;
@@ -60,9 +60,9 @@ pub async fn tcp_connection(
 
             tokio::task::spawn_local(handle_io);
 
-            handle_request(connection, receiver, client.clone(), agent).await
+            handle_requests(connection, receiver, client.clone(), agent).await
         })
-        .await?;
+        .await;
 
     info!("Disconnected from '{}' via tcp", agent);
     Ok::<(), Error>(())

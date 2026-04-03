@@ -3,7 +3,7 @@ use crate::{
     acp::{
         connection::{Assistant, UserRequest},
         error::Error,
-        handler::message::handle_request,
+        handler::message::handle_requests,
     },
 };
 use std::fmt::Debug;
@@ -60,9 +60,9 @@ where
 
             tokio::task::spawn_local(handle_io);
 
-            handle_request(connection, receiver, client.clone(), agent).await
+            handle_requests(connection, receiver, client.clone(), agent).await
         })
-        .await?;
+        .await;
 
     drop(child);
     info!("Disconnected from '{}'", agent);

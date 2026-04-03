@@ -1648,13 +1648,13 @@ Available formats:
 - **json** - Machine-readable JSON format
 
 ## TODO:
--- before v1
-- [ ] disable capabilities that the agent does not have
-  - [ ] report error (or warning?) to user if a method called is Unsupported by the agent
-  - [ ] filter unsupported method calls
-
 -- infra
 - [ ] consolidate api generation logic
+  - [ ] move into struct with impl methods
+  - [ ] store async runtime in struct
+  - [ ] clean up runtime on shutdown
+  - [ ] make callback wrapper that houses async logic
+  - [ ] capture errors and return ok from callback wrapper instead of in each callback
 - [ ] use smol instead of tokio to reduce build size
 - [ ] use async for all the things
 
@@ -1663,6 +1663,7 @@ Available formats:
   - [x] Via stdio
   - [ ] Via http
   - [x] Via tcp socket
+  - [ ] Via unix socket
 - [ ] Add autocommand that triggers on all events
 - [ ] Support "unstable" ACP methods
   - [ ] model selection

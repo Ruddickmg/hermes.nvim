@@ -4,10 +4,11 @@ use nvim_oxi::{
     conversion::{Error, FromObject},
     lua::{Error as LuaError, Poppable, Pushable},
 };
-use std::{cell::RefCell, path::PathBuf, rc::Rc};
+use tokio::sync::Mutex;
+use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
 use tracing::{debug, error, instrument};
 
-use crate::acp::connection::ConnectionManager;
+use crate::{PluginState, acp::connection::ConnectionManager};
 
 /// Configuration for listing sessions (optional argument)
 #[derive(Debug, Clone, Default)]
@@ -66,10 +67,17 @@ impl Pushable for ListSessionsConfig {
 }
 
 #[instrument(level = "trace", skip_all)]
-pub fn list_sessions(connection: Rc<RefCell<ConnectionManager>>) -> Object {
+pub fn list_sessions(connection: Rc<RefCell<ConnectionManager>>, state: Arc<Mutex<PluginState>>) -> Object {
     let function: Function<Option<ListSessionsConfig>, Result<(), LuaError>> =
         Function::from_fn(move |maybe_config: Option<ListSessionsConfig>| {
             debug!("listSessions function called");
+            let plugin_state = state.blocking_lock();
+            let agent_info = plugin_state.agent_info.clone();
+            drop(plugin_state);
+
+            if !agent_info.can_list_sessions() {
+                return Ok(())
+            }
 
             let config = maybe_config.unwrap_or_default();
 
