@@ -113,7 +113,11 @@ impl AgentInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol::ProtocolVersion;
+    use agent_client_protocol::{
+        AgentCapabilities, McpCapabilities, PromptCapabilities, ProtocolVersion,
+        SessionCapabilities, SessionForkCapabilities, SessionListCapabilities,
+        SessionResumeCapabilities,
+    };
 
     fn create_test_response() -> InitializeResponse {
         InitializeResponse::new(ProtocolVersion::V1)
@@ -289,5 +293,150 @@ mod tests {
         // After setting current, should return Some
         info.set_agent(agent);
         assert!(info.get_current_info().is_some());
+    }
+
+    // Positive capability tests - verify filters return true when enabled
+    fn create_response_with_load_session_enabled() -> InitializeResponse {
+        InitializeResponse::new(ProtocolVersion::V1)
+            .agent_capabilities(AgentCapabilities::new().load_session(true))
+    }
+
+    #[test]
+    fn test_can_load_session_returns_true_when_enabled() {
+        let mut info = AgentInfo::default();
+        let agent = Assistant::Opencode;
+        info.add_agent(agent.clone(), create_response_with_load_session_enabled());
+        info.set_agent(agent);
+        assert!(info.can_load_session());
+    }
+
+    fn create_response_with_images_enabled() -> InitializeResponse {
+        InitializeResponse::new(ProtocolVersion::V1).agent_capabilities(
+            AgentCapabilities::new().prompt_capabilities(PromptCapabilities::new().image(true)),
+        )
+    }
+
+    #[test]
+    fn test_can_send_images_returns_true_when_enabled() {
+        let mut info = AgentInfo::default();
+        let agent = Assistant::Opencode;
+        info.add_agent(agent.clone(), create_response_with_images_enabled());
+        info.set_agent(agent);
+        assert!(info.can_send_images());
+    }
+
+    fn create_response_with_audio_enabled() -> InitializeResponse {
+        InitializeResponse::new(ProtocolVersion::V1).agent_capabilities(
+            AgentCapabilities::new().prompt_capabilities(PromptCapabilities::new().audio(true)),
+        )
+    }
+
+    #[test]
+    fn test_can_send_audio_returns_true_when_enabled() {
+        let mut info = AgentInfo::default();
+        let agent = Assistant::Opencode;
+        info.add_agent(agent.clone(), create_response_with_audio_enabled());
+        info.set_agent(agent);
+        assert!(info.can_send_audio());
+    }
+
+    fn create_response_with_embedded_context_enabled() -> InitializeResponse {
+        InitializeResponse::new(ProtocolVersion::V1).agent_capabilities(
+            AgentCapabilities::new()
+                .prompt_capabilities(PromptCapabilities::new().embedded_context(true)),
+        )
+    }
+
+    #[test]
+    fn test_can_send_embedded_context_returns_true_when_enabled() {
+        let mut info = AgentInfo::default();
+        let agent = Assistant::Opencode;
+        info.add_agent(
+            agent.clone(),
+            create_response_with_embedded_context_enabled(),
+        );
+        info.set_agent(agent);
+        assert!(info.can_send_embedded_context());
+    }
+
+    fn create_response_with_mcp_http_enabled() -> InitializeResponse {
+        InitializeResponse::new(ProtocolVersion::V1).agent_capabilities(
+            AgentCapabilities::new().mcp_capabilities(McpCapabilities::new().http(true)),
+        )
+    }
+
+    #[test]
+    fn test_can_connect_to_mcp_over_http_returns_true_when_enabled() {
+        let mut info = AgentInfo::default();
+        let agent = Assistant::Opencode;
+        info.add_agent(agent.clone(), create_response_with_mcp_http_enabled());
+        info.set_agent(agent);
+        assert!(info.can_connect_to_mcp_over_http());
+    }
+
+    fn create_response_with_mcp_sse_enabled() -> InitializeResponse {
+        InitializeResponse::new(ProtocolVersion::V1).agent_capabilities(
+            AgentCapabilities::new().mcp_capabilities(McpCapabilities::new().sse(true)),
+        )
+    }
+
+    #[test]
+    fn test_can_connect_to_mcp_over_sse_returns_true_when_enabled() {
+        let mut info = AgentInfo::default();
+        let agent = Assistant::Opencode;
+        info.add_agent(agent.clone(), create_response_with_mcp_sse_enabled());
+        info.set_agent(agent);
+        assert!(info.can_connect_to_mcp_over_sse());
+    }
+
+    fn create_response_with_fork_enabled() -> InitializeResponse {
+        InitializeResponse::new(ProtocolVersion::V1).agent_capabilities(
+            AgentCapabilities::new().session_capabilities(
+                SessionCapabilities::new().fork(Some(SessionForkCapabilities::new())),
+            ),
+        )
+    }
+
+    #[test]
+    fn test_can_fork_sessions_returns_true_when_enabled() {
+        let mut info = AgentInfo::default();
+        let agent = Assistant::Opencode;
+        info.add_agent(agent.clone(), create_response_with_fork_enabled());
+        info.set_agent(agent);
+        assert!(info.can_fork_sessions());
+    }
+
+    fn create_response_with_resume_enabled() -> InitializeResponse {
+        InitializeResponse::new(ProtocolVersion::V1).agent_capabilities(
+            AgentCapabilities::new().session_capabilities(
+                SessionCapabilities::new().resume(Some(SessionResumeCapabilities::new())),
+            ),
+        )
+    }
+
+    #[test]
+    fn test_can_resume_sessions_returns_true_when_enabled() {
+        let mut info = AgentInfo::default();
+        let agent = Assistant::Opencode;
+        info.add_agent(agent.clone(), create_response_with_resume_enabled());
+        info.set_agent(agent);
+        assert!(info.can_resume_sessions());
+    }
+
+    fn create_response_with_list_enabled() -> InitializeResponse {
+        InitializeResponse::new(ProtocolVersion::V1).agent_capabilities(
+            AgentCapabilities::new().session_capabilities(
+                SessionCapabilities::new().list(Some(SessionListCapabilities::new())),
+            ),
+        )
+    }
+
+    #[test]
+    fn test_can_list_sessions_returns_true_when_enabled() {
+        let mut info = AgentInfo::default();
+        let agent = Assistant::Opencode;
+        info.add_agent(agent.clone(), create_response_with_list_enabled());
+        info.set_agent(agent);
+        assert!(info.can_list_sessions());
     }
 }
