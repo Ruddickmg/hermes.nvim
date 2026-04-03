@@ -52,7 +52,6 @@ impl Logger {
         W: for<'a> fmt::writer::MakeWriter<'a> + Send + Sync + 'static,
     {
         let base = layer
-            .with_ansi(true)
             .with_file(true)
             .with_line_number(true)
             .with_thread_ids(true)
@@ -67,7 +66,10 @@ impl Logger {
 
     fn stdio_layer(config: LogTargetConfig) -> BoxedLayer {
         let writer = StdoutWriter::new().filtered(config.level);
-        Self::base_layer(fmt::layer().with_writer(writer), config.format)
+        Self::base_layer(
+            fmt::layer().with_writer(writer).with_ansi(true),
+            config.format,
+        )
     }
 
     fn notification_layer(
