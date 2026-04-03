@@ -141,13 +141,6 @@ impl Handler {
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub async fn set_agent(&self, agent: Assistant) {
-        let mut state = self.state.lock().await;
-        state.set_agent(agent);
-        drop(state);
-    }
-
-    #[instrument(level = "trace", skip(self))]
     pub async fn set_agent_info(
         &self,
         agent: Assistant,
