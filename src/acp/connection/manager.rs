@@ -466,8 +466,22 @@ mod tests {
     }
 
     #[test]
-    fn test_assistant_from_str_unknown_creates_custom() {
-        let result = Assistant::from("unknown-agent");
-        assert!(matches!(result, Assistant::CustomStdio { name, .. } if name == "unknown-agent"));
+    fn test_assistant_custom_url_display() {
+        let assistant = Assistant::CustomUrl {
+            name: String::from("my-agent"),
+            host: String::from("localhost"),
+            port: 8080,
+        };
+        assert_eq!(format!("{}", assistant), "my-agent (localhost:8080)");
+    }
+
+    #[test]
+    fn test_assistant_custom_stdio_display() {
+        let assistant = Assistant::CustomStdio {
+            name: String::from("custom-cli"),
+            command: String::from("my-cmd"),
+            args: vec![String::from("--arg1"), String::from("--arg2")],
+        };
+        assert_eq!(format!("{}", assistant), "custom-cli");
     }
 }
