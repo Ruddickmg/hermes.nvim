@@ -19,6 +19,7 @@ impl Handler {
         info: InitializeResponse,
     ) -> Result<(), Error> {
         self.set_agent_info(agent.clone(), info.clone()).await;
+        self.set_agent(agent.clone()).await;
 
         // TODO: figure out a better way to deal with the deserialization issue with the protocol version
         let value = serde_json::json!({

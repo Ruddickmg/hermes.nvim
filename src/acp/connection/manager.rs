@@ -255,7 +255,6 @@ impl ConnectionManager {
                 debug!("Stored connection to '{}'", agent);
                 connection.initialize(init_config)?;
                 info!("Initialized connection to '{}'", agent);
-                self.set_agent(agent.clone());
                 connection
             }
         })
