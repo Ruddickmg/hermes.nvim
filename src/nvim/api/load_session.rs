@@ -88,9 +88,12 @@ pub fn load_session(
             let root_markers = state.config.root_markers.clone();
             let agent_info = state.agent_info.clone();
             drop(state);
-            
+
             if !agent_info.can_load_session() {
-                error!("The '{}' agent does not support loading sessions", agent_info.current);
+                error!(
+                    "The '{}' agent does not support loading sessions",
+                    agent_info.current
+                );
                 return Ok(());
             }
 

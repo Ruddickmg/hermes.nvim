@@ -1,4 +1,7 @@
-use crate::{acp::connection::Assistant, nvim::{configuration::ClientConfig, state::agent::AgentInfo}};
+use crate::{
+    acp::connection::Assistant,
+    nvim::{configuration::ClientConfig, state::agent::AgentInfo},
+};
 use agent_client_protocol::InitializeResponse;
 use tracing::{debug, instrument};
 

@@ -1,4 +1,4 @@
-use std::{sync::Arc};
+use std::sync::Arc;
 
 use tokio::sync::mpsc::Receiver;
 
@@ -83,7 +83,7 @@ pub async fn handle_requests(
     while let Some(msg) = receiver.recv().await {
         debug!("Received request from '{}': {:#?}", agent, msg);
         if msg == UserRequest::Close {
-           break; 
+            break;
         } else if let Err(e) = handle_request(&connection, &client, agent, msg).await {
             error!("{:?}", e);
         } else {

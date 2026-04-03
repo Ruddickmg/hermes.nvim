@@ -3,7 +3,7 @@ use crate::{
     acp::{
         connection::{Assistant, UserRequest},
         error::Error,
-        handler::message::{handle_requests},
+        handler::message::handle_requests,
     },
 };
 use std::sync::Arc;

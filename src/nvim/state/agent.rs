@@ -118,6 +118,7 @@ mod tests {
         SessionCapabilities, SessionForkCapabilities, SessionListCapabilities,
         SessionResumeCapabilities,
     };
+    use pretty_assertions::assert_eq;
 
     fn create_test_response() -> InitializeResponse {
         InitializeResponse::new(ProtocolVersion::V1)
@@ -307,7 +308,7 @@ mod tests {
         let agent = Assistant::Opencode;
         info.add_agent(agent.clone(), create_response_with_load_session_enabled());
         info.set_agent(agent);
-        assert!(info.can_load_session());
+        assert_eq!(info.can_load_session(), true);
     }
 
     fn create_response_with_images_enabled() -> InitializeResponse {
@@ -322,7 +323,7 @@ mod tests {
         let agent = Assistant::Opencode;
         info.add_agent(agent.clone(), create_response_with_images_enabled());
         info.set_agent(agent);
-        assert!(info.can_send_images());
+        assert_eq!(info.can_send_images(), true);
     }
 
     fn create_response_with_audio_enabled() -> InitializeResponse {
@@ -337,7 +338,7 @@ mod tests {
         let agent = Assistant::Opencode;
         info.add_agent(agent.clone(), create_response_with_audio_enabled());
         info.set_agent(agent);
-        assert!(info.can_send_audio());
+        assert_eq!(info.can_send_audio(), true);
     }
 
     fn create_response_with_embedded_context_enabled() -> InitializeResponse {
@@ -356,7 +357,7 @@ mod tests {
             create_response_with_embedded_context_enabled(),
         );
         info.set_agent(agent);
-        assert!(info.can_send_embedded_context());
+        assert_eq!(info.can_send_embedded_context(), true);
     }
 
     fn create_response_with_mcp_http_enabled() -> InitializeResponse {
@@ -371,7 +372,7 @@ mod tests {
         let agent = Assistant::Opencode;
         info.add_agent(agent.clone(), create_response_with_mcp_http_enabled());
         info.set_agent(agent);
-        assert!(info.can_connect_to_mcp_over_http());
+        assert_eq!(info.can_connect_to_mcp_over_http(), true);
     }
 
     fn create_response_with_mcp_sse_enabled() -> InitializeResponse {
@@ -386,7 +387,7 @@ mod tests {
         let agent = Assistant::Opencode;
         info.add_agent(agent.clone(), create_response_with_mcp_sse_enabled());
         info.set_agent(agent);
-        assert!(info.can_connect_to_mcp_over_sse());
+        assert_eq!(info.can_connect_to_mcp_over_sse(), true);
     }
 
     fn create_response_with_fork_enabled() -> InitializeResponse {
@@ -403,7 +404,7 @@ mod tests {
         let agent = Assistant::Opencode;
         info.add_agent(agent.clone(), create_response_with_fork_enabled());
         info.set_agent(agent);
-        assert!(info.can_fork_sessions());
+        assert_eq!(info.can_fork_sessions(), true);
     }
 
     fn create_response_with_resume_enabled() -> InitializeResponse {
@@ -420,7 +421,7 @@ mod tests {
         let agent = Assistant::Opencode;
         info.add_agent(agent.clone(), create_response_with_resume_enabled());
         info.set_agent(agent);
-        assert!(info.can_resume_sessions());
+        assert_eq!(info.can_resume_sessions(), true);
     }
 
     fn create_response_with_list_enabled() -> InitializeResponse {
@@ -437,6 +438,6 @@ mod tests {
         let agent = Assistant::Opencode;
         info.add_agent(agent.clone(), create_response_with_list_enabled());
         info.set_agent(agent);
-        assert!(info.can_list_sessions());
+        assert_eq!(info.can_list_sessions(), true);
     }
 }

@@ -342,7 +342,7 @@ pub fn prompt(
                     ContentBlock::Image(_) => agent_info.can_send_images(),
                     ContentBlock::Audio(_) => agent_info.can_send_audio(),
                     ContentBlock::Resource(_) => agent_info.can_send_embedded_context(),
-                    _ => true
+                    _ => true,
                 })
                 .collect();
 

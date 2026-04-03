@@ -4,8 +4,8 @@ use nvim_oxi::{
     conversion::{Error, FromObject},
     lua::{Error as LuaError, Poppable, Pushable},
 };
-use tokio::sync::Mutex;
 use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
+use tokio::sync::Mutex;
 use tracing::{debug, error, instrument};
 
 use crate::{PluginState, acp::connection::ConnectionManager};
@@ -67,7 +67,10 @@ impl Pushable for ListSessionsConfig {
 }
 
 #[instrument(level = "trace", skip_all)]
-pub fn list_sessions(connection: Rc<RefCell<ConnectionManager>>, state: Arc<Mutex<PluginState>>) -> Object {
+pub fn list_sessions(
+    connection: Rc<RefCell<ConnectionManager>>,
+    state: Arc<Mutex<PluginState>>,
+) -> Object {
     let function: Function<Option<ListSessionsConfig>, Result<(), LuaError>> =
         Function::from_fn(move |maybe_config: Option<ListSessionsConfig>| {
             debug!("listSessions function called");
@@ -76,7 +79,7 @@ pub fn list_sessions(connection: Rc<RefCell<ConnectionManager>>, state: Arc<Mute
             drop(plugin_state);
 
             if !agent_info.can_list_sessions() {
-                return Ok(())
+                return Ok(());
             }
 
             let config = maybe_config.unwrap_or_default();
