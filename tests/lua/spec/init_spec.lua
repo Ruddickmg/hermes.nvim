@@ -1316,6 +1316,31 @@ describe("hermes.init (main API)", function()
 			assert.is_true(#notify_calls > 0, "Hermes build should show notification")
 		end)
 		
+		it("cancel subcommand shows notification when no build in progress", function()
+			-- Set notification level to WARN so we can see the warning
+			local config = require("hermes.config")
+			config.setup({
+				log = { notification = { level = "warn" } }
+			})
+			
+			local notify_calls = {}
+			local original_notify = vim.notify
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, {msg = msg, level = level})
+			end
+			
+			-- Execute the cancel command (no build in progress)
+			vim.cmd("Hermes cancel")
+			
+			-- Wait for the command to complete
+			vim.wait(100)
+			
+			vim.notify = original_notify
+			
+			-- Should show notification about no build in progress
+			assert.is_true(#notify_calls > 0, "Hermes cancel should show notification")
+		end)
+		
 		it("unknown subcommand shows error", function()
 			local notify_calls = {}
 			local original_notify = vim.notify

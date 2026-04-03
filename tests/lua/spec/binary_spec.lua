@@ -577,4 +577,336 @@ describe("hermes.binary", function()
       os.remove(ver_file)
     end)
   end)
+
+  describe("build_from_source_async()", function()
+    before_each(function()
+      -- Set notification level to INFO so we can capture notifications
+      local config = require("hermes.config")
+      config.setup({
+        log = { notification = { level = "info" } }
+      })
+    end)
+
+    it("returns false when build is already in progress", function()
+      -- Stub vim.system to not actually run
+      local system_stub = stub(vim, "system").returns({
+        kill = function() return true end
+      })
+      
+      -- Start a build
+      local result1 = binary.build_from_source_async(temp_dir, function() end)
+      
+      -- Try to start another build while first is in progress
+      local result2 = binary.build_from_source_async(temp_dir, function() end)
+      
+      system_stub:revert()
+      
+      -- First should succeed (or return true to indicate it started)
+      -- Second should fail/return false because build is already in progress
+      assert.is_false(result2)
+    end)
+
+    it("shows warning when attempting duplicate build", function()
+      local system_stub = stub(vim, "system").returns({
+        kill = function() return true end
+      })
+      
+      local notify_calls = {}
+      local original_notify = vim.notify
+      vim.notify = function(msg, level)
+        table.insert(notify_calls, { msg = msg, level = level })
+      end
+      
+      -- Start first build
+      binary.build_from_source_async(temp_dir, function() end)
+      
+      -- Try second build
+      binary.build_from_source_async(temp_dir, function() end)
+      
+      vim.notify = original_notify
+      system_stub:revert()
+      
+      -- Should have warning about build in progress
+      local found_warning = false
+      for _, call in ipairs(notify_calls) do
+        if call.msg and call.msg:find("already in progress") then
+          found_warning = true
+          break
+        end
+      end
+      
+      assert.is_true(found_warning, "Should warn about build already in progress")
+    end)
+
+    it("requires cargo to be available", function()
+      stub(vim.fn, "executable").returns(0)  -- cargo not available
+      
+      local result = binary.build_from_source_async(temp_dir, function() end)
+      
+      assert.is_false(result)
+    end)
+
+    it("notifies about missing cargo", function()
+      stub(vim.fn, "executable").returns(0)
+      
+      local notify_calls = {}
+      local original_notify = vim.notify
+      vim.notify = function(msg, level)
+        table.insert(notify_calls, { msg = msg, level = level })
+      end
+      
+      binary.build_from_source_async(temp_dir, function() end)
+      
+      vim.notify = original_notify
+      
+      local found_cargo_msg = false
+      for _, call in ipairs(notify_calls) do
+        if call.msg and (call.msg:find("cargo") or call.msg:find("Rust")) then
+          found_cargo_msg = true
+          break
+        end
+      end
+      
+      assert.is_true(found_cargo_msg, "Should notify about missing cargo/Rust")
+    end)
+
+    it("accepts source directory as parameter", function()
+      -- First clean up any previous build state
+      if binary.is_build_in_progress() then
+        binary.cancel_build()
+      end
+      
+      -- Mock vim.system with proper return value
+      local system_stub = stub(vim, "system").returns({
+        kill = function() return true end
+      })
+      
+      -- Mock cargo as available
+      stub(vim.fn, "executable").returns(1)
+      
+      -- Use temp_dir which is a valid directory
+      local result = binary.build_from_source_async(temp_dir, function() end)
+      
+      system_stub:revert()
+      
+      -- Should accept the custom directory
+      assert.is_true(result)
+    end)
+
+    it("accepts callback function for completion", function()
+      stub(vim, "system").returns({ kill = function() return true end })
+      stub(vim.fn, "executable").returns(1)
+      
+      local callback_called = false
+      
+      binary.build_from_source_async(temp_dir, function(success, error)
+        callback_called = true
+      end)
+      
+      -- Since we're stubbing vim.system, the callback won't be called
+      -- but we verify the function accepts the callback parameter
+      assert.is_true(true)  -- Test passes if no error
+    end)
+
+    it("returns true when build starts successfully", function()
+      stub(vim, "system").returns({ kill = function() return true end })
+      stub(vim.fn, "executable").returns(1)
+      
+      local result = binary.build_from_source_async(temp_dir, function() end)
+      
+      assert.is_true(result)
+    end)
+
+    it("notifies that build has started", function()
+      stub(vim, "system").returns({ kill = function() return true end })
+      stub(vim.fn, "executable").returns(1)
+      
+      local notify_calls = {}
+      local original_notify = vim.notify
+      vim.notify = function(msg, level)
+        table.insert(notify_calls, { msg = msg, level = level })
+      end
+      
+      binary.build_from_source_async(temp_dir, function() end)
+      
+      vim.notify = original_notify
+      
+      local found_start_msg = false
+      for _, call in ipairs(notify_calls) do
+        if call.msg and (call.msg:find("Building") or call.msg:find("from source")) then
+          found_start_msg = true
+          break
+        end
+      end
+      
+      assert.is_true(found_start_msg, "Should notify that build has started")
+    end)
+  end)
+
+  describe("cancel_build()", function()
+    before_each(function()
+      -- Set notification level to INFO
+      local config = require("hermes.config")
+      config.setup({
+        log = { notification = { level = "info" } }
+      })
+    end)
+
+    it("returns false when no build is in progress", function()
+      local result = binary.cancel_build()
+      assert.is_false(result)
+    end)
+
+    it("notifies when no build to cancel", function()
+      local notify_calls = {}
+      local original_notify = vim.notify
+      vim.notify = function(msg, level)
+        table.insert(notify_calls, { msg = msg, level = level })
+      end
+      
+      binary.cancel_build()
+      
+      vim.notify = original_notify
+      
+      local found_no_build_msg = false
+      for _, call in ipairs(notify_calls) do
+        if call.msg and (call.msg:find("No build") or call.msg:find("in progress")) then
+          found_no_build_msg = true
+          break
+        end
+      end
+      
+      assert.is_true(found_no_build_msg, "Should notify when no build to cancel")
+    end)
+
+    it("returns true when build is cancelled", function()
+      -- First start a build
+      stub(vim, "system").returns({
+        kill = function() return true end
+      })
+      stub(vim.fn, "executable").returns(1)
+      
+      binary.build_from_source_async(temp_dir, function() end)
+      
+      -- Now cancel it
+      local result = binary.cancel_build()
+      
+      assert.is_true(result)
+    end)
+
+    it("notifies when build is cancelled", function()
+      stub(vim, "system").returns({
+        kill = function() return true end
+      })
+      stub(vim.fn, "executable").returns(1)
+      
+      local notify_calls = {}
+      local original_notify = vim.notify
+      vim.notify = function(msg, level)
+        table.insert(notify_calls, { msg = msg, level = level })
+      end
+      
+      binary.build_from_source_async(temp_dir, function() end)
+      binary.cancel_build()
+      
+      vim.notify = original_notify
+      
+      local found_cancelled_msg = false
+      for _, call in ipairs(notify_calls) do
+        if call.msg and call.msg:find("cancelled") then
+          found_cancelled_msg = true
+          break
+        end
+      end
+      
+      assert.is_true(found_cancelled_msg, "Should notify that build was cancelled")
+    end)
+
+    it("prevents duplicate builds after cancel", function()
+      stub(vim, "system").returns({
+        kill = function() return true end
+      })
+      stub(vim.fn, "executable").returns(1)
+      
+      -- Start a build
+      binary.build_from_source_async(temp_dir, function() end)
+      
+      -- Cancel it
+      binary.cancel_build()
+      
+      -- Now should be able to start a new build
+      local result = binary.build_from_source_async(temp_dir, function() end)
+      
+      assert.is_true(result, "Should allow new build after cancel")
+    end)
+  end)
+
+  describe("is_build_in_progress()", function()
+    it("returns false initially", function()
+      local result = binary.is_build_in_progress()
+      assert.is_false(result)
+    end)
+
+    it("returns true when build is in progress", function()
+      stub(vim, "system").returns({
+        kill = function() return true end
+      })
+      stub(vim.fn, "executable").returns(1)
+      
+      binary.build_from_source_async(temp_dir, function() end)
+      
+      local result = binary.is_build_in_progress()
+      
+      assert.is_true(result)
+    end)
+
+    it("returns false after build is cancelled", function()
+      stub(vim, "system").returns({
+        kill = function() return true end
+      })
+      stub(vim.fn, "executable").returns(1)
+      
+      binary.build_from_source_async(temp_dir, function() end)
+      binary.cancel_build()
+      
+      local result = binary.is_build_in_progress()
+      
+      assert.is_false(result)
+    end)
+  end)
+
+  describe("async build state tracking", function()
+    it("tracks build state correctly through lifecycle", function()
+      stub(vim, "system").returns({
+        kill = function() return true end
+      })
+      stub(vim.fn, "executable").returns(1)
+      
+      -- Initial state
+      assert.is_false(binary.is_build_in_progress())
+      
+      -- Start build
+      binary.build_from_source_async(temp_dir, function() end)
+      assert.is_true(binary.is_build_in_progress())
+      
+      -- Cancel build
+      binary.cancel_build()
+      assert.is_false(binary.is_build_in_progress())
+    end)
+
+    it("prevents concurrent builds", function()
+      stub(vim, "system").returns({
+        kill = function() return true end
+      })
+      stub(vim.fn, "executable").returns(1)
+      
+      -- First build should succeed
+      local result1 = binary.build_from_source_async(temp_dir, function() end)
+      assert.is_true(result1)
+      
+      -- Second build should fail (already in progress)
+      local result2 = binary.build_from_source_async(temp_dir, function() end)
+      assert.is_false(result2)
+    end)
+  end)
 end)
