@@ -234,6 +234,11 @@ vim.api.nvim_create_user_command("Hermes", function(args)
 		if vim.fn.isdirectory(data_dir) == 1 then
 			vim.fn.delete(data_dir, "rf")
 		end
+		
+		-- Reset internal state so Hermes knows the binary is gone
+		local hermes = require("hermes")
+		hermes._set_loading_state("NOT_LOADED")
+		hermes._set_loading_error(nil)
 
 		logger.notify("Hermes cleaned successfully!", vim.log.levels.INFO)
 	elseif subcmd == "setup" or subcmd == "config" then

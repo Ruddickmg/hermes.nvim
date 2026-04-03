@@ -144,6 +144,31 @@ impl Logger {
     }
 
     pub fn inititalize(storage_path: &str) -> Result<&'static Self> {
+        // Check if global subscriber already exists (reload scenario)
+        if LOGGER.get().is_some() {
+            // Reload: Get cached logger and update layers with fresh messengers
+            let logger = LOGGER.get()
+                .ok_or_else(|| Error::Internal("Logger cached but not found".into()))?;
+            
+            // Create NEW messengers for this instance
+            let nvim_notifications = NotificationMessenger::initialize()?;
+            let nvim_messages = MessageMessenger::initialize()?;
+            
+            // Create fresh layers with new messengers and default config
+            let layers = Self::all_layers(
+                Default::default(),
+                nvim_notifications,
+                nvim_messages,
+            )?;
+            
+            // Reload the layers in the global subscriber
+            logger.handle.reload(layers)
+                .map_err(|e| Error::Internal(e.to_string()))?;
+            
+            return Ok(logger);
+        }
+        
+        // First initialization: Create new global subscriber
         let nvim_notifications_messenger = NotificationMessenger::initialize()?;
         let nvim_messages_messenger = MessageMessenger::initialize()?;
         let layers: Vec<BoxedLayer> = Self::all_layers(
