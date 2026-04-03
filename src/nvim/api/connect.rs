@@ -6,7 +6,6 @@ use crate::{
         error::Error,
     },
 };
-use agent_client_protocol::PermissionOptionKind;
 use nvim_oxi::{Dictionary, Function, Object, ObjectKind};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use tracing::{debug, error, instrument};

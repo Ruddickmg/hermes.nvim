@@ -157,6 +157,8 @@ pub fn create_session(
             drop(state);
             let current_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let root = utilities::get_project_root(current_directory, root_markers);
+            let can_connect_over_http = agent_info.can_connect_to_mcp_over_http();
+            let can_connect_over_sse = agent_info.can_connect_to_mcp_over_sse();
             let request = match session {
                 CreateSessionArgs::Default => NewSessionRequest::new(root),
                 CreateSessionArgs::Configuration { cwd, mcp_servers } => {
@@ -165,8 +167,8 @@ pub fn create_session(
                             .unwrap_or_default()
                             .into_iter()
                             .filter(|mcp| match mcp {
-                                McpServer::Http(_) => agent_info.can_connect_to_mcp_over_http(),
-                                McpServer::Sse(_) => agent_info.can_connect_to_mcp_over_sse(),
+                                McpServer::Http(_) => can_connect_over_http,
+                                McpServer::Sse(_) => can_connect_over_sse,
                                 _ => true,
                             })
                             .collect(),

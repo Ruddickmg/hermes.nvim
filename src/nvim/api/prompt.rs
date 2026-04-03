@@ -334,14 +334,17 @@ pub fn prompt(
             let state = state.blocking_lock();
             let agent_info = state.agent_info.clone();
             drop(state);
+            let can_send_images = agent_info.can_send_images();
+            let can_send_audio = agent_info.can_send_audio();
+            let can_send_embedded = agent_info.can_send_embedded_context();
             let content_blocks: Vec<ContentBlock> = content
                 .into_vec()
                 .into_iter()
                 .map(Into::into)
                 .filter(|content| match content {
-                    ContentBlock::Image(_) => agent_info.can_send_images(),
-                    ContentBlock::Audio(_) => agent_info.can_send_audio(),
-                    ContentBlock::Resource(_) => agent_info.can_send_embedded_context(),
+                    ContentBlock::Image(_) => can_send_images,
+                    ContentBlock::Audio(_) => can_send_audio,
+                    ContentBlock::Resource(_) => can_send_embedded,
                     _ => true,
                 })
                 .collect();
