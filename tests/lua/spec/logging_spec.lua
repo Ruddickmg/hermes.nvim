@@ -32,10 +32,10 @@ describe("hermes.logging", function()
       assert.stub(notify_stub).was_called()
     end)
     
-    it("filters out info messages with default error level", function()
-      config.setup({})  -- Default level is "error"
+    it("filters out debug messages with default info level", function()
+      config.setup({})  -- Default level is "info"
       
-      logging.notify("Test info", vim.log.levels.INFO)
+      logging.notify("Test debug", vim.log.levels.DEBUG)
       
       assert.stub(notify_stub).was_not_called()
     end)

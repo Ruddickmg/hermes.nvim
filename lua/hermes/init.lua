@@ -477,31 +477,33 @@ function M.setup(opts)
 		log = opts.log,
 	})
 
-	-- Check if version changed and we need to re-download
-	local version = require("hermes.version")
-	local configured_ver = version.get_wanted()
-	local binary = require("hermes.binary")
-	local ver_file = binary.get_version_file()
-	local bin_path = binary.get_binary_path()
+	-- Check if version changed and we need to re-download (only if auto-download is enabled)
+	if should_auto_download() then
+		local version = require("hermes.version")
+		local configured_ver = version.get_wanted()
+		local binary = require("hermes.binary")
+		local ver_file = binary.get_version_file()
+		local bin_path = binary.get_binary_path()
 
-	if is_ready() and vim.fn.filereadable(ver_file) == 1 then
-		local ok, installed_ver = pcall(function()
-			return vim.fn.readfile(ver_file)[1]
-		end)
-
-		if ok and installed_ver ~= configured_ver then
-			-- Version changed! Delete old binary and reset state
-			pcall(function()
-				vim.fn.delete(bin_path)
-				vim.fn.delete(ver_file)
+		if is_ready() and vim.fn.filereadable(ver_file) == 1 then
+			local ok, installed_ver = pcall(function()
+				return vim.fn.readfile(ver_file)[1]
 			end)
 
-			_loading_state = "NOT_LOADED"
-			_native = nil
-			logging.notify(
-				string.format("Version changed from %s to %s, downloading...", installed_ver, configured_ver),
-				vim.log.levels.INFO
-			)
+			if ok and installed_ver ~= configured_ver then
+				-- Version changed! Delete old binary and reset state
+				pcall(function()
+					vim.fn.delete(bin_path)
+					vim.fn.delete(ver_file)
+				end)
+
+				_loading_state = "NOT_LOADED"
+				_native = nil
+				logging.notify(
+					string.format("Version changed from %s to %s, downloading...", installed_ver, configured_ver),
+					vim.log.levels.INFO
+				)
+			end
 		end
 	end
 

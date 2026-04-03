@@ -224,12 +224,13 @@ function M.build_from_source_async(dest_dir, on_complete)
 
 	-- Check if build already in progress
 	if _build_in_progress then
-		logging.notify("Build already in progress. Use :Hermes cancel to stop.", vim.log.levels.WARN)
+		-- Use vim.notify directly to ensure this always shows regardless of log level
+		vim.notify("Build already in progress. Use :Hermes cancel to stop.", vim.log.levels.WARN, { title = "Hermes" })
 		return false
 	end
 
-	-- Show notification immediately
-	logging.notify("Building Hermes from source... (this may take a few minutes)", vim.log.levels.INFO)
+	-- Show notification immediately - use vim.notify directly to ensure it always shows
+	vim.notify("Building Hermes from source... (this may take a few minutes)", vim.log.levels.INFO, { title = "Hermes" })
 
 	-- Mark build as in progress immediately so subsequent calls are blocked
 	_build_in_progress = true
@@ -242,7 +243,7 @@ function M.build_from_source_async(dest_dir, on_complete)
 		-- Check for required tools
 		if vim.fn.executable("cargo") ~= 1 then
 			_build_in_progress = false
-			logging.notify("Rust/Cargo is required to build from source", vim.log.levels.ERROR)
+			vim.notify("Rust/Cargo is required to build from source", vim.log.levels.ERROR, { title = "Hermes" })
 			on_complete(false, "cargo not available")
 			return
 		end
@@ -255,10 +256,11 @@ function M.build_from_source_async(dest_dir, on_complete)
 		local cargo_toml = source_dir .. "/Cargo.toml"
 		if vim.fn.filereadable(cargo_toml) ~= 1 then
 			_build_in_progress = false
-			logging.notify(
+			vim.notify(
 				"Could not find Hermes source code at: " .. source_dir .. "\n"
 					.. "Expected to find Cargo.toml in that directory",
-				vim.log.levels.ERROR
+				vim.log.levels.ERROR,
+				{ title = "Hermes" }
 			)
 			on_complete(false, "Cargo.toml not found")
 			return
@@ -278,7 +280,7 @@ function M.build_from_source_async(dest_dir, on_complete)
 				_build_job = nil
 
 				if exit_code ~= 0 then
-					logging.notify("Build failed with exit code: " .. exit_code, vim.log.levels.ERROR)
+					vim.notify("Build failed with exit code: " .. exit_code, vim.log.levels.ERROR, { title = "Hermes" })
 					on_complete(false, "Build failed")
 					return
 				end
@@ -289,11 +291,19 @@ function M.build_from_source_async(dest_dir, on_complete)
 				local built_lib = source_dir .. "/target/release/libhermes." .. ext
 				local dest_lib = dest_dir .. "/" .. M.get_binary_name()
 
+				-- Check if built binary exists
+				if vim.fn.filereadable(built_lib) ~= 1 then
+					local err_msg = "Built binary not found at: " .. built_lib
+					vim.notify(err_msg, vim.log.levels.ERROR, { title = "Hermes" })
+					on_complete(false, err_msg)
+					return
+				end
+
 				local copy_ok = uv.fs_copyfile(built_lib, dest_lib)
 
 				if not copy_ok then
 					local err_msg = "Failed to copy built library from " .. built_lib .. " to " .. dest_lib
-					logging.notify(err_msg, vim.log.levels.ERROR)
+					vim.notify(err_msg, vim.log.levels.ERROR, { title = "Hermes" })
 					on_complete(false, err_msg)
 					return
 				end
@@ -303,9 +313,10 @@ function M.build_from_source_async(dest_dir, on_complete)
 				vim.fn.writefile({ "source" }, ver_file)
 
 				local elapsed = math.floor((uv.now() - start_time) / 1000)
-				logging.notify(
+				vim.notify(
 					"Build successful! Hermes has been built from source in " .. elapsed .. " seconds.",
-					vim.log.levels.INFO
+					vim.log.levels.INFO,
+					{ title = "Hermes" }
 				)
 				on_complete(true, nil)
 			end)
@@ -313,7 +324,7 @@ function M.build_from_source_async(dest_dir, on_complete)
 
 		if job_id <= 0 then
 			_build_in_progress = false
-			logging.notify("Failed to start cargo build", vim.log.levels.ERROR)
+			vim.notify("Failed to start cargo build", vim.log.levels.ERROR, { title = "Hermes" })
 			on_complete(false, "Failed to start build")
 			return
 		end
@@ -333,7 +344,7 @@ function M.build_from_source_async(dest_dir, on_complete)
 				end
 				local elapsed = math.floor((uv.now() - start_time) / 1000 / 60)
 				vim.schedule(function()
-					logging.notify("Still building... (" .. elapsed .. " minutes elapsed)", vim.log.levels.INFO)
+					vim.notify("Still building... (" .. elapsed .. " minutes elapsed)", vim.log.levels.INFO, { title = "Hermes" })
 				end)
 			end
 		)
