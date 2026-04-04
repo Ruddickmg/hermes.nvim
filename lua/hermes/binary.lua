@@ -220,8 +220,6 @@ end
 ---@private
 -- luacov: enable
 function M.build_from_source_async(dest_dir, on_complete)
-	local logging = require("hermes.logging")
-
 	-- Check if build already in progress
 	if _build_in_progress then
 		-- Use vim.notify directly to ensure this always shows regardless of log level

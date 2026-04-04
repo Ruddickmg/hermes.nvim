@@ -91,7 +91,7 @@ describe("hermes.version", function()
 
 			-- Must be exactly "source", not "vsource"
 			assert.equals("source", result)
-			assert.is_not.equals("vsource", result)
+			assert(result ~= "vsource", "Should not have 'v' prefix")
 
 			config_stub:revert()
 		end)

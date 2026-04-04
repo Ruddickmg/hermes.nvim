@@ -592,7 +592,7 @@ describe("hermes.binary", function()
       local jobstart_stub = stub(vim.fn, "jobstart").returns(123)
       
       -- Start a build
-      local result1 = binary.build_from_source_async(temp_dir, function() end)
+      binary.build_from_source_async(temp_dir, function() end)
       
       -- Try to start another build while first is in progress
       local result2 = binary.build_from_source_async(temp_dir, function() end)
@@ -647,7 +647,7 @@ describe("hermes.binary", function()
       
       local callback_called = false
       
-      binary.build_from_source_async(temp_dir, function(success, err)
+      binary.build_from_source_async(temp_dir, function(_success, _err)
         callback_called = true
       end)
       
@@ -662,7 +662,7 @@ describe("hermes.binary", function()
       
       local callback_success = nil
       
-      binary.build_from_source_async(temp_dir, function(success, err)
+      binary.build_from_source_async(temp_dir, function(success, _err)
         callback_success = success
       end)
       
@@ -726,7 +726,7 @@ describe("hermes.binary", function()
       
       -- Verify the function accepts the callback parameter without error
       local ok, err = pcall(function()
-        binary.build_from_source_async(temp_dir, function(success, error)
+        binary.build_from_source_async(temp_dir, function(_success, _error)
           -- Callback defined
         end)
       end)

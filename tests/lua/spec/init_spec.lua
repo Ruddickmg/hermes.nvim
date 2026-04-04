@@ -349,12 +349,12 @@ describe("hermes.init (main API)", function()
 			hermes._set_loading_state("READY")
 			
 			-- Stub filereadable to return 0 (not readable) to ensure test isolation
-			local filereadable_stub = stub(vim.fn, "filereadable").returns(0)
+			local _filereadable_stub = stub(vim.fn, "filereadable").returns(0)
 			
 			-- Verify get_loading_state checks actual binary existence
 			local result = hermes.get_loading_state()
 			
-			filereadable_stub:revert()
+			_filereadable_stub:revert()
 			
 			assert.equals("NOT_LOADED", result, "Should return NOT_LOADED when binary is missing")
 		end)
@@ -1384,7 +1384,7 @@ describe("hermes.init (main API)", function()
 		end)
 		
 		it("reset state to NOT_LOADED when binary is cleaned", function()
-			local hermes = require("hermes")
+			local hermes_local = require("hermes")
 			local binary = require("hermes.binary")
 			
 			-- Set up a binary to simulate READY state
@@ -1402,10 +1402,10 @@ describe("hermes.init (main API)", function()
 			vim.fn.writefile({ "source" }, ver_file)
 			
 			-- Simulate READY state
-			hermes._set_loading_state("READY")
+			hermes_local._set_loading_state("READY")
 			
 			-- Verify initial state
-			assert.equals("READY", hermes.get_loading_state())
+			assert.equals("READY", hermes_local.get_loading_state())
 			
 			-- Clean up the test binary
 			if vim.fn.filereadable(bin_path) == 1 then
@@ -1415,13 +1415,15 @@ describe("hermes.init (main API)", function()
 				vim.fn.delete(ver_file)
 			end
 			
-			-- Reset state (simulating what :Hermes clean does)
-			hermes._set_loading_state("NOT_LOADED")
-			hermes._set_loading_error(nil)
+			-- Stub filereadable to return 0 to ensure test isolation
+			local _filereadable_stub = stub(vim.fn, "filereadable").returns(0)
 			
-			-- Verify state is reset
-			assert.equals("NOT_LOADED", hermes.get_loading_state())
-			assert.is_nil(hermes.get_loading_error())
+			-- Verify state reset to NOT_LOADED
+			local result = hermes_local.get_loading_state()
+			
+			_filereadable_stub:revert()
+			
+			assert.equals("NOT_LOADED", result)
 		end)
 	end)
 
