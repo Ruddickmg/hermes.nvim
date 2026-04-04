@@ -163,7 +163,7 @@ function M.build_from_source(dest_dir)
 
 	-- Auto-detect source directory from current Lua file location
 	-- debug.getinfo(1).source returns "@/path/to/lua/hermes/binary.lua"
-	local current_file = debug.getinfo(1).source:sub(2)  -- Remove leading "@"
+	local current_file = debug.getinfo(1).source:sub(2) -- Remove leading "@"
 	-- Go up 3 levels: binary.lua → hermes/ → lua/ → project_root/
 	local source_dir = vim.fn.fnamemodify(current_file, ":h:h:h")
 
@@ -171,7 +171,9 @@ function M.build_from_source(dest_dir)
 	local cargo_toml = source_dir .. "/Cargo.toml"
 	if vim.fn.filereadable(cargo_toml) ~= 1 then
 		logging.notify(
-			"Could not find Hermes source code at: " .. source_dir .. "\n"
+			"Could not find Hermes source code at: "
+				.. source_dir
+				.. "\n"
 				.. "Expected to find Cargo.toml in that directory",
 			vim.log.levels.ERROR
 		)
@@ -228,7 +230,11 @@ function M.build_from_source_async(dest_dir, on_complete)
 	end
 
 	-- Show notification immediately - use vim.notify directly to ensure it always shows
-	vim.notify("Building Hermes from source... (this may take a few minutes)", vim.log.levels.INFO, { title = "Hermes" })
+	vim.notify(
+		"Building Hermes from source... (this may take a few minutes)",
+		vim.log.levels.INFO,
+		{ title = "Hermes" }
+	)
 
 	-- Mark build as in progress immediately so subsequent calls are blocked
 	_build_in_progress = true
@@ -255,7 +261,9 @@ function M.build_from_source_async(dest_dir, on_complete)
 		if vim.fn.filereadable(cargo_toml) ~= 1 then
 			_build_in_progress = false
 			vim.notify(
-				"Could not find Hermes source code at: " .. source_dir .. "\n"
+				"Could not find Hermes source code at: "
+					.. source_dir
+					.. "\n"
 					.. "Expected to find Cargo.toml in that directory",
 				vim.log.levels.ERROR,
 				{ title = "Hermes" }
@@ -267,9 +275,9 @@ function M.build_from_source_async(dest_dir, on_complete)
 		-- Start async cargo build using jobstart
 		local uv = vim.uv or vim.loop
 		local start_time = uv.now()
-		local progress_interval = 60000  -- Show progress every 60 seconds
+		local progress_interval = 60000 -- Show progress every 60 seconds
 
-		local job_id = vim.fn.jobstart({"cargo", "build", "--release"}, {
+		local job_id = vim.fn.jobstart({ "cargo", "build", "--release" }, {
 			cwd = source_dir,
 			on_stdout = function(_, _) end,
 			on_stderr = function(_, _) end,
@@ -317,7 +325,7 @@ function M.build_from_source_async(dest_dir, on_complete)
 					{ title = "Hermes" }
 				)
 				on_complete(true, nil)
-			end)
+			end),
 		})
 
 		if job_id <= 0 then
@@ -327,25 +335,29 @@ function M.build_from_source_async(dest_dir, on_complete)
 			return
 		end
 
-		_build_job = { kill = function() vim.fn.jobstop(job_id) end }
+		_build_job = {
+			kill = function()
+				vim.fn.jobstop(job_id)
+			end,
+		}
 
 		-- Set up progress timer
 		local progress_timer = uv.new_timer()
-		progress_timer:start(
-			progress_interval,
-			progress_interval,
-			function()
-				if not _build_in_progress then
-					progress_timer:stop()
-					progress_timer:close()
-					return
-				end
-				local elapsed = math.floor((uv.now() - start_time) / 1000 / 60)
-				vim.schedule(function()
-					vim.notify("Still building... (" .. elapsed .. " minutes elapsed)", vim.log.levels.INFO, { title = "Hermes" })
-				end)
+		progress_timer:start(progress_interval, progress_interval, function()
+			if not _build_in_progress then
+				progress_timer:stop()
+				progress_timer:close()
+				return
 			end
-		)
+			local elapsed = math.floor((uv.now() - start_time) / 1000 / 60)
+			vim.schedule(function()
+				vim.notify(
+					"Still building... (" .. elapsed .. " minutes elapsed)",
+					vim.log.levels.INFO,
+					{ title = "Hermes" }
+				)
+			end)
+		end)
 	end)
 
 	return true
@@ -394,32 +406,17 @@ function M.ensure_binary()
 	local ver_file = M.get_version_file()
 	local version = require("hermes.version")
 	local wanted_ver = version.get_wanted()
+	local auto_download = require("hermes.config").get_auto_download()
 
 	-- Check if binary already exists
 	if vim.fn.filereadable(bin_path) == 1 then
 		-- Binary exists - check if version matches config
 		if vim.fn.filereadable(ver_file) == 1 then
 			local current_ver = vim.fn.readfile(ver_file)[1]
+			local use_source = current_ver == "source" and not auto_download
 			-- If versions match, or it's a source build, use existing binary
-			if current_ver == wanted_ver or current_ver == "source" then
+			if current_ver == wanted_ver or use_source then
 				return bin_path
-			end
-			-- Versions differ - check if it's a source build
-			if current_ver == "source" then
-				error(
-					"A source-built Hermes binary is installed, but the config requests version "
-						.. wanted_ver
-						.. ".\n\n"
-						.. "You have two options:\n\n"
-						.. "1. Rebuild from source: :Hermes build\n"
-						.. "2. Change your config version to 'source' to use the built binary\n\n"
-						.. "Current config:\n"
-						.. "  download = { version = '"
-						.. wanted_ver
-						.. "' }\n\n"
-						.. "To use source builds:\n"
-						.. "  download = { version = 'source' }"
-				)
 			end
 			-- Versions differ - need to download new version
 		end
