@@ -273,6 +273,21 @@ describe("hermes.init (main API)", function()
 			package.loaded["hermes.init"] = nil
 			package.loaded["hermes.binary"] = nil
 			package.loaded["hermes.config"] = nil
+			
+			-- Clean up any binary files from previous tests FIRST, before requiring modules
+			local ok, binary_module = pcall(require, "hermes.binary")
+			if ok then
+				local bin_path = binary_module.get_binary_path()
+				local data_dir = binary_module.get_data_dir()
+				local ver_file = data_dir .. "/version"
+				if vim.fn.filereadable(bin_path) == 1 then
+					vim.fn.delete(bin_path)
+				end
+				if vim.fn.filereadable(ver_file) == 1 then
+					vim.fn.delete(ver_file)
+				end
+			end
+			
 			hermes = require("hermes")
 			-- Reset state to NOT_LOADED explicitly since module reload may not reset state
 			hermes._set_loading_state("NOT_LOADED")
@@ -309,6 +324,62 @@ describe("hermes.init (main API)", function()
 		it("_is_failed returns true when state is FAILED", function()
 			hermes._set_loading_state("FAILED")
 			assert.is_true(hermes._is_failed())
+		end)
+
+		it("get_loading_state returns NOT_LOADED when binary is missing despite READY state", function()
+			local binary = require("hermes.binary")
+			local bin_path = binary.get_binary_path()
+			local data_dir = binary.get_data_dir()
+			local ver_file = data_dir .. "/version"
+			
+			-- Ensure data directory exists but binary does not
+			vim.fn.mkdir(data_dir, "p")
+			
+			-- Force delete binary if it exists
+			if vim.fn.filereadable(bin_path) == 1 then
+				vim.fn.delete(bin_path)
+			end
+			
+			-- Also delete version file to ensure clean state
+			if vim.fn.filereadable(ver_file) == 1 then
+				vim.fn.delete(ver_file)
+			end
+			
+			-- Set internal state to READY
+			hermes._set_loading_state("READY")
+			
+			-- Stub filereadable to return 0 (not readable) to ensure test isolation
+			local filereadable_stub = stub(vim.fn, "filereadable").returns(0)
+			
+			-- Verify get_loading_state checks actual binary existence
+			local result = hermes.get_loading_state()
+			
+			filereadable_stub:revert()
+			
+			assert.equals("NOT_LOADED", result, "Should return NOT_LOADED when binary is missing")
+		end)
+
+		it("get_loading_state returns READY when binary exists", function()
+			local binary = require("hermes.binary")
+			local bin_path = binary.get_binary_path()
+			local data_dir = binary.get_data_dir()
+			
+			-- Create a binary file
+			vim.fn.mkdir(data_dir, "p")
+			local f = io.open(bin_path, "w")
+			f:write("mock binary")
+			f:close()
+			
+			-- Set internal state to READY
+			hermes._set_loading_state("READY")
+			
+			-- Now should return READY since binary exists
+			local state = hermes.get_loading_state()
+			
+			-- Cleanup
+			vim.fn.delete(bin_path)
+			
+			assert.equals("READY", state, "Should return READY when binary exists")
 		end)
 	end)
 
@@ -785,6 +856,42 @@ describe("hermes.init (main API)", function()
 			local wanted = version.get_wanted()
 			
 			assert.equals("v0.1.0", wanted)
+			
+			-- Cleanup
+			vim.fn.delete(bin_path)
+			vim.fn.delete(ver_file)
+		end)
+
+		it("version change detection skips re-download when auto-download disabled", function()
+			-- Setup with auto-download disabled
+			hermes.setup({ download = { auto = false, version = "v0.3.0" } })
+			
+			-- Create existing binary with different version
+			local binary = require("hermes.binary")
+			local bin_path = binary.get_binary_path()
+			local ver_file = binary.get_version_file()
+			
+			vim.fn.mkdir(binary.get_data_dir(), "p")
+			local f = io.open(bin_path, "w")
+			f:write("mock binary")
+			f:close()
+			
+			-- Write different version (would normally trigger re-download)
+			vim.fn.writefile({"v0.2.0"}, ver_file)
+			
+			-- Simulate READY state with old version
+			hermes._set_loading_state("READY")
+			
+			-- Verify auto-download is disabled
+			assert.is_false(hermes._should_auto_download())
+			
+			-- When auto-download is disabled, version mismatch should NOT trigger re-download
+			-- The binary should remain and state should stay as-is
+			local state = hermes.get_loading_state()
+			assert.equals("READY", state, "State should remain READY when auto-download is disabled despite version mismatch")
+			
+			-- Verify binary still exists (was not deleted)
+			assert.equals(1, vim.fn.filereadable(bin_path), "Binary should not be deleted when auto-download is disabled")
 			
 			-- Cleanup
 			vim.fn.delete(bin_path)
@@ -1274,6 +1381,47 @@ describe("hermes.init (main API)", function()
 			assert.is_true(create_buf_called, "show_status should call nvim_create_buf")
 			assert.is_true(buf_set_lines_called, "show_status should call nvim_buf_set_lines")
 			assert.is_true(open_win_called, "show_status should call nvim_open_win")
+		end)
+		
+		it("reset state to NOT_LOADED when binary is cleaned", function()
+			local hermes = require("hermes")
+			local binary = require("hermes.binary")
+			
+			-- Set up a binary to simulate READY state
+			local data_dir = binary.get_data_dir()
+			vim.fn.mkdir(data_dir, "p")
+			
+			-- Create a fake binary file
+			local bin_path = binary.get_binary_path()
+			local f = io.open(bin_path, "w")
+			f:write("fake binary")
+			f:close()
+			
+			-- Create version file
+			local ver_file = binary.get_version_file()
+			vim.fn.writefile({ "source" }, ver_file)
+			
+			-- Simulate READY state
+			hermes._set_loading_state("READY")
+			
+			-- Verify initial state
+			assert.equals("READY", hermes.get_loading_state())
+			
+			-- Clean up the test binary
+			if vim.fn.filereadable(bin_path) == 1 then
+				vim.fn.delete(bin_path)
+			end
+			if vim.fn.filereadable(ver_file) == 1 then
+				vim.fn.delete(ver_file)
+			end
+			
+			-- Reset state (simulating what :Hermes clean does)
+			hermes._set_loading_state("NOT_LOADED")
+			hermes._set_loading_error(nil)
+			
+			-- Verify state is reset
+			assert.equals("NOT_LOADED", hermes.get_loading_state())
+			assert.is_nil(hermes.get_loading_error())
 		end)
 	end)
 

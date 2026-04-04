@@ -159,9 +159,18 @@ local _download_timeout = 60
 
 -- luacov: disable
 ---Get current loading state
+---Checks actual binary existence for more accurate state reporting
 ---@private
 -- luacov: enable
 function M.get_loading_state()
+	-- If we think we're READY but binary doesn't exist, we're actually NOT_LOADED
+	if _loading_state == "READY" then
+		local binary = require("hermes.binary")
+		local bin_path = binary.get_binary_path()
+		if vim.fn.filereadable(bin_path) ~= 1 then
+			return "NOT_LOADED"
+		end
+	end
 	return _loading_state
 end
 

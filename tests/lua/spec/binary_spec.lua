@@ -633,23 +633,42 @@ describe("hermes.binary", function()
       assert.is_true(found_warning, "Should warn about build already in progress")
     end)
 
-    it("requires cargo to be available", function()
+    it("returns true when cargo is not available (async)", function()
+      stub(vim.fn, "executable").returns(0)  -- cargo not available
+      
+      local result = binary.build_from_source_async(temp_dir, function() end)
+      
+      -- Should return true (build started) but callback should fail
+      assert.is_true(result)
+    end)
+
+    it("calls callback with failure when cargo is not available", function()
       stub(vim.fn, "executable").returns(0)  -- cargo not available
       
       local callback_called = false
+      
+      binary.build_from_source_async(temp_dir, function(success, err)
+        callback_called = true
+      end)
+      
+      -- Wait for the async work to complete
+      vim.wait(100)
+      
+      assert.is_true(callback_called)
+    end)
+
+    it("callback receives false success when cargo is not available", function()
+      stub(vim.fn, "executable").returns(0)  -- cargo not available
+      
       local callback_success = nil
       
-      local result = binary.build_from_source_async(temp_dir, function(success, err)
-        callback_called = true
+      binary.build_from_source_async(temp_dir, function(success, err)
         callback_success = success
       end)
       
       -- Wait for the async work to complete
       vim.wait(100)
       
-      -- Should return true (build started) but callback should fail
-      assert.is_true(result)
-      assert.is_true(callback_called)
       assert.is_false(callback_success)
     end)
 
@@ -705,15 +724,14 @@ describe("hermes.binary", function()
       stub(vim.fn, "jobstart").returns(123)
       stub(vim.fn, "executable").returns(1)
       
-      local callback_called = false
-      
-      binary.build_from_source_async(temp_dir, function(success, error)
-        callback_called = true
+      -- Verify the function accepts the callback parameter without error
+      local ok, err = pcall(function()
+        binary.build_from_source_async(temp_dir, function(success, error)
+          -- Callback defined
+        end)
       end)
       
-      -- Since we're stubbing vim.fn.jobstart, the callback won't be called
-      -- but we verify the function accepts the callback parameter
-      assert.is_true(true)  -- Test passes if no error
+      assert.is_true(ok, "Should accept callback parameter without error: " .. tostring(err))
     end)
 
     it("returns true when build starts successfully", function()
@@ -891,12 +909,13 @@ describe("hermes.binary", function()
   end)
 
   describe("async build state tracking", function()
-    it("tracks build state correctly through lifecycle", function()
+    it("returns false initially when no build is in progress", function()
+      assert.is_false(binary.is_build_in_progress())
+    end)
+
+    it("returns true when build is in progress", function()
       stub(vim.fn, "jobstart").returns(123)
       stub(vim.fn, "executable").returns(1)
-      
-      -- Initial state
-      assert.is_false(binary.is_build_in_progress())
       
       -- Start build
       binary.build_from_source_async(temp_dir, function() end)
@@ -905,23 +924,39 @@ describe("hermes.binary", function()
       vim.wait(50)
       
       assert.is_true(binary.is_build_in_progress())
+    end)
+
+    it("returns false after build is cancelled", function()
+      stub(vim.fn, "jobstart").returns(123)
+      stub(vim.fn, "executable").returns(1)
       
-      -- Cancel build
+      -- Start and then cancel build
+      binary.build_from_source_async(temp_dir, function() end)
+      vim.wait(50)
       binary.cancel_build()
+      
       assert.is_false(binary.is_build_in_progress())
     end)
 
-    it("prevents concurrent builds", function()
+    it("allows first build to start", function()
       stub(vim.fn, "jobstart").returns(123)
       stub(vim.fn, "executable").returns(1)
       
       -- First build should succeed
-      local result1 = binary.build_from_source_async(temp_dir, function() end)
-      assert.is_true(result1)
+      local result = binary.build_from_source_async(temp_dir, function() end)
+      assert.is_true(result)
+    end)
+
+    it("prevents concurrent builds when already in progress", function()
+      stub(vim.fn, "jobstart").returns(123)
+      stub(vim.fn, "executable").returns(1)
+      
+      -- Start first build
+      binary.build_from_source_async(temp_dir, function() end)
       
       -- Second build should fail (already in progress)
-      local result2 = binary.build_from_source_async(temp_dir, function() end)
-      assert.is_false(result2)
+      local result = binary.build_from_source_async(temp_dir, function() end)
+      assert.is_false(result)
     end)
   end)
 end)
