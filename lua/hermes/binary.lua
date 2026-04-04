@@ -236,9 +236,6 @@ function M.build_from_source_async(dest_dir, on_complete)
 		{ title = "Hermes" }
 	)
 
-	-- Mark build as in progress immediately so subsequent calls are blocked
-	_build_in_progress = true
-
 	-- Use vim.schedule to make the entire process async and non-blocking
 	vim.schedule(function()
 		-- Ensure destination directory exists
@@ -246,11 +243,11 @@ function M.build_from_source_async(dest_dir, on_complete)
 
 		-- Check for required tools
 		if vim.fn.executable("cargo") ~= 1 then
-			_build_in_progress = false
 			vim.notify("Rust/Cargo is required to build from source", vim.log.levels.ERROR, { title = "Hermes" })
 			on_complete(false, "cargo not available")
 			return
 		end
+
 
 		-- Auto-detect source directory from current Lua file location
 		local current_file = debug.getinfo(1).source:sub(2)
@@ -259,7 +256,6 @@ function M.build_from_source_async(dest_dir, on_complete)
 		-- Verify this looks like a Hermes source directory
 		local cargo_toml = source_dir .. "/Cargo.toml"
 		if vim.fn.filereadable(cargo_toml) ~= 1 then
-			_build_in_progress = false
 			vim.notify(
 				"Could not find Hermes source code at: "
 					.. source_dir
@@ -271,6 +267,9 @@ function M.build_from_source_async(dest_dir, on_complete)
 			on_complete(false, "Cargo.toml not found")
 			return
 		end
+
+		-- Mark build as in progress immediately so subsequent calls are blocked
+		_build_in_progress = true
 
 		-- Start async cargo build using jobstart
 		local uv = vim.uv or vim.loop
