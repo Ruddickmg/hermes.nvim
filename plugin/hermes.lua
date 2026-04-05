@@ -51,8 +51,13 @@ vim.api.nvim_create_user_command("Hermes", function(args)
 		if vim.fn.filereadable(bin_path) == 1 then
 			table.insert(status_lines, "")
 			if vim.fn.filereadable(ver_file) == 1 then
-				local current_ver = vim.fn.readfile(ver_file)[1]
-				table.insert(status_lines, "Installed version: " .. current_ver)
+				local ok, version_lines = pcall(vim.fn.readfile, ver_file)
+				local current_ver = ok and type(version_lines) == "table" and version_lines[1] or nil
+				if current_ver and current_ver ~= "" then
+					table.insert(status_lines, "Installed version: " .. current_ver)
+				else
+					table.insert(status_lines, "Installed version: unknown")
+				end
 			else
 				table.insert(status_lines, "Installed version: unknown (no version file)")
 			end
