@@ -533,6 +533,10 @@ describe("hermes.binary", function()
 
   describe("ensure_binary() with source version", function()
     it("accepts 'source' version as valid and returns binary path", function()
+      -- Disable auto-download to ensure source build is used
+      local config = require("hermes.config")
+      config.setup({ download = { auto = false } })
+      
       -- Create binary file
       local bin_path = binary.get_binary_path()
       vim.fn.mkdir(binary.get_data_dir(), "p")
