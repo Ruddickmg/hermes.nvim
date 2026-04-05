@@ -549,18 +549,19 @@ describe("hermes.binary", function()
 			assert.is_false(result)
 		end)
 
-		it("auto-detects source directory from current file location", function()
-			-- This test validates the source detection logic concept
-			-- The actual implementation uses debug.getinfo(1).source which is hard to mock
-			-- So we just verify that build_from_source function exists and has correct behavior
+		it("exports build_from_source as a function", function()
+			assert.is_function(binary.build_from_source)
+		end)
 
-			-- Verify the function exists
-			assert.is_function(binary.build_from_source, "build_from_source function should exist")
-
-			-- Verify it requires cargo
-			stub(vim.fn, "executable").returns(0) -- cargo not available
+		it("returns false when cargo is not available", function()
+			stub(vim.fn, "executable").returns(0)
 			local result = binary.build_from_source(temp_dir)
-			assert.is_false(result, "Should fail when cargo not available")
+			assert.is_false(result)
+		end)
+
+		it("_get_source_dir returns a string path", function()
+			local source_dir = binary._get_source_dir()
+			assert.is_string(source_dir)
 		end)
 	end)
 

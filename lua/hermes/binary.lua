@@ -144,6 +144,20 @@ end
 
 -- luacov: disable
 ---Build from source
+-- luacov: disable
+---Get the source directory of the Hermes plugin
+---Uses debug.getinfo to determine the path of the current Lua file
+---@return string source_dir The detected source directory path
+---@private
+function M._get_source_dir()
+	-- Auto-detect source directory from current Lua file location
+	-- debug.getinfo(1).source returns "@/path/to/lua/hermes/binary.lua"
+	local current_file = debug.getinfo(1).source:sub(2) -- Remove leading "@"
+	-- Go up 3 levels: binary.lua → hermes/ → lua/ → project_root/
+	return vim.fn.fnamemodify(current_file, ":h:h:h")
+end
+-- luacov: enable
+
 ---Builds from the local source directory where the plugin is installed
 ---@param dest_dir string Destination directory
 ---@return boolean success Whether build succeeded
@@ -161,11 +175,7 @@ function M.build_from_source(dest_dir)
 		return false
 	end
 
-	-- Auto-detect source directory from current Lua file location
-	-- debug.getinfo(1).source returns "@/path/to/lua/hermes/binary.lua"
-	local current_file = debug.getinfo(1).source:sub(2) -- Remove leading "@"
-	-- Go up 3 levels: binary.lua → hermes/ → lua/ → project_root/
-	local source_dir = vim.fn.fnamemodify(current_file, ":h:h:h")
+	local source_dir = M._get_source_dir()
 
 	-- Verify this looks like a Hermes source directory
 	local cargo_toml = source_dir .. "/Cargo.toml"
