@@ -88,6 +88,27 @@ function M.get_version_file()
 end
 
 -- luacov: disable
+---Get the installed binary version
+---Returns the version from the version file if binary exists
+---Returns nil if binary doesn't exist or version file can't be read
+---@return string|nil version The installed version or nil
+---@private
+-- luacov: enable
+function M.get_installed_version()
+	local bin_path = M.get_binary_path()
+	local ver_file = M.get_version_file()
+
+	if vim.fn.filereadable(bin_path) == 1 and vim.fn.filereadable(ver_file) == 1 then
+		-- Safely read the version file
+		local ok, result = pcall(vim.fn.readfile, ver_file)
+		if ok and result and result[1] then
+			return result[1]
+		end
+	end
+	return nil
+end
+
+-- luacov: disable
 ---Download binary for platform
 ---@param dest_path string Destination path for binary
 ---@param ver string Version to download

@@ -21,14 +21,21 @@ function M.get_wanted()
 	end
 
 	if wanted == "latest" then
+		-- Check if we already have a binary installed
+		local binary = require("hermes.binary")
+		local installed = binary.get_installed_version()
+		if installed then
+			-- Use existing binary's version instead of downloading latest
+			return installed
+		end
+		-- No binary exists, use "latest" to trigger download
 		return "latest"
 	end
 
-	-- Ensure version starts with 'v'
+	-- Version explicitly configured (not "latest"), or no binary exists
 	if not wanted:match("^v") then
 		wanted = "v" .. wanted
 	end
-
 	return wanted
 end
 

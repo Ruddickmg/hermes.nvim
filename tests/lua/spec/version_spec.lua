@@ -12,15 +12,32 @@ describe("hermes.version", function()
 	end)
 
 	describe("get_wanted()", function()
-		it("returns latest when version is 'latest'", function()
+		it("returns latest when version is 'latest' and no binary exists", function()
 			-- Stub config to return latest
 			local config_stub = stub(require("hermes.config"), "get_version").returns("latest")
+			-- Stub binary to return nil (no binary installed)
+			local binary_stub = stub(require("hermes.binary"), "get_installed_version").returns(nil)
 
 			local result = version.get_wanted()
 
 			assert.equals("latest", result)
 
 			config_stub:revert()
+			binary_stub:revert()
+		end)
+
+		it("returns installed version when version is 'latest' and binary exists", function()
+			-- Stub config to return latest
+			local config_stub = stub(require("hermes.config"), "get_version").returns("latest")
+			-- Stub binary to return an installed version
+			local binary_stub = stub(require("hermes.binary"), "get_installed_version").returns("v0.2.0")
+
+			local result = version.get_wanted()
+
+			assert.equals("v0.2.0", result)
+
+			config_stub:revert()
+			binary_stub:revert()
 		end)
 
 		it("adds 'v' prefix when version doesn't have it", function()

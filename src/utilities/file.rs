@@ -331,4 +331,28 @@ mod tests {
         assert_eq!(lines[1], "");
         assert_eq!(lines[2], "line3");
     }
+
+    #[test]
+    fn escape_for_ex_escapes_spaces() {
+        let result = escape_for_ex("file with spaces.txt");
+        assert_eq!(result, "file\\ with\\ spaces.txt");
+    }
+
+    #[test]
+    fn escape_for_ex_escapes_special_chars() {
+        let result = escape_for_ex("file\"with'quotes\\and|pipes.txt");
+        assert_eq!(result, "file\\\"with\\'quotes\\\\and\\|pipes.txt");
+    }
+
+    #[test]
+    fn escape_for_ex_no_escapes_needed() {
+        let result = escape_for_ex("normal_file.txt");
+        assert_eq!(result, "normal_file.txt");
+    }
+
+    #[test]
+    fn escape_for_ex_escapes_tabs() {
+        let result = escape_for_ex("file\twith\ttabs.txt");
+        assert_eq!(result, "file\\\twith\\\ttabs.txt");
+    }
 }

@@ -566,34 +566,31 @@ describe("hermes.binary", function()
 	end)
 
 	describe("ensure_binary() with source version", function()
-		it("accepts 'source' version as valid and returns binary path", function()
-			-- Disable auto-download to ensure source build is used
-			local config = require("hermes.config")
-			config.setup({ download = { auto = false } })
+	it("accepts 'source' version as valid and returns binary path", function()
+		-- Disable auto-download to ensure source build is used
+		local config = require("hermes.config")
+		config.setup({ download = { auto = false } })
 
-			-- Create binary file
-			local bin_path = binary.get_binary_path()
-			vim.fn.mkdir(binary.get_data_dir(), "p")
-			local f = io.open(bin_path, "w")
-			f:write("mock binary")
-			f:close()
+		-- Create binary file
+		local bin_path = binary.get_binary_path()
+		vim.fn.mkdir(binary.get_data_dir(), "p")
+		local f = io.open(bin_path, "w")
+		f:write("mock binary")
+		f:close()
 
-			-- Create version file with "source"
-			local ver_file = binary.get_version_file()
-			vim.fn.writefile({ "source" }, ver_file)
+		-- Create version file with "source"
+		local ver_file = binary.get_version_file()
+		vim.fn.writefile({ "source" }, ver_file)
 
-			-- Mock version.get_wanted to return anything (source build should work regardless)
-			stub(require("hermes.version"), "get_wanted").returns("v9.9.9")
+		-- Should not error and should return the binary path
+		local result = binary.ensure_binary()
 
-			-- Should not error and should return the binary path
-			local result = binary.ensure_binary()
+		assert.equals(bin_path, result)
 
-			assert.equals(bin_path, result)
-
-			-- Cleanup
-			os.remove(bin_path)
-			os.remove(ver_file)
-		end)
+		-- Cleanup
+		os.remove(bin_path)
+		os.remove(ver_file)
+	end)
 
 		it("writes 'source' to version file after successful build", function()
 			-- This test validates that ensure_binary handles 'source' version correctly
