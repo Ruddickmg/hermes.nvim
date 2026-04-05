@@ -622,15 +622,12 @@ describe("hermes.binary", function()
       vim.notify = original_notify
       
       -- Should have warning about build in progress
-      local found_warning = false
-      for _, call in ipairs(notify_calls) do
-        if call.msg and call.msg:find("already in progress") then
-          found_warning = true
-          break
-        end
-      end
-      
-      assert.is_true(found_warning, "Should warn about build already in progress")
+      assert.is_true(
+        #vim.tbl_filter(function(call)
+          return call.msg and call.msg:find("already in progress") ~= nil
+        end, notify_calls) > 0,
+        "Should warn about build already in progress"
+      )
     end)
 
     it("returns true when cargo is not available (async)", function()
