@@ -229,6 +229,9 @@ function M.build_from_source_async(dest_dir, on_complete)
 		return false
 	end
 
+	-- Mark build as in progress immediately so subsequent calls are blocked
+	_build_in_progress = true
+
 	-- Show notification immediately - use vim.notify directly to ensure it always shows
 	vim.notify(
 		"Building Hermes from source... (this may take a few minutes)",
@@ -236,18 +239,18 @@ function M.build_from_source_async(dest_dir, on_complete)
 		{ title = "Hermes" }
 	)
 
-	-- Use vim.schedule to make the entire process async and non-blocking
+	-- Use vim.schedule to make the actual work async and non-blocking
 	vim.schedule(function()
 		-- Ensure destination directory exists
 		vim.fn.mkdir(dest_dir, "p")
 
 		-- Check for required tools
 		if vim.fn.executable("cargo") ~= 1 then
+			_build_in_progress = false
 			vim.notify("Rust/Cargo is required to build from source", vim.log.levels.ERROR, { title = "Hermes" })
 			on_complete(false, "cargo not available")
 			return
 		end
-
 
 		-- Auto-detect source directory from current Lua file location
 		local current_file = debug.getinfo(1).source:sub(2)
@@ -256,6 +259,7 @@ function M.build_from_source_async(dest_dir, on_complete)
 		-- Verify this looks like a Hermes source directory
 		local cargo_toml = source_dir .. "/Cargo.toml"
 		if vim.fn.filereadable(cargo_toml) ~= 1 then
+			_build_in_progress = false
 			vim.notify(
 				"Could not find Hermes source code at: "
 					.. source_dir
@@ -267,9 +271,6 @@ function M.build_from_source_async(dest_dir, on_complete)
 			on_complete(false, "Cargo.toml not found")
 			return
 		end
-
-		-- Mark build as in progress immediately so subsequent calls are blocked
-		_build_in_progress = true
 
 		-- Start async cargo build using jobstart
 		local uv = vim.uv or vim.loop
@@ -370,21 +371,26 @@ end
 function M.cancel_build()
 	local logging = require("hermes.logging")
 
-	if not _build_job or not _build_in_progress then
-		logging.notify("No build in progress to cancel", vim.log.levels.WARN)
-		return false
+	if _build_job ~= nil then
+		-- Kill the build job using jobstop
+		_build_job.kill()
+		_build_in_progress = false
+		_build_job = nil
+		logging.notify("Build cancelled", vim.log.levels.INFO)
+		return true
+	else
+		if not _build_in_progress then
+			logging.notify("No build in progress to cancel", vim.log.levels.WARN)
+			return false
+		end
+
+		_build_in_progress = false
+		_build_job = nil
+
+		logging.notify("Build cancelled", vim.log.levels.INFO)
+		return true
 	end
-
-	-- Kill the build job using jobstop
-	_build_job.kill()
-
-	_build_in_progress = false
-	_build_job = nil
-
-	logging.notify("Build cancelled", vim.log.levels.INFO)
-	return true
 end
-
 -- luacov: disable
 ---Check if a build is currently in progress
 ---@return boolean in_progress Whether a build is in progress

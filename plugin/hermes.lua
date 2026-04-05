@@ -196,10 +196,7 @@ vim.api.nvim_create_user_command("Hermes", function(args)
 	elseif subcmd == "cancel" then
 		-- Cancel an in-progress build
 		local binary = require("hermes.binary")
-		local cancelled = binary.cancel_build()
-		if not cancelled then
-			logger.notify("No build in progress to cancel", vim.log.levels.WARN)
-		end
+		binary.cancel_build()
 	elseif subcmd == "version" or subcmd == "info" then
 		-- Show version info
 		local platform = require("hermes.platform")
@@ -239,7 +236,7 @@ vim.api.nvim_create_user_command("Hermes", function(args)
 		if vim.fn.isdirectory(data_dir) == 1 then
 			vim.fn.delete(data_dir, "rf")
 		end
-		
+
 		-- Reset internal state so Hermes knows the binary is gone
 		local hermes = require("hermes")
 		hermes._set_loading_state("NOT_LOADED")
