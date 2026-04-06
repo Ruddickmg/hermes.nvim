@@ -1,13 +1,22 @@
 use crate::acp::{Result, error::Error};
 use crossbeam_channel::{Receiver, Sender, bounded};
 use nvim_oxi::libuv::AsyncHandle;
-use std::sync::Arc;
+use std::{ptr, sync::Arc};
 
 #[derive(Clone)]
 pub struct MessageMessenger {
     handle: Arc<AsyncHandle>,
     sender: Arc<Sender<String>>,
 }
+
+impl PartialEq for MessageMessenger {
+    fn eq(&self, other: &Self) -> bool {
+        ptr::eq(self, other) // Compares memory addresses
+    }
+}
+
+// 2. Implement Eq (marker trait)
+impl Eq for MessageMessenger {}
 
 impl std::fmt::Debug for MessageMessenger {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

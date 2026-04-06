@@ -383,6 +383,7 @@ Subcommands: ~
     install    Download and install binary
     update     Update to latest version from GitHub
     build      Build binary from source
+    cancel     Cancel in-progress build
     version    Show version information
     clean      Remove binary
     setup      Show current configuration
@@ -393,6 +394,7 @@ Example: >
     :Hermes install    " Download binary (first time or specific version)
     :Hermes update     " Fetch and install latest version
     :Hermes build      " Build from source
+    :Hermes cancel     " Cancel in-progress build
     :Hermes version    " Show version info
     :Hermes clean      " Remove binary
     :Hermes setup      " Show configuration
@@ -442,7 +444,8 @@ Build from source fails: ~
 1. Ensure Rust is installed: `cargo --version`
 2. Check build dependencies (gcc, make, etc.)
 3. Run `:Hermes build`
-4. Check for specific error messages in the output
+4. Cancel a stuck build with `:Hermes cancel`
+5. Check for specific error messages in the output
 
 If issues persist, create an issue at:
 https://github.com/Ruddickmg/hermes.nvim/issues

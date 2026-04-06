@@ -125,8 +125,10 @@ mod tests {
     }
 
     fn create_agent_info_with_agent(agent: Assistant) -> AgentInfo {
-        let mut info = AgentInfo::default();
-        info.current = agent.clone();
+        let mut info = AgentInfo {
+            current: agent.clone(),
+            ..Default::default()
+        };
         info.add_agent(agent, create_test_response());
         info
     }

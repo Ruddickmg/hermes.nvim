@@ -174,4 +174,28 @@ mod tests {
         // The actual functionality is tested in E2E tests
         let _: Option<LoadSessionArgs> = None;
     }
+
+    #[test]
+    fn test_load_session_config_with_mcp_servers() {
+        // Test that LoadSessionConfig properly stores an empty mcp_servers vector
+        // The actual McpServer construction comes from the agent_client_protocol crate
+        let config = LoadSessionConfig {
+            cwd: Some(PathBuf::from("/project")),
+            mcp_servers: vec![], // Empty vector for simplicity
+        };
+        // Verify the config handles MCP servers correctly
+        assert_eq!(config.cwd, Some(PathBuf::from("/project")));
+        assert!(config.mcp_servers.is_empty());
+    }
+
+    #[test]
+    fn test_load_session_config_pushable_without_cwd() {
+        let config = LoadSessionConfig {
+            cwd: None,
+            mcp_servers: vec![],
+        };
+        // Verify the config struct handles None cwd correctly
+        assert!(config.cwd.is_none());
+        assert!(config.mcp_servers.is_empty());
+    }
 }

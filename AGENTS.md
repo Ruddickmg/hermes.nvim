@@ -566,6 +566,7 @@ mod tests {
   - If a test needs multiple assertions, split it into multiple tests with descriptive names
   - Each test name should clearly indicate what specific behavior it's testing
 - **Debugging:** Run tests locally to verify fixes.
+- **Documentation:** Do not run tests after updating documentation files (e.g., README.md, doc/*.txt). Documentation changes do not require test execution.
 
 ### One Assertion Per Test Rule
 
@@ -926,6 +927,29 @@ luacov -c tests/lua/.luacov
 - luacov generates `luacov.stats.out` (raw stats) and `luacov.report.out` (human-readable)
 - Coverage inside `vim.schedule()` callbacks is not tracked (known limitation)
 - Focus on testing sync code paths and state management
+
+### Patch Coverage
+
+**Patch coverage** measures the percentage of code changed in a pull request that is covered by tests. Unlike project coverage (which measures the entire codebase), patch coverage focuses specifically on the code you're modifying.
+
+**Why patch coverage matters:**
+- **Quality gate**: Ensures new code is tested before merging
+- **Focused feedback**: Tells you if your changes are tested, not the whole codebase
+- **Prevents technical debt**: Untested changes today become legacy bugs tomorrow
+- **CI/CD integration**: Most CI systems can block PRs with low patch coverage
+
+**Current target: 80% patch coverage** - This means at least 80% of the lines you add or modify must be covered by tests.
+
+**Measuring patch coverage:**
+Patch coverage is calculated by combining all test types:
+- Unit tests (Rust)
+- Integration tests (Rust + Neovim)
+- E2E tests (Rust + Neovim + full flow)
+- Lua tests (Lua modules)
+
+The coverage tool tracks which lines were executed across all test runs and calculates what percentage of your PR's changed lines were covered.
+
+For more details: [Why Patch Coverage is More Important Than Project Coverage](https://about.codecov.io/blog/why-patch-coverage-is-more-important-than-project-coverage/)
 
 ### Running Tests
 

@@ -51,7 +51,7 @@ describe("hermes.config", function()
         },
         log = {
           notification = {
-            level = "error"
+            level = "info"  -- Changed from "error" to "info" for better UX
           }
         }
       }, current)

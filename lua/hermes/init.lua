@@ -159,9 +159,18 @@ local _download_timeout = 60
 
 -- luacov: disable
 ---Get current loading state
+---Checks actual binary existence for more accurate state reporting
 ---@private
 -- luacov: enable
 function M.get_loading_state()
+	-- If we think we're READY but binary doesn't exist, we're actually NOT_LOADED
+	if _loading_state == "READY" then
+		local binary = require("hermes.binary")
+		local bin_path = binary.get_binary_path()
+		if vim.fn.filereadable(bin_path) ~= 1 then
+			return "NOT_LOADED"
+		end
+	end
 	return _loading_state
 end
 
@@ -477,31 +486,33 @@ function M.setup(opts)
 		log = opts.log,
 	})
 
-	-- Check if version changed and we need to re-download
-	local version = require("hermes.version")
-	local configured_ver = version.get_wanted()
-	local binary = require("hermes.binary")
-	local ver_file = binary.get_version_file()
-	local bin_path = binary.get_binary_path()
+	-- Check if version changed and we need to re-download (only if auto-download is enabled)
+	if should_auto_download() then
+		local version = require("hermes.version")
+		local configured_ver = version.get_wanted()
+		local binary = require("hermes.binary")
+		local ver_file = binary.get_version_file()
+		local bin_path = binary.get_binary_path()
 
-	if is_ready() and vim.fn.filereadable(ver_file) == 1 then
-		local ok, installed_ver = pcall(function()
-			return vim.fn.readfile(ver_file)[1]
-		end)
-
-		if ok and installed_ver ~= configured_ver then
-			-- Version changed! Delete old binary and reset state
-			pcall(function()
-				vim.fn.delete(bin_path)
-				vim.fn.delete(ver_file)
+		if is_ready() and vim.fn.filereadable(ver_file) == 1 then
+			local ok, installed_ver = pcall(function()
+				return vim.fn.readfile(ver_file)[1]
 			end)
 
-			_loading_state = "NOT_LOADED"
-			_native = nil
-			logging.notify(
-				string.format("Version changed from %s to %s, downloading...", installed_ver, configured_ver),
-				vim.log.levels.INFO
-			)
+			if ok and installed_ver ~= configured_ver then
+				-- Version changed! Delete old binary and reset state
+				pcall(function()
+					vim.fn.delete(bin_path)
+					vim.fn.delete(ver_file)
+				end)
+
+				_loading_state = "NOT_LOADED"
+				_native = nil
+				logging.notify(
+					string.format("Version changed from %s to %s, downloading...", installed_ver, configured_ver),
+					vim.log.levels.INFO
+				)
+			end
 		end
 	end
 
@@ -745,46 +756,6 @@ local function show_status()
 		vim.api.nvim_win_close(win, true)
 	end, { buffer = buf, silent = true })
 end
-
--- Register :Hermes user command
-vim.api.nvim_create_user_command("Hermes", function(opts)
-	local args = opts.args:lower()
-
-	if args == "status" then
-		show_status()
-	elseif args == "build" then
-		-- Trigger build from source
-		logging.notify("Building from source...", vim.log.levels.INFO)
-		vim.schedule(function()
-			local binary = require("hermes.binary")
-			local data_dir = binary.get_data_dir()
-			local ok, err = binary.build_from_source(data_dir)
-			if ok then
-				logging.notify("Build successful! Restart Neovim to load the new binary.", vim.log.levels.INFO)
-			else
-				logging.notify("Build failed: " .. tostring(err), vim.log.levels.ERROR)
-			end
-		end)
-	elseif args == "log" then
-		-- Open log file
-		local config = require("hermes.config")
-		local log_config = config.get_log and config.get_log() or {}
-		local log_path = log_config.path
-		if log_path and vim.fn.filereadable(log_path) == 1 then
-			vim.cmd("vsplit " .. vim.fn.fnameescape(log_path))
-		else
-			logging.notify("No log file found", vim.log.levels.WARN)
-		end
-	else
-		logging.notify("Unknown command '" .. opts.args .. "'. Available: status, build, log", vim.log.levels.ERROR)
-	end
-end, {
-	nargs = 1,
-	complete = function()
-		return { "status", "build", "log" }
-	end,
-	desc = "Hermes commands: status, build, log",
-})
 
 -- ============================================================================
 -- Export internal functions for testing (marked private to hide from LSP)

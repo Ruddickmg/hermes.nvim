@@ -106,17 +106,6 @@ cargo build --release
 # Copy target/release/libhermes.* to your Neovim data directory
 ```
 
-### Platform Not Supported?
-
-If your platform isn't supported and building from source fails:
-
-1. Create an issue on GitHub: https://github.com/Ruddickmg/hermes.nvim/issues
-2. Include:
-   - Your operating system and version
-   - Output of `:Hermes version` (if available)
-   - Full error messages from `:Hermes build` or `cargo build --release`
-   - Architecture info from `uname -m` (or `uname -a` on macOS)
-
 ## Commands
 
 **Check status:**
@@ -159,7 +148,13 @@ Removes the binary. Run `:Hermes install` or use Hermes API to re-download.
 ```
 :Hermes build
 ```
-Compiles from source (requires Rust toolchain).
+Compiles from source (requires Rust toolchain). Runs asynchronously without blocking Neovim.
+
+**Cancel build:**
+```
+:Hermes cancel
+```
+Cancels an in-progress source build. Shows warning if no build is running.
 
 **View configuration:**
 ```
