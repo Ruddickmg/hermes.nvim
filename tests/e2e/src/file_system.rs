@@ -2,8 +2,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::{
-    utilities::{autocommand, mock_agent::MockAgent, mock_config::MockConfig},
     TIMEOUT_IN_SECONDS,
+    utilities::{autocommand, mock_agent::MockAgent, mock_config::MockConfig},
 };
 use agent_client_protocol::{
     InitializeResponse, NewSessionResponse, PromptResponse, ReadTextFileRequest, SessionId,
@@ -13,7 +13,7 @@ use hermes::{
     api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
     nvim::{autocommands::Commands, hermes},
 };
-use nvim_oxi::{conversion::FromObject, Dictionary, Function, Object};
+use nvim_oxi::{Dictionary, Function, Object, conversion::FromObject};
 use pretty_assertions::assert_eq;
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;

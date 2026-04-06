@@ -9,11 +9,11 @@ use agent_client_protocol::{
     NewSessionResponse, PromptCapabilities, PromptRequest, PromptResponse, ProtocolVersion,
     ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
     RequestPermissionOutcome, RequestPermissionRequest, SessionCapabilities,
-    SessionForkCapabilities, SessionListCapabilities, SessionNotification, SessionResumeCapabilities,
-    SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
-    SetSessionModeRequest, SetSessionModeResponse, StopReason, TerminalOutputRequest,
-    TerminalOutputResponse, TextContent, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
-    WriteTextFileRequest, WriteTextFileResponse,
+    SessionForkCapabilities, SessionListCapabilities, SessionNotification,
+    SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, SetSessionModeRequest, SetSessionModeResponse, StopReason,
+    TerminalOutputRequest, TerminalOutputResponse, TextContent, WaitForTerminalExitRequest,
+    WaitForTerminalExitResponse, WriteTextFileRequest, WriteTextFileResponse,
 };
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
@@ -367,10 +367,8 @@ impl Agent for MockAgent {
 
                 // Step 2: Get terminal output (if configured)
                 if send_terminal_output {
-                    let output_req = TerminalOutputRequest::new(
-                        request.session_id.clone(),
-                        terminal_id.clone(),
-                    );
+                    let output_req =
+                        TerminalOutputRequest::new(request.session_id.clone(), terminal_id.clone());
                     let (tx, rx) = oneshot::channel();
                     self.conn_tx
                         .send(AgentToConnection::TerminalOutput(output_req, tx))
@@ -385,10 +383,8 @@ impl Agent for MockAgent {
 
                 // Step 3: Wait for terminal exit (if configured)
                 if send_terminal_exit {
-                    let exit_req = WaitForTerminalExitRequest::new(
-                        request.session_id.clone(),
-                        terminal_id,
-                    );
+                    let exit_req =
+                        WaitForTerminalExitRequest::new(request.session_id.clone(), terminal_id);
                     let (tx, rx) = oneshot::channel();
                     self.conn_tx
                         .send(AgentToConnection::WaitForTerminalExit(exit_req, tx))

@@ -6,9 +6,9 @@ use hermes::{
     api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
     nvim::{autocommands::Commands, hermes},
 };
-use nvim_oxi::{conversion::FromObject, Dictionary, Function, Object};
+use nvim_oxi::{Dictionary, Function, Object, conversion::FromObject};
 
-use crate::{utilities::autocommand, TIMEOUT_IN_SECONDS};
+use crate::{TIMEOUT_IN_SECONDS, utilities::autocommand};
 
 pub fn test_agent_prompt(agent: Assistant) -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;

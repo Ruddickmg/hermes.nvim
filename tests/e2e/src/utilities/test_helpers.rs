@@ -1,8 +1,8 @@
 //! Test helpers for working with the MockAgent in E2E tests
 
 use crate::{
-    utilities::{autocommand, mock_agent::MockAgent, mock_agent_handle::MockAgentHandle},
     TIMEOUT_IN_SECONDS,
+    utilities::{autocommand, mock_agent::MockAgent, mock_agent_handle::MockAgentHandle},
 };
 use agent_client_protocol::{InitializeResponse, NewSessionResponse};
 use hermes::{
@@ -10,7 +10,7 @@ use hermes::{
     nvim::{autocommands::Commands, hermes},
 };
 use nvim_oxi::lua::Pushable;
-use nvim_oxi::{conversion::FromObject, Dictionary, Function};
+use nvim_oxi::{Dictionary, Function, conversion::FromObject};
 use std::time::Duration;
 
 /// Setup result containing all the common test resources

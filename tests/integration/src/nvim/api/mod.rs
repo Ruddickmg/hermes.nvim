@@ -14,7 +14,8 @@ use hermes::nvim::state::PluginState;
 
 use agent_client_protocol::{
     AgentCapabilities, InitializeResponse, McpCapabilities, PromptCapabilities, ProtocolVersion,
-    SessionCapabilities, SessionForkCapabilities, SessionListCapabilities, SessionResumeCapabilities,
+    SessionCapabilities, SessionForkCapabilities, SessionListCapabilities,
+    SessionResumeCapabilities,
 };
 
 use crate::helpers::MockRequestHandler;
@@ -92,7 +93,9 @@ fn test_agent_with_all_capabilities_disabled() -> nvim_oxi::Result<()> {
             state_guard.agent_info.can_fork_sessions(),
             state_guard.agent_info.can_resume_sessions(),
         ),
-        (false, false, false, false, false, false, false, false, false)
+        (
+            false, false, false, false, false, false, false, false, false
+        )
     );
 
     Ok(())
