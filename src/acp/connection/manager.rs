@@ -484,4 +484,43 @@ mod tests {
         };
         assert_eq!(format!("{}", assistant), "custom-cli");
     }
+
+    #[test]
+    fn test_assistant_gemini_display() {
+        let assistant = Assistant::Gemini;
+        assert_eq!(format!("{}", assistant), "gemini");
+    }
+
+    #[test]
+    fn test_assistant_from_str_gemini_lowercase() {
+        // Note: Gemini is not currently handled in From<&str>, it becomes CustomStdio
+        // This test documents current behavior
+        let result = Assistant::from("gemini");
+        assert!(matches!(result, Assistant::CustomStdio { .. }));
+    }
+
+    #[test]
+    fn test_assistant_from_str_custom_name() {
+        let result = Assistant::from("my-custom-agent");
+        match result {
+            Assistant::CustomStdio { name, command, args } => {
+                assert_eq!(name, "my-custom-agent");
+                assert!(command.is_empty());
+                assert!(args.is_empty());
+            }
+            _ => panic!("Expected CustomStdio variant"),
+        }
+    }
+
+    #[test]
+    fn test_assistant_from_string() {
+        let result = Assistant::from(String::from("opencode"));
+        assert!(matches!(result, Assistant::Opencode));
+    }
+
+    #[test]
+    fn test_protocol_default_is_stdio() {
+        let protocol: Protocol = Default::default();
+        assert!(matches!(protocol, Protocol::Stdio));
+    }
 }

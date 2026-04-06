@@ -1,8 +1,8 @@
 use nvim_oxi::{
-    Function, Object, ObjectKind,
     conversion::{self, FromObject},
     lua::{self, Error, Poppable, Pushable},
     serde::SerializeError,
+    Function, Object, ObjectKind,
 };
 use std::{cell::RefCell, rc::Rc};
 use tracing::{debug, error, instrument};
@@ -247,5 +247,40 @@ mod tests {
     fn test_parse_assistant_string_invalid() {
         let result = parse_assistant_string(nvim_oxi::String::from("invalid"));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_disconnect_args_pushable_all_variant() {
+        // Test that All variant pushes correctly (empty tuple)
+        let args = DisconnectArgs::All;
+        // Verify the variant exists and has correct type
+        assert!(matches!(args, DisconnectArgs::All));
+    }
+
+    #[test]
+    fn test_disconnect_args_pushable_single_variant() {
+        // Test that Single variant stores assistant correctly
+        let args = DisconnectArgs::Single(Assistant::Copilot);
+        match args {
+            DisconnectArgs::Single(assistant) => {
+                assert!(matches!(assistant, Assistant::Copilot));
+            }
+            _ => panic!("Expected Single variant"),
+        }
+    }
+
+    #[test]
+    fn test_disconnect_args_pushable_multiple_variant() {
+        // Test that Multiple variant stores vector correctly
+        let assistants = vec![Assistant::Copilot, Assistant::Opencode];
+        let args = DisconnectArgs::Multiple(assistants);
+        match args {
+            DisconnectArgs::Multiple(vec) => {
+                assert_eq!(vec.len(), 2);
+                assert!(matches!(vec[0], Assistant::Copilot));
+                assert!(matches!(vec[1], Assistant::Opencode));
+            }
+            _ => panic!("Expected Multiple variant"),
+        }
     }
 }

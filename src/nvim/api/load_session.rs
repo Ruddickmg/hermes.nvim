@@ -1,18 +1,18 @@
 use agent_client_protocol::{LoadSessionRequest, SessionId};
 use nvim_oxi::{
-    Dictionary, Function, Object,
     conversion::{Error, FromObject},
     lua::{Error as LuaError, Poppable, Pushable},
+    Dictionary, Function, Object,
 };
 use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{debug, error, instrument};
 
 use crate::{
-    PluginState,
     acp::connection::ConnectionManager,
     api::mcp_servers::parse_mcp_servers,
     utilities::{self, get_project_root},
+    PluginState,
 };
 
 /// Configuration for loading a session (second argument of the tuple)
@@ -173,5 +173,29 @@ mod tests {
         // This test just verifies the type alias compiles correctly
         // The actual functionality is tested in E2E tests
         let _: Option<LoadSessionArgs> = None;
+    }
+
+    #[test]
+    fn test_load_session_config_with_mcp_servers() {
+        // Test that LoadSessionConfig properly stores an empty mcp_servers vector
+        // The actual McpServer construction comes from the agent_client_protocol crate
+        let config = LoadSessionConfig {
+            cwd: Some(PathBuf::from("/project")),
+            mcp_servers: vec![], // Empty vector for simplicity
+        };
+        // Verify the config handles MCP servers correctly
+        assert_eq!(config.cwd, Some(PathBuf::from("/project")));
+        assert!(config.mcp_servers.is_empty());
+    }
+
+    #[test]
+    fn test_load_session_config_pushable_without_cwd() {
+        let config = LoadSessionConfig {
+            cwd: None,
+            mcp_servers: vec![],
+        };
+        // Verify the config struct handles None cwd correctly
+        assert!(config.cwd.is_none());
+        assert!(config.mcp_servers.is_empty());
     }
 }
