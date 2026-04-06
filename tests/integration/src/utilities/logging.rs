@@ -713,8 +713,11 @@ fn test_logger_messages_is_refreshed_correctly() -> nvim_oxi::Result<()> {
     let logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
     let refreshed_logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
 
-    assert_eq!(logger.nvim_messages_messenger, refreshed_logger.nvim_messages_messenger);
-    
+    assert_eq!(
+        logger.nvim_messages_messenger,
+        refreshed_logger.nvim_messages_messenger
+    );
+
     Ok(())
 }
 
@@ -723,7 +726,10 @@ fn test_logger_notification_is_refreshed_correctly() -> nvim_oxi::Result<()> {
     let logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
     let refreshed_logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
 
-    assert_eq!(logger.nvim_notifications_messenger, refreshed_logger.nvim_notifications_messenger);
-    
+    assert_eq!(
+        logger.nvim_notifications_messenger,
+        refreshed_logger.nvim_notifications_messenger
+    );
+
     Ok(())
 }
