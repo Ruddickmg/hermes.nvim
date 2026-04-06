@@ -3,6 +3,7 @@ use crate::utilities::LogLevel;
 use crossbeam_channel::{Sender, bounded};
 use nvim_oxi::libuv::AsyncHandle;
 use nvim_oxi::{Dictionary, api};
+use std::ptr;
 use std::sync::Arc;
 
 /// A notification message to be delivered to Neovim
@@ -18,6 +19,14 @@ pub struct NotificationMessenger {
     handle: Arc<AsyncHandle>,
     sender: Arc<Sender<NotificationMessage>>,
 }
+
+impl PartialEq for NotificationMessenger {
+    fn eq(&self, other: &Self) -> bool {
+        ptr::eq(self, other) // Compares memory addresses
+    }
+}
+
+impl Eq for NotificationMessenger {}
 
 impl std::fmt::Debug for NotificationMessenger {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

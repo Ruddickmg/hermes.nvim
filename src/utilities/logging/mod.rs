@@ -39,8 +39,8 @@ type BoxedLayer = Box<dyn tracing_subscriber::layer::Layer<Registry> + Send + Sy
 pub struct Logger {
     handle: reload::Handle<Vec<BoxedLayer>, Registry>,
     storage_path: String,
-    nvim_messages_messenger: MessageMessenger,
-    nvim_notifications_messenger: NotificationMessenger,
+    pub nvim_messages_messenger: MessageMessenger,
+    pub nvim_notifications_messenger: NotificationMessenger,
 }
 
 impl Logger {
