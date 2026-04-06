@@ -39,7 +39,7 @@ local default_config = {
 	},
 	log = {
 		notification = {
-			level = "error", -- Default per README.md
+			level = "info", -- Show INFO and above by default
 		},
 	},
 }

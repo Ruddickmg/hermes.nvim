@@ -39,8 +39,8 @@ type BoxedLayer = Box<dyn tracing_subscriber::layer::Layer<Registry> + Send + Sy
 pub struct Logger {
     handle: reload::Handle<Vec<BoxedLayer>, Registry>,
     storage_path: String,
-    nvim_messages_messenger: MessageMessenger,
-    nvim_notifications_messenger: NotificationMessenger,
+    pub nvim_messages_messenger: MessageMessenger,
+    pub nvim_notifications_messenger: NotificationMessenger,
 }
 
 impl Logger {
@@ -144,6 +144,29 @@ impl Logger {
     }
 
     pub fn inititalize(storage_path: &str) -> Result<&'static Self> {
+        // Check if global subscriber already exists (reload scenario)
+        if LOGGER.get().is_some() {
+            // Reload: Get cached logger and rebuild layers with the cached messengers
+            let logger = LOGGER
+                .get()
+                .ok_or_else(|| Error::Internal("Logger cached but not found".into()))?;
+
+            // Reuse the cached messengers so future reconfiguration stays consistent
+            let layers = Self::all_layers(
+                Default::default(),
+                logger.nvim_notifications_messenger.clone(),
+                logger.nvim_messages_messenger.clone(),
+            )?;
+            // Reload the layers in the global subscriber
+            logger
+                .handle
+                .reload(layers)
+                .map_err(|e| Error::Internal(e.to_string()))?;
+
+            return Ok(logger);
+        }
+
+        // First initialization: Create new global subscriber
         let nvim_notifications_messenger = NotificationMessenger::initialize()?;
         let nvim_messages_messenger = MessageMessenger::initialize()?;
         let layers: Vec<BoxedLayer> = Self::all_layers(

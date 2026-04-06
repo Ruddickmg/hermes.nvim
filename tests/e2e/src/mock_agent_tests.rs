@@ -8,12 +8,12 @@ use hermes::{
     api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
     nvim::{autocommands::Commands, hermes},
 };
-use nvim_oxi::{conversion::FromObject, Dictionary, Function};
+use nvim_oxi::{Dictionary, Function, conversion::FromObject};
 use std::time::Duration;
 
 use crate::{
-    utilities::{autocommand, mock_agent::MockAgent},
     TIMEOUT_IN_SECONDS,
+    utilities::{autocommand, mock_agent::MockAgent},
 };
 
 fn create_func<A>(plugin: Dictionary, name: &str) -> Function<A, ()> {
