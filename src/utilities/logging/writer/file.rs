@@ -1,8 +1,8 @@
 use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::path::Path;
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::OnceLock;
 use tracing_subscriber::fmt::MakeWriter;
 
 use crate::utilities::logging::channel::ChannelWriter;

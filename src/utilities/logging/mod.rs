@@ -6,7 +6,7 @@ use tracing_subscriber::{
     reload::{self},
 };
 
-use crate::utilities::logging::writer::{FileWriter, Filtered, StdoutWriter};
+use crate::utilities::logging::writer::{AnsiStrip, FileWriter, Filtered, StdoutWriter};
 use crate::utilities::message_messenger::MessageMessenger;
 use crate::utilities::notification_messenger::NotificationMessenger;
 use crate::utilities::writer::MessageWriter;
@@ -60,7 +60,7 @@ impl Logger {
             LogFormat::Full => base.boxed(),
             LogFormat::Compact => base.compact().boxed(),
             LogFormat::Json => base.json().boxed(),
-            _ => base.pretty().boxed(),
+            LogFormat::Pretty => base.pretty().boxed(),
         }
     }
 
@@ -84,9 +84,9 @@ impl Logger {
     }
 
     fn message_layer(config: LogTargetConfig, messenger: MessageMessenger) -> Result<BoxedLayer> {
-        let writer = MessageWriter::new(messenger).filtered(config.level);
+        let writer = AnsiStrip::new(MessageWriter::new(messenger)).filtered(config.level);
         Ok(Self::base_layer(
-            fmt::layer().with_writer(writer.clone()),
+            fmt::layer().with_writer(writer.clone()).with_ansi(false),
             config.format,
         ))
     }
@@ -96,11 +96,14 @@ impl Logger {
             // Skip file logging if path is empty or logging is disabled
             Ok(None)
         } else {
-            let writer = FileWriter::new(&config.path, config.max_size, config.max_files as usize)?
+            let writer =
+                AnsiStrip::new(
+                    FileWriter::new(&config.path, config.max_size, config.max_files as usize)?,
+                )
                 .filtered(config.level);
 
             Ok(Some(Self::base_layer(
-                fmt::layer().with_writer(writer),
+                fmt::layer().with_writer(writer).with_ansi(false),
                 config.format,
             )))
         }
