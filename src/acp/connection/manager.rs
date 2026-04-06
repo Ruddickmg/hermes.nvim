@@ -503,7 +503,11 @@ mod tests {
     fn test_assistant_from_str_custom_name() {
         let result = Assistant::from("my-custom-agent");
         match result {
-            Assistant::CustomStdio { name, command, args } => {
+            Assistant::CustomStdio {
+                name,
+                command,
+                args,
+            } => {
                 assert_eq!(name, "my-custom-agent");
                 assert!(command.is_empty());
                 assert!(args.is_empty());

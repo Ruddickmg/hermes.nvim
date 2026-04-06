@@ -1,18 +1,18 @@
 use agent_client_protocol::{LoadSessionRequest, SessionId};
 use nvim_oxi::{
+    Dictionary, Function, Object,
     conversion::{Error, FromObject},
     lua::{Error as LuaError, Poppable, Pushable},
-    Dictionary, Function, Object,
 };
 use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{debug, error, instrument};
 
 use crate::{
+    PluginState,
     acp::connection::ConnectionManager,
     api::mcp_servers::parse_mcp_servers,
     utilities::{self, get_project_root},
-    PluginState,
 };
 
 /// Configuration for loading a session (second argument of the tuple)
