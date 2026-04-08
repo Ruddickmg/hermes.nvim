@@ -73,7 +73,7 @@ pub fn update_buffer_content(buf: &mut nvim_oxi::api::Buffer, content: &str) -> 
         false,
         content.lines().map(String::from).collect::<Vec<String>>(),
     )
-    .map_err(|e| Error::Internal(e.to_string()))
+        .map_err(|e| Error::Internal(e.to_string()))
 }
 
 /// Mark buffer as having unsaved changes
@@ -85,7 +85,7 @@ pub fn mark_buffer_modified(buf: &nvim_oxi::api::Buffer) -> Result<()> {
             .buffer(buf.clone())
             .build(),
     )
-    .map_err(|e| Error::Internal(e.to_string()))?;
+        .map_err(|e| Error::Internal(e.to_string()))?;
     Ok(())
 }
 
@@ -102,7 +102,7 @@ pub fn save_buffer_to_disk(buf: &nvim_oxi::api::Buffer) -> Result<()> {
             })
             .ok();
     })
-    .map_err(|e| Error::Internal(e.to_string()))?;
+        .map_err(|e| Error::Internal(e.to_string()))?;
 
     Ok(())
 }
@@ -124,7 +124,7 @@ pub fn read_file_content(path: &PathBuf, start: Option<u32>, end: Option<u32>) -
 
     // Validate bounds: if end is specified, start must be <= end
     if let Some(e) = end_line
-        && start_line > e
+    && start_line > e
     {
         return Err(Error::Internal(format!(
             "Invalid line range: start ({}) > end ({})",

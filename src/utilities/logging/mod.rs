@@ -92,22 +92,17 @@ impl Logger {
     }
 
     fn file_layer(config: LogFileConfig) -> io::Result<Option<BoxedLayer>> {
-        if config.path.is_empty() || config.level == LogLevel::Off {
-            // Skip file logging if path is empty or logging is disabled
-            Ok(None)
-        } else {
-            let writer = AnsiStrip::new(FileWriter::new(
-                &config.path,
-                config.max_size,
-                config.max_files as usize,
-            )?)
-            .filtered(config.level);
+        let writer = AnsiStrip::new(FileWriter::new(
+            &config.path,
+            config.max_size,
+            config.max_files as usize,
+        )?)
+        .filtered(config.level);
 
-            Ok(Some(Self::base_layer(
-                fmt::layer().with_writer(writer).with_ansi(false),
-                config.format,
-            )))
-        }
+        Ok(Some(Self::base_layer(
+            fmt::layer().with_writer(writer).with_ansi(false),
+            config.format,
+        )))
     }
 
     fn all_layers(
@@ -147,7 +142,19 @@ impl Logger {
         Ok(layers)
     }
 
+    pub fn default_config(storage_path: &str) -> LogConfig {
+        let file_config = LogFileConfig {
+            path: storage_path.to_string(),
+            ..Default::default()
+        };
+        LogConfig {
+            file: file_config,
+            ..Default::default()
+        }
+    }
+
     pub fn inititalize(storage_path: &str) -> Result<&'static Self> {
+        let config = Self::default_config(storage_path);
         // Check if global subscriber already exists (reload scenario)
         if LOGGER.get().is_some() {
             // Reload: Get cached logger and rebuild layers with the cached messengers
@@ -157,7 +164,7 @@ impl Logger {
 
             // Reuse the cached messengers so future reconfiguration stays consistent
             let layers = Self::all_layers(
-                Default::default(),
+                config,
                 logger.nvim_notifications_messenger.clone(),
                 logger.nvim_messages_messenger.clone(),
             )?;
@@ -174,7 +181,7 @@ impl Logger {
         let nvim_notifications_messenger = NotificationMessenger::initialize()?;
         let nvim_messages_messenger = MessageMessenger::initialize()?;
         let layers: Vec<BoxedLayer> = Self::all_layers(
-            Default::default(),
+            config,
             nvim_notifications_messenger.clone(),
             nvim_messages_messenger.clone(),
         )?;
