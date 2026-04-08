@@ -96,11 +96,12 @@ impl Logger {
             // Skip file logging if path is empty or logging is disabled
             Ok(None)
         } else {
-            let writer =
-                AnsiStrip::new(
-                    FileWriter::new(&config.path, config.max_size, config.max_files as usize)?,
-                )
-                .filtered(config.level);
+            let writer = AnsiStrip::new(FileWriter::new(
+                &config.path,
+                config.max_size,
+                config.max_files as usize,
+            )?)
+            .filtered(config.level);
 
             Ok(Some(Self::base_layer(
                 fmt::layer().with_writer(writer).with_ansi(false),
