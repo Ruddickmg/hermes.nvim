@@ -38,6 +38,11 @@ impl SizeBasedFileAppender {
     pub fn new(path: impl AsRef<Path>, max_size: u64, max_files: usize) -> io::Result<Self> {
         let path = path.as_ref().to_path_buf();
 
+        // Ensure parent directory exists before creating the file
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
         // Open or create the file
         let file = OpenOptions::new().create(true).append(true).open(&path)?;
 
@@ -98,6 +103,11 @@ impl SizeBasedFileAppender {
         } else if self.max_files == 0 {
             // No backups, just truncate current file
             let _ = fs::remove_file(&self.path);
+        }
+
+        // Ensure parent directory still exists (in case it was deleted)
+        if let Some(parent) = self.path.parent() {
+            fs::create_dir_all(parent)?;
         }
 
         // Open new file
@@ -260,5 +270,92 @@ mod tests {
         let content = fs::read_to_string(&log_path).unwrap();
         assert!(content.contains("More data"));
         assert!(!content.contains("First content"));
+    }
+
+    #[test]
+    fn test_creates_nested_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        // Path with nested directories that don't exist yet
+        let log_path = temp_dir.path().join("hermes/nested/logs/hermes.log");
+
+        // Directory should not exist initially
+        assert!(!log_path.parent().unwrap().exists());
+
+        // Creating appender should succeed and create directories
+        let mut appender = SizeBasedFileAppender::new(&log_path, 100, 2).unwrap();
+
+        // Directory should now exist
+        assert!(log_path.parent().unwrap().exists());
+
+        // Should be able to write
+        appender.write_all(b"Test log entry").unwrap();
+        drop(appender);
+
+        // Verify file was created with content
+        let content = fs::read_to_string(&log_path).unwrap();
+        assert_eq!(content, "Test log entry");
+    }
+
+    #[test]
+    fn test_works_when_directory_already_exists() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_path = temp_dir.path().join("existing/hermes.log");
+
+        // Pre-create the directory
+        fs::create_dir(log_path.parent().unwrap()).unwrap();
+        assert!(log_path.parent().unwrap().exists());
+
+        // Should still work when directory already exists
+        let mut appender = SizeBasedFileAppender::new(&log_path, 100, 2).unwrap();
+        appender.write_all(b"Existing dir test").unwrap();
+        drop(appender);
+
+        let content = fs::read_to_string(&log_path).unwrap();
+        assert_eq!(content, "Existing dir test");
+    }
+
+    #[test]
+    fn test_rotation_recreates_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_path = temp_dir.path().join("rotated/hermes.log");
+
+        // Create appender with small size limit
+        let mut appender = SizeBasedFileAppender::new(&log_path, 50, 2).unwrap();
+
+        // Write initial data
+        appender
+            .write_all(b"First data that is long enough to test")
+            .unwrap();
+
+        // Delete the directory (simulating external deletion)
+        fs::remove_dir_all(log_path.parent().unwrap()).unwrap();
+        assert!(!log_path.parent().unwrap().exists());
+
+        // Trigger rotation - should recreate directory
+        appender
+            .write_all(b"More data to trigger rotation of the file completely")
+            .unwrap();
+
+        // Directory should be recreated
+        assert!(log_path.parent().unwrap().exists());
+        // File should exist
+        assert!(log_path.exists());
+    }
+
+    #[test]
+    fn test_creates_single_level_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_path = temp_dir.path().join("logs/app.log");
+
+        // Single nested directory
+        assert!(!log_path.parent().unwrap().exists());
+
+        let mut appender = SizeBasedFileAppender::new(&log_path, 100, 1).unwrap();
+        appender.write_all(b"Single level test").unwrap();
+        drop(appender);
+
+        assert!(log_path.parent().unwrap().exists());
+        let content = fs::read_to_string(&log_path).unwrap();
+        assert_eq!(content, "Single level test");
     }
 }

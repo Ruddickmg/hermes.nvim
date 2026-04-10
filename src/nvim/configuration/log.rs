@@ -1,7 +1,7 @@
 use crate::utilities::logging::{LogFormat, LogLevel};
 use nvim_oxi::{
-    conversion::{Error, FromObject},
     Object,
+    conversion::{Error, FromObject},
 };
 
 use super::dict_from_object;
