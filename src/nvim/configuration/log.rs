@@ -57,6 +57,12 @@ pub struct LogFileConfig {
     pub max_files: u32,
 }
 
+impl LogFileConfig {
+    pub fn is_enabled(&self) -> bool {
+        self.level != LogLevel::Off && !self.path.is_empty()
+    }
+}
+
 impl Default for LogFileConfig {
     fn default() -> Self {
         Self {

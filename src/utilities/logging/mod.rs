@@ -132,7 +132,7 @@ impl Logger {
             )?);
         }
 
-        if file.level != LogLevel::Off
+        if file.is_enabled()
             && let Some(file_layer) =
                 Self::file_layer(file).map_err(|e| Error::Internal(e.to_string()))?
         {
@@ -206,12 +206,8 @@ impl Logger {
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn configure(&self, configuration: LogConfig) -> Result<()> {
-        let mut config = configuration.clone();
-        if config.file.path.is_empty() && config.file.level < LogLevel::Off {
-            config.file.path = self.storage_path.to_string();
-        }
         let layers = Self::all_layers(
-            config,
+            configuration,
             self.nvim_notifications_messenger.clone(),
             self.nvim_messages_messenger.clone(),
         )?;
