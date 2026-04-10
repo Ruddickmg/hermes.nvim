@@ -32,13 +32,14 @@ use sink::FileSink;
 
 static LOGGER: OnceLock<Logger> = OnceLock::new();
 
+const LOG_FILE_NAME: &str = "hermes.log";
+
 pub type FileChannel = channel::ChannelWriter<FileSink>;
 type BoxedLayer = Box<dyn tracing_subscriber::layer::Layer<Registry> + Send + Sync + 'static>;
 
 /// Logger that supports multiple output targets
 pub struct Logger {
     handle: reload::Handle<Vec<BoxedLayer>, Registry>,
-    storage_path: String,
     pub nvim_messages_messenger: MessageMessenger,
     pub nvim_notifications_messenger: NotificationMessenger,
 }
@@ -92,8 +93,9 @@ impl Logger {
     }
 
     fn file_layer(config: LogFileConfig) -> io::Result<Option<BoxedLayer>> {
+        let log_file_path = std::path::Path::new(&config.path).join(LOG_FILE_NAME);
         let writer = AnsiStrip::new(FileWriter::new(
-            &config.path,
+            &log_file_path,
             config.max_size,
             config.max_files as usize,
         )?)
@@ -197,7 +199,6 @@ impl Logger {
             }
             Self {
                 handle,
-                storage_path: storage_path.to_string(),
                 nvim_messages_messenger,
                 nvim_notifications_messenger,
             }
