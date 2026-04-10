@@ -40,6 +40,7 @@ type BoxedLayer = Box<dyn tracing_subscriber::layer::Layer<Registry> + Send + Sy
 /// Logger that supports multiple output targets
 pub struct Logger {
     handle: reload::Handle<Vec<BoxedLayer>, Registry>,
+    storage_path: String,
     pub nvim_messages_messenger: MessageMessenger,
     pub nvim_notifications_messenger: NotificationMessenger,
 }
@@ -199,6 +200,7 @@ impl Logger {
             }
             Self {
                 handle,
+                storage_path: storage_path.to_string(),
                 nvim_messages_messenger,
                 nvim_notifications_messenger,
             }
@@ -206,7 +208,10 @@ impl Logger {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn configure(&self, configuration: LogConfig) -> Result<()> {
+    pub fn configure(&self, mut configuration: LogConfig) -> Result<()> {
+        if configuration.file.path.is_empty() {
+            configuration.file.path = self.storage_path.clone();
+        }
         let layers = Self::all_layers(
             configuration,
             self.nvim_notifications_messenger.clone(),
