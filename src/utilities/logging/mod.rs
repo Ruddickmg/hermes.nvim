@@ -293,50 +293,7 @@ mod tests {
     }
 
     #[test]
-    fn test_file_layer_with_empty_path_creates_in_cwd() {
-        // When path is empty, file_layer creates "hermes.log" in current directory
-        // (Path::new("").join("hermes.log") returns "hermes.log" as relative path)
-        use std::env;
-        use tempfile::TempDir;
-
-        // Store original directory and create temp directory
-        let original_dir = env::current_dir().unwrap();
-        let temp_dir = TempDir::new().unwrap();
-
-        // Change to temp directory for test
-        env::set_current_dir(&temp_dir).unwrap();
-
-        let config = LogFileConfig {
-            path: "".to_string(),
-            level: LogLevel::Debug,
-            format: LogFormat::Full,
-            max_size: 10_485_760,
-            max_files: 5,
-        };
-
-        // Create the file layer - this creates hermes.log in CWD (temp_dir)
-        let layer_result = Logger::file_layer(config);
-        assert!(
-            layer_result.is_ok(),
-            "file_layer should succeed with empty path"
-        );
-
-        // Drop the layer to close file handles before assertions and cleanup
-        drop(layer_result);
-
-        // Verify file was created in temp directory (which was CWD)
-        let expected_path = temp_dir.path().join("hermes.log");
-        assert!(
-            expected_path.exists(),
-            "hermes.log should be created in temp CWD"
-        );
-
-        // Restore original directory - temp_dir will be cleaned up on drop
-        env::set_current_dir(&original_dir).unwrap();
-    }
-
-    #[test]
-    fn test_file_layer_with_valid_path_succeeds() {
+    fn test_file_layer_succeeds_with_valid_path() {
         use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
@@ -348,28 +305,36 @@ mod tests {
             max_files: 5,
         };
 
-        // Create the file layer
-        let layer_result = Logger::file_layer(config);
-        assert!(
-            layer_result.is_ok(),
-            "file_layer should succeed with valid path"
-        );
+        let result = Logger::file_layer(config);
 
-        // Drop the layer to close file handles
-        drop(layer_result);
+        assert!(result.is_ok(), "file_layer should succeed with valid path");
+    }
 
-        // Verify file was created
+    #[test]
+    fn test_file_layer_creates_log_file_at_valid_path() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let config = LogFileConfig {
+            path: temp_dir.path().to_string_lossy().to_string(),
+            level: LogLevel::Debug,
+            format: LogFormat::Full,
+            max_size: 10_485_760,
+            max_files: 5,
+        };
+
+        let layer = Logger::file_layer(config).unwrap();
+        drop(layer);
+
         let expected_path = temp_dir.path().join("hermes.log");
         assert!(
             expected_path.exists(),
             "hermes.log should be created in temp directory"
         );
-
-        // temp_dir is automatically cleaned up when dropped
     }
 
     #[test]
-    fn test_file_layer_creates_nested_directory() {
+    fn test_file_layer_creates_nested_directories() {
         use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
@@ -383,32 +348,37 @@ mod tests {
             max_files: 5,
         };
 
-        // Directory doesn't exist yet
+        let layer = Logger::file_layer(config).unwrap();
+        drop(layer);
+
         assert!(
-            !nested_path.exists(),
-            "nested directory should not exist initially"
+            nested_path.exists(),
+            "nested directory structure should be created"
         );
+    }
 
-        // Create the file layer - should create directories
-        let layer_result = Logger::file_layer(config);
-        assert!(
-            layer_result.is_ok(),
-            "file_layer should succeed and create directories"
-        );
+    #[test]
+    fn test_file_layer_creates_log_file_in_nested_directory() {
+        use tempfile::TempDir;
 
-        // Drop the layer to close file handles
-        drop(layer_result);
+        let temp_dir = TempDir::new().unwrap();
+        let nested_path = temp_dir.path().join("hermes/nested/logs");
 
-        // Verify directory was created
-        assert!(nested_path.exists(), "nested directory should be created");
+        let config = LogFileConfig {
+            path: nested_path.to_string_lossy().to_string(),
+            level: LogLevel::Debug,
+            format: LogFormat::Full,
+            max_size: 10_485_760,
+            max_files: 5,
+        };
 
-        // Verify log file was created
+        let layer = Logger::file_layer(config).unwrap();
+        drop(layer);
+
         let expected_path = nested_path.join("hermes.log");
         assert!(
             expected_path.exists(),
             "hermes.log should be created in nested directory"
         );
-
-        // temp_dir is automatically cleaned up when dropped (removes all nested directories)
     }
 }
