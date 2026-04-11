@@ -6,8 +6,6 @@ use nvim_oxi::{
 
 use super::dict_from_object;
 
-const LOG_FILE_NAME: &str = "hermes.log";
-
 /// Configuration for a single log target (notification, message, quickfix, etc.)
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct LogTargetConfig {
