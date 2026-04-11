@@ -5,8 +5,8 @@ mod terminal;
 
 pub use buffer::{BufferConfig, BufferConfigPartial};
 pub use log::{
-    LogConfig, LogConfigPartial, LogFileConfig, LogFileConfigPartial, LogTargetConfig,
-    LogTargetConfigPartial,
+    LOG_FILE_NAME, LogConfig, LogConfigPartial, LogFileConfig, LogFileConfigPartial,
+    LogTargetConfig, LogTargetConfigPartial,
 };
 use nvim_oxi::{
     Array, Dictionary, Object, ObjectKind,

@@ -6,6 +6,8 @@ use nvim_oxi::{
 
 use super::dict_from_object;
 
+pub const LOG_FILE_NAME: &str = "hermes.log";
+
 /// Configuration for a single log target (notification, message, quickfix, etc.)
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct LogTargetConfig {
@@ -51,6 +53,7 @@ impl FromObject for LogTargetConfigPartial {
 #[derive(Clone, Debug, PartialEq)]
 pub struct LogFileConfig {
     pub path: String,
+    pub name: String,
     pub level: LogLevel,
     pub format: LogFormat, // None = use global format
     pub max_size: u64,
@@ -67,6 +70,7 @@ impl Default for LogFileConfig {
     fn default() -> Self {
         Self {
             path: "".to_string(),
+            name: LOG_FILE_NAME.to_string(),
             level: LogLevel::Off,
             format: LogFormat::default(),
             max_size: 10_485_760, // 10MB default

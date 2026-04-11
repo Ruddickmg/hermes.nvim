@@ -12,10 +12,7 @@ use crate::utilities::notification_messenger::NotificationMessenger;
 use crate::utilities::writer::MessageWriter;
 use crate::{
     acp::{Result, error::Error},
-    nvim::configuration::LogConfig,
-};
-use crate::{
-    nvim::configuration::{LogFileConfig, LogTargetConfig},
+    nvim::configuration::{LogConfig, LogFileConfig, LogTargetConfig},
     utilities::writer::NotifyWriter,
 };
 
@@ -31,8 +28,6 @@ pub use level::*;
 use sink::FileSink;
 
 static LOGGER: OnceLock<Logger> = OnceLock::new();
-
-const LOG_FILE_NAME: &str = "hermes.log";
 
 pub type FileChannel = channel::ChannelWriter<FileSink>;
 type BoxedLayer = Box<dyn tracing_subscriber::layer::Layer<Registry> + Send + Sync + 'static>;
@@ -94,7 +89,7 @@ impl Logger {
     }
 
     fn file_layer(config: LogFileConfig) -> io::Result<Option<BoxedLayer>> {
-        let log_file_path = std::path::Path::new(&config.path).join(LOG_FILE_NAME);
+        let log_file_path = std::path::Path::new(&config.path).join(&config.name);
         let writer = AnsiStrip::new(FileWriter::new(
             &log_file_path,
             config.max_size,
