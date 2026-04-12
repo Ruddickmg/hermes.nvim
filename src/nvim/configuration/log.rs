@@ -1,7 +1,7 @@
 use crate::utilities::logging::{LogFormat, LogLevel};
 use nvim_oxi::{
-    Object,
     conversion::{Error, FromObject},
+    Object,
 };
 
 use super::dict_from_object;
@@ -401,6 +401,7 @@ mod tests {
     fn test_log_file_config_is_enabled_when_level_off() {
         let config = LogFileConfig {
             path: "/test.log".to_string(),
+            name: LOG_FILE_NAME.to_string(),
             level: LogLevel::Off,
             format: LogFormat::default(),
             max_size: 10_485_760,
@@ -413,6 +414,7 @@ mod tests {
     fn test_log_file_config_is_enabled_when_path_empty() {
         let config = LogFileConfig {
             path: "".to_string(),
+            name: LOG_FILE_NAME.to_string(),
             level: LogLevel::Debug,
             format: LogFormat::default(),
             max_size: 10_485_760,
@@ -425,6 +427,7 @@ mod tests {
     fn test_log_file_config_is_enabled_when_both_invalid() {
         let config = LogFileConfig {
             path: "".to_string(),
+            name: LOG_FILE_NAME.to_string(),
             level: LogLevel::Off,
             format: LogFormat::default(),
             max_size: 10_485_760,
@@ -437,6 +440,7 @@ mod tests {
     fn test_log_file_config_is_enabled_when_valid() {
         let config = LogFileConfig {
             path: "/test.log".to_string(),
+            name: LOG_FILE_NAME.to_string(),
             level: LogLevel::Debug,
             format: LogFormat::default(),
             max_size: 10_485_760,

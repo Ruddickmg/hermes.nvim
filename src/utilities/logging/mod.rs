@@ -12,7 +12,7 @@ use crate::utilities::notification_messenger::NotificationMessenger;
 use crate::utilities::writer::MessageWriter;
 use crate::{
     acp::{Result, error::Error},
-    nvim::configuration::{LogConfig, LogFileConfig, LogTargetConfig},
+    nvim::configuration::{LogConfig, LogFileConfig, LogTargetConfig, LOG_FILE_NAME},
     utilities::writer::NotifyWriter,
 };
 
@@ -294,6 +294,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let config = LogFileConfig {
             path: temp_dir.path().to_string_lossy().to_string(),
+            name: LOG_FILE_NAME.to_string(),
             level: LogLevel::Debug,
             format: LogFormat::Full,
             max_size: 10_485_760,
@@ -312,6 +313,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let config = LogFileConfig {
             path: temp_dir.path().to_string_lossy().to_string(),
+            name: LOG_FILE_NAME.to_string(),
             level: LogLevel::Debug,
             format: LogFormat::Full,
             max_size: 10_485_760,
@@ -321,10 +323,10 @@ mod tests {
         let layer = Logger::file_layer(config).unwrap();
         drop(layer);
 
-        let expected_path = temp_dir.path().join("hermes.log");
+        let expected_path = temp_dir.path().join(LOG_FILE_NAME);
         assert!(
             expected_path.exists(),
-            "hermes.log should be created in temp directory"
+            "log file should be created in temp directory"
         );
     }
 
@@ -337,6 +339,7 @@ mod tests {
 
         let config = LogFileConfig {
             path: nested_path.to_string_lossy().to_string(),
+            name: LOG_FILE_NAME.to_string(),
             level: LogLevel::Debug,
             format: LogFormat::Full,
             max_size: 10_485_760,
@@ -361,6 +364,7 @@ mod tests {
 
         let config = LogFileConfig {
             path: nested_path.to_string_lossy().to_string(),
+            name: LOG_FILE_NAME.to_string(),
             level: LogLevel::Debug,
             format: LogFormat::Full,
             max_size: 10_485_760,
@@ -370,10 +374,10 @@ mod tests {
         let layer = Logger::file_layer(config).unwrap();
         drop(layer);
 
-        let expected_path = nested_path.join("hermes.log");
+        let expected_path = nested_path.join(LOG_FILE_NAME);
         assert!(
             expected_path.exists(),
-            "hermes.log should be created in nested directory"
+            "log file should be created in nested directory"
         );
     }
 }
