@@ -3,9 +3,9 @@
 //! These tests verify that the Logger integrates correctly with the tracing
 //! system and can be configured at runtime via the setup API.
 
-use hermes::nvim::configuration::{LogConfig, LogFileConfig, LogTargetConfig, LOG_FILE_NAME};
+use hermes::nvim::configuration::{LOG_FILE_NAME, LogConfig, LogFileConfig, LogTargetConfig};
 use hermes::utilities::logging::{LogLevel, Logger};
-use hermes::utilities::{detect_project_storage_path, LogFormat};
+use hermes::utilities::{LogFormat, detect_project_storage_path};
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 use tracing::warn;
