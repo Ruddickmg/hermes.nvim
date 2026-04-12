@@ -1,8 +1,10 @@
+mod ansi_strip;
 mod file;
 mod message;
 mod notification;
 mod stdio;
 
+pub use ansi_strip::*;
 pub use file::*;
 pub use message::*;
 pub use notification::*;
