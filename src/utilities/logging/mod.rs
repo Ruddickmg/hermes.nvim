@@ -12,7 +12,7 @@ use crate::utilities::notification_messenger::NotificationMessenger;
 use crate::utilities::writer::MessageWriter;
 use crate::{
     acp::{Result, error::Error},
-    nvim::configuration::{LogConfig, LogFileConfig, LogTargetConfig, LOG_FILE_NAME},
+    nvim::configuration::{LOG_FILE_NAME, LogConfig, LogFileConfig, LogTargetConfig},
     utilities::writer::NotifyWriter,
 };
 

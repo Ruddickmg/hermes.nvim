@@ -136,7 +136,9 @@ unsafe impl Sync for FileWriter {}
 /// MakeWriter implementation for tracing_subscriber integration
 ///
 /// This allows FileWriter to be used with `.with_writer()`:
-/// ```
+/// ```ignore
+/// use hermes::utilities::logging::writer::FileWriter;
+/// use tracing_subscriber::fmt;
 /// let writer = FileWriter::new("/var/log/app.log", 10_000_000, 5)?;
 /// let layer = fmt::layer().with_writer(move || writer.clone());
 /// ```
