@@ -6,16 +6,13 @@ use tracing_subscriber::{
     reload::{self},
 };
 
-use crate::utilities::logging::writer::{FileWriter, Filtered, StdoutWriter};
+use crate::utilities::logging::writer::{AnsiStrip, FileWriter, Filtered, StdoutWriter};
 use crate::utilities::message_messenger::MessageMessenger;
 use crate::utilities::notification_messenger::NotificationMessenger;
 use crate::utilities::writer::MessageWriter;
 use crate::{
     acp::{Result, error::Error},
-    nvim::configuration::LogConfig,
-};
-use crate::{
-    nvim::configuration::{LogFileConfig, LogTargetConfig},
+    nvim::configuration::{LOG_FILE_NAME, LogConfig, LogFileConfig, LogTargetConfig},
     utilities::writer::NotifyWriter,
 };
 
@@ -60,7 +57,7 @@ impl Logger {
             LogFormat::Full => base.boxed(),
             LogFormat::Compact => base.compact().boxed(),
             LogFormat::Json => base.json().boxed(),
-            _ => base.pretty().boxed(),
+            LogFormat::Pretty => base.pretty().boxed(),
         }
     }
 
@@ -84,26 +81,26 @@ impl Logger {
     }
 
     fn message_layer(config: LogTargetConfig, messenger: MessageMessenger) -> Result<BoxedLayer> {
-        let writer = MessageWriter::new(messenger).filtered(config.level);
+        let writer = AnsiStrip::new(MessageWriter::new(messenger)).filtered(config.level);
         Ok(Self::base_layer(
-            fmt::layer().with_writer(writer.clone()),
+            fmt::layer().with_writer(writer.clone()).with_ansi(false),
             config.format,
         ))
     }
 
     fn file_layer(config: LogFileConfig) -> io::Result<Option<BoxedLayer>> {
-        if config.path.is_empty() || config.level == LogLevel::Off {
-            // Skip file logging if path is empty or logging is disabled
-            Ok(None)
-        } else {
-            let writer = FileWriter::new(&config.path, config.max_size, config.max_files as usize)?
-                .filtered(config.level);
+        let log_file_path = std::path::Path::new(&config.path).join(&config.name);
+        let writer = AnsiStrip::new(FileWriter::new(
+            &log_file_path,
+            config.max_size,
+            config.max_files as usize,
+        )?)
+        .filtered(config.level);
 
-            Ok(Some(Self::base_layer(
-                fmt::layer().with_writer(writer),
-                config.format,
-            )))
-        }
+        Ok(Some(Self::base_layer(
+            fmt::layer().with_writer(writer).with_ansi(false),
+            config.format,
+        )))
     }
 
     fn all_layers(
@@ -133,7 +130,7 @@ impl Logger {
             )?);
         }
 
-        if file.level != LogLevel::Off
+        if file.is_enabled()
             && let Some(file_layer) =
                 Self::file_layer(file).map_err(|e| Error::Internal(e.to_string()))?
         {
@@ -143,7 +140,19 @@ impl Logger {
         Ok(layers)
     }
 
+    pub fn default_config(storage_path: &str) -> LogConfig {
+        let file_config = LogFileConfig {
+            path: storage_path.to_string(),
+            ..Default::default()
+        };
+        LogConfig {
+            file: file_config,
+            ..Default::default()
+        }
+    }
+
     pub fn inititalize(storage_path: &str) -> Result<&'static Self> {
+        let config = Self::default_config(storage_path);
         // Check if global subscriber already exists (reload scenario)
         if LOGGER.get().is_some() {
             // Reload: Get cached logger and rebuild layers with the cached messengers
@@ -153,7 +162,7 @@ impl Logger {
 
             // Reuse the cached messengers so future reconfiguration stays consistent
             let layers = Self::all_layers(
-                Default::default(),
+                config,
                 logger.nvim_notifications_messenger.clone(),
                 logger.nvim_messages_messenger.clone(),
             )?;
@@ -170,7 +179,7 @@ impl Logger {
         let nvim_notifications_messenger = NotificationMessenger::initialize()?;
         let nvim_messages_messenger = MessageMessenger::initialize()?;
         let layers: Vec<BoxedLayer> = Self::all_layers(
-            Default::default(),
+            config,
             nvim_notifications_messenger.clone(),
             nvim_messages_messenger.clone(),
         )?;
@@ -194,13 +203,12 @@ impl Logger {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn configure(&self, configuration: LogConfig) -> Result<()> {
-        let mut config = configuration.clone();
-        if config.file.path.is_empty() && config.file.level < LogLevel::Off {
-            config.file.path = self.storage_path.to_string();
+    pub fn configure(&self, mut configuration: LogConfig) -> Result<()> {
+        if configuration.file.path.is_empty() {
+            configuration.file.path = self.storage_path.clone();
         }
         let layers = Self::all_layers(
-            config,
+            configuration,
             self.nvim_notifications_messenger.clone(),
             self.nvim_messages_messenger.clone(),
         )?;
@@ -277,5 +285,99 @@ mod tests {
         let expected: Vec<LevelFilter> = vec![LevelFilter::TRACE, LevelFilter::OFF];
 
         assert_eq!(results, expected);
+    }
+
+    #[test]
+    fn test_file_layer_succeeds_with_valid_path() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let config = LogFileConfig {
+            path: temp_dir.path().to_string_lossy().to_string(),
+            name: LOG_FILE_NAME.to_string(),
+            level: LogLevel::Debug,
+            format: LogFormat::Full,
+            max_size: 10_485_760,
+            max_files: 5,
+        };
+
+        let result = Logger::file_layer(config);
+
+        assert!(result.is_ok(), "file_layer should succeed with valid path");
+    }
+
+    #[test]
+    fn test_file_layer_creates_log_file_at_valid_path() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let config = LogFileConfig {
+            path: temp_dir.path().to_string_lossy().to_string(),
+            name: LOG_FILE_NAME.to_string(),
+            level: LogLevel::Debug,
+            format: LogFormat::Full,
+            max_size: 10_485_760,
+            max_files: 5,
+        };
+
+        let layer = Logger::file_layer(config).unwrap();
+        drop(layer);
+
+        let expected_path = temp_dir.path().join(LOG_FILE_NAME);
+        assert!(
+            expected_path.exists(),
+            "log file should be created in temp directory"
+        );
+    }
+
+    #[test]
+    fn test_file_layer_creates_nested_directories() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let nested_path = temp_dir.path().join("hermes/nested/logs");
+
+        let config = LogFileConfig {
+            path: nested_path.to_string_lossy().to_string(),
+            name: LOG_FILE_NAME.to_string(),
+            level: LogLevel::Debug,
+            format: LogFormat::Full,
+            max_size: 10_485_760,
+            max_files: 5,
+        };
+
+        let layer = Logger::file_layer(config).unwrap();
+        drop(layer);
+
+        assert!(
+            nested_path.exists(),
+            "nested directory structure should be created"
+        );
+    }
+
+    #[test]
+    fn test_file_layer_creates_log_file_in_nested_directory() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let nested_path = temp_dir.path().join("hermes/nested/logs");
+
+        let config = LogFileConfig {
+            path: nested_path.to_string_lossy().to_string(),
+            name: LOG_FILE_NAME.to_string(),
+            level: LogLevel::Debug,
+            format: LogFormat::Full,
+            max_size: 10_485_760,
+            max_files: 5,
+        };
+
+        let layer = Logger::file_layer(config).unwrap();
+        drop(layer);
+
+        let expected_path = nested_path.join(LOG_FILE_NAME);
+        assert!(
+            expected_path.exists(),
+            "log file should be created in nested directory"
+        );
     }
 }

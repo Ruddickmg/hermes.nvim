@@ -6,6 +6,8 @@ use nvim_oxi::{
 
 use super::dict_from_object;
 
+pub const LOG_FILE_NAME: &str = "hermes.log";
+
 /// Configuration for a single log target (notification, message, quickfix, etc.)
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct LogTargetConfig {
@@ -51,16 +53,24 @@ impl FromObject for LogTargetConfigPartial {
 #[derive(Clone, Debug, PartialEq)]
 pub struct LogFileConfig {
     pub path: String,
+    pub name: String,
     pub level: LogLevel,
     pub format: LogFormat, // None = use global format
     pub max_size: u64,
     pub max_files: u32,
 }
 
+impl LogFileConfig {
+    pub fn is_enabled(&self) -> bool {
+        self.level != LogLevel::Off && !self.path.is_empty()
+    }
+}
+
 impl Default for LogFileConfig {
     fn default() -> Self {
         Self {
             path: "".to_string(),
+            name: LOG_FILE_NAME.to_string(),
             level: LogLevel::Off,
             format: LogFormat::default(),
             max_size: 10_485_760, // 10MB default
@@ -385,5 +395,57 @@ mod tests {
         };
         partial.apply_to(&mut config);
         assert_eq!(config.notification.level, LogLevel::Error);
+    }
+
+    #[test]
+    fn test_log_file_config_is_enabled_when_level_off() {
+        let config = LogFileConfig {
+            path: "/test.log".to_string(),
+            name: LOG_FILE_NAME.to_string(),
+            level: LogLevel::Off,
+            format: LogFormat::default(),
+            max_size: 10_485_760,
+            max_files: 5,
+        };
+        assert!(!config.is_enabled());
+    }
+
+    #[test]
+    fn test_log_file_config_is_enabled_when_path_empty() {
+        let config = LogFileConfig {
+            path: "".to_string(),
+            name: LOG_FILE_NAME.to_string(),
+            level: LogLevel::Debug,
+            format: LogFormat::default(),
+            max_size: 10_485_760,
+            max_files: 5,
+        };
+        assert!(!config.is_enabled());
+    }
+
+    #[test]
+    fn test_log_file_config_is_enabled_when_both_invalid() {
+        let config = LogFileConfig {
+            path: "".to_string(),
+            name: LOG_FILE_NAME.to_string(),
+            level: LogLevel::Off,
+            format: LogFormat::default(),
+            max_size: 10_485_760,
+            max_files: 5,
+        };
+        assert!(!config.is_enabled());
+    }
+
+    #[test]
+    fn test_log_file_config_is_enabled_when_valid() {
+        let config = LogFileConfig {
+            path: "/test.log".to_string(),
+            name: LOG_FILE_NAME.to_string(),
+            level: LogLevel::Debug,
+            format: LogFormat::default(),
+            max_size: 10_485_760,
+            max_files: 5,
+        };
+        assert!(config.is_enabled());
     }
 }
