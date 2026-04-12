@@ -3,9 +3,9 @@
 //! These tests verify that the Logger integrates correctly with the tracing
 //! system and can be configured at runtime via the setup API.
 
-use hermes::nvim::configuration::{LOG_FILE_NAME, LogConfig, LogFileConfig, LogTargetConfig};
+use hermes::nvim::configuration::{LogConfig, LogFileConfig, LogTargetConfig, LOG_FILE_NAME};
 use hermes::utilities::logging::{LogLevel, Logger};
-use hermes::utilities::{LogFormat, detect_project_storage_path};
+use hermes::utilities::{detect_project_storage_path, LogFormat};
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 use tracing::warn;
@@ -393,13 +393,14 @@ fn test_log_rotation() -> nvim_oxi::Result<()> {
         "Current log should contain messages"
     );
 
-    // Verify rotated files exist
+    // Verify rotated files exist (pattern: hermes.log.1, hermes.log.2, etc.)
     let rotated_files: Vec<_> = std::fs::read_dir(log_dir)
         .unwrap()
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
             let name = entry.file_name().to_string_lossy().to_string();
-            name.starts_with("test.log.") && name.chars().last().unwrap().is_numeric()
+            name.starts_with(&format!("{}.", LOG_FILE_NAME))
+                && name.chars().last().unwrap().is_numeric()
         })
         .collect();
 
@@ -412,8 +413,10 @@ fn test_log_rotation() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_reconfigure_to_second_path() -> nvim_oxi::Result<()> {
     let temp_dir = TempDir::new().unwrap();
-    let first_path = temp_dir.path().join("first.log");
-    let second_path = temp_dir.path().join("second.log");
+    let first_dir = temp_dir.path().join("first");
+    let second_dir = temp_dir.path().join("second");
+    let first_file = first_dir.join(LOG_FILE_NAME);
+    let second_file = second_dir.join(LOG_FILE_NAME);
 
     let logger = Logger::inititalize(&detect_project_storage_path().unwrap()).unwrap();
 
@@ -421,7 +424,7 @@ fn test_reconfigure_to_second_path() -> nvim_oxi::Result<()> {
     let first_config = create_log_config_with_file(
         LogLevel::Info,
         LogFileConfig {
-            path: first_path.to_string_lossy().to_string(),
+            path: first_dir.to_string_lossy().to_string(),
             name: LOG_FILE_NAME.to_string(),
             level: LogLevel::Info,
             format: LogFormat::default(),
@@ -437,7 +440,7 @@ fn test_reconfigure_to_second_path() -> nvim_oxi::Result<()> {
     let second_config = create_log_config_with_file(
         LogLevel::Info,
         LogFileConfig {
-            path: second_path.to_string_lossy().to_string(),
+            path: second_dir.to_string_lossy().to_string(),
             name: LOG_FILE_NAME.to_string(),
             level: LogLevel::Info,
             format: LogFormat::default(),
@@ -450,14 +453,14 @@ fn test_reconfigure_to_second_path() -> nvim_oxi::Result<()> {
     std::thread::sleep(std::time::Duration::from_millis(500));
 
     // Verify first log has first message only
-    let first_content = std::fs::read_to_string(&first_path).unwrap();
+    let first_content = std::fs::read_to_string(&first_file).unwrap();
     assert!(
         first_content.contains("First path message"),
         "First log should have first message"
     );
 
     // Verify second log has second message only
-    let second_content = std::fs::read_to_string(&second_path).unwrap();
+    let second_content = std::fs::read_to_string(&second_file).unwrap();
     assert!(
         second_content.contains("Second path message"),
         "Second log should have second message"
