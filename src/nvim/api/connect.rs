@@ -7,7 +7,7 @@ use crate::{
     },
     api::create_api_method,
 };
-use nvim_oxi::{Dictionary, Function, Object, ObjectKind};
+use nvim_oxi::{Dictionary, Object, ObjectKind};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use tracing::{debug, error, instrument};
 
@@ -127,17 +127,9 @@ pub fn connect(connection: Rc<RefCell<ConnectionManager>>, handler: Arc<Handler>
 
         let details = ConnectionDetails { agent, protocol };
 
-        let mut conn = match connection.try_borrow_mut() {
-            Ok(c) => c,
-            Err(e) => {
-                error!("Failed to borrow connection manager: {}", e);
-                return Ok(());
-            }
-        };
+        let conn = connection.try_borrow_mut()?;
 
-        if let Err(e) = conn.connect(handler.clone(), details) {
-            error!("Error connecting: {:?}", e);
-        }
+        conn.connect(handler.clone(), details)?; 
 
         drop(conn);
         Ok(())

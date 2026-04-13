@@ -68,7 +68,7 @@ impl Pushable for ListSessionsConfig {
 
 #[instrument(level = "trace", skip_all)]
 pub fn list_sessions(
-    connection: Rc<RefCell<ConnectionManager>>,
+    connection: Rc<ConnectionManager>,
     state: Arc<Mutex<PluginState>>,
 ) -> Object {
     create_api_method(move |maybe_config: Option<ListSessionsConfig>| {
@@ -93,7 +93,7 @@ pub fn list_sessions(
             request = request.cursor(cursor);
         }
 
-        let conn = match connection.borrow().get_current_connection() {
+        let conn = match connection.get_current_connection() {
             Some(c) => c,
             None => {
                 error!("No connection found, call the connect function");

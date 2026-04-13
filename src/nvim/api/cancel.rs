@@ -1,37 +1,30 @@
+use crate::acp::{Result, error::Error};
 use agent_client_protocol::CancelNotification;
-use nvim_oxi::{Function, Object, lua::Error};
+use nvim_oxi::Object;
 use std::{cell::RefCell, rc::Rc};
-use tracing::{debug, error, instrument};
+use tracing::{instrument, trace};
 
-use crate::{acp::connection::ConnectionManager, nvim::requests::RequestHandler};
+use crate::{
+    acp::connection::ConnectionManager, api::create_api_method, nvim::requests::RequestHandler,
+};
 
 #[instrument(level = "trace", skip_all)]
 pub fn cancel<R: RequestHandler + 'static>(
     connection: Rc<RefCell<ConnectionManager>>,
     request_handler: Rc<R>,
 ) -> Object {
-    let function: Function<String, Result<(), Error>> =
-        Function::from_fn(move |session_id: String| -> Result<(), Error> {
-            debug!("Cancel function called with session_id: {}", session_id);
+    create_api_method(move |session_id: String| -> Result<()> {
+        trace!("Cancel api methpd called with session_id: {}", session_id);
 
-            let conn = match connection.borrow().get_current_connection() {
-                Some(c) => c,
-                None => {
-                    error!("No connection found for cancel, call the connect function first");
-                    return Ok(());
-                }
-            };
+        let borrowed_connection = connection.try_borrow_mut()?;
+        let conn = borrowed_connection
+            .get_current_connection()
+            .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
 
-            let notification: CancelNotification = CancelNotification::new(session_id.clone());
-            if let Err(e) = conn.cancel(notification) {
-                error!("Error cancelling session {}: {:?}", session_id, e);
-            }
+        conn.cancel(CancelNotification::new(session_id.clone()))?;
 
-            if let Err(e) = request_handler.cancel_session_requests(session_id) {
-                error!("Error cancelling session requests: {:?}", e);
-            }
+        drop(borrowed_connection);
 
-            Ok(())
-        });
-    function.into()
+        request_handler.cancel_session_requests(session_id)
+    })
 }

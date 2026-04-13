@@ -1,6 +1,9 @@
 pub mod manager;
 pub mod stdio;
 pub mod tcp;
+use std::thread::JoinHandle;
+use tracing::warn;
+
 pub use manager::*;
 
 use crate::acp::{Result, error::Error};
@@ -31,20 +34,66 @@ pub enum UserRequest {
 
 #[derive(Debug)]
 pub struct Connection {
-    sender: Sender<UserRequest>,
+    sender: Option<Sender<UserRequest>>,
+    handle: Option<JoinHandle<Result<()>>>,
 }
 
 impl Connection {
     #[tracing::instrument(level = "trace", skip(self))]
     fn send(&self, request: UserRequest) -> Result<()> {
-        self.sender
-            .blocking_send(request)
-            .map_err(|e| Error::Internal(e.to_string()))
+        if let Some(sender) = &self.sender {
+            sender
+                .blocking_send(request)
+                .map_err(|e| Error::Internal(e.to_string()))
+        } else {
+            Err(Error::Internal(
+                "Connection sender is not available".to_string(),
+            ))
+        }
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn disconnect(&mut self) -> Result<()> {
+        if let Some(sender) = self.sender.take() {
+            drop(sender);
+        }
+        self.join()?;
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn join(&mut self) -> Result<()> {
+        if let Some(handle) = self.handle.take() {
+            match handle.join() {
+                Ok(Ok(_)) => Ok(()),
+                Ok(Err(e)) => Err(Error::Connection(format!(
+                    "Error in connection thread for agent {:?}",
+                    e
+                ))),
+                Err(e) => Err(Error::Internal(format!(
+                    "Failed to join thread for agent {:?}",
+                    e
+                ))),
+            }
+        } else {
+            Err(Error::Internal(
+                "Connection handle is not available".to_string(),
+            ))
+        }
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn close(&self) -> Result<()> {
+        self.send(UserRequest::Close)?;
+        Ok(())
     }
 
     #[tracing::instrument(level = "trace")]
-    pub fn new(sender: Sender<UserRequest>) -> Self {
-        Self { sender }
+    pub fn new(sender: Sender<UserRequest>, handle: JoinHandle<Result<()>>) -> Self {
+        Self {
+            sender: Some(sender),
+            handle: Some(handle),
+        }
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -117,6 +166,14 @@ impl Connection {
     pub fn set_session_model(&self, request: SetSessionModelRequest) -> Result<()> {
         self.send(UserRequest::SetSessionModel(request))?;
         Ok(())
+    }
+}
+
+impl Drop for Connection {
+    fn drop(&mut self) {
+        if let Err(e) = self.disconnect() {
+            warn!("Failed to close connection on drop: {}", e);
+        }
     }
 }
 

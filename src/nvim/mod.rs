@@ -30,6 +30,13 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     let event_handler = Arc::new(Handler::new(plugin_state.clone(), request_handler.clone())?);
     let connection_manager = Rc::new(RefCell::new(ConnectionManager::new(plugin_state.clone())));
     let connection = connection_manager.clone();
+    let api = api::Api::new(
+        connection_manager.clone(),
+        logger.clone(),
+        plugin_state.clone(),
+        event_handler.clone(),
+        request_handler.clone(),
+    );
 
     let group =
         nvim_oxi::api::create_augroup(GROUP, &CreateAugroupOpts::default()).map_err(|e| {
@@ -46,9 +53,13 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
             .group(group)
             .callback(move |_| {
                 debug!("Closing all agent connections...");
-                match connection.borrow_mut().close_all() {
-                    Ok(_) => info!("All agent connections have been closed"),
-                    Err(e) => error!("Error occurred while exiting neovim: {:?}", e),
+                if let Ok(borrowed_connection) = connection.try_borrow() {
+                    match borrowed_connection.close_all() {
+                        Ok(_) => info!("All agent connections have been closed"),
+                        Err(e) => error!("Error occurred while exiting neovim: {:?}", e),
+                    };
+                } else {
+                    error!("Could not borrow connection, failed to close");
                 };
                 true
             })

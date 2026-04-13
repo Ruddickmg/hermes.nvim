@@ -2,7 +2,7 @@
 use crate::nvim::autocommands::Commands;
 use agent_client_protocol::Error as AcpError;
 use nvim_oxi::{api, lua};
-use std::sync::{PoisonError, mpsc::SendError};
+use std::{cell::{BorrowError, BorrowMutError}, sync::{PoisonError, mpsc::SendError}};
 
 #[derive(Debug, Clone)]
 pub enum Error {
@@ -28,6 +28,18 @@ impl std::fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+impl From<BorrowMutError> for Error {
+    fn from(value: BorrowMutError) -> Self {
+        Self::Internal(format!("Failed to borrow mutable reference: {}", value))
+    }
+}
+
+impl From<BorrowError> for Error {
+    fn from(value: BorrowError) -> Self {
+        Self::Internal(format!("Failed to borrow reference: {}", value))
+    }
+}
 
 impl<T> From<SendError<T>> for Error {
     fn from(e: SendError<T>) -> Self {
