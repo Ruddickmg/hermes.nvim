@@ -49,6 +49,7 @@ where
     trace!("Starting async runtime for ACP communication");
     local_set
         .run_until(async {
+            trace!("creating ACP client connection");
             let (connection, handle_io) = agent_client_protocol::ClientSideConnection::new(
                 client.clone(),
                 outgoing,
@@ -58,6 +59,7 @@ where
                 },
             );
 
+            trace!("starting IO handling task for ACP connection");
             tokio::task::spawn_local(handle_io);
 
             handle_requests(connection, receiver, client.clone(), agent).await

@@ -8,7 +8,7 @@ use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{debug, error, instrument};
 
-use crate::{PluginState, acp::connection::ConnectionManager};
+use crate::{PluginState, acp::connection::ConnectionManager, api::create_api_method};
 
 /// Configuration for listing sessions (optional argument)
 #[derive(Debug, Clone, Default)]
@@ -71,43 +71,41 @@ pub fn list_sessions(
     connection: Rc<RefCell<ConnectionManager>>,
     state: Arc<Mutex<PluginState>>,
 ) -> Object {
-    let function: Function<Option<ListSessionsConfig>, Result<(), LuaError>> =
-        Function::from_fn(move |maybe_config: Option<ListSessionsConfig>| {
-            debug!("listSessions function called");
-            let plugin_state = state.blocking_lock();
-            let agent_info = plugin_state.agent_info.clone();
-            drop(plugin_state);
+    create_api_method(move |maybe_config: Option<ListSessionsConfig>| {
+        debug!("listSessions function called");
+        let plugin_state = state.blocking_lock();
+        let agent_info = plugin_state.agent_info.clone();
+        drop(plugin_state);
 
-            if !agent_info.can_list_sessions() {
+        if !agent_info.can_list_sessions() {
+            return Ok(());
+        }
+
+        let config = maybe_config.unwrap_or_default();
+
+        let mut request = ListSessionsRequest::new();
+
+        if let Some(cwd) = config.cwd {
+            request = request.cwd(cwd);
+        }
+
+        if let Some(cursor) = config.cursor {
+            request = request.cursor(cursor);
+        }
+
+        let conn = match connection.borrow().get_current_connection() {
+            Some(c) => c,
+            None => {
+                error!("No connection found, call the connect function");
                 return Ok(());
             }
+        };
 
-            let config = maybe_config.unwrap_or_default();
-
-            let mut request = ListSessionsRequest::new();
-
-            if let Some(cwd) = config.cwd {
-                request = request.cwd(cwd);
-            }
-
-            if let Some(cursor) = config.cursor {
-                request = request.cursor(cursor);
-            }
-
-            let conn = match connection.borrow().get_current_connection() {
-                Some(c) => c,
-                None => {
-                    error!("No connection found, call the connect function");
-                    return Ok(());
-                }
-            };
-
-            if let Err(e) = conn.list_sessions(request) {
-                error!("Error listing sessions: {:?}", e);
-            }
-            Ok(())
-        });
-    function.into()
+        if let Err(e) = conn.list_sessions(request) {
+            error!("Error listing sessions: {:?}", e);
+        }
+        Ok(())
+    })
 }
 
 #[cfg(test)]

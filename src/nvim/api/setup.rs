@@ -1,10 +1,11 @@
+use nvim_oxi::Object;
 use nvim_oxi::conversion::FromObject;
 use nvim_oxi::lua::{self, Poppable};
-use nvim_oxi::{Function, Object, lua::Error};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{debug, error, instrument};
 
+use crate::api::create_api_method;
 use crate::nvim::configuration::ClientConfigPartial;
 use crate::nvim::state::PluginState;
 use crate::utilities::Logger;
@@ -48,20 +49,18 @@ impl nvim_oxi::lua::Pushable for SetupArgs {
 /// Can be called with no arguments or an empty table to keep all defaults.
 #[instrument(level = "trace", skip_all)]
 pub fn setup(plugin_state: Arc<Mutex<PluginState>>, logger: &'static Logger) -> Object {
-    let function: Function<SetupArgs, Result<(), Error>> =
-        Function::from_fn(move |args: SetupArgs| -> Result<(), Error> {
-            debug!("Setup function called");
+    create_api_method(move |args: SetupArgs| -> crate::acp::Result<()> {
+        debug!("Setup function called");
 
-            let config_update = args.into_inner();
-            let mut state = plugin_state.blocking_lock();
-            config_update.apply_to(&mut state.config);
-            let log_config = state.config.log.clone();
-            drop(state);
-            if let Err(e) = logger.configure(log_config) {
-                error!("Error configuring logger: {:?}", e);
-            }
+        let config_update = args.into_inner();
+        let mut state = plugin_state.blocking_lock();
+        config_update.apply_to(&mut state.config);
+        let log_config = state.config.log.clone();
+        drop(state);
+        if let Err(e) = logger.configure(log_config) {
+            error!("Error configuring logger: {:?}", e);
+        }
 
-            Ok(())
-        });
-    function.into()
+        Ok(())
+    })
 }

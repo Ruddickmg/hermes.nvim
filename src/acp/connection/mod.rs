@@ -35,58 +35,85 @@ pub struct Connection {
 }
 
 impl Connection {
+    #[tracing::instrument(level = "trace", skip(self))]
     fn send(&self, request: UserRequest) -> Result<()> {
         self.sender
             .blocking_send(request)
             .map_err(|e| Error::Internal(e.to_string()))
     }
+
+    #[tracing::instrument(level = "trace")]
     pub fn new(sender: Sender<UserRequest>) -> Self {
         Self { sender }
     }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn initialize(&self, request: InitializeRequest) -> Result<()> {
         self.send(UserRequest::Initialize(request))?;
         Ok(())
     }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn create_session(&self, session: NewSessionRequest) -> Result<()> {
         self.send(UserRequest::CreateSession(session))?;
         Ok(())
     }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn cancel(&self, notification: CancelNotification) -> Result<()> {
         self.send(UserRequest::Cancel(notification))?;
         Ok(())
     }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn prompt(&self, request: PromptRequest) -> Result<()> {
         self.send(UserRequest::Prompt(request))?;
         Ok(())
     }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn authenticate(&self, request: AuthenticateRequest) -> Result<()> {
         self.send(UserRequest::Authenticate(request))?;
         Ok(())
     }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn set_config_option(&self, request: SetSessionConfigOptionRequest) -> Result<()> {
         self.send(UserRequest::SetConfigOption(request))?;
         Ok(())
     }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn set_mode(&self, request: SetSessionModeRequest) -> Result<()> {
         self.send(UserRequest::SetMode(request))?;
         Ok(())
     }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn load_session(&self, request: LoadSessionRequest) -> Result<()> {
         self.send(UserRequest::LoadSession(request))?;
         Ok(())
     }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn list_sessions(&self, request: ListSessionsRequest) -> Result<()> {
         self.send(UserRequest::ListSessions(request))?;
         Ok(())
     }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn fork_session(&self, request: ForkSessionRequest) -> Result<()> {
         self.send(UserRequest::ForkSession(request))?;
         Ok(())
     }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn resume_session(&self, request: ResumeSessionRequest) -> Result<()> {
         self.send(UserRequest::ResumeSession(request))?;
         Ok(())
     }
+
+    #[tracing::instrument(level = "trace", skip(self))]
     pub fn set_session_model(&self, request: SetSessionModelRequest) -> Result<()> {
         self.send(UserRequest::SetSessionModel(request))?;
         Ok(())
