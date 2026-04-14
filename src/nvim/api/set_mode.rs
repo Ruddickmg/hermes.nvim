@@ -1,11 +1,12 @@
-
-use crate::{acp::{error::Error, Result }, api::Api};
+use crate::{
+    acp::{Result, error::Error},
+    api::Api,
+};
 
 /// Tuple for two positional arguments: (session_id, mode_id)
 pub type SetModeArgs = (String, String);
 
 impl Api {
-
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn set_mode(&self, (session_id, mode_id): SetModeArgs) -> Result<()> {
         let request = agent_client_protocol::SetSessionModeRequest::new(session_id, mode_id);
@@ -17,5 +18,4 @@ impl Api {
 
         connection.set_mode(request)
     }
-
 }

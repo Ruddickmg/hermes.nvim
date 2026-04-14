@@ -7,14 +7,17 @@ pub mod state;
 pub mod terminal;
 
 use crate::{
-    Handler, api::DisconnectArgs, utilities::{Logger, detect_project_storage_path}
+    Handler,
+    api::{Api, DisconnectArgs},
+    utilities::{Logger, detect_project_storage_path},
 };
 use nvim_oxi::{
-    Dictionary, api::opts::{CreateAugroupOpts, CreateAutocmdOpts}
+    Dictionary,
+    api::opts::{CreateAugroupOpts, CreateAutocmdOpts},
 };
-use tracing::{debug, error};
-use std::{rc::Rc, sync::Arc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
+use tracing::error;
 
 pub const GROUP: &str = "hermes";
 
@@ -25,12 +28,13 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     let plugin_state = Arc::new(Mutex::new(state::PluginState::new()));
     let request_handler = Rc::new(requests::Requests::new(plugin_state.clone())?);
     let event_handler = Arc::new(Handler::new(plugin_state.clone(), request_handler.clone())?);
-    let api = api::Api::new(
+    let api = Rc::new(RefCell::new(api::Api::new(
         plugin_state,
         logger,
         event_handler,
         request_handler,
-    );
+    )));
+    let cloned = api.clone();
 
     let group =
         nvim_oxi::api::create_augroup(GROUP, &CreateAugroupOpts::default()).map_err(|e| {
@@ -40,23 +44,27 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
             )))
         })?;
 
-    let app: Dictionary = api.into();
-    
     // clean up on exit
     nvim_oxi::api::create_autocmd(
         ["VimLeavePre"],
         &CreateAutocmdOpts::builder()
             .group(group)
             .callback(move |_| {
-                // if let Err(e) = app.get("disconnect").unwrap().call(DisconnectArgs::All) {
-                //     error!("An error occurred while disconnecting sessions on exit: {:?}", e);
-                // } else {
-                //     debug!("Successfully disconnected all sessions on exit");
-                // }
+                match cloned.try_borrow_mut() {
+                    Ok(mut app) => {
+                        app.disconnect(DisconnectArgs::All)
+                            .inspect_err(|e| error!("Error disconnecting: {:?}", e))
+                            .ok();
+                    }
+                    Err(e) => error!(
+                        "An error occurred while disconnecting sessions on exit: {:?}",
+                        e
+                    ),
+                };
                 true
             })
             .build(),
     )?;
-    
-    Ok(app)
+
+    Ok(Api::to_dictionary(api))
 }

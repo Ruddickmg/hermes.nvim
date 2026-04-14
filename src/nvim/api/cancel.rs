@@ -1,12 +1,12 @@
-use crate::{acp::{Result, error::Error}, api::Api};
+use crate::{
+    acp::{Result, error::Error},
+    api::Api,
+};
 use agent_client_protocol::CancelNotification;
 
-use crate::{
-    nvim::requests::RequestHandler,
-};
+use crate::nvim::requests::RequestHandler;
 
 impl Api {
-
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn cancel(&self, session_id: String) -> Result<()> {
         let connection = self

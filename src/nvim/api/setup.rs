@@ -3,8 +3,8 @@ use nvim_oxi::conversion::FromObject;
 use nvim_oxi::lua::{self, Poppable};
 use tracing::instrument;
 
-use crate::{acp::Result, api::Api};
 use crate::nvim::configuration::ClientConfigPartial;
+use crate::{acp::Result, api::Api};
 
 /// Wrapper type for setup arguments that can be nil or a config table
 #[derive(Clone, Debug, Default)]

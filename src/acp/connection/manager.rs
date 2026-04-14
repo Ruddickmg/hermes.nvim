@@ -7,6 +7,7 @@ use agent_client_protocol::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::os::unix::thread;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -180,7 +181,6 @@ impl ConnectionManager {
 
         // Now we can safely do mutable operations
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
-        let thread_agent = agent.clone();
         let init_config = InitializeRequest::new(ProtocolVersion::LATEST)
             .client_info(Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"))
             .client_capabilities(
@@ -191,6 +191,7 @@ impl ConnectionManager {
                         .write_text_file(permissions.fs_write_access)),
             );
 
+        let thread_agent = agent.clone();
         trace!("Starting agent communication in new thread");
         let handle = std::thread::spawn(move || {
             // TODO: figure out whether this is actually necessary, this should be pure rust, no FFI panics
@@ -203,7 +204,9 @@ impl ConnectionManager {
                 trace!("Starting tokio runtime");
                 runtime.block_on(async {
                     match protocol {
-                        Protocol::Stdio => stdio::connect(handler, thread_agent, receiver).await,
+                        Protocol::Stdio => {
+                            stdio::connect(handler, thread_agent.clone(), receiver).await
+                        }
                         Protocol::Http => {
                             error!("HTTP protocol is not yet implemented");
                             Err(Error::Internal(
@@ -216,12 +219,31 @@ impl ConnectionManager {
                                 "Socket protocol is not yet implemented".to_string(),
                             ))
                         }
-                        Protocol::Tcp => tcp::connect(handler, thread_agent, receiver).await,
+                        Protocol::Tcp => {
+                            tcp::connect(handler, thread_agent.clone(), receiver).await
+                        }
                     }
                 })
             }))
-            .map_err(|e| Error::Internal(format!("Error: {:?}", e)))?
-            .map_err(|e| Error::Internal(e.to_string()))?;
+            .map(|result| match result {
+                Ok(_) => info!(
+                    "Agent thread for '{}' exited normally",
+                    thread_agent.clone()
+                ),
+                Err(e) => error!(
+                    "Agent thread for '{}' panicked: {:?}",
+                    thread_agent.clone(),
+                    e
+                ),
+            })
+            .inspect_err(|e| {
+                error!(
+                    "Failed to start agent thread for '{}': {:?}",
+                    thread_agent.clone(),
+                    e
+                )
+            })
+            .ok();
             Ok::<(), Error>(())
         });
         self.add_connection(agent.clone(), Connection::new(sender, handle));

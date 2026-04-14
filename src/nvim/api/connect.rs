@@ -4,7 +4,7 @@ use crate::{
         connection::{Assistant, ConnectionDetails, Protocol},
         error::Error,
     },
-    api::{Api},
+    api::Api,
 };
 use nvim_oxi::{Dictionary, ObjectKind};
 
@@ -89,7 +89,6 @@ pub fn parse_agent_connection(
 }
 
 impl Api {
-
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn connect(&mut self, (agent_name, options): ConnectionArgs) -> Result<()> {
         let mut protocol = Protocol::default();

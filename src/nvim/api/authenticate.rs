@@ -1,9 +1,11 @@
 use agent_client_protocol::AuthenticateRequest;
 
-use crate::{acp::{Result, error::Error}, api::Api};
+use crate::{
+    acp::{Result, error::Error},
+    api::Api,
+};
 
 impl Api {
-
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn authenticate(&self, id: String) -> Result<()> {
         let args: AuthenticateRequest = AuthenticateRequest::new(id);

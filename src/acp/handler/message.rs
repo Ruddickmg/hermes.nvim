@@ -14,7 +14,6 @@ use crate::{
     },
 };
 
-
 #[tracing::instrument(level = "trace", skip(connection, client))]
 async fn handle_request(
     connection: &ClientSideConnection,

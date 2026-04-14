@@ -11,8 +11,8 @@ pub mod respond;
 pub mod set_mode;
 pub mod setup;
 
-use std::{cell::RefCell, rc::Rc};
 use std::sync::Arc;
+use std::{cell::RefCell, rc::Rc};
 
 use super::requests::Requests;
 pub use connect::*;
@@ -21,7 +21,8 @@ pub use disconnect::*;
 pub use list_sessions::*;
 pub use load_session::*;
 use nvim_oxi::{
-    Dictionary, Function, Object, lua::{Poppable, Pushable}
+    Dictionary, Function, Object,
+    lua::{Poppable, Pushable},
 };
 pub use prompt::*;
 pub use respond::*;
@@ -97,7 +98,9 @@ impl Api {
     }
 
     fn create_list_sessions_method(api: Rc<RefCell<Self>>) -> Object {
-        create_api_method(move |args: Option<ListSessionsConfig>| api.try_borrow()?.list_sessions(args))
+        create_api_method(move |args: Option<ListSessionsConfig>| {
+            api.try_borrow()?.list_sessions(args)
+        })
     }
 
     fn create_load_session_method(api: Rc<RefCell<Self>>) -> Object {
@@ -107,7 +110,7 @@ impl Api {
     fn create_authenticate_method(api: Rc<RefCell<Self>>) -> Object {
         create_api_method(move |id: String| api.try_borrow()?.authenticate(id))
     }
-    
+
     fn create_set_mode_method(api: Rc<RefCell<Self>>) -> Object {
         create_api_method(move |args: SetModeArgs| api.try_borrow()?.set_mode(args))
     }
@@ -123,23 +126,38 @@ impl Api {
     fn create_respond_method(api: Rc<RefCell<Self>>) -> Object {
         create_api_method(move |args: RespondArgs| api.try_borrow()?.respond(args))
     }
-}
 
-impl Into<Dictionary> for Api {
-    fn into(self) -> Dictionary {
-        let api = Rc::new(RefCell::new(self));
+    pub fn to_dictionary(api: Rc<RefCell<Self>>) -> Dictionary {
         Dictionary::from_iter([
             ("cancel", Self::create_cancel_method(api.clone())),
             ("connect", Self::create_connect_method(api.clone())),
-            ("authenticate", Self::create_authenticate_method(api.clone())),
+            (
+                "create_session",
+                Self::create_create_session_method(api.clone()),
+            ),
             ("disconnect", Self::create_disconnect_method(api.clone())),
-            ("create_session", Self::create_create_session_method(api.clone())),
-            ("load_session", Self::create_load_session_method(api.clone())),
-            ("list_sessions", Self::create_list_sessions_method(api.clone())),
-            ("prompt", Self::create_prompt_method(api.clone())),
+            (
+                "list_sessions",
+                Self::create_list_sessions_method(api.clone()),
+            ),
+            (
+                "load_session",
+                Self::create_load_session_method(api.clone()),
+            ),
+            (
+                "authenticate",
+                Self::create_authenticate_method(api.clone()),
+            ),
             ("set_mode", Self::create_set_mode_method(api.clone())),
-            ("respond", Self::create_respond_method(api.clone())),
             ("setup", Self::ceate_setup_method(api.clone())),
+            ("prompt", Self::create_prompt_method(api.clone())),
+            ("respond", Self::create_respond_method(api.clone())),
         ])
+    }
+}
+
+impl From<Api> for Dictionary {
+    fn from(api: Api) -> Dictionary {
+        Api::to_dictionary(Rc::new(RefCell::new(api)))
     }
 }

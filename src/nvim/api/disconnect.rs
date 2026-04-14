@@ -6,10 +6,7 @@ use nvim_oxi::{
 };
 use tracing::instrument;
 
-use crate::{
-    acp::connection::{Assistant},
-    api::Api,
-};
+use crate::{acp::connection::Assistant, api::Api};
 
 #[derive(Clone, Debug, Default)]
 pub enum DisconnectArgs {
