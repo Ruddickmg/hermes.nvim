@@ -1,19 +1,12 @@
-use agent_client_protocol::{McpServer, NewSessionRequest};
+use agent_client_protocol::McpServer;
 use nvim_oxi::{
-    Dictionary, Function, Object,
+    Dictionary, Object,
     conversion::{Error, FromObject},
     lua::{Poppable, Pushable},
 };
-use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
-use tokio::sync::Mutex;
-use tracing::{debug, error, instrument};
+use std::path::PathBuf;
 
-use crate::{
-    PluginState,
-    acp::connection::ConnectionManager,
-    api::{Api, mcp_servers::parse_mcp_servers},
-    utilities,
-};
+use crate::api::{Api, mcp_servers::parse_mcp_servers};
 
 #[derive(Debug, Clone)]
 pub enum CreateSessionArgs {

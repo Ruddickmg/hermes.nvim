@@ -1,18 +1,12 @@
 use agent_client_protocol::ListSessionsRequest;
 use nvim_oxi::{
-    Dictionary, Function, Object,
+    Dictionary, Object,
     conversion::{Error, FromObject},
-    lua::{Error as LuaError, Poppable, Pushable},
+    lua::{Poppable, Pushable},
 };
-use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
-use tokio::sync::Mutex;
-use tracing::{debug, error, instrument};
+use std::path::PathBuf;
 
-use crate::{
-    PluginState,
-    acp::connection::ConnectionManager,
-    api::{Api, create_api_method},
-};
+use crate::api::Api;
 
 /// Configuration for listing sessions (optional argument)
 #[derive(Debug, Clone, Default)]

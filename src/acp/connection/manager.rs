@@ -7,7 +7,6 @@ use agent_client_protocol::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::os::unix::thread;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, trace, warn};
