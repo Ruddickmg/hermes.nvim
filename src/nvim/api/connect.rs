@@ -1,15 +1,12 @@
 use crate::{
-    Handler,
     acp::{
         Result,
-        connection::{Assistant, ConnectionDetails, ConnectionManager, Protocol},
+        connection::{Assistant, ConnectionDetails, Protocol},
         error::Error,
     },
-    api::create_api_method,
+    api::{Api},
 };
-use nvim_oxi::{Dictionary, Object, ObjectKind};
-use std::{cell::RefCell, rc::Rc, sync::Arc};
-use tracing::{debug, error, instrument};
+use nvim_oxi::{Dictionary, ObjectKind};
 
 pub type ConnectionArgs = (nvim_oxi::String, Option<Dictionary>);
 
@@ -91,49 +88,28 @@ pub fn parse_agent_connection(
     }
 }
 
-#[instrument(level = "trace", skip_all)]
-pub fn connect(connection: Rc<RefCell<ConnectionManager>>, handler: Arc<Handler>) -> Object {
-    create_api_method(move |(agent_name, options): ConnectionArgs| -> Result<()> {
-        debug!(
-            "Connect function called with agent: {:?}, options: {:?}",
-            agent_name, options
-        );
-        let mut protocol = Protocol::default();
+impl Api {
 
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn connect(&self, (agent_name, options): ConnectionArgs) -> Result<()> {
+        let mut protocol = Protocol::default();
         if let Some(ref dict) = options
             && let Some(obj) = dict.get("protocol")
         {
-            let result: std::result::Result<nvim_oxi::String, nvim_oxi::conversion::Error> =
-                obj.clone().try_into();
-            match result {
-                Ok(s) => protocol = Protocol::from(s.to_string()),
-                Err(e) => {
-                    return Err(Error::InvalidInput(format!(
-                        "Failed to parse protocol: {}",
-                        e
-                    )));
-                }
-            }
+            protocol = obj
+                .clone()
+                .try_into()
+                .map(|s: nvim_oxi::String| Protocol::from(s.to_string()))?;
         }
-
         let agent_name_str = agent_name.to_string();
-        let agent = match parse_agent_connection(agent_name_str, protocol, options) {
-            Ok(a) => a,
-            Err(e) => {
-                error!("Error parsing agent connection details: {}", e);
-                return Ok(());
-            }
-        };
+        let agent = parse_agent_connection(agent_name_str, protocol, options)?;
 
-        let details = ConnectionDetails { agent, protocol };
-
-        let conn = connection.try_borrow_mut()?;
-
-        conn.connect(handler.clone(), details)?; 
-
-        drop(conn);
+        self.connection.connect(
+            self.response_handler.clone(),
+            ConnectionDetails { agent, protocol },
+        )?;
         Ok(())
-    })
+    }
 }
 
 #[cfg(test)]

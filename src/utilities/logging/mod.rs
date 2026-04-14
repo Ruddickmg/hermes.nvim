@@ -12,7 +12,7 @@ use crate::utilities::notification_messenger::NotificationMessenger;
 use crate::utilities::writer::MessageWriter;
 use crate::{
     acp::{Result, error::Error},
-    nvim::configuration::{LOG_FILE_NAME, LogConfig, LogFileConfig, LogTargetConfig},
+    nvim::configuration::{LogConfig, LogFileConfig, LogTargetConfig},
     utilities::writer::NotifyWriter,
 };
 
@@ -27,7 +27,7 @@ pub use level::*;
 
 use sink::FileSink;
 
-static LOGGER: OnceLock<Logger> = OnceLock::new();
+pub static LOGGER: OnceLock<Logger> = OnceLock::new();
 
 pub type FileChannel = channel::ChannelWriter<FileSink>;
 type BoxedLayer = Box<dyn tracing_subscriber::layer::Layer<Registry> + Send + Sync + 'static>;

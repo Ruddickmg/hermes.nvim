@@ -7,17 +7,14 @@ pub mod state;
 pub mod terminal;
 
 use crate::{
-    Handler,
-    acp::connection::ConnectionManager,
-    utilities::{Logger, detect_project_storage_path},
+    Handler, api::DisconnectArgs, utilities::{Logger, detect_project_storage_path}
 };
 use nvim_oxi::{
-    Dictionary,
-    api::opts::{CreateAugroupOpts, CreateAutocmdOpts},
+    Dictionary, api::opts::{CreateAugroupOpts, CreateAutocmdOpts}
 };
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use tracing::{debug, error};
+use std::{rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
-use tracing::{debug, error, info};
 
 pub const GROUP: &str = "hermes";
 
@@ -28,14 +25,11 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     let plugin_state = Arc::new(Mutex::new(state::PluginState::new()));
     let request_handler = Rc::new(requests::Requests::new(plugin_state.clone())?);
     let event_handler = Arc::new(Handler::new(plugin_state.clone(), request_handler.clone())?);
-    let connection_manager = Rc::new(RefCell::new(ConnectionManager::new(plugin_state.clone())));
-    let connection = connection_manager.clone();
     let api = api::Api::new(
-        connection_manager.clone(),
-        logger.clone(),
-        plugin_state.clone(),
-        event_handler.clone(),
-        request_handler.clone(),
+        plugin_state,
+        logger,
+        event_handler,
+        request_handler,
     );
 
     let group =
@@ -46,58 +40,23 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
             )))
         })?;
 
+    let app: Dictionary = api.into();
+    
     // clean up on exit
     nvim_oxi::api::create_autocmd(
         ["VimLeavePre"],
         &CreateAutocmdOpts::builder()
             .group(group)
             .callback(move |_| {
-                debug!("Closing all agent connections...");
-                if let Ok(borrowed_connection) = connection.try_borrow() {
-                    match borrowed_connection.close_all() {
-                        Ok(_) => info!("All agent connections have been closed"),
-                        Err(e) => error!("Error occurred while exiting neovim: {:?}", e),
-                    };
+                if let Err(e) = app.get("disconnect").unwrap().call(DisconnectArgs::All) {
+                    error!("An error occurred while disconnecting sessions on exit: {:?}", e);
                 } else {
-                    error!("Could not borrow connection, failed to close");
-                };
+                    debug!("Successfully disconnected all sessions on exit");
+                }
                 true
             })
             .build(),
     )?;
-
-    Ok(Dictionary::from_iter([
-        (
-            "cancel",
-            api::cancel(connection_manager.clone(), request_handler.clone()),
-        ),
-        (
-            "connect",
-            api::connect(connection_manager.clone(), event_handler.clone()),
-        ),
-        (
-            "authenticate",
-            api::authenticate(connection_manager.clone()),
-        ),
-        ("disconnect", api::disconnect(connection_manager.clone())),
-        (
-            "create_session",
-            api::create_session(connection_manager.clone(), plugin_state.clone()),
-        ),
-        (
-            "load_session",
-            api::load_session(connection_manager.clone(), plugin_state.clone()),
-        ),
-        (
-            "list_sessions",
-            api::list_sessions(connection_manager.clone(), plugin_state.clone()),
-        ),
-        (
-            "prompt",
-            api::prompt(connection_manager.clone(), plugin_state.clone()),
-        ),
-        ("set_mode", api::set_mode(connection_manager.clone())),
-        ("respond", api::respond(request_handler)),
-        ("setup", api::setup(plugin_state, logger)),
-    ]))
+    
+    Ok(api.into())
 }

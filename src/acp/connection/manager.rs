@@ -7,7 +7,6 @@ use agent_client_protocol::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -160,7 +159,7 @@ impl ConnectionManager {
 
     #[instrument(level = "trace", skip(self, handler))]
     pub fn connect(
-        &self,
+        &mut self,
         handler: Arc<Handler>,
         ConnectionDetails { agent, protocol }: ConnectionDetails,
     ) -> Result<&Connection, Error> {

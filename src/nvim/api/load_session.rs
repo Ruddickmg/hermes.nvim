@@ -1,18 +1,14 @@
-use agent_client_protocol::{LoadSessionRequest, SessionId};
 use nvim_oxi::{
-    Dictionary, Function, Object,
-    conversion::{Error, FromObject},
-    lua::{Error as LuaError, Poppable, Pushable},
+    Dictionary, Object,
+    conversion::FromObject,
+    lua::{Poppable, Pushable},
 };
-use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
-use tokio::sync::Mutex;
-use tracing::{debug, error, instrument};
+use std::path::PathBuf;
 
 use crate::{
-    PluginState,
-    acp::connection::ConnectionManager,
-    api::mcp_servers::parse_mcp_servers,
-    utilities::{self, get_project_root},
+    acp::{Result, error::Error},
+    api::{Api, mcp_servers::parse_mcp_servers},
+    utilities::{self},
 };
 
 /// Configuration for loading a session (second argument of the tuple)
@@ -23,7 +19,7 @@ pub struct LoadSessionConfig {
 }
 
 impl FromObject for LoadSessionConfig {
-    fn from_object(obj: Object) -> Result<Self, Error> {
+    fn from_object(obj: Object) -> std::result::Result<Self, nvim_oxi::conversion::Error> {
         // Convert Object to Dictionary, handling empty Lua tables
         let dict = crate::nvim::configuration::dict_from_object(obj)?;
 
@@ -50,7 +46,9 @@ impl FromObject for LoadSessionConfig {
 }
 
 impl Poppable for LoadSessionConfig {
-    unsafe fn pop(lua_state: *mut nvim_oxi::lua::ffi::State) -> Result<Self, nvim_oxi::lua::Error> {
+    unsafe fn pop(
+        lua_state: *mut nvim_oxi::lua::ffi::State,
+    ) -> std::result::Result<Self, nvim_oxi::lua::Error> {
         let obj = unsafe { Object::pop(lua_state)? };
         Self::from_object(obj).map_err(|e| nvim_oxi::lua::Error::RuntimeError(e.to_string()))
     }
@@ -60,7 +58,7 @@ impl Pushable for LoadSessionConfig {
     unsafe fn push(
         self,
         lua_state: *mut nvim_oxi::lua::ffi::State,
-    ) -> Result<i32, nvim_oxi::lua::Error> {
+    ) -> std::result::Result<i32, nvim_oxi::lua::Error> {
         let mut dict = Dictionary::new();
         if let Some(cwd) = self.cwd {
             dict.insert("cwd", cwd.to_string_lossy().to_string());
@@ -71,61 +69,34 @@ impl Pushable for LoadSessionConfig {
 
 pub type LoadSessionArgs = (String, Option<LoadSessionConfig>);
 
-#[instrument(level = "trace", skip_all)]
-pub fn load_session(
-    connection: Rc<RefCell<ConnectionManager>>,
-    state: Arc<Mutex<PluginState>>,
-) -> Object {
-    let function: Function<LoadSessionArgs, Result<(), LuaError>> =
-        Function::from_fn(move |(session_id, maybe_config): LoadSessionArgs| {
-            debug!(
-                "loadSession function called with session_id: {}",
-                session_id
-            );
+impl Api {
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn load_session(&self, (session_id, maybe_config): LoadSessionArgs) -> Result<()> {
+        let config = maybe_config.unwrap_or_default();
+        let state = self.state.blocking_lock();
+        let root_markers = state.config.root_markers.clone();
+        let agent_info = state.agent_info.clone();
+        drop(state);
 
-            let config = maybe_config.unwrap_or_else(LoadSessionConfig::default);
-            let state = state.blocking_lock();
-            let root_markers = state.config.root_markers.clone();
-            let agent_info = state.agent_info.clone();
-            drop(state);
+        if !agent_info.can_load_session() {
+            return Ok(());
+        }
 
-            if !agent_info.can_load_session() {
-                error!(
-                    "The '{}' agent does not support loading sessions",
-                    agent_info.current
-                );
-                return Ok(());
-            }
+        let request = agent_client_protocol::LoadSessionRequest::new(
+            agent_client_protocol::SessionId::from(session_id),
+            config.cwd.unwrap_or_else(|| {
+                let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                crate::utilities::get_project_root(current_dir, root_markers)
+            }),
+        );
 
-            let request = LoadSessionRequest::new(
-                SessionId::from(session_id),
-                config.cwd.unwrap_or_else(|| {
-                    let current_dir = std::env::current_dir().unwrap_or_else(|e| {
-                        error!(
-                            "Error getting current directory: {:?}, defaulting to: \".\"",
-                            e
-                        );
-                        PathBuf::from(".")
-                    });
-                    get_project_root(current_dir, root_markers)
-                }),
-            )
-            .mcp_servers(config.mcp_servers);
+        let connection = self
+            .connection
+            .get_current_connection()
+            .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
 
-            let conn = match connection.borrow().get_current_connection() {
-                Some(c) => c,
-                None => {
-                    error!("No connection found, call the connect function");
-                    return Ok(());
-                }
-            };
-
-            if let Err(e) = conn.load_session(request) {
-                error!("Error loading session: {:?}", e);
-            }
-            Ok(())
-        });
-    function.into()
+        connection.load_session(request)
+    }
 }
 
 #[cfg(test)]

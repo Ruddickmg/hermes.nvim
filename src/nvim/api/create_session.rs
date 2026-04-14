@@ -9,7 +9,10 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, instrument};
 
 use crate::{
-    PluginState, acp::connection::ConnectionManager, api::mcp_servers::parse_mcp_servers, utilities,
+    PluginState,
+    acp::connection::ConnectionManager,
+    api::{Api, mcp_servers::parse_mcp_servers},
+    utilities,
 };
 
 #[derive(Debug, Clone)]
@@ -143,52 +146,41 @@ impl Pushable for CreateSessionArgs {
     }
 }
 
-#[instrument(level = "trace", skip_all)]
-pub fn create_session(
-    connection: Rc<RefCell<ConnectionManager>>,
-    state: Arc<Mutex<PluginState>>,
-) -> Object {
-    let function: Function<CreateSessionArgs, Result<(), nvim_oxi::lua::Error>> =
-        Function::from_fn(move |session: CreateSessionArgs| {
-            debug!("createSession function called with: {:#?}", session);
-            let state = state.blocking_lock();
-            let root_markers = state.config.root_markers.clone();
-            let agent_info = state.agent_info.clone();
-            drop(state);
-            let current_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let root = utilities::get_project_root(current_directory, root_markers);
-            let can_connect_over_http = agent_info.can_connect_to_mcp_over_http();
-            let can_connect_over_sse = agent_info.can_connect_to_mcp_over_sse();
-            let request = match session {
-                CreateSessionArgs::Default => NewSessionRequest::new(root),
-                CreateSessionArgs::Configuration { cwd, mcp_servers } => {
-                    NewSessionRequest::new(cwd.unwrap_or(root)).mcp_servers(
-                        mcp_servers
-                            .unwrap_or_default()
-                            .into_iter()
-                            .filter(|mcp| match mcp {
-                                McpServer::Http(_) => can_connect_over_http,
-                                McpServer::Sse(_) => can_connect_over_sse,
-                                _ => true,
-                            })
-                            .collect(),
-                    )
-                }
-            };
-            let conn = match connection.borrow().get_current_connection() {
-                Some(c) => c,
-                None => {
-                    error!("No connection found, call the connect function");
-                    return Ok(());
-                }
-            };
+impl Api {
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn create_session(&self, session: CreateSessionArgs) -> crate::acp::Result<()> {
+        let state = self.state.blocking_lock();
+        let root_markers = state.config.root_markers.clone();
+        let agent_info = state.agent_info.clone();
+        drop(state);
+        let current_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let root = crate::utilities::get_project_root(current_directory, root_markers);
+        let can_connect_over_http = agent_info.can_connect_to_mcp_over_http();
+        let can_connect_over_sse = agent_info.can_connect_to_mcp_over_sse();
 
-            if let Err(e) = conn.create_session(request) {
-                error!("Error creating session: {:?}", e);
+        let request = match session {
+            CreateSessionArgs::Default => agent_client_protocol::NewSessionRequest::new(root),
+            CreateSessionArgs::Configuration { cwd, mcp_servers } => {
+                agent_client_protocol::NewSessionRequest::new(cwd.unwrap_or(root)).mcp_servers(
+                    mcp_servers
+                        .unwrap_or_default()
+                        .into_iter()
+                        .filter(|mcp| match mcp {
+                            McpServer::Http(_) => can_connect_over_http,
+                            McpServer::Sse(_) => can_connect_over_sse,
+                            _ => true,
+                        })
+                        .collect(),
+                )
             }
-            Ok(())
-        });
-    function.into()
+        };
+
+        let connection = self.connection.get_current_connection().ok_or_else(|| {
+            crate::acp::error::Error::Connection("No connection found".to_string())
+        })?;
+
+        connection.create_session(request)
+    }
 }
 
 #[cfg(test)]

@@ -11,36 +11,29 @@ pub mod respond;
 pub mod set_mode;
 pub mod setup;
 
+use std::{cell::RefCell, rc::Rc};
 use std::sync::Arc;
 
 use super::requests::Requests;
-use agent_client_protocol::{CancelNotification, ListSessionsRequest};
-pub use authenticate::*;
-pub use cancel::*;
 pub use connect::*;
 pub use create_session::*;
 pub use disconnect::*;
 pub use list_sessions::*;
 pub use load_session::*;
 use nvim_oxi::{
-    Function, Object,
-    lua::{Poppable, Pushable},
+    Dictionary, Function, Object, lua::{Poppable, Pushable}
 };
 pub use prompt::*;
 pub use respond::*;
 pub use set_mode::*;
 pub use setup::*;
-use tracing::trace;
+use tokio::sync::Mutex;
+use tracing::{debug, error};
 
+use crate::utilities::Logger;
 use crate::{
     Handler, PluginState,
-    acp::{
-        Result,
-        connection::{ConnectionDetails, ConnectionManager, Protocol},
-        error::Error,
-    },
-    nvim::requests::RequestHandler,
-    utilities::Logger,
+    acp::{Result, connection::ConnectionManager},
 };
 
 pub fn create_api_method<A, R, F>(func: F) -> Object
@@ -52,10 +45,10 @@ where
     let function: Function<A, Result<()>> = Function::from_fn(move |args: A| -> Result<()> {
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| func(args)))
             .map(|result| match result {
-                Err(e) => eprintln!("ERROR: {}", e),
-                Ok(_) => println!("API method executed successfully"),
+                Err(e) => error!("An error occurred while executing api method: {:?}", e),
+                Ok(_) => debug!("API method executed successfully"),
             })
-            .inspect_err(|e| eprintln!("error: {:?}", e))
+            .inspect_err(|e| error!("A panic occurred while executing api method: {:?}", e))
             .ok();
         Ok(())
     });
@@ -63,89 +56,90 @@ where
 }
 
 pub struct Api {
+    state: Arc<Mutex<PluginState>>,
+    logger: &'static Logger,
     connection: ConnectionManager,
-    logger: Logger,
-    state: PluginState,
     response_handler: Arc<Handler>,
-    request_handler: Requests,
+    request_handler: Rc<Requests>,
 }
 
 impl Api {
     #[tracing::instrument(level = "trace", skip_all)]
     pub fn new(
-        connection: ConnectionManager,
-        logger: Logger,
-        state: PluginState,
+        state: Arc<Mutex<PluginState>>,
+        logger: &'static Logger,
         response_handler: Arc<Handler>,
-        request_handler: Requests,
+        request_handler: Rc<Requests>,
     ) -> Self {
         Self {
-            connection,
-            logger,
-            state,
+            connection: ConnectionManager::new(state.clone()),
             response_handler,
             request_handler,
+            logger,
+            state,
         }
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
-    pub fn cancel(&self, session_id: String) -> Result<()> {
-        let connection = self
-            .connection
-            .get_current_connection()
-            .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
-
-        connection.cancel(CancelNotification::new(session_id.clone()))?;
-
-        self.request_handler.cancel_session_requests(session_id)
+    fn create_cancel_method(api: Rc<RefCell<Self>>) -> Object {
+        create_api_method(move |session_id: String| api.try_borrow()?.cancel(session_id))
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
-    pub fn list_sessions(&self, maybe_config: Option<ListSessionsConfig>) -> Result<()> {
-        let agent_info = self.state.agent_info.clone();
-
-        if !agent_info.can_list_sessions() {
-            return Ok(());
-        }
-
-        let config = maybe_config.unwrap_or_default();
-
-        let mut request = ListSessionsRequest::new();
-
-        if let Some(cwd) = config.cwd {
-            request = request.cwd(cwd);
-        }
-
-        if let Some(cursor) = config.cursor {
-            request = request.cursor(cursor);
-        }
-
-        let connection = self
-            .connection
-            .get_current_connection()
-            .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
-
-        connection.list_sessions(request)
+    fn create_connect_method(api: Rc<RefCell<Self>>) -> Object {
+        create_api_method(move |args: ConnectionArgs| api.try_borrow()?.connect(args))
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
-    pub fn connect(&self, (agent_name, options): ConnectionArgs) -> Result<()> {
-        let mut protocol = Protocol::default();
-        if let Some(ref dict) = options
-            && let Some(obj) = dict.get("protocol")
-        {
-            protocol = obj
-                .clone()
-                .try_into()
-                .map(|s: nvim_oxi::String| Protocol::from(s.to_string()))?;
-        }
-        let agent_name_str = agent_name.to_string();
-        let agent = parse_agent_connection(agent_name_str, protocol, options)?;
+    fn create_create_session_method(api: Rc<RefCell<Self>>) -> Object {
+        create_api_method(move |args: CreateSessionArgs| api.try_borrow()?.create_session(args))
+    }
 
-        self.connection.connect(
-            self.response_handler.clone(),
-            ConnectionDetails { agent, protocol },
-        )?;
-        Ok(())
+    fn create_disconnect_method(api: Rc<RefCell<Self>>) -> Object {
+        create_api_method(move |args: DisconnectArgs| api.try_borrow_mut()?.disconnect(args))
+    }
+
+    fn create_list_sessions_method(api: Rc<RefCell<Self>>) -> Object {
+        create_api_method(move |args: Option<ListSessionsConfig>| api.try_borrow()?.list_sessions(args))
+    }
+
+    fn create_load_session_method(api: Rc<RefCell<Self>>) -> Object {
+        create_api_method(move |args: LoadSessionArgs| api.try_borrow()?.load_session(args))
+    }
+
+    fn create_authenticate_method(api: Rc<RefCell<Self>>) -> Object {
+        create_api_method(move |id: String| api.try_borrow()?.authenticate(id))
+    }
+    
+    fn create_set_mode_method(api: Rc<RefCell<Self>>) -> Object {
+        create_api_method(move |args: SetModeArgs| api.try_borrow()?.set_mode(args))
+    }
+
+    fn ceate_setup_method(api: Rc<RefCell<Self>>) -> Object {
+        create_api_method(move |args: SetupArgs| api.try_borrow()?.setup(args))
+    }
+
+    fn create_prompt_method(api: Rc<RefCell<Self>>) -> Object {
+        create_api_method(move |args: PromptArgs| api.try_borrow()?.prompt(args))
+    }
+
+    fn create_respond_method(api: Rc<RefCell<Self>>) -> Object {
+        create_api_method(move |args: RespondArgs| api.try_borrow()?.respond(args))
+    }
+}
+
+impl Into<Dictionary> for Api {
+    fn into(self) -> Dictionary {
+        let api = Rc::new(RefCell::new(self));
+        Dictionary::from_iter([
+            ("cancel", Self::create_cancel_method(api.clone())),
+            ("connect", Self::create_connect_method(api.clone())),
+            ("authenticate", Self::create_authenticate_method(api.clone())),
+            ("disconnect", Self::create_disconnect_method(api.clone())),
+            ("create_session", Self::create_create_session_method(api.clone())),
+            ("load_session", Self::create_load_session_method(api.clone())),
+            ("list_sessions", Self::create_list_sessions_method(api.clone())),
+            ("prompt", Self::create_prompt_method(api.clone())),
+            ("set_mode", Self::create_set_mode_method(api.clone())),
+            ("respond", Self::create_respond_method(api.clone())),
+            ("setup", Self::ceate_setup_method(api.clone())),
+        ])
     }
 }
