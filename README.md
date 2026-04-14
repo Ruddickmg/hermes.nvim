@@ -1645,12 +1645,12 @@ Available formats:
 
 ## TODO:
 -- infra
-- [ ] consolidate api generation logic
-  - [ ] move into struct with impl methods
+- [x] consolidate api generation logic
+  - [x] move into struct with impl methods
   - [ ] store async runtime in struct
   - [ ] clean up runtime on shutdown
-  - [ ] make callback wrapper that houses async logic
-  - [ ] capture errors and return ok from callback wrapper instead of in each callback
+  - [x] make callback wrapper that houses async logic
+  - [x] capture errors and return ok from callback wrapper instead of in each callback
 - [ ] use smol instead of tokio to reduce build size
 - [ ] use async for all the things
 

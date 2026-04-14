@@ -185,10 +185,15 @@ mod tests {
     use agent_client_protocol::{InitializeRequest, ProtocolVersion};
     use pretty_assertions::assert_eq;
 
+    /// Creates a mock thread handle that immediately returns Ok for testing
+    fn mock_handle() -> JoinHandle<Result<()>> {
+        std::thread::spawn(|| Ok::<(), Error>(()))
+    }
+
     #[tokio::test]
     async fn test_connection_initialize() {
         let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
-        let connection = Arc::new(Connection::new(sender));
+        let connection = Arc::new(Connection::new(sender, mock_handle()));
         let request = InitializeRequest::new(ProtocolVersion::LATEST);
 
         // Spawn blocking task because Connection uses blocking_send
@@ -211,7 +216,7 @@ mod tests {
     async fn test_connection_create_session() {
         use agent_client_protocol::NewSessionRequest;
         let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
-        let connection = Arc::new(Connection::new(sender));
+        let connection = Arc::new(Connection::new(sender, mock_handle()));
 
         let conn_clone = connection.clone();
         let request = NewSessionRequest::new(std::path::PathBuf::from("/"));

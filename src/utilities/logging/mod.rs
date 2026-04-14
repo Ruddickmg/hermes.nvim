@@ -221,6 +221,7 @@ impl Logger {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::nvim::configuration::LOG_FILE_NAME;
     use pretty_assertions::assert_eq;
     use proptest::prelude::*;
     use tracing::level_filters::LevelFilter;
