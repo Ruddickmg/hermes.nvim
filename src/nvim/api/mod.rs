@@ -85,7 +85,7 @@ impl Api {
     }
 
     fn create_connect_method(api: Rc<RefCell<Self>>) -> Object {
-        create_api_method(move |args: ConnectionArgs| api.try_borrow()?.connect(args))
+        create_api_method(move |args: ConnectionArgs| api.try_borrow_mut()?.connect(args))
     }
 
     fn create_create_session_method(api: Rc<RefCell<Self>>) -> Object {

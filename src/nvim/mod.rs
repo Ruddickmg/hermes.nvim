@@ -48,15 +48,15 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
         &CreateAutocmdOpts::builder()
             .group(group)
             .callback(move |_| {
-                if let Err(e) = app.get("disconnect").unwrap().call(DisconnectArgs::All) {
-                    error!("An error occurred while disconnecting sessions on exit: {:?}", e);
-                } else {
-                    debug!("Successfully disconnected all sessions on exit");
-                }
+                // if let Err(e) = app.get("disconnect").unwrap().call(DisconnectArgs::All) {
+                //     error!("An error occurred while disconnecting sessions on exit: {:?}", e);
+                // } else {
+                //     debug!("Successfully disconnected all sessions on exit");
+                // }
                 true
             })
             .build(),
     )?;
     
-    Ok(api.into())
+    Ok(app)
 }

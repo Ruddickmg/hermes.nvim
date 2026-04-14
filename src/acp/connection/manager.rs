@@ -162,80 +162,75 @@ impl ConnectionManager {
         &mut self,
         handler: Arc<Handler>,
         ConnectionDetails { agent, protocol }: ConnectionDetails,
-    ) -> Result<&Connection, Error> {
+    ) -> crate::acp::Result<&Connection> {
         let permissions = self.get_permissions();
-        Ok(if let Some(connection) = self.get_connection(&agent) {
+
+        // Check if connection already exists without borrowing
+        let already_connected = self.connection.contains_key(&agent);
+        if already_connected {
             warn!(
                 "A connection already exists for '{}'. Returning existing connection",
                 agent
             );
-            connection
-        } else {
-            let (sender, receiver) = tokio::sync::mpsc::channel(100);
-            let thread_agent = agent.clone();
-            let init_config = InitializeRequest::new(ProtocolVersion::LATEST)
-                .client_info(
-                    Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"),
-                )
-                .client_capabilities(
-                    ClientCapabilities::new()
-                        .terminal(permissions.terminal_access)
-                        .fs(FileSystemCapabilities::new()
-                            .read_text_file(permissions.fs_read_access)
-                            .write_text_file(permissions.fs_write_access)),
-                );
+            return self
+                .connection
+                .get(&agent)
+                .ok_or_else(|| Error::Internal("Connection not found".to_string()));
+        }
 
-            trace!("Starting agent communication in new thread");
-            let panic_agent = agent.clone(); // Clone for panic message
-            let handle = std::thread::spawn(move || {
-                // TODO: figure out whether this is actually necessary, this should be pure rust, no FFI panics
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    let runtime = tokio::runtime::Builder::new_current_thread()
-                        .enable_all()
-                        .build()
-                        .map_err(|e| Error::Internal(e.to_string()))?;
+        // Now we can safely do mutable operations
+        let (sender, receiver) = tokio::sync::mpsc::channel(100);
+        let thread_agent = agent.clone();
+        let init_config = InitializeRequest::new(ProtocolVersion::LATEST)
+            .client_info(Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"))
+            .client_capabilities(
+                ClientCapabilities::new()
+                    .terminal(permissions.terminal_access)
+                    .fs(FileSystemCapabilities::new()
+                        .read_text_file(permissions.fs_read_access)
+                        .write_text_file(permissions.fs_write_access)),
+            );
 
-                    trace!("Starting tokio runtime");
-                    runtime.block_on(async {
-                        match protocol {
-                            Protocol::Stdio => {
-                                stdio::connect(handler, thread_agent, receiver).await
-                            }
-                            Protocol::Http => {
-                                error!("HTTP protocol is not yet implemented");
-                                Err(Error::Internal(
-                                    "HTTP protocol is not yet implemented".to_string(),
-                                ))
-                            }
-                            Protocol::Socket => {
-                                error!("Socket protocol is not yet implemented");
-                                Err(Error::Internal(
-                                    "Socket protocol is not yet implemented".to_string(),
-                                ))
-                            }
-                            Protocol::Tcp => tcp::connect(handler, thread_agent, receiver).await,
+        trace!("Starting agent communication in new thread");
+        let handle = std::thread::spawn(move || {
+            // TODO: figure out whether this is actually necessary, this should be pure rust, no FFI panics
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|e| Error::Internal(e.to_string()))?;
+
+                trace!("Starting tokio runtime");
+                runtime.block_on(async {
+                    match protocol {
+                        Protocol::Stdio => stdio::connect(handler, thread_agent, receiver).await,
+                        Protocol::Http => {
+                            error!("HTTP protocol is not yet implemented");
+                            Err(Error::Internal(
+                                "HTTP protocol is not yet implemented".to_string(),
+                            ))
                         }
-                    })
-                }))
-                .inspect_err(|e| {
-                    error!("Connection thread for '{}' panicked: {:?}", panic_agent, e);
-                })
-                .inspect(|result| match result {
-                    Ok(_) => {
-                        info!("Connection to '{}' successfully closed", panic_agent)
+                        Protocol::Socket => {
+                            error!("Socket protocol is not yet implemented");
+                            Err(Error::Internal(
+                                "Socket protocol is not yet implemented".to_string(),
+                            ))
+                        }
+                        Protocol::Tcp => tcp::connect(handler, thread_agent, receiver).await,
                     }
-                    Err(e) => error!("Connection error for '{}': {:?}", panic_agent, e),
                 })
-                .ok();
-                Ok::<(), Error>(())
-            });
-            self.add_connection(agent.clone(), Connection::new(sender, handle));
-            self.set_agent(agent.clone());
-            let connection = self.get_connection(&agent);
-            debug!("Stored connection to '{}'", agent);
-            info!("Initialized connection to '{}'", agent);
-            connection.unwrap()
-        })
+            }))
+            .map_err(|e| Error::Internal(format!("Error: {:?}", e)))?
+            .map_err(|e| Error::Internal(e.to_string()))?;
+            Ok::<(), Error>(())
+        });
+        self.add_connection(agent.clone(), Connection::new(sender, handle));
+        self.set_agent(agent.clone());
+        let connection = self.get_connection(&agent).unwrap();
+        debug!("Stored connection to '{}'", agent);
+        connection.initialize(init_config)?;
+        info!("Initialized connection to '{}'", agent);
+        Ok(connection)
     }
 
     #[instrument(level = "trace", skip(self))]
