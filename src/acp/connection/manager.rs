@@ -79,6 +79,29 @@ impl std::fmt::Display for Assistant {
     }
 }
 
+impl Assistant {
+    /// Return the command and arguments for launching this agent via stdio.
+    ///
+    /// # Panics
+    /// Panics if called on a `CustomUrl` variant (which uses TCP, not stdio).
+    pub fn connection(&self) -> crate::acp::Result<stdio::child::Child> {
+        let (command, args) = match self {
+            Assistant::Copilot => ("copilot", vec!["--acp"]),
+            Assistant::Opencode => ("opencode", vec!["acp"]),
+            Assistant::Gemini => ("gemini", vec!["--acp"]),
+            Assistant::CustomStdio { command, args, .. } => {
+                (command.as_str(), args.iter().map(|s| s.as_str()).collect())
+            }
+            Assistant::CustomUrl { .. } => {
+                panic!("command_and_args() called on CustomUrl variant")
+            }
+        };
+        let mut cmd = tokio::process::Command::new(command);
+        cmd.args(args);
+        stdio::child::Child::spawn(&mut cmd)
+    }
+}
+
 impl From<&str> for Assistant {
     fn from(s: &str) -> Self {
         match s.to_lowercase().as_str() {
@@ -192,6 +215,14 @@ impl ConnectionManager {
 
         let thread_agent = agent.clone();
         trace!("Starting agent communication in new thread");
+
+        let connection = if protocol == Protocol::Stdio {
+            Some(Arc::new(agent.connection()?))
+        } else {
+            None
+        };
+        let stdio_connection = connection.clone();
+
         let handle = std::thread::spawn(move || {
             // TODO: figure out whether this is actually necessary, this should be pure rust, no FFI panics
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -204,7 +235,8 @@ impl ConnectionManager {
                 runtime.block_on(async {
                     match protocol {
                         Protocol::Stdio => {
-                            stdio::connect(handler, thread_agent.clone(), receiver).await
+                            stdio::connect(handler, thread_agent.clone(), receiver, connection.unwrap())
+                                .await
                         }
                         Protocol::Http => {
                             error!("HTTP protocol is not yet implemented");
@@ -245,7 +277,8 @@ impl ConnectionManager {
             .ok();
             Ok::<(), Error>(())
         });
-        self.add_connection(agent.clone(), Connection::new(sender, handle));
+
+        self.add_connection(agent.clone(), Connection::new(sender, handle, stdio_connection));
         self.set_agent(agent.clone());
         let connection = self.get_connection(&agent).unwrap();
         debug!("Stored connection to '{}'", agent);

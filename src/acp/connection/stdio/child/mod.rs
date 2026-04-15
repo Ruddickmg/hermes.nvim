@@ -1,0 +1,310 @@
+mod sys;
+
+use std::io;
+use std::process::ExitStatus;
+use std::sync::Arc;
+use tokio::process::{Child as TokioChild, ChildStderr, ChildStdin, ChildStdout, Command};
+use tokio::sync::Mutex;
+use crate::acp::Result;
+use tracing::{debug, trace, warn};
+
+#[derive(Debug)]
+enum ChildState {
+    Running,
+    Exited(ExitStatus),
+}
+
+#[derive(Debug)]
+struct ChildInner {
+    child: TokioChild,
+    state: ChildState,
+}
+
+#[derive(Debug)]
+pub struct Child {
+    inner: Mutex<ChildInner>,
+    exit_notify: Arc<tokio::sync::Notify>,
+}
+
+impl Child {
+    pub fn spawn(command: &mut Command) -> Result<Self> {
+        let child = command
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()?;
+
+        debug!("Child process spawned with PID {:?}", child.id());
+
+        Ok(Self {
+            inner: Mutex::new(ChildInner {
+                child,
+                state: ChildState::Running,
+            }),
+            exit_notify: Arc::new(tokio::sync::Notify::new()),
+        })
+    }
+
+    pub async fn take_stdin(&self) -> Option<ChildStdin> {
+        self.inner.lock().await.child.stdin.take()
+    }
+
+    pub async fn take_stdout(&self) -> Option<ChildStdout> {
+        self.inner.lock().await.child.stdout.take()
+    }
+
+    pub async fn take_stderr(&self) -> Option<ChildStderr> {
+        self.inner.lock().await.child.stderr.take()
+    }
+
+    pub async fn id(&self) -> Option<u32> {
+        let inner = self.inner.lock().await;
+        match inner.state {
+            ChildState::Exited(_) => None,
+            ChildState::Running => inner.child.id(),
+        }
+    }
+
+    pub async fn wait(&self) -> io::Result<ExitStatus> {
+        {
+            let inner = self.inner.lock().await;
+            if let ChildState::Exited(status) = inner.state {
+                return Ok(status);
+            }
+        }
+
+        let handle = {
+            let inner = self.inner.lock().await;
+            sys::get_handle(&inner.child)
+        };
+
+        trace!("Waiting for child process to exit (non-reaping)");
+        tokio::task::spawn_blocking(move || sys::wait_noreap(handle)).await??;
+
+        let mut inner = self.inner.lock().await;
+
+        if let ChildState::Exited(status) = inner.state {
+            return Ok(status);
+        }
+
+        let status = inner
+            .child
+            .try_wait()?
+            .ok_or_else(|| io::Error::other("child not exited after wait"))?;
+
+        inner.state = ChildState::Exited(status);
+        self.exit_notify.notify_waiters();
+        Ok(status)
+    }
+
+    /// Check if the child has exited without blocking.
+    ///
+    /// Returns `Ok(Some(status))` if exited, `Ok(None)` if still running.
+    pub async fn try_wait(&self) -> io::Result<Option<ExitStatus>> {
+        let mut inner = self.inner.lock().await;
+        match inner.state {
+            ChildState::Exited(status) => Ok(Some(status)),
+            ChildState::Running => {
+                if let Some(status) = inner.child.try_wait()? {
+                    inner.state = ChildState::Exited(status);
+                    self.exit_notify.notify_waiters();
+                    Ok(Some(status))
+                } else {
+                    Ok(None)
+                }
+            }
+        }
+    }
+
+    pub async fn terminate(&self) -> io::Result<()> {
+        let inner = self.inner.lock().await;
+        if let ChildState::Exited(_) = inner.state {
+            return Ok(()); // Already exited
+        }
+        debug!("Sending terminate signal to child process");
+        sys::terminate(&inner.child)
+    }
+
+    pub fn terminate_blocking(&self) -> io::Result<()> {
+        let inner = self.inner.blocking_lock();
+        if let ChildState::Exited(_) = inner.state {
+            return Ok(()); // Already exited
+        }
+        debug!("Sending terminate signal to child process");
+        sys::terminate(&inner.child)
+    }
+
+    pub async fn kill(&self) -> io::Result<()> {
+        let inner = self.inner.lock().await;
+        if let ChildState::Exited(_) = inner.state {
+            return Ok(()); // Already exited
+        }
+        debug!("Sending kill signal to child process");
+        sys::force_kill(&inner.child)
+    }
+
+    pub fn kill_blocking(&self) -> io::Result<()> {
+        let inner = self.inner.blocking_lock();
+        if let ChildState::Exited(_) = inner.state {
+            return Ok(()); // Already exited
+        }
+        debug!("Sending kill signal to child process");
+        sys::force_kill(&inner.child)
+    }
+}
+
+impl Drop for Child {
+    fn drop(&mut self) {
+        let inner = self.inner.get_mut();
+        if let ChildState::Running = inner.state
+            && let Err(e) = inner.child.start_kill()
+        {
+            warn!("Failed to kill child process on drop: {}", e);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn spawn_creates_child_with_pid() {
+        let mut cmd = Command::new("echo");
+        cmd.arg("hello");
+        let child = Child::spawn(&mut cmd).unwrap();
+        assert!(child.id().await.is_some());
+    }
+
+    #[tokio::test]
+    async fn take_stdin_returns_handle() {
+        let mut cmd = Command::new("cat");
+        let child = Child::spawn(&mut cmd).unwrap();
+        assert!(child.take_stdin().await.is_some());
+        // Cleanup
+        child.kill().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn take_stdout_returns_handle() {
+        let mut cmd = Command::new("echo");
+        cmd.arg("hello");
+        let child = Child::spawn(&mut cmd).unwrap();
+        assert!(child.take_stdout().await.is_some());
+    }
+
+    #[tokio::test]
+    async fn take_stderr_returns_handle() {
+        let mut cmd = Command::new("echo");
+        cmd.arg("hello");
+        let child = Child::spawn(&mut cmd).unwrap();
+        assert!(child.take_stderr().await.is_some());
+    }
+
+    #[tokio::test]
+    async fn take_stdin_twice_returns_none() {
+        let mut cmd = Command::new("cat");
+        let child = Child::spawn(&mut cmd).unwrap();
+        assert!(child.take_stdin().await.is_some());
+        assert!(child.take_stdin().await.is_none());
+        // Cleanup
+        child.kill().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn wait_returns_exit_status() {
+        let mut cmd = Command::new("echo");
+        cmd.arg("hello");
+        let child = Child::spawn(&mut cmd).unwrap();
+        let status = child.wait().await.unwrap();
+        assert!(status.success());
+    }
+
+    #[tokio::test]
+    async fn wait_caches_exit_status() {
+        let mut cmd = Command::new("echo");
+        cmd.arg("hello");
+        let child = Child::spawn(&mut cmd).unwrap();
+        let status1 = child.wait().await.unwrap();
+        let status2 = child.wait().await.unwrap();
+        assert_eq!(status1, status2);
+    }
+
+    #[tokio::test]
+    async fn id_returns_none_after_exit() {
+        let mut cmd = Command::new("echo");
+        cmd.arg("hello");
+        let child = Child::spawn(&mut cmd).unwrap();
+        let _ = child.wait().await.unwrap();
+        assert!(child.id().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn try_wait_returns_none_while_running() {
+        let mut cmd = Command::new("sleep");
+        cmd.arg("60");
+        let child = Child::spawn(&mut cmd).unwrap();
+        let result = child.try_wait().await.unwrap();
+        assert!(result.is_none());
+        child.kill().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn kill_terminates_child() {
+        let mut cmd = Command::new("sleep");
+        cmd.arg("60");
+        let child = Child::spawn(&mut cmd).unwrap();
+        child.kill().await.unwrap();
+        let status = child.wait().await.unwrap();
+        assert!(!status.success());
+    }
+
+    #[tokio::test]
+    async fn terminate_followed_by_wait() {
+        let mut cmd = Command::new("sleep");
+        cmd.arg("60");
+        let child = Child::spawn(&mut cmd).unwrap();
+        child.terminate().await.unwrap();
+        let status = child.wait().await.unwrap();
+        assert!(!status.success());
+    }
+
+    #[tokio::test]
+    async fn kill_already_exited_is_ok() {
+        let mut cmd = Command::new("echo");
+        cmd.arg("hello");
+        let child = Child::spawn(&mut cmd).unwrap();
+        let _ = child.wait().await.unwrap();
+        assert!(child.kill().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn terminate_already_exited_is_ok() {
+        let mut cmd = Command::new("echo");
+        cmd.arg("hello");
+        let child = Child::spawn(&mut cmd).unwrap();
+        let _ = child.wait().await.unwrap();
+        assert!(child.terminate().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn concurrent_wait_and_kill() {
+        let mut cmd = Command::new("sleep");
+        cmd.arg("60");
+        let child = Child::spawn(&mut cmd).unwrap();
+        let child = Arc::new(child);
+
+        // One task waits
+        let child_clone = child.clone();
+        let wait_handle = tokio::spawn(async move { child_clone.wait().await });
+
+        // Give the wait task time to start, then kill
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        child.kill().await.unwrap();
+
+        // Both should complete without error
+        let status = wait_handle.await.unwrap().unwrap();
+        assert!(!status.success());
+    }
+}

@@ -30,6 +30,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3.0", features = ["json", "env-filter"] }
 uuid = { version = "1.22.0", features = ["v4"] }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [build-dependencies]
 nvim-oxi = { version = "0.6.0", features = ["test", "neovim-0-11"] }
 

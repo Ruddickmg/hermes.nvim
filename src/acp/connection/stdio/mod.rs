@@ -1,3 +1,5 @@
+pub mod child;
+
 use crate::{
     Handler,
     acp::{
@@ -6,43 +8,30 @@ use crate::{
         handler::message::handle_requests,
     },
 };
-use std::fmt::Debug;
-use std::{ffi::OsStr, process::Stdio, sync::Arc};
+use child::Child;
+use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::{error, info, instrument, trace};
 
-#[instrument(level = "trace", skip(client, receiver))]
-pub async fn stdio_connection<I, S>(
+#[instrument(level = "trace", skip(client, receiver, stdio))]
+pub async fn stdio_connection(
     receiver: Receiver<UserRequest>,
     client: Arc<Handler>,
     agent: &Assistant,
-    command: &str,
-    args: I,
-) -> Result<(), Error>
-where
-    I: IntoIterator<Item = S> + Debug,
-    S: AsRef<OsStr>,
-{
+    stdio: Arc<Child>,
+) -> Result<(), Error> {
     let local_set = tokio::task::LocalSet::new();
-    let mut child = tokio::process::Command::new(command)
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|e| Error::Connection(e.to_string()))?;
 
-    let outgoing = child
-        .stdin
-        .take()
+    let outgoing = stdio
+        .take_stdin()
+        .await
         .ok_or_else(|| Error::Connection("Failed to take stdin".to_string()))?
         .compat_write();
 
-    let incoming = child
-        .stdout
-        .take()
+    let incoming = stdio
+        .take_stdout()
+        .await
         .ok_or_else(|| Error::Connection("Failed to take stdout".to_string()))?
         .compat();
 
@@ -66,33 +55,27 @@ where
         })
         .await;
 
-    drop(child);
-    info!("Disconnected from '{}'", agent);
+    // Wait for the child to exit (it may have already exited when the ACP
+    // connection closed, or we may need to wait briefly)
+    let status = stdio.wait().await?;
+    info!("Disconnected from '{}' with exit status: {}", agent, status);
     Ok::<(), Error>(())
 }
 
-#[instrument(level = "trace", skip(client, receiver))]
+#[instrument(level = "trace", skip(client, receiver, stdio))]
 pub async fn connect(
     client: Arc<Handler>,
     agent: Assistant,
     receiver: Receiver<UserRequest>,
+    stdio: Arc<Child>,
 ) -> Result<(), Error> {
     match agent.clone() {
-        Assistant::Copilot => {
-            trace!("Starting copilot connection");
-            stdio_connection(receiver, client, &agent, "copilot", ["--acp"]).await
-        }
-        Assistant::Opencode => {
-            trace!("Starting opencode connection");
-            stdio_connection(receiver, client, &agent, "opencode", ["acp"]).await
-        }
-        Assistant::Gemini => {
-            trace!("Starting gemini connection");
-            stdio_connection(receiver, client, &agent, "gemini", ["--acp"]).await
-        }
-        Assistant::CustomStdio { command, args, .. } => {
-            trace!("Starting custom agent connection: {}", agent);
-            stdio_connection(receiver, client, &agent, &command, args).await
+        Assistant::Copilot
+        | Assistant::Opencode
+        | Assistant::Gemini
+        | Assistant::CustomStdio { .. } => {
+            trace!("Starting stdio connection for '{}'", agent);
+            stdio_connection(receiver, client, &agent, stdio).await
         }
         _ => {
             error!("Unsupported agent type for stdio connection: {}", agent);

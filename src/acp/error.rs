@@ -2,6 +2,7 @@
 use crate::nvim::autocommands::Commands;
 use agent_client_protocol::Error as AcpError;
 use nvim_oxi::{api, lua};
+use tokio::io;
 use std::{
     cell::{BorrowError, BorrowMutError},
     sync::{PoisonError, mpsc::SendError},
@@ -31,6 +32,12 @@ impl std::fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self {
+        Self::Connection(e.to_string())
+    }
+}
 
 impl From<BorrowMutError> for Error {
     fn from(value: BorrowMutError) -> Self {
