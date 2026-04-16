@@ -1,5 +1,4 @@
 use hermes::{
-    Handler, PluginState,
     api::{Api, SetupArgs},
     nvim::{
         configuration::{
@@ -9,6 +8,7 @@ use hermes::{
         requests::Requests,
     },
     utilities::detect_project_storage_path,
+    Handler, PluginState,
 };
 use nvim_oxi;
 use pretty_assertions::assert_eq;
@@ -28,6 +28,15 @@ fn create_test_api(
     Api::new(plugin_state, logger, handler, requests)
 }
 
+/// Helper to block on an async future in synchronous tests
+/// Uses futures::executor::block_on which works within an existing runtime
+fn block_on<F>(fut: F) -> F::Output
+where
+    F: std::future::Future,
+{
+    futures::executor::block_on(fut)
+}
+
 /// Test: setup() updates permissions correctly
 #[nvim_oxi::test]
 fn setup_updates_permissions_correctly() -> nvim_oxi::Result<()> {
@@ -45,8 +54,7 @@ fn setup_updates_permissions_correctly() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    api.setup(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     assert!(!state.config.permissions.fs_write_access); // Single assertion
@@ -69,8 +77,7 @@ fn setup_updates_buffer_config_correctly() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    api.setup(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     assert!(state.config.buffer.auto_save); // Single assertion
@@ -99,8 +106,7 @@ fn setup_updates_stdio_log_level() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    api.setup(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     assert_eq!(
@@ -132,8 +138,7 @@ fn setup_updates_notification_log_level() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    api.setup(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     assert_eq!(
@@ -165,8 +170,7 @@ fn setup_updates_message_log_level() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    api.setup(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     assert_eq!(
@@ -186,22 +190,22 @@ fn setup_preserves_permissions_on_subsequent_calls() -> nvim_oxi::Result<()> {
     let api = create_test_api(plugin_state.clone(), logger);
 
     // First call: set permissions
-    api.setup(SetupArgs(Some(ClientConfigPartial {
+    block_on(api.setup(SetupArgs(Some(ClientConfigPartial {
         permissions: Some(hermes::nvim::configuration::PermissionsPartial {
             fs_write_access: Some(false),
             ..Default::default()
         }),
         ..Default::default()
-    })))
+    }))))
     .expect("Failed to call setup first time");
 
     // Second call: set buffer config (should keep permissions)
-    api.setup(SetupArgs(Some(ClientConfigPartial {
+    block_on(api.setup(SetupArgs(Some(ClientConfigPartial {
         buffer: Some(BufferConfigPartial {
             auto_save: Some(true),
         }),
         ..Default::default()
-    })))
+    }))))
     .expect("Failed to call setup second time");
 
     let state = plugin_state.blocking_lock();
@@ -219,22 +223,22 @@ fn setup_updates_buffer_config_on_subsequent_calls() -> nvim_oxi::Result<()> {
     let api = create_test_api(plugin_state.clone(), logger);
 
     // First call: set permissions
-    api.setup(SetupArgs(Some(ClientConfigPartial {
+    block_on(api.setup(SetupArgs(Some(ClientConfigPartial {
         permissions: Some(hermes::nvim::configuration::PermissionsPartial {
             fs_write_access: Some(false),
             ..Default::default()
         }),
         ..Default::default()
-    })))
+    }))))
     .expect("Failed to call setup first time");
 
     // Second call: set buffer config
-    api.setup(SetupArgs(Some(ClientConfigPartial {
+    block_on(api.setup(SetupArgs(Some(ClientConfigPartial {
         buffer: Some(BufferConfigPartial {
             auto_save: Some(true),
         }),
         ..Default::default()
-    })))
+    }))))
     .expect("Failed to call setup second time");
 
     let state = plugin_state.blocking_lock();
@@ -255,7 +259,7 @@ fn setup_with_empty_config_does_not_fail() -> nvim_oxi::Result<()> {
     let api = create_test_api(plugin_state.clone(), logger);
 
     // Empty config - should not panic
-    let result = api.setup(SetupArgs(None));
+    let result = block_on(api.setup(SetupArgs(None)));
 
     // Verify no error was returned
     assert!(result.is_ok(), "Setup with empty config should not fail");
@@ -273,7 +277,7 @@ fn setup_with_empty_config_uses_default_permissions() -> nvim_oxi::Result<()> {
     let api = create_test_api(plugin_state.clone(), logger);
 
     // Empty config - should not panic
-    api.setup(SetupArgs(None)).expect("Setup should not fail");
+    block_on(api.setup(SetupArgs(None))).expect("Setup should not fail");
 
     // Verify state uses defaults
     let state = plugin_state.blocking_lock();
@@ -294,7 +298,7 @@ fn setup_works_with_none() -> nvim_oxi::Result<()> {
     let api = create_test_api(plugin_state.clone(), logger);
 
     // None config
-    api.setup(SetupArgs(None)).expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(None))).expect("Failed to call setup");
 
     // Should use defaults
     let state = plugin_state.blocking_lock();
@@ -328,8 +332,7 @@ fn setup_enables_log_file_config() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    api.setup(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     let file_config = state.config.log.file.clone();
@@ -360,8 +363,7 @@ fn setup_sets_log_file_path() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    api.setup(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     let file_config = state.config.log.file.clone();
@@ -392,8 +394,7 @@ fn setup_sets_log_file_level() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    api.setup(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     let file_config = state.config.log.file.clone();
@@ -423,8 +424,7 @@ fn setup_updates_stdio_log_format() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    api.setup(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     assert_eq!(
@@ -456,8 +456,7 @@ fn setup_updates_notification_log_format() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    api.setup(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     assert_eq!(
