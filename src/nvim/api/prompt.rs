@@ -323,7 +323,7 @@ pub type PromptArgs = (String, PromptContent);
 
 impl Api {
     #[instrument(level = "trace", skip_all)]
-    pub fn prompt(&self, (session_id, content): PromptArgs) -> crate::acp::Result<()> {
+    pub async fn prompt(&self, (session_id, content): PromptArgs) -> crate::acp::Result<()> {
         let state = self.state.blocking_lock();
         let agent_info = state.agent_info.clone();
         drop(state);

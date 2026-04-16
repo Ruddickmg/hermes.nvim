@@ -2,11 +2,11 @@
 use crate::nvim::autocommands::Commands;
 use agent_client_protocol::Error as AcpError;
 use nvim_oxi::{api, lua};
-use tokio::io;
 use std::{
     cell::{BorrowError, BorrowMutError},
     sync::{PoisonError, mpsc::SendError},
 };
+use tokio::io;
 
 #[derive(Debug, Clone)]
 pub enum Error {

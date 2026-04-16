@@ -66,7 +66,7 @@ impl Pushable for ListSessionsConfig {
 
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn list_sessions(
+    pub async fn list_sessions(
         &self,
         maybe_config: Option<ListSessionsConfig>,
     ) -> crate::acp::Result<()> {

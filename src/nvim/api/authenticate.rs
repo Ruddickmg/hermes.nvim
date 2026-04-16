@@ -7,7 +7,7 @@ use crate::{
 
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn authenticate(&self, id: String) -> Result<()> {
+    pub async fn authenticate(&self, id: String) -> Result<()> {
         let args: AuthenticateRequest = AuthenticateRequest::new(id);
         let connection = self
             .connection

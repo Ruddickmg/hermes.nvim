@@ -38,7 +38,7 @@ impl From<&str> for Protocol {
             "socket" => Protocol::Socket,
             "http" => Protocol::Http,
             "stdio" => Protocol::Stdio,
-            _ => Protocol::default(), // Default to Stdio if unrecognized
+            _ => Protocol::Stdio, // default to Stdio for unknown protocols
         }
     }
 }
@@ -235,8 +235,13 @@ impl ConnectionManager {
                 runtime.block_on(async {
                     match protocol {
                         Protocol::Stdio => {
-                            stdio::connect(handler, thread_agent.clone(), receiver, connection.unwrap())
-                                .await
+                            stdio::connect(
+                                handler,
+                                thread_agent.clone(),
+                                receiver,
+                                connection.unwrap(),
+                            )
+                            .await
                         }
                         Protocol::Http => {
                             error!("HTTP protocol is not yet implemented");
@@ -278,7 +283,10 @@ impl ConnectionManager {
             Ok::<(), Error>(())
         });
 
-        self.add_connection(agent.clone(), Connection::new(sender, handle, stdio_connection));
+        self.add_connection(
+            agent.clone(),
+            Connection::new(sender, handle, stdio_connection),
+        );
         self.set_agent(agent.clone());
         let connection = self.get_connection(&agent).unwrap();
         debug!("Stored connection to '{}'", agent);

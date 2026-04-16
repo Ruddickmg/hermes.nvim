@@ -8,7 +8,7 @@ use crate::nvim::requests::RequestHandler;
 
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn cancel(&self, session_id: String) -> Result<()> {
+    pub async fn cancel(&self, session_id: String) -> Result<()> {
         let connection = self
             .connection
             .get_current_connection()

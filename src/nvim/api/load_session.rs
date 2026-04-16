@@ -71,7 +71,7 @@ pub type LoadSessionArgs = (String, Option<LoadSessionConfig>);
 
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn load_session(&self, (session_id, maybe_config): LoadSessionArgs) -> Result<()> {
+    pub async fn load_session(&self, (session_id, maybe_config): LoadSessionArgs) -> Result<()> {
         let config = maybe_config.unwrap_or_default();
         let state = self.state.blocking_lock();
         let root_markers = state.config.root_markers.clone();

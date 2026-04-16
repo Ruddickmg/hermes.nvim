@@ -8,7 +8,8 @@ pub mod terminal;
 
 use crate::{
     Handler,
-    api::{Api, DisconnectArgs},
+    acp::error::Error,
+    api::{DisconnectArgs, HermesRuntime},
     utilities::{Logger, detect_project_storage_path},
 };
 use nvim_oxi::{
@@ -35,6 +36,14 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
         request_handler,
     )));
     let cloned = api.clone();
+    let runtime = Rc::new(
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| Error::Internal(e.to_string()))?,
+    );
+    let shutdown_runtime = runtime.clone();
+    let hermes_runtime = HermesRuntime::new(runtime, api)?;
 
     let group =
         nvim_oxi::api::create_augroup(GROUP, &CreateAugroupOpts::default()).map_err(|e| {
@@ -52,9 +61,12 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
             .callback(move |_| {
                 match cloned.try_borrow_mut() {
                     Ok(mut app) => {
-                        app.disconnect(DisconnectArgs::All)
-                            .inspect_err(|e| error!("Error disconnecting: {:?}", e))
-                            .ok();
+                        shutdown_runtime.block_on(async {
+                            app.disconnect(DisconnectArgs::All)
+                                .await
+                                .inspect_err(|e| error!("Error disconnecting: {:?}", e))
+                                .ok();
+                        });
                     }
                     Err(e) => error!(
                         "An error occurred while disconnecting sessions on exit: {:?}",
@@ -66,5 +78,5 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
             .build(),
     )?;
 
-    Ok(Api::to_dictionary(api))
+    Ok(hermes_runtime.into())
 }

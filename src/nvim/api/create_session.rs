@@ -141,7 +141,7 @@ impl Pushable for CreateSessionArgs {
 
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn create_session(&self, session: CreateSessionArgs) -> crate::acp::Result<()> {
+    pub async fn create_session(&self, session: CreateSessionArgs) -> crate::acp::Result<()> {
         let state = self.state.blocking_lock();
         let root_markers = state.config.root_markers.clone();
         let agent_info = state.agent_info.clone();

@@ -90,7 +90,7 @@ pub fn parse_agent_connection(
 
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn connect(&mut self, (agent_name, options): ConnectionArgs) -> Result<()> {
+    pub async fn connect(&mut self, (agent_name, options): ConnectionArgs) -> Result<()> {
         let mut protocol = Protocol::default();
         if let Some(ref dict) = options
             && let Some(obj) = dict.get("protocol")

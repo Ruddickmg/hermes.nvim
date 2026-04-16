@@ -44,7 +44,7 @@ impl nvim_oxi::lua::Pushable for SetupArgs {
 
 impl Api {
     #[instrument(level = "trace", skip_all)]
-    pub fn setup(&self, args: SetupArgs) -> Result<()> {
+    pub async fn setup(&self, args: SetupArgs) -> Result<()> {
         let config_update = args.into_inner();
         let mut state = self.state.blocking_lock();
         config_update.apply_to(&mut state.config);

@@ -8,7 +8,7 @@ pub type SetModeArgs = (String, String);
 
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn set_mode(&self, (session_id, mode_id): SetModeArgs) -> Result<()> {
+    pub async fn set_mode(&self, (session_id, mode_id): SetModeArgs) -> Result<()> {
         let request = agent_client_protocol::SetSessionModeRequest::new(session_id, mode_id);
 
         let connection = self
