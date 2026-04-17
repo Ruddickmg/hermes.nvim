@@ -45,7 +45,10 @@ pub struct HermesRuntime {
 
 impl HermesRuntime {
     pub fn new(runtime: Rc<Runtime>, api: Rc<RefCell<Api>>) -> Result<Self> {
-        Ok(Self { api, runtime })
+        Ok(Self {
+            api,
+            runtime,
+        })
     }
 
     fn create_api_method<A, R, F, Fut>(&self, func: F) -> Object

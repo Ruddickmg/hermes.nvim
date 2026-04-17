@@ -1,7 +1,9 @@
 use crate::acp::{Result, error::Error};
 use nvim_oxi::IntoResult;
 use nvim_oxi::libuv::AsyncHandle;
+use std::rc::Rc;
 use std::sync::Arc;
+use tokio::runtime::Runtime;
 use tracing::error;
 
 #[derive(Clone)]
@@ -11,9 +13,10 @@ pub struct NvimMessenger<T: 'static> {
 }
 
 impl<T> NvimMessenger<T> {
-    pub fn initialize<F, R>(mut callback: F) -> Result<Self>
+    pub fn initialize<F, R, Fut>(runtime: Rc<Runtime>, mut callback: F) -> Result<Self>
     where
-        F: FnMut(T) -> R + 'static,
+        F: FnMut(T) -> Fut + 'static,
+        Fut: Future<Output = R>,
         R: IntoResult<()>,
         R::Error: std::error::Error + 'static,
     {
@@ -26,10 +29,13 @@ impl<T> NvimMessenger<T> {
                 // prevent remaining queued items from being processed.
                 // Note: We do NOT attempt to log panics here - if the logging
                 // infrastructure is broken, we can't log. Silently swallow instead.
+                let rt = runtime.clone();
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    if let Err(err) = callback(data).into_result() {
-                        error!("Error in NvimMessenger callback: {}", err);
-                    }
+                    rt.block_on(tokio::task::LocalSet::new().run_until(async {
+                        if let Err(err) = callback(data).await.into_result() {
+                            error!("Error in NvimMessenger callback: {}", err);
+                        }
+                    }))
                 }))
                 .ok();
             }
@@ -49,14 +55,24 @@ pub trait TransmitToNvim<T> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl<T> TransmitToNvim<T> for NvimMessenger<T> {
+impl<T: Send + 'static> TransmitToNvim<T> for NvimMessenger<T> {
     fn blocking_send(&self, data: T) -> Result<()> {
-        self.sender
-            .blocking_send(data)
-            .map_err(|e| Error::Internal(e.to_string()))?;
-        self.handle
-            .send()
-            .map_err(|e| Error::Internal(e.to_string()))
+        // Spawn a new thread with a tokio runtime to handle the blocking send
+        // This avoids requiring a tokio runtime on the current thread
+        let sender = self.sender.clone();
+        let handle = self.handle.clone();
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                sender
+                    .send(data)
+                    .await
+                    .map_err(|e| Error::Internal(e.to_string()))
+            })?;
+            handle.send().map_err(|e| Error::Internal(e.to_string()))
+        })
+        .join()
+        .map_err(|_| Error::Internal("Thread panicked".to_string()))?
     }
 
     async fn send(&self, data: T) -> Result<()> {

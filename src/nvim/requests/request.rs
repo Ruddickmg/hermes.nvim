@@ -7,21 +7,21 @@ use agent_client_protocol::{
 };
 use nvim_oxi::conversion::FromObject;
 use std::sync::Arc;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use tracing::error;
 use uuid::Uuid;
 
-use crate::PluginState;
-use crate::acp::Result;
 use crate::acp::error::Error;
+use crate::acp::Result;
 use crate::nvim::autocommands::Commands;
 use crate::nvim::configuration::dict_from_object;
-use crate::nvim::terminal::{Terminal, TerminalManager, parse_exit_code};
+use crate::nvim::terminal::{parse_exit_code, Terminal, TerminalManager};
 use crate::utilities::{
-    NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
-    save_buffer_to_disk, show_permission_ui, update_buffer_content,
+    acquire_or_create_buffer, mark_buffer_modified, refresh_view, save_buffer_to_disk,
+    show_permission_ui, update_buffer_content, NvimMessenger, TransmitToNvim,
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
+use crate::PluginState;
 
 #[derive(Debug)]
 pub enum Responder {
@@ -97,12 +97,24 @@ impl Request {
     }
 
     fn finish(&self) -> Result<()> {
-        self.remove.blocking_send(self.id).map_err(|e| {
-            Error::Internal(format!(
-                "Failed to send finish signal for request '{}', in session '{}': {:?}",
-                self.id, self.session_id, e
-            ))
+        // Clone what we need for the thread
+        let remove = self.remove.clone();
+        let id = self.id;
+        let session_id = self.session_id.clone();
+        
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                remove.send(id).await.map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send finish signal for request '{}', in session '{}': {:?}",
+                        id, session_id, e
+                    ))
+                })
+            })
         })
+        .join()
+        .map_err(|_| Error::Internal("Thread panicked".to_string()))?
     }
 
     pub fn is_permission_request(&self) -> bool {
@@ -227,7 +239,11 @@ impl Request {
                             Some(s) => {
                                 let sig: String = String::from_object(s)
                                     .map_err(|e| Error::InvalidInput(e.to_string()))?;
-                                if sig.is_empty() { None } else { Some(sig) }
+                                if sig.is_empty() {
+                                    None
+                                } else {
+                                    Some(sig)
+                                }
                             }
                             None => None,
                         };

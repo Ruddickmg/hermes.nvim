@@ -1,4 +1,5 @@
 //! Mock implementation of RequestHandler trait for testing
+use async_trait::async_trait;
 use hermes::nvim::requests::{Request, RequestHandler, Responder};
 use uuid::Uuid;
 
@@ -17,8 +18,9 @@ impl MockRequestHandler {
     }
 }
 
+#[async_trait(?Send)]
 impl RequestHandler for MockRequestHandler {
-    fn default_response(
+    async fn default_response(
         &self,
         _request_id: &Uuid,
         _data: serde_json::Value,
@@ -26,7 +28,7 @@ impl RequestHandler for MockRequestHandler {
         Ok(())
     }
 
-    fn handle_response(
+    async fn handle_response(
         &self,
         _request_id: &Uuid,
         _response: nvim_oxi::Object,
@@ -34,15 +36,23 @@ impl RequestHandler for MockRequestHandler {
         Ok(())
     }
 
-    fn cancel_session_requests(&self, _session_id: String) -> hermes::acp::Result<()> {
+    async fn cancel_session_requests(&self, _session_id: String) -> hermes::acp::Result<()> {
         Ok(())
     }
 
-    fn add_request(&self, _session_id: String, _responder: Responder) -> Uuid {
+    async fn add_request(&self, _session_id: String, _responder: Responder) -> Uuid {
         Uuid::new_v4()
     }
 
-    fn get_request(&self, _request_id: &Uuid) -> Option<Request> {
+    async fn get_request(&self, _request_id: &Uuid) -> Option<Request> {
         None
+    }
+
+    fn add_request_sync(&self, _session_id: String, _responder: Responder) -> Uuid {
+        Uuid::new_v4()
+    }
+
+    fn default_response_sync(&self, _request_id: &Uuid, _data: serde_json::Value) -> hermes::acp::Result<()> {
+        Ok(())
     }
 }

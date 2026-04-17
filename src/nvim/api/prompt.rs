@@ -324,7 +324,7 @@ pub type PromptArgs = (String, PromptContent);
 impl Api {
     #[instrument(level = "trace", skip_all)]
     pub async fn prompt(&self, (session_id, content): PromptArgs) -> crate::acp::Result<()> {
-        let state = self.state.blocking_lock();
+        let state = self.state.lock().await;
         let agent_info = state.agent_info.clone();
         drop(state);
         let can_send_images = agent_info.can_send_images();
@@ -343,13 +343,13 @@ impl Api {
             .collect();
 
         let request = PromptRequest::new(session_id, content_blocks);
-        let connection = self.connection.get_current_connection().ok_or_else(|| {
+        let connection = self.connection.get_current_connection().await.ok_or_else(|| {
             crate::acp::error::Error::Connection(
                 "You are not connected to an agent, call connect before \"prompt\"".to_string(),
             )
         })?;
 
-        connection.prompt(request)
+        connection.prompt(request).await
     }
 }
 

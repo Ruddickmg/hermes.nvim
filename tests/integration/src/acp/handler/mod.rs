@@ -281,10 +281,13 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
     use tokio::sync::oneshot;
     use uuid::Uuid;
 
+    use async_trait::async_trait;
+
     // Create a mock that fails on default_response to trigger error! at lines 74-77
     struct FailingMockRequestHandler;
+    #[async_trait(?Send)]
     impl RequestHandler for FailingMockRequestHandler {
-        fn default_response(
+        async fn default_response(
             &self,
             _request_id: &Uuid,
             _data: serde_json::Value,
@@ -295,7 +298,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
             ))
         }
 
-        fn handle_response(
+        async fn handle_response(
             &self,
             _request_id: &Uuid,
             _response: nvim_oxi::Object,
@@ -303,16 +306,26 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
             Ok(())
         }
 
-        fn cancel_session_requests(&self, _session_id: String) -> hermes::acp::Result<()> {
+        async fn cancel_session_requests(&self, _session_id: String) -> hermes::acp::Result<()> {
             Ok(())
         }
 
-        fn add_request(&self, _session_id: String, _responder: Responder) -> Uuid {
+        async fn add_request(&self, _session_id: String, _responder: Responder) -> Uuid {
             Uuid::new_v4()
         }
 
-        fn get_request(&self, _request_id: &Uuid) -> Option<hermes::nvim::requests::Request> {
+        async fn get_request(&self, _request_id: &Uuid) -> Option<hermes::nvim::requests::Request> {
             None
+        }
+
+        fn add_request_sync(&self, _session_id: String, _responder: Responder) -> Uuid {
+            Uuid::new_v4()
+        }
+
+        fn default_response_sync(&self, _request_id: &Uuid, _data: serde_json::Value) -> hermes::acp::Result<()> {
+            Err(hermes::acp::error::Error::Internal(
+                "Test error from default_response".to_string(),
+            ))
         }
     }
 

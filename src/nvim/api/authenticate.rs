@@ -12,7 +12,8 @@ impl Api {
         let connection = self
             .connection
             .get_current_connection()
+            .await
             .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
-        connection.authenticate(args)
+        connection.authenticate(args).await
     }
 }

@@ -26,9 +26,22 @@ pub const GROUP: &str = "hermes";
 pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     let storage_path = detect_project_storage_path()?;
     let logger = Logger::inititalize(&storage_path)?;
+    let runtime = Rc::new(
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| Error::Internal(e.to_string()))?,
+    );
     let plugin_state = Arc::new(Mutex::new(state::PluginState::new()));
-    let request_handler = Rc::new(requests::Requests::new(plugin_state.clone())?);
-    let event_handler = Arc::new(Handler::new(plugin_state.clone(), request_handler.clone())?);
+    let request_handler = Rc::new(requests::Requests::new(
+        runtime.clone(),
+        plugin_state.clone(),
+    )?);
+    let event_handler = Arc::new(Handler::new(
+        plugin_state.clone(),
+        runtime.clone(),
+        request_handler.clone(),
+    )?);
     let api = Rc::new(RefCell::new(api::Api::new(
         plugin_state,
         logger,
@@ -36,12 +49,6 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
         request_handler,
     )));
     let cloned = api.clone();
-    let runtime = Rc::new(
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| Error::Internal(e.to_string()))?,
-    );
     let shutdown_runtime = runtime.clone();
     let hermes_runtime = HermesRuntime::new(runtime, api)?;
 

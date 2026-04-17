@@ -46,7 +46,7 @@ impl Api {
     #[instrument(level = "trace", skip_all)]
     pub async fn setup(&self, args: SetupArgs) -> Result<()> {
         let config_update = args.into_inner();
-        let mut state = self.state.blocking_lock();
+        let mut state = self.state.lock().await;
         config_update.apply_to(&mut state.config);
         let log_config = state.config.log.clone();
         drop(state);

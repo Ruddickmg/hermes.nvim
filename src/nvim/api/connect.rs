@@ -106,7 +106,7 @@ impl Api {
         self.connection.connect(
             self.response_handler.clone(),
             ConnectionDetails { agent, protocol },
-        )?;
+        ).await?;
         Ok(())
     }
 }

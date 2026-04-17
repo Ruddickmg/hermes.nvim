@@ -73,7 +73,7 @@ impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn load_session(&self, (session_id, maybe_config): LoadSessionArgs) -> Result<()> {
         let config = maybe_config.unwrap_or_default();
-        let state = self.state.blocking_lock();
+        let state = self.state.lock().await;
         let root_markers = state.config.root_markers.clone();
         let agent_info = state.agent_info.clone();
         drop(state);
@@ -93,9 +93,10 @@ impl Api {
         let connection = self
             .connection
             .get_current_connection()
+            .await
             .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
 
-        connection.load_session(request)
+        connection.load_session(request).await
     }
 }
 

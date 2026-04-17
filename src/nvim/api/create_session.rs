@@ -142,7 +142,7 @@ impl Pushable for CreateSessionArgs {
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn create_session(&self, session: CreateSessionArgs) -> crate::acp::Result<()> {
-        let state = self.state.blocking_lock();
+        let state = self.state.lock().await;
         let root_markers = state.config.root_markers.clone();
         let agent_info = state.agent_info.clone();
         drop(state);
@@ -168,11 +168,11 @@ impl Api {
             }
         };
 
-        let connection = self.connection.get_current_connection().ok_or_else(|| {
+        let connection = self.connection.get_current_connection().await.ok_or_else(|| {
             crate::acp::error::Error::Connection("No connection found".to_string())
         })?;
 
-        connection.create_session(request)
+        connection.create_session(request).await
     }
 }
 

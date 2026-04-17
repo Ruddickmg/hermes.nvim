@@ -29,7 +29,6 @@ fn create_test_api(
 }
 
 /// Helper to block on an async future in synchronous tests
-/// Uses futures::executor::block_on which works within an existing runtime
 fn block_on<F>(fut: F) -> F::Output
 where
     F: std::future::Future,

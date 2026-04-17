@@ -10,8 +10,16 @@ use hermes::nvim::state::PluginState;
 use pretty_assertions::assert_eq;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use uuid::Uuid;
+
+/// Helper to block on an async future in synchronous tests
+fn block_on<F>(fut: F) -> F::Output
+where
+    F: std::future::Future,
+{
+    futures::executor::block_on(fut)
+}
 
 fn _create_test_permission_request(session_id: impl Into<String>) -> RequestPermissionRequest {
     RequestPermissionRequest::new(
@@ -35,10 +43,10 @@ fn test_handle_response_success() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = requests.add_request(session_id, responder);
+    let request_id = block_on(requests.add_request(session_id, responder));
 
     let response_obj = nvim_oxi::Object::from("selected-option-id");
-    let result = requests.handle_response(&request_id, response_obj);
+    let result = block_on(requests.handle_response(&request_id, response_obj));
 
     assert!(result.is_ok());
     Ok(())
@@ -55,11 +63,10 @@ fn test_handle_response_outcome_contains_option_id() -> nvim_oxi::Result<()> {
     let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = requests.add_request(session_id, responder);
+    let request_id = block_on(requests.add_request(session_id, responder));
 
     let response_obj = nvim_oxi::Object::from("selected-option-id");
-    requests
-        .handle_response(&request_id, response_obj)
+    block_on(requests.handle_response(&request_id, response_obj))
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     let outcome = receiver.try_recv().expect("Should receive outcome");
@@ -82,7 +89,7 @@ fn test_handle_response_not_found_returns_error() -> nvim_oxi::Result<()> {
     let request_id = Uuid::new_v4();
     let response_obj = nvim_oxi::Object::from("some-option");
 
-    let result = requests.handle_response(&request_id, response_obj);
+    let result = block_on(requests.handle_response(&request_id, response_obj));
 
     assert!(result.is_err());
     Ok(())
@@ -98,9 +105,9 @@ fn test_cancel_session_requests_returns_ok() -> nvim_oxi::Result<()> {
     let session_id = String::from("test-session");
     let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
 
-    requests.add_request(session_id.clone(), Responder::PermissionResponse(sender));
+    block_on(requests.add_request(session_id.clone(), Responder::PermissionResponse(sender)));
 
-    let result = requests.cancel_session_requests(session_id);
+    let result = block_on(requests.cancel_session_requests(session_id));
     assert!(result.is_ok());
     Ok(())
 }
@@ -114,7 +121,7 @@ fn test_cancel_session_requests_no_matches_returns_ok() -> nvim_oxi::Result<()> 
     );
     let session_id = String::from("nonexistent-session");
 
-    let result = requests.cancel_session_requests(session_id);
+    let result = block_on(requests.cancel_session_requests(session_id));
     assert!(result.is_ok());
     Ok(())
 }
@@ -131,17 +138,16 @@ fn test_cancel_session_requests_only_affects_target_session() -> nvim_oxi::Resul
     let (target_sender, mut target_receiver) = oneshot::channel::<RequestPermissionOutcome>();
     let (other_sender, other_receiver) = oneshot::channel::<RequestPermissionOutcome>();
 
-    requests.add_request(
+    block_on(requests.add_request(
         session_id.clone(),
         Responder::PermissionResponse(target_sender),
-    );
-    requests.add_request(
+    ));
+    block_on(requests.add_request(
         other_session_id.clone(),
         Responder::PermissionResponse(other_sender),
-    );
+    ));
 
-    requests
-        .cancel_session_requests(session_id)
+    block_on(requests.cancel_session_requests(session_id))
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     // Target session should be cancelled
@@ -168,17 +174,16 @@ fn test_other_session_not_cancelled() -> nvim_oxi::Result<()> {
     let (target_sender, _target_receiver) = oneshot::channel::<RequestPermissionOutcome>();
     let (other_sender, mut other_receiver) = oneshot::channel::<RequestPermissionOutcome>();
 
-    requests.add_request(
+    block_on(requests.add_request(
         session_id.clone(),
         Responder::PermissionResponse(target_sender),
-    );
-    requests.add_request(
+    ));
+    block_on(requests.add_request(
         other_session_id.clone(),
         Responder::PermissionResponse(other_sender),
-    );
+    ));
 
-    requests
-        .cancel_session_requests(session_id)
+    block_on(requests.cancel_session_requests(session_id))
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     // Other session should not be cancelled
@@ -199,8 +204,8 @@ fn test_get_request_returns_some_for_existing() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = requests.add_request(session_id, responder);
-    let retrieved = requests.get_request(&request_id);
+    let request_id = block_on(requests.add_request(session_id, responder));
+    let retrieved = block_on(requests.get_request(&request_id));
 
     assert!(retrieved.is_some(), "Should find existing request");
     Ok(())
@@ -215,7 +220,7 @@ fn test_get_request_returns_none_for_nonexistent() -> nvim_oxi::Result<()> {
     );
     let request_id = Uuid::new_v4();
 
-    let retrieved = requests.get_request(&request_id);
+    let retrieved = block_on(requests.get_request(&request_id));
 
     assert!(retrieved.is_none(), "Should not find non-existent request");
     Ok(())
@@ -232,17 +237,16 @@ fn test_handle_response_removes_request_from_pending() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = requests.add_request(session_id, responder);
+    let request_id = block_on(requests.add_request(session_id, responder));
 
     // Handle the response
     let response_obj = nvim_oxi::Object::from("selected-option-id");
-    requests
-        .handle_response(&request_id, response_obj)
+    block_on(requests.handle_response(&request_id, response_obj))
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     // Wait for cleanup to complete
     let cleaned_up = wait_for(
-        || requests.get_request(&request_id).is_none(),
+        || block_on(requests.get_request(&request_id)).is_none(),
         Duration::from_millis(500),
     );
 
@@ -264,11 +268,11 @@ fn test_request_exists_before_response_handled() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = requests.add_request(session_id, responder);
+    let request_id = block_on(requests.add_request(session_id, responder));
 
     // Verify request exists before response (separate test from cleanup test)
     assert!(
-        requests.get_request(&request_id).is_some(),
+        block_on(requests.get_request(&request_id)).is_some(),
         "Request should exist before response"
     );
     Ok(())
@@ -293,10 +297,10 @@ fn test_write_file_request_cleanup_via_handle_response() -> nvim_oxi::Result<()>
     );
     let responder = Responder::WriteFileResponse(sender, write_request);
 
-    let request_id = requests.add_request("test-session".to_string(), responder);
+    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
 
     // Verify request exists
-    assert!(requests.get_request(&request_id).is_some());
+    assert!(block_on(requests.get_request(&request_id)).is_some());
 
     // Cleanup receiver at end of test
     drop(receiver);
@@ -322,12 +326,12 @@ fn test_write_file_handle_response_succeeds() -> nvim_oxi::Result<()> {
     );
     let responder = Responder::WriteFileResponse(sender, write_request);
 
-    let request_id = requests.add_request("test-session".to_string(), responder);
+    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
 
     // Use handle_response to trigger cleanup (goes through respond() -> finish())
     // NOTE: default_response() doesn't call finish(), so we use handle_response for this test
     let response_obj = nvim_oxi::Object::from(0i64); // WriteFileResponse doesn't use the response data
-    let result = requests.handle_response(&request_id, response_obj);
+    let result = block_on(requests.handle_response(&request_id, response_obj));
 
     assert!(
         result.is_ok(),
@@ -356,17 +360,16 @@ fn test_write_file_request_cleaned_up_after_response() -> nvim_oxi::Result<()> {
     );
     let responder = Responder::WriteFileResponse(sender, write_request);
 
-    let request_id = requests.add_request("test-session".to_string(), responder);
+    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
 
     // Use handle_response to trigger cleanup
     let response_obj = nvim_oxi::Object::from(0i64);
-    requests
-        .handle_response(&request_id, response_obj)
+    block_on(requests.handle_response(&request_id, response_obj))
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     // Wait for cleanup
     let cleaned_up = wait_for(
-        || requests.get_request(&request_id).is_none(),
+        || block_on(requests.get_request(&request_id)).is_none(),
         Duration::from_millis(500),
     );
 
@@ -392,7 +395,7 @@ fn test_multiple_requests_exist_after_adding() -> nvim_oxi::Result<()> {
         let session_id = format!("test-session-{}", i);
         let (sender, receiver) = oneshot::channel::<RequestPermissionOutcome>();
         let responder = Responder::PermissionResponse(sender);
-        let request_id = requests.add_request(session_id, responder);
+        let request_id = block_on(requests.add_request(session_id, responder));
         request_ids.push(request_id);
         receivers.push(receiver);
     }
@@ -400,7 +403,7 @@ fn test_multiple_requests_exist_after_adding() -> nvim_oxi::Result<()> {
     // Verify all 3 exist
     let all_exist = request_ids
         .iter()
-        .all(|id| requests.get_request(id).is_some());
+        .all(|id| block_on(requests.get_request(id)).is_some());
 
     assert!(all_exist, "All 3 requests should exist after adding");
 
@@ -424,7 +427,7 @@ fn test_multiple_requests_all_handled_successfully() -> nvim_oxi::Result<()> {
             let session_id = format!("test-session-{}", i);
             let (sender, receiver) = oneshot::channel::<RequestPermissionOutcome>();
             let responder = Responder::PermissionResponse(sender);
-            let request_id = requests.add_request(session_id, responder);
+            let request_id = block_on(requests.add_request(session_id, responder));
             request_ids.push(request_id);
             receiver
         })
@@ -433,7 +436,7 @@ fn test_multiple_requests_all_handled_successfully() -> nvim_oxi::Result<()> {
     // Respond to all 3
     let all_succeeded = request_ids.iter().all(|id| {
         let response_obj = nvim_oxi::Object::from("selected-option");
-        requests.handle_response(id, response_obj).is_ok()
+        block_on(requests.handle_response(id, response_obj)).is_ok()
     });
 
     assert!(all_succeeded, "All handle_response calls should succeed");
@@ -458,7 +461,7 @@ fn test_multiple_requests_all_cleaned_up() -> nvim_oxi::Result<()> {
             let session_id = format!("test-session-{}", i);
             let (sender, receiver) = oneshot::channel::<RequestPermissionOutcome>();
             let responder = Responder::PermissionResponse(sender);
-            let request_id = requests.add_request(session_id, responder);
+            let request_id = block_on(requests.add_request(session_id, responder));
             request_ids.push(request_id);
             receiver
         })
@@ -467,8 +470,7 @@ fn test_multiple_requests_all_cleaned_up() -> nvim_oxi::Result<()> {
     // Respond to all 3
     for id in &request_ids {
         let response_obj = nvim_oxi::Object::from("selected-option");
-        requests
-            .handle_response(id, response_obj)
+        block_on(requests.handle_response(id, response_obj))
             .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
     }
 
@@ -477,7 +479,7 @@ fn test_multiple_requests_all_cleaned_up() -> nvim_oxi::Result<()> {
         || {
             request_ids
                 .iter()
-                .all(|id| requests.get_request(id).is_none())
+                .all(|id| block_on(requests.get_request(id)).is_none())
         },
         Duration::from_millis(1000),
     );
@@ -503,11 +505,11 @@ fn test_first_response_to_request_succeeds() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = requests.add_request(session_id, responder);
+    let request_id = block_on(requests.add_request(session_id, responder));
 
     // First response succeeds
     let response_obj = nvim_oxi::Object::from("selected-option-id");
-    let result1 = requests.handle_response(&request_id, response_obj.clone());
+    let result1 = block_on(requests.handle_response(&request_id, response_obj.clone()));
 
     assert!(result1.is_ok(), "First response should succeed");
     Ok(())
@@ -524,22 +526,21 @@ fn test_second_response_to_cleaned_up_request_fails() -> nvim_oxi::Result<()> {
     let (sender, receiver) = oneshot::channel::<RequestPermissionOutcome>();
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = requests.add_request(session_id, responder);
+    let request_id = block_on(requests.add_request(session_id, responder));
 
     // First response succeeds
     let response_obj = nvim_oxi::Object::from("selected-option-id");
-    requests
-        .handle_response(&request_id, response_obj.clone())
+    block_on(requests.handle_response(&request_id, response_obj.clone()))
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
 
     // Wait for cleanup
     wait_for(
-        || requests.get_request(&request_id).is_none(),
+        || block_on(requests.get_request(&request_id)).is_none(),
         Duration::from_millis(500),
     );
 
     // Second response should fail (request no longer exists)
-    let result2 = requests.handle_response(&request_id, response_obj);
+    let result2 = block_on(requests.handle_response(&request_id, response_obj));
 
     assert!(
         result2.is_err(),
@@ -563,10 +564,8 @@ fn test_request_respond_with_permission_response_sends_outcome() -> nvim_oxi::Re
     let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = requests.add_request(session_id, responder);
-    let request = requests
-        .get_request(&request_id)
-        .expect("Request should exist");
+    let request_id = block_on(requests.add_request(session_id, responder));
+    let request = block_on(requests.get_request(&request_id)).expect("Request should exist");
 
     // Respond with an option ID
     let response_obj = nvim_oxi::Object::from("selected-option-id");
@@ -596,10 +595,8 @@ fn test_request_respond_with_permission_empty_string_sends_cancelled() -> nvim_o
     let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = requests.add_request(session_id, responder);
-    let request = requests
-        .get_request(&request_id)
-        .expect("Request should exist");
+    let request_id = block_on(requests.add_request(session_id, responder));
+    let request = block_on(requests.get_request(&request_id)).expect("Request should exist");
 
     // Respond with empty string (cancels the request)
     let response_obj = nvim_oxi::Object::from("");
@@ -628,10 +625,8 @@ fn test_request_cancel_sends_cancelled_outcome() -> nvim_oxi::Result<()> {
     let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = requests.add_request(session_id, responder);
-    let request = requests
-        .get_request(&request_id)
-        .expect("Request should exist");
+    let request_id = block_on(requests.add_request(session_id, responder));
+    let request = block_on(requests.get_request(&request_id)).expect("Request should exist");
 
     // Cancel the request
     request
@@ -667,10 +662,8 @@ fn test_request_cancel_on_non_permission_request_returns_ok() -> nvim_oxi::Resul
     );
     let responder = Responder::WriteFileResponse(sender, write_request);
 
-    let request_id = requests.add_request(session_id, responder);
-    let request = requests
-        .get_request(&request_id)
-        .expect("Request should exist");
+    let request_id = block_on(requests.add_request(session_id, responder));
+    let request = block_on(requests.get_request(&request_id)).expect("Request should exist");
 
     // Cancel on non-permission request should succeed (no-op)
     let result = request.cancel();
@@ -692,10 +685,8 @@ fn test_request_is_permission_request_true_for_permission() -> nvim_oxi::Result<
     let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = requests.add_request(session_id, responder);
-    let request = requests
-        .get_request(&request_id)
-        .expect("Request should exist");
+    let request_id = block_on(requests.add_request(session_id, responder));
+    let request = block_on(requests.get_request(&request_id)).expect("Request should exist");
 
     assert!(
         request.is_permission_request(),
@@ -723,10 +714,8 @@ fn test_request_is_permission_request_false_for_write_file() -> nvim_oxi::Result
     );
     let responder = Responder::WriteFileResponse(sender, write_request);
 
-    let request_id = requests.add_request(session_id, responder);
-    let request = requests
-        .get_request(&request_id)
-        .expect("Request should exist");
+    let request_id = block_on(requests.add_request(session_id, responder));
+    let request = block_on(requests.get_request(&request_id)).expect("Request should exist");
 
     assert!(
         !request.is_permission_request(),
@@ -750,10 +739,8 @@ fn test_request_terminal_true_for_terminal_create() -> nvim_oxi::Result<()> {
     );
     let responder = Responder::TerminalCreate(sender, create_request);
 
-    let request_id = requests.add_request(session_id, responder);
-    let request = requests
-        .get_request(&request_id)
-        .expect("Request should exist");
+    let request_id = block_on(requests.add_request(session_id, responder));
+    let request = block_on(requests.get_request(&request_id)).expect("Request should exist");
 
     assert!(
         request.terminal(),
@@ -773,10 +760,8 @@ fn test_request_terminal_false_for_permission() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = requests.add_request(session_id, responder);
-    let request = requests
-        .get_request(&request_id)
-        .expect("Request should exist");
+    let request_id = block_on(requests.add_request(session_id, responder));
+    let request = block_on(requests.get_request(&request_id)).expect("Request should exist");
 
     assert!(
         !request.terminal(),
@@ -796,10 +781,8 @@ fn test_request_is_session_true_for_matching() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = requests.add_request(session_id.clone(), responder);
-    let request = requests
-        .get_request(&request_id)
-        .expect("Request should exist");
+    let request_id = block_on(requests.add_request(session_id.clone(), responder));
+    let request = block_on(requests.get_request(&request_id)).expect("Request should exist");
 
     assert!(request.is_session(session_id), "Should match session");
     Ok(())
@@ -816,10 +799,8 @@ fn test_request_is_session_false_for_non_matching() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = requests.add_request(session_id, responder);
-    let request = requests
-        .get_request(&request_id)
-        .expect("Request should exist");
+    let request_id = block_on(requests.add_request(session_id, responder));
+    let request = block_on(requests.get_request(&request_id)).expect("Request should exist");
 
     assert!(
         !request.is_session("other-session".to_string()),

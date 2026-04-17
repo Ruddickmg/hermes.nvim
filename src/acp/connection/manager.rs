@@ -80,10 +80,6 @@ impl std::fmt::Display for Assistant {
 }
 
 impl Assistant {
-    /// Return the command and arguments for launching this agent via stdio.
-    ///
-    /// # Panics
-    /// Panics if called on a `CustomUrl` variant (which uses TCP, not stdio).
     pub fn connection(&self) -> crate::acp::Result<stdio::child::Child> {
         let (command, args) = match self {
             Assistant::Copilot => ("copilot", vec!["--acp"]),
@@ -93,11 +89,13 @@ impl Assistant {
                 (command.as_str(), args.iter().map(|s| s.as_str()).collect())
             }
             Assistant::CustomUrl { .. } => {
-                panic!("command_and_args() called on CustomUrl variant")
+                return Err(Error::Connection("CustomUrl assistants do not use stdio connections".to_string()))
             }
         };
-        let mut cmd = tokio::process::Command::new(command);
-        cmd.args(args);
+        let cmd_str = command.to_string();
+        let args_vec: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+        let mut cmd = tokio::process::Command::new(&cmd_str);
+        cmd.args(&args_vec);
         stdio::child::Child::spawn(&mut cmd)
     }
 }
@@ -143,15 +141,15 @@ impl ConnectionManager {
     }
 
     #[instrument(level = "trace", skip(self))]
-    fn set_agent(&self, agent: Assistant) {
-        let mut config = self.state.blocking_lock();
+    async fn set_agent(&self, agent: Assistant) {
+        let mut config = self.state.lock().await;
         config.set_agent(agent);
         drop(config);
     }
 
     #[instrument(level = "trace", skip(self))]
-    fn get_agent(&self) -> Assistant {
-        let config = self.state.blocking_lock();
+    async fn get_agent(&self) -> Assistant {
+        let config = self.state.lock().await;
         let agent = config.agent_info.current.clone();
         drop(config);
         agent
@@ -168,25 +166,25 @@ impl ConnectionManager {
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn get_current_connection(&self) -> Option<&Connection> {
-        self.get_connection(&self.get_agent())
+    pub async fn get_current_connection(&self) -> Option<&Connection> {
+        self.get_connection(&self.get_agent().await)
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn get_permissions(&self) -> Permissions {
-        let config = self.state.blocking_lock();
+    pub async fn get_permissions(&self) -> Permissions {
+        let config = self.state.lock().await;
         let permissions = config.config.permissions.clone();
         drop(config);
         permissions
     }
 
     #[instrument(level = "trace", skip(self, handler))]
-    pub fn connect(
+    pub async fn connect(
         &mut self,
         handler: Arc<Handler>,
         ConnectionDetails { agent, protocol }: ConnectionDetails,
     ) -> crate::acp::Result<&Connection> {
-        let permissions = self.get_permissions();
+        let permissions = self.get_permissions().await;
 
         // Check if connection already exists without borrowing
         let already_connected = self.connection.contains_key(&agent);
@@ -287,10 +285,10 @@ impl ConnectionManager {
             agent.clone(),
             Connection::new(sender, handle, stdio_connection),
         );
-        self.set_agent(agent.clone());
+        self.set_agent(agent.clone()).await;
         let connection = self.get_connection(&agent).unwrap();
         debug!("Stored connection to '{}'", agent);
-        connection.initialize(init_config)?;
+        connection.initialize(init_config).await?;
         info!("Initialized connection to '{}'", agent);
         Ok(connection)
     }

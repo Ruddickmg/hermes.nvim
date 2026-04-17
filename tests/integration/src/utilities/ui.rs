@@ -20,6 +20,14 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tracing::debug;
 
+/// Helper to block on an async future in synchronous tests
+fn block_on<F>(fut: F) -> F::Output
+where
+    F: std::future::Future,
+{
+    futures::executor::block_on(fut)
+}
+
 fn create_permission_option(id: &str, name: &str) -> PermissionOption {
     PermissionOption::new(
         PermissionOptionId::new(id),
@@ -132,12 +140,10 @@ fn test_non_permission_request_not_permission() -> nvim_oxi::Result<()> {
         "test content",
     );
     let responder = Responder::WriteFileResponse(sender, write_request);
-    let request_id = requests.add_request("test-session".to_string(), responder);
+    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
 
     // Get the request and check if it's a permission request
-    let request = requests
-        .get_request(&request_id)
-        .expect("Request should exist");
+    let request = block_on(requests.get_request(&request_id)).expect("Request should exist");
 
     // Verify this is NOT a permission request
     assert!(

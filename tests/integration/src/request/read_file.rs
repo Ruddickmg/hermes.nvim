@@ -4,16 +4,24 @@
 //! Setup code and .expect() calls don't count as assertions.
 use crate::helpers::ui::wait_for;
 use agent_client_protocol::{ReadTextFileRequest, ReadTextFileResponse, SessionId};
-use assert_fs::NamedTempFile;
 use assert_fs::prelude::*;
+use assert_fs::NamedTempFile;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use uuid::Uuid;
+
+/// Helper to block on an async future in synchronous tests
+fn block_on<F>(fut: F) -> F::Output
+where
+    F: std::future::Future,
+{
+    futures::executor::block_on(fut)
+}
 
 fn create_read_request(
     path: &std::path::Path,
@@ -52,7 +60,7 @@ fn setup_read_request(
     let (sender, receiver) =
         oneshot::channel::<agent_client_protocol::Result<ReadTextFileResponse>>();
     let responder = Responder::ReadFileResponse(sender, create_read_request(path, start, limit));
-    let request_id = requests.add_request("test-session".to_string(), responder);
+    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
     (requests, request_id, receiver)
 }
 
@@ -63,7 +71,7 @@ fn read_file_default_response_succeeds() -> nvim_oxi::Result<()> {
     let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, _receiver) = setup_read_request(&path, None, None);
 
-    let result = requests.default_response(&request_id, serde_json::Value::Null);
+    let result = block_on(requests.default_response(&request_id, serde_json::Value::Null));
     assert!(result.is_ok());
 
     Ok(())
@@ -74,8 +82,7 @@ fn read_file_returns_all_content() -> nvim_oxi::Result<()> {
     let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, mut receiver) = setup_read_request(&path, None, None);
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
+    block_on(requests.default_response(&request_id, serde_json::Value::Null))
         .expect("default_response should succeed");
 
     let response = receiver
@@ -92,7 +99,7 @@ fn read_file_creates_request_in_pending() -> nvim_oxi::Result<()> {
     let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, _receiver) = setup_read_request(&path, None, None);
 
-    assert!(requests.get_request(&request_id).is_some());
+    assert!(block_on(requests.get_request(&request_id)).is_some());
 
     Ok(())
 }
@@ -102,12 +109,10 @@ fn read_file_gets_removed_from_pending() -> nvim_oxi::Result<()> {
     let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, _receiver) = setup_read_request(&path, None, None);
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let cleaned_up = wait_for(
-        || requests.get_request(&request_id).is_none(),
+        || block_on(requests.get_request(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(cleaned_up);
@@ -129,9 +134,7 @@ fn read_file_prefers_buffer_over_disk() -> nvim_oxi::Result<()> {
 
     let (requests, request_id, mut receiver) = setup_read_request(temp_file.path(), None, None);
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let response = receiver
         .try_recv()
@@ -151,12 +154,10 @@ fn read_file_buffer_cleanup_works() -> nvim_oxi::Result<()> {
 
     let (requests, request_id, _receiver) = setup_read_request(temp_file.path(), None, None);
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let cleaned_up = wait_for(
-        || requests.get_request(&request_id).is_none(),
+        || block_on(requests.get_request(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(cleaned_up);
@@ -173,9 +174,7 @@ fn read_file_line_range_returns_correct_lines() -> nvim_oxi::Result<()> {
     // After conversion to 0-based: start=1, end=3, so we get lines 1, 2 (indices 1..3)
     let (requests, request_id, mut receiver) = setup_read_request(&path, Some(2), Some(4));
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let response = receiver
         .try_recv()
@@ -192,12 +191,10 @@ fn read_file_line_range_cleanup_works() -> nvim_oxi::Result<()> {
     let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, _receiver) = setup_read_request(&path, Some(1), Some(4));
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let cleaned_up = wait_for(
-        || requests.get_request(&request_id).is_none(),
+        || block_on(requests.get_request(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(cleaned_up);
@@ -219,9 +216,7 @@ fn read_file_range_with_buffer_modifications() -> nvim_oxi::Result<()> {
     let (requests, request_id, mut receiver) =
         setup_read_request(temp_file.path(), Some(1), Some(4));
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let response = receiver
         .try_recv()
@@ -244,9 +239,7 @@ fn read_file_buffer_and_file_return_same_content() -> nvim_oxi::Result<()> {
 
     // Read from disk (file not open in buffer)
     let (requests1, request_id1, mut receiver1) = setup_read_request(&path, Some(3), Some(7));
-    requests1
-        .default_response(&request_id1, serde_json::Value::Null)
-        .ok();
+    block_on(requests1.default_response(&request_id1, serde_json::Value::Null)).ok();
     let file_response = receiver1
         .try_recv()
         .expect("Should receive file response")
@@ -255,9 +248,7 @@ fn read_file_buffer_and_file_return_same_content() -> nvim_oxi::Result<()> {
     // Read from buffer (file open in buffer)
     nvim_oxi::api::command(&format!("edit {}", path.display()))?;
     let (requests2, request_id2, mut receiver2) = setup_read_request(&path, Some(3), Some(7));
-    requests2
-        .default_response(&request_id2, serde_json::Value::Null)
-        .ok();
+    block_on(requests2.default_response(&request_id2, serde_json::Value::Null)).ok();
     let buffer_response = receiver2
         .try_recv()
         .expect("Should receive buffer response")
@@ -279,9 +270,7 @@ fn read_file_buffer_and_file_edge_case_line_one() -> nvim_oxi::Result<()> {
 
     // Read from disk with line=1 (should read from beginning)
     let (requests1, request_id1, mut receiver1) = setup_read_request(&path, Some(1), None);
-    requests1
-        .default_response(&request_id1, serde_json::Value::Null)
-        .ok();
+    block_on(requests1.default_response(&request_id1, serde_json::Value::Null)).ok();
     let file_response = receiver1
         .try_recv()
         .expect("Should receive file response")
@@ -290,9 +279,7 @@ fn read_file_buffer_and_file_edge_case_line_one() -> nvim_oxi::Result<()> {
     // Read from buffer with line=1
     nvim_oxi::api::command(&format!("edit {}", path.display()))?;
     let (requests2, request_id2, mut receiver2) = setup_read_request(&path, Some(1), None);
-    requests2
-        .default_response(&request_id2, serde_json::Value::Null)
-        .ok();
+    block_on(requests2.default_response(&request_id2, serde_json::Value::Null)).ok();
     let buffer_response = receiver2
         .try_recv()
         .expect("Should receive buffer response")
@@ -319,9 +306,7 @@ fn read_file_buffer_shows_modifications() -> nvim_oxi::Result<()> {
 
     // Read from buffer (should see modifications)
     let (requests, request_id, mut receiver) = setup_read_request(&path, Some(1), Some(2));
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
     let buffer_response = receiver
         .try_recv()
         .expect("Should receive buffer response")
@@ -351,9 +336,7 @@ fn read_file_file_ignores_modifications() -> nvim_oxi::Result<()> {
 
     // Read from disk (should see original content)
     let (requests, request_id, mut receiver) = setup_read_request(&path, Some(1), Some(2));
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
     let file_response = receiver
         .try_recv()
         .expect("Should receive file response")
@@ -379,9 +362,7 @@ fn read_file_buffer_and_file_apply_same_conversion() -> nvim_oxi::Result<()> {
 
     // Read from buffer with 1-based indexing
     let (requests1, request_id1, mut receiver1) = setup_read_request(&path, Some(2), Some(3));
-    requests1
-        .default_response(&request_id1, serde_json::Value::Null)
-        .ok();
+    block_on(requests1.default_response(&request_id1, serde_json::Value::Null)).ok();
     let buffer_response = receiver1
         .try_recv()
         .expect("Should receive buffer response")
@@ -392,9 +373,7 @@ fn read_file_buffer_and_file_apply_same_conversion() -> nvim_oxi::Result<()> {
 
     // Read from disk with same 1-based parameters
     let (requests2, request_id2, mut receiver2) = setup_read_request(&path, Some(2), Some(3));
-    requests2
-        .default_response(&request_id2, serde_json::Value::Null)
-        .ok();
+    block_on(requests2.default_response(&request_id2, serde_json::Value::Null)).ok();
     let file_response = receiver2
         .try_recv()
         .expect("Should receive file response")
@@ -417,9 +396,7 @@ fn read_file_line_zero_returns_invalid_params_error() -> nvim_oxi::Result<()> {
     let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, mut receiver) = setup_read_request(&path, Some(0), None);
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let response = receiver.try_recv().expect("Should receive response");
     assert!(
@@ -435,9 +412,7 @@ fn read_file_limit_zero_returns_invalid_params_error() -> nvim_oxi::Result<()> {
     let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, mut receiver) = setup_read_request(&path, None, Some(0));
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let response = receiver.try_recv().expect("Should receive response");
     assert!(
@@ -453,12 +428,10 @@ fn read_file_line_zero_cleanup_works() -> nvim_oxi::Result<()> {
     let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, _receiver) = setup_read_request(&path, Some(0), None);
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let cleaned_up = wait_for(
-        || requests.get_request(&request_id).is_none(),
+        || block_on(requests.get_request(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(
@@ -474,9 +447,7 @@ fn read_file_invalid_line_error_sent_to_agent() -> nvim_oxi::Result<()> {
     let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, mut receiver) = setup_read_request(&path, Some(0), Some(3));
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let response = receiver.try_recv().expect("Should receive response");
     let is_invalid_params = response.is_err();
@@ -496,11 +467,9 @@ fn read_file_missing_file_returns_error() -> nvim_oxi::Result<()> {
         sender,
         create_read_request(PathBuf::from("/nonexistent/file.txt").as_path(), None, None),
     );
-    let request_id = requests.add_request("test-session".to_string(), responder);
+    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let response = receiver.try_recv().expect("Should receive response");
     assert!(response.is_err());
@@ -516,14 +485,12 @@ fn read_file_missing_file_cleanup_works() -> nvim_oxi::Result<()> {
         sender,
         create_read_request(PathBuf::from("/nonexistent/file.txt").as_path(), None, None),
     );
-    let request_id = requests.add_request("test-session".to_string(), responder);
+    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let cleaned_up = wait_for(
-        || requests.get_request(&request_id).is_none(),
+        || block_on(requests.get_request(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(cleaned_up);
@@ -538,9 +505,7 @@ fn read_file_empty_file_returns_empty_content() -> nvim_oxi::Result<()> {
 
     let (requests, request_id, mut receiver) = setup_read_request(temp_file.path(), None, None);
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let response = receiver
         .try_recv()
@@ -558,12 +523,10 @@ fn read_file_empty_file_cleanup_works() -> nvim_oxi::Result<()> {
 
     let (requests, request_id, _receiver) = setup_read_request(temp_file.path(), None, None);
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let cleaned_up = wait_for(
-        || requests.get_request(&request_id).is_none(),
+        || block_on(requests.get_request(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(cleaned_up);
@@ -576,9 +539,7 @@ fn read_file_start_beyond_length_returns_empty() -> nvim_oxi::Result<()> {
     let (_temp_file, path) = create_file_with_lines(3);
     let (requests, request_id, mut receiver) = setup_read_request(&path, Some(10), None);
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let response = receiver
         .try_recv()
@@ -594,12 +555,11 @@ fn read_file_start_beyond_length_cleanup_works() -> nvim_oxi::Result<()> {
     let (_temp_file, path) = create_file_with_lines(3);
     let (requests, request_id, _receiver) = setup_read_request(&path, Some(10), None);
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
+    block_on(requests.default_response(&request_id, serde_json::Value::Null))
         .expect("Failed to send default response for out-of-range read request");
 
     let cleaned_up = wait_for(
-        || requests.get_request(&request_id).is_none(),
+        || block_on(requests.get_request(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(cleaned_up);
@@ -615,12 +575,11 @@ fn read_file_respond_path_sends_custom_content() -> nvim_oxi::Result<()> {
     let requests = Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).unwrap());
     let (sender, mut receiver) = oneshot::channel::<Result<ReadTextFileResponse, _>>();
     let responder = Responder::ReadFileResponse(sender, create_read_request(&path, None, None));
-    let request_id = requests.add_request("test-session".to_string(), responder);
+    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
 
     let custom_content = "Custom content from user";
     let response_obj = nvim_oxi::Object::from(custom_content);
-    requests
-        .handle_response(&request_id, response_obj)
+    block_on(requests.handle_response(&request_id, response_obj))
         .expect("Failed to handle custom content response");
 
     let response = receiver
@@ -638,15 +597,14 @@ fn read_file_respond_path_cleanup_works() -> nvim_oxi::Result<()> {
     let requests = Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).unwrap());
     let (sender, _receiver) = oneshot::channel::<Result<ReadTextFileResponse, _>>();
     let responder = Responder::ReadFileResponse(sender, create_read_request(&path, None, None));
-    let request_id = requests.add_request("test-session".to_string(), responder);
+    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
 
     let response_obj = nvim_oxi::Object::from("test content");
-    requests
-        .handle_response(&request_id, response_obj)
+    block_on(requests.handle_response(&request_id, response_obj))
         .expect("Failed to handle response for cleanup verification");
 
     let cleaned_up = wait_for(
-        || requests.get_request(&request_id).is_none(),
+        || block_on(requests.get_request(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(cleaned_up);
@@ -663,9 +621,7 @@ fn read_file_large_returns_correct_range() -> nvim_oxi::Result<()> {
     // After conversion to 0-based: start=100, end=200, so we get lines 100-199
     let (requests, request_id, mut receiver) = setup_read_request(&path, Some(101), Some(201));
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let response = receiver
         .try_recv()
@@ -682,12 +638,10 @@ fn read_file_large_cleanup_works() -> nvim_oxi::Result<()> {
     let (_temp_file, path) = create_file_with_lines(300);
     let (requests, request_id, _receiver) = setup_read_request(&path, Some(101), Some(201));
 
-    requests
-        .default_response(&request_id, serde_json::Value::Null)
-        .ok();
+    block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let cleaned_up = wait_for(
-        || requests.get_request(&request_id).is_none(),
+        || block_on(requests.get_request(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(cleaned_up);

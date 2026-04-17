@@ -52,10 +52,11 @@ pub struct Connection {
 
 impl Connection {
     #[tracing::instrument(level = "trace", skip(self))]
-    fn send(&self, request: UserRequest) -> Result<()> {
+    async fn send(&self, request: UserRequest) -> Result<()> {
         if let Some(sender) = &self.sender {
             sender
-                .blocking_send(request)
+                .send(request)
+                .await
                 .map_err(|e| Error::Internal(e.to_string()))
         } else {
             Err(Error::Internal(
@@ -143,8 +144,8 @@ impl Connection {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn close(&self) -> Result<()> {
-        self.send(UserRequest::Close)?;
+    pub async fn close(&self) -> Result<()> {
+        self.send(UserRequest::Close).await?;
         Ok(())
     }
 
@@ -162,74 +163,74 @@ impl Connection {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn initialize(&self, request: InitializeRequest) -> Result<()> {
-        self.send(UserRequest::Initialize(request))?;
+    pub async fn initialize(&self, request: InitializeRequest) -> Result<()> {
+        self.send(UserRequest::Initialize(request)).await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn create_session(&self, session: NewSessionRequest) -> Result<()> {
-        self.send(UserRequest::CreateSession(session))?;
+    pub async fn create_session(&self, session: NewSessionRequest) -> Result<()> {
+        self.send(UserRequest::CreateSession(session)).await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn cancel(&self, notification: CancelNotification) -> Result<()> {
-        self.send(UserRequest::Cancel(notification))?;
+    pub async fn cancel(&self, notification: CancelNotification) -> Result<()> {
+        self.send(UserRequest::Cancel(notification)).await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn prompt(&self, request: PromptRequest) -> Result<()> {
-        self.send(UserRequest::Prompt(request))?;
+    pub async fn prompt(&self, request: PromptRequest) -> Result<()> {
+        self.send(UserRequest::Prompt(request)).await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn authenticate(&self, request: AuthenticateRequest) -> Result<()> {
-        self.send(UserRequest::Authenticate(request))?;
+    pub async fn authenticate(&self, request: AuthenticateRequest) -> Result<()> {
+        self.send(UserRequest::Authenticate(request)).await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn set_config_option(&self, request: SetSessionConfigOptionRequest) -> Result<()> {
-        self.send(UserRequest::SetConfigOption(request))?;
+    pub async fn set_config_option(&self, request: SetSessionConfigOptionRequest) -> Result<()> {
+        self.send(UserRequest::SetConfigOption(request)).await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn set_mode(&self, request: SetSessionModeRequest) -> Result<()> {
-        self.send(UserRequest::SetMode(request))?;
+    pub async fn set_mode(&self, request: SetSessionModeRequest) -> Result<()> {
+        self.send(UserRequest::SetMode(request)).await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn load_session(&self, request: LoadSessionRequest) -> Result<()> {
-        self.send(UserRequest::LoadSession(request))?;
+    pub async fn load_session(&self, request: LoadSessionRequest) -> Result<()> {
+        self.send(UserRequest::LoadSession(request)).await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn list_sessions(&self, request: ListSessionsRequest) -> Result<()> {
-        self.send(UserRequest::ListSessions(request))?;
+    pub async fn list_sessions(&self, request: ListSessionsRequest) -> Result<()> {
+        self.send(UserRequest::ListSessions(request)).await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn fork_session(&self, request: ForkSessionRequest) -> Result<()> {
-        self.send(UserRequest::ForkSession(request))?;
+    pub async fn fork_session(&self, request: ForkSessionRequest) -> Result<()> {
+        self.send(UserRequest::ForkSession(request)).await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn resume_session(&self, request: ResumeSessionRequest) -> Result<()> {
-        self.send(UserRequest::ResumeSession(request))?;
+    pub async fn resume_session(&self, request: ResumeSessionRequest) -> Result<()> {
+        self.send(UserRequest::ResumeSession(request)).await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn set_session_model(&self, request: SetSessionModelRequest) -> Result<()> {
-        self.send(UserRequest::SetSessionModel(request))?;
+    pub async fn set_session_model(&self, request: SetSessionModelRequest) -> Result<()> {
+        self.send(UserRequest::SetSessionModel(request)).await?;
         Ok(())
     }
 }
@@ -264,14 +265,8 @@ mod tests {
         let connection = Arc::new(Connection::new(sender, mock_handle(), None));
         let request = InitializeRequest::new(ProtocolVersion::LATEST);
 
-        // Spawn blocking task because Connection uses blocking_send
-        let conn_clone = connection.clone();
-        let req_clone = request.clone();
-        tokio::task::spawn_blocking(move || {
-            conn_clone.initialize(req_clone).unwrap();
-        })
-        .await
-        .unwrap();
+        // Call the async method directly
+        connection.initialize(request.clone()).await.unwrap();
 
         if let Some(UserRequest::Initialize(received)) = receiver.recv().await {
             assert_eq!(received.protocol_version, request.protocol_version);
@@ -286,14 +281,10 @@ mod tests {
         let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
         let connection = Arc::new(Connection::new(sender, mock_handle(), None));
 
-        let conn_clone = connection.clone();
         let request = NewSessionRequest::new(std::path::PathBuf::from("/"));
 
-        tokio::task::spawn_blocking(move || {
-            conn_clone.create_session(request).unwrap();
-        })
-        .await
-        .unwrap();
+        // Call the async method directly
+        connection.create_session(request).await.unwrap();
 
         assert!(matches!(
             receiver.recv().await,

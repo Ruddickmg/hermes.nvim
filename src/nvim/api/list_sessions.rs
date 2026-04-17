@@ -70,7 +70,7 @@ impl Api {
         &self,
         maybe_config: Option<ListSessionsConfig>,
     ) -> crate::acp::Result<()> {
-        let state = self.state.blocking_lock();
+        let state = self.state.lock().await;
         let agent_info = state.agent_info.clone();
         drop(state);
 
@@ -90,11 +90,11 @@ impl Api {
             request = request.cursor(cursor);
         }
 
-        let connection = self.connection.get_current_connection().ok_or_else(|| {
+        let connection = self.connection.get_current_connection().await.ok_or_else(|| {
             crate::acp::error::Error::Connection("No connection found".to_string())
         })?;
 
-        connection.list_sessions(request)
+        connection.list_sessions(request).await
     }
 }
 
