@@ -4,15 +4,15 @@
 //! Setup code and .expect() calls don't count as assertions.
 use crate::helpers::ui::wait_for;
 use agent_client_protocol::{ReadTextFileRequest, ReadTextFileResponse, SessionId};
-use assert_fs::prelude::*;
 use assert_fs::NamedTempFile;
+use assert_fs::prelude::*;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 use uuid::Uuid;
 
 /// Helper to block on an async future in synchronous tests

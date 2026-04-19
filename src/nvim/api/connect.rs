@@ -103,10 +103,12 @@ impl Api {
         let agent_name_str = agent_name.to_string();
         let agent = parse_agent_connection(agent_name_str, protocol, options)?;
 
-        self.connection.connect(
-            self.response_handler.clone(),
-            ConnectionDetails { agent, protocol },
-        ).await?;
+        self.connection
+            .connect(
+                self.response_handler.clone(),
+                ConnectionDetails { agent, protocol },
+            )
+            .await?;
         Ok(())
     }
 }

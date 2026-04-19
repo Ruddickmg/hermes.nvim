@@ -10,7 +10,7 @@ use hermes::nvim::state::PluginState;
 use pretty_assertions::assert_eq;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 use uuid::Uuid;
 
 /// Helper to block on an async future in synchronous tests

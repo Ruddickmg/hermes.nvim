@@ -52,7 +52,11 @@ impl RequestHandler for MockRequestHandler {
         Uuid::new_v4()
     }
 
-    fn default_response_sync(&self, _request_id: &Uuid, _data: serde_json::Value) -> hermes::acp::Result<()> {
+    fn default_response_sync(
+        &self,
+        _request_id: &Uuid,
+        _data: serde_json::Value,
+    ) -> hermes::acp::Result<()> {
         Ok(())
     }
 }

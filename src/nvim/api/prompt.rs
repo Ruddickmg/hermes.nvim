@@ -343,11 +343,15 @@ impl Api {
             .collect();
 
         let request = PromptRequest::new(session_id, content_blocks);
-        let connection = self.connection.get_current_connection().await.ok_or_else(|| {
-            crate::acp::error::Error::Connection(
-                "You are not connected to an agent, call connect before \"prompt\"".to_string(),
-            )
-        })?;
+        let connection = self
+            .connection
+            .get_current_connection()
+            .await
+            .ok_or_else(|| {
+                crate::acp::error::Error::Connection(
+                    "You are not connected to an agent, call connect before \"prompt\"".to_string(),
+                )
+            })?;
 
         connection.prompt(request).await
     }

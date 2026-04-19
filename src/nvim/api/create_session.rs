@@ -168,9 +168,13 @@ impl Api {
             }
         };
 
-        let connection = self.connection.get_current_connection().await.ok_or_else(|| {
-            crate::acp::error::Error::Connection("No connection found".to_string())
-        })?;
+        let connection = self
+            .connection
+            .get_current_connection()
+            .await
+            .ok_or_else(|| {
+                crate::acp::error::Error::Connection("No connection found".to_string())
+            })?;
 
         connection.create_session(request).await
     }

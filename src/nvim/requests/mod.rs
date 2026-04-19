@@ -1,9 +1,9 @@
 pub mod request;
 use crate::{
-    acp::{error::Error, Result},
+    PluginState,
+    acp::{Result, error::Error},
     nvim::terminal::{TerminalInfo, TerminalManager},
     utilities::NvimMessenger,
-    PluginState,
 };
 use async_trait::async_trait;
 use std::{collections::HashMap, rc::Rc, sync::Arc};
@@ -28,9 +28,9 @@ impl Requests {
         let nvim_handler = NvimMessenger::initialize(runtime, move |id| {
             let list = list.clone();
             async move {
-              let mut lock = list.lock().await;
-              lock.remove(&id);
-              drop(lock);
+                let mut lock = list.lock().await;
+                lock.remove(&id);
+                drop(lock);
             }
         })?;
         Ok(Self {

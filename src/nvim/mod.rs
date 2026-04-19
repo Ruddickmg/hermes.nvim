@@ -9,7 +9,7 @@ pub mod terminal;
 use crate::{
     Handler,
     acp::error::Error,
-    api::{DisconnectArgs, HermesRuntime},
+    api::{DisconnectArgs, Hermes},
     utilities::{Logger, detect_project_storage_path},
 };
 use nvim_oxi::{
@@ -50,7 +50,7 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     )));
     let cloned = api.clone();
     let shutdown_runtime = runtime.clone();
-    let hermes_runtime = HermesRuntime::new(runtime, api)?;
+    let hermes = Hermes::new(runtime, api)?;
 
     let group =
         nvim_oxi::api::create_augroup(GROUP, &CreateAugroupOpts::default()).map_err(|e| {
@@ -85,5 +85,5 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
             .build(),
     )?;
 
-    Ok(hermes_runtime.into())
+    Ok(hermes.into())
 }

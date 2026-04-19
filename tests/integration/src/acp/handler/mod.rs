@@ -322,7 +322,11 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
             Uuid::new_v4()
         }
 
-        fn default_response_sync(&self, _request_id: &Uuid, _data: serde_json::Value) -> hermes::acp::Result<()> {
+        fn default_response_sync(
+            &self,
+            _request_id: &Uuid,
+            _data: serde_json::Value,
+        ) -> hermes::acp::Result<()> {
             Err(hermes::acp::error::Error::Internal(
                 "Test error from default_response".to_string(),
             ))

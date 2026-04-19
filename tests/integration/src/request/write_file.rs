@@ -8,7 +8,7 @@ use hermes::nvim::state::PluginState;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 
 /// Helper to block on an async future in synchronous tests
 fn block_on<F>(fut: F) -> F::Output

@@ -89,7 +89,9 @@ impl Assistant {
                 (command.as_str(), args.iter().map(|s| s.as_str()).collect())
             }
             Assistant::CustomUrl { .. } => {
-                return Err(Error::Connection("CustomUrl assistants do not use stdio connections".to_string()))
+                return Err(Error::Connection(
+                    "CustomUrl assistants do not use stdio connections".to_string(),
+                ));
             }
         };
         let cmd_str = command.to_string();

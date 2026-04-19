@@ -1,4 +1,5 @@
 use hermes::{
+    Handler, PluginState,
     api::{Api, SetupArgs},
     nvim::{
         configuration::{
@@ -8,7 +9,6 @@ use hermes::{
         requests::Requests,
     },
     utilities::detect_project_storage_path,
-    Handler, PluginState,
 };
 use nvim_oxi;
 use pretty_assertions::assert_eq;

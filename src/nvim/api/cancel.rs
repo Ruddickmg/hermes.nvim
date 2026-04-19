@@ -13,7 +13,9 @@ impl Api {
             .await
             .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
 
-        connection.cancel(CancelNotification::new(session_id.clone())).await?;
+        connection
+            .cancel(CancelNotification::new(session_id.clone()))
+            .await?;
 
         crate::nvim::requests::RequestHandler::cancel_session_requests(
             &*self.request_handler,
