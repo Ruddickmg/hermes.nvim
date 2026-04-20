@@ -72,7 +72,7 @@ impl Connection {
     /// 4. If still running, force-kill the child process (SIGKILL) and wait again
     /// 5. If still running, abandon the thread (don't block Neovim)
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn disconnect(&mut self) -> Result<()> {
+    pub async fn disconnect(&mut self) -> Result<()> {
         // Phase 1: Drop the channel sender to signal the message loop to exit
         if let Some(sender) = self.sender.take() {
             drop(sender);
@@ -86,7 +86,7 @@ impl Connection {
 
         // Phase 3: Terminate the child process (SIGTERM on Unix, TerminateProcess on Windows)
         if let Some(ref child) = self.child
-            && let Err(e) = child.terminate_blocking()
+            && let Err(e) = child.terminate().await
         {
             warn!("Failed to send terminate signal to child: {}", e);
         }
@@ -97,7 +97,7 @@ impl Connection {
 
         // Phase 4: Force-kill the child process (SIGKILL on Unix, TerminateProcess on Windows)
         if let Some(ref child) = self.child
-            && let Err(e) = child.kill_blocking()
+            && let Err(e) = child.kill().await
         {
             warn!("Failed to force-kill child: {}", e);
         }
@@ -237,12 +237,47 @@ impl Connection {
 
 impl Drop for Connection {
     fn drop(&mut self) {
-        // Drop must never block Neovim. If disconnect() hangs, Neovim will freeze.
-        // The disconnect() method already has timeout-based escalation and will
-        // abandon the thread rather than block indefinitely.
-        if let Err(e) = self.disconnect() {
-            warn!("Failed to close connection on drop: {}", e);
+        // Phase 1: Drop the channel sender to signal the message loop to exit
+        if let Some(sender) = self.sender.take() {
+            drop(sender);
         }
+
+        // Phase 2: Wait for graceful exit
+        if self.wait_for_thread(GRACEFUL_SHUTDOWN_TIMEOUT) {
+            debug!("Connection thread exited gracefully");
+            return;
+        }
+
+        // Phase 3: Terminate the child process (SIGTERM on Unix, TerminateProcess on Windows)
+        if let Some(ref child) = self.child
+            && let Err(e) = child.terminate_blocking()
+        {
+            warn!("Failed to send terminate signal to child: {}", e);
+        }
+        if self.wait_for_thread(FORCE_KILL_TIMEOUT) {
+            debug!("Connection thread exited after terminate");
+            return;
+        }
+
+        // Phase 4: Force-kill the child process (SIGKILL on Unix, TerminateProcess on Windows)
+        if let Some(ref child) = self.child
+            && let Err(e) = child.kill_blocking()
+        {
+            warn!("Failed to force-kill child: {}", e);
+        }
+        if self.wait_for_thread(FORCE_KILL_TIMEOUT) {
+            debug!("Connection thread exited after force-kill");
+            return;
+        }
+
+        // Phase 5: Abandon the thread - don't block Neovim
+        error!(
+            "Connection thread did not exit within timeout, abandoning. \
+             The child process may still be running."
+        );
+        // Intentionally leak the JoinHandle to avoid blocking.
+        // The thread will eventually exit when the child process dies or the OS cleans up.
+        self.handle.take();
     }
 }
 

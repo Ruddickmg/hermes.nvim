@@ -8,8 +8,10 @@ use hermes::acp::Result;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
 use pretty_assertions::assert_eq;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::runtime;
 use tokio::sync::{Mutex, oneshot};
 use uuid::Uuid;
 
@@ -726,10 +728,13 @@ fn test_request_is_permission_request_false_for_write_file() -> nvim_oxi::Result
 
 #[nvim_oxi::test]
 fn test_request_terminal_true_for_terminal_create() -> nvim_oxi::Result<()> {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
     let requests = Arc::new(
-        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
-            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?,
+        Requests::new(
+            Rc::new(runtime),
+            Arc::new(Mutex::new(PluginState::default())),
+        )
+        .map_err(|e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)))?,
     );
     let session_id = String::from("test-session");
     let (sender, _receiver) = oneshot::channel::<Result<CreateTerminalResponse>>();

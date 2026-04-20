@@ -19,13 +19,14 @@ pub struct Requests {
     nvim_handler: NvimMessenger<Uuid>,
     terminal_manager: TerminalManager<TerminalInfo>,
     state: Arc<Mutex<PluginState>>,
+    runtime: Rc<Runtime>,
 }
 
 impl Requests {
     pub fn new(runtime: Rc<Runtime>, state: Arc<Mutex<PluginState>>) -> Result<Self> {
         let list = Arc::new(Mutex::new(HashMap::new()));
         let pending = list.clone();
-        let nvim_handler = NvimMessenger::initialize(runtime, move |id| {
+        let nvim_handler = NvimMessenger::initialize(runtime.clone(), move |id| {
             let list = list.clone();
             async move {
                 let mut lock = list.lock().await;
@@ -34,6 +35,7 @@ impl Requests {
             }
         })?;
         Ok(Self {
+            runtime,
             state: state.clone(),
             pending,
             nvim_handler,
@@ -58,7 +60,7 @@ impl RequestHandler for Requests {
         let retrieved = pending.get(request_id).cloned();
         drop(pending);
         if let Some(mut request) = retrieved {
-            request.default(data, self.terminal_manager.clone())
+            request.default(data, self.terminal_manager.clone()).await
         } else {
             Err(Error::Internal(format!(
                 "No pending request found for ID: '{}'",
@@ -70,7 +72,13 @@ impl RequestHandler for Requests {
     async fn add_request(&self, session_id: String, responder: Responder) -> Uuid {
         let mut pending = self.pending.lock().await;
         let finisher = self.nvim_handler.clone();
-        let request = Request::new(session_id, finisher, responder, self.state.clone());
+        let request = Request::new(
+            session_id,
+            finisher,
+            responder,
+            self.state.clone(),
+            self.runtime.clone(),
+        );
         let request_id = request.id();
         pending.insert(request_id, request);
         drop(pending);
@@ -86,12 +94,14 @@ impl RequestHandler for Requests {
 
     async fn cancel_session_requests(&self, session_id: String) -> Result<()> {
         let mut pending = self.pending.lock().await;
-        pending
-            .extract_if(|_, request| {
-                request.is_permission_request() && request.is_session(session_id.clone())
-            })
-            .map(|(_, request)| request.cancel())
-            .collect::<Result<Vec<()>>>()?;
+        futures::future::try_join_all(
+            pending
+                .extract_if(|_, request| {
+                    request.is_permission_request() && request.is_session(session_id.clone())
+                })
+                .map(|(_, request)| async move { request.cancel().await }),
+        )
+        .await?;
         drop(pending);
         Ok(())
     }
@@ -104,6 +114,7 @@ impl RequestHandler for Requests {
         if let Some(request) = retrieved {
             request
                 .respond(response)
+                .await
                 .map_err(|e| Error::Internal(format!("Failed to respond to request: {}", e)))?;
             Ok(())
         } else {

@@ -6,6 +6,7 @@ use agent_client_protocol::{
     WriteTextFileRequest, WriteTextFileResponse,
 };
 use nvim_oxi::conversion::FromObject;
+use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::{Mutex, oneshot};
 use tracing::error;
@@ -71,10 +72,12 @@ impl From<Responder> for Commands {
 #[derive(Clone)]
 pub struct Request {
     id: Uuid,
+    runtime: Rc<tokio::runtime::Runtime>,
     session_id: String,
     responder: Arc<Mutex<Option<Responder>>>,
     remove: NvimMessenger<Uuid>,
     state: Arc<Mutex<PluginState>>,
+    is_permission_request: bool,
 }
 
 impl Request {
@@ -86,46 +89,37 @@ impl Request {
         remove: NvimMessenger<Uuid>,
         responder: Responder,
         state: Arc<Mutex<PluginState>>,
+        runtime: Rc<tokio::runtime::Runtime>,
     ) -> Self {
         Self {
             state,
+            runtime,
             id: Uuid::new_v4(),
             session_id,
+            is_permission_request: matches!(responder, Responder::PermissionResponse(..)),
             responder: Arc::new(Mutex::new(Some(responder))),
             remove,
         }
     }
 
-    fn finish(&self) -> Result<()> {
+    async fn finish(&self) -> Result<()> {
         // Clone what we need for the thread
-        let remove = self.remove.clone();
         let id = self.id;
-        let session_id = self.session_id.clone();
 
-        std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async {
-                remove.send(id).await.map_err(|e| {
-                    Error::Internal(format!(
-                        "Failed to send finish signal for request '{}', in session '{}': {:?}",
-                        id, session_id, e
-                    ))
-                })
-            })
+        self.remove.send(id).await.map_err(|e| {
+            Error::Internal(format!(
+                "Failed to send finish signal for request '{}', in session '{}': {:?}",
+                id, self.session_id, e
+            ))
         })
-        .join()
-        .map_err(|_| Error::Internal("Thread panicked".to_string()))?
     }
 
     pub fn is_permission_request(&self) -> bool {
-        let responder = self.responder.blocking_lock();
-        let is_permission = matches!(*responder, Some(Responder::PermissionResponse(..)));
-        drop(responder);
-        is_permission
+        self.is_permission_request
     }
 
-    pub fn terminal(&self) -> bool {
-        let responder = self.responder.blocking_lock();
+    pub async fn terminal(&self) -> bool {
+        let responder = self.responder.lock().await;
         let is_terminal = matches!(
             responder.as_ref(),
             Some(
@@ -144,8 +138,8 @@ impl Request {
         self.session_id == session_id
     }
 
-    fn get_responder(&self) -> Result<Responder> {
-        let mut lock = self.responder.blocking_lock();
+    async fn get_responder(&self) -> Result<Responder> {
+        let mut lock = self.responder.lock().await;
         let responder = lock.take();
         drop(lock);
         responder.ok_or_else(|| {
@@ -156,9 +150,9 @@ impl Request {
         })
     }
 
-    pub fn cancel(&self) -> Result<()> {
+    pub async fn cancel(&self) -> Result<()> {
         let session_id = self.session_id.clone();
-        if let Responder::PermissionResponse(sender, ..) = self.get_responder()? {
+        if let Responder::PermissionResponse(sender, ..) = self.get_responder().await? {
             sender
                 .send(RequestPermissionOutcome::Cancelled)
                 .map_err(|e| {
@@ -264,8 +258,8 @@ impl Request {
         }
     }
 
-    pub fn respond(&self, response: nvim_oxi::Object) -> Result<()> {
-        match self.get_responder()? {
+    pub async fn respond(&self, response: nvim_oxi::Object) -> Result<()> {
+        match self.get_responder().await? {
             Responder::ReadFileResponse(sender, ..) => {
                 let outcome =
                     String::from_object(response).map_err(|e| Error::Internal(e.to_string()))?;
@@ -350,24 +344,28 @@ impl Request {
                 })?;
             }
         };
-        self.finish()
+        self.finish().await
     }
 
-    fn ask_user_for_permission(&self, data: serde_json::Value) -> Result<()> {
+    async fn ask_user_for_permission(&self, data: serde_json::Value) -> Result<()> {
         let data: RequestPermissionRequest = serde_json::from_value(data)?;
         let request_id = self.id.to_string();
         let session_id = self.session_id.clone();
         let response_handler = self.clone();
         let prompt = get_permission_prompt();
+        let runtime = self.runtime.clone();
         show_permission_ui(&data.options, &prompt, move |option_id| {
-            response_handler
-                .respond(option_id.into())
-                .unwrap_or_else(|e| {
+            let response_handler = response_handler.clone();
+            let request_id = request_id.clone();
+            let session_id = session_id.clone();
+            runtime.block_on(tokio::task::LocalSet::new().run_until(async move {
+                response_handler.respond(option_id.into()).await.unwrap_or_else(|e| {
                     error!(
                         "Failed to send permission response for request '{}', session '{}': {:?}",
                         request_id, session_id, e
                     )
-                });
+                })
+            }));
         })
     }
 
@@ -418,15 +416,15 @@ impl Request {
     }
 
     // TODO: return error to both the caller and agent
-    pub fn default<T: Terminal + Clone>(
+    pub async fn default<T: Terminal + Clone>(
         &mut self,
         data: serde_json::Value,
         mut terminal_manager: TerminalManager<T>,
     ) -> Result<()> {
         if self.is_permission_request() {
-            self.ask_user_for_permission(data)?;
+            self.ask_user_for_permission(data).await?;
         } else {
-            match self.get_responder()? {
+            match self.get_responder().await? {
                 Responder::PermissionResponse(..) => {
                     error!("Permission requests should have been handled in the if branch above");
                     return Err(Error::Internal(
@@ -444,7 +442,7 @@ impl Request {
                 Responder::WriteFileResponse(responder, data) => {
                     let path = data.path.clone();
                     let (mut buffer, was_already_open) = acquire_or_create_buffer(&path)?;
-                    let state = self.state.blocking_lock();
+                    let state = self.state.lock().await;
                     let auto_save = state.config.buffer.auto_save;
                     drop(state);
 
@@ -467,7 +465,7 @@ impl Request {
                     })?;
                 }
                 Responder::TerminalCreate(sender, data) => {
-                    let state = self.state.blocking_lock();
+                    let state = self.state.lock().await;
                     let config = state.config.terminal.clone();
                     drop(state);
                     let mut terminal = T::from_request(data.clone()).configure(config);
@@ -500,7 +498,7 @@ impl Request {
                     terminal_manager.notify_when_finished(&data.terminal_id.to_string(), sender)?;
                 }
                 Responder::TerminalRelease(sender, data) => {
-                    let state = self.state.blocking_lock();
+                    let state = self.state.lock().await;
                     let delete_on_release = state.config.terminal.delete;
                     drop(state);
                     let response = terminal_manager
@@ -532,7 +530,7 @@ impl Request {
                     })?;
                 }
             }
-            self.finish()?;
+            self.finish().await?;
         }
         Ok(())
     }
