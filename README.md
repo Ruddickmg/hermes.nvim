@@ -1652,7 +1652,7 @@ Available formats:
   - [x] make callback wrapper that houses async logic
   - [x] capture errors and return ok from callback wrapper instead of in each callback
 - [ ] use smol instead of tokio to reduce build size
-- [ ] use async for all the things
+- [x] use async for all the things
 
 -- functionality
 - [x] Allow connecting to Agents
