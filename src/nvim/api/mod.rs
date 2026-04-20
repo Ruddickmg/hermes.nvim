@@ -177,10 +177,9 @@ impl Api {
         logger: &'static Logger,
         response_handler: Arc<Handler>,
         request_handler: Rc<Requests>,
-        runtime: Rc<Runtime>,
     ) -> Self {
         Self {
-            connection: ConnectionManager::new(state.clone(), runtime),
+            connection: ConnectionManager::new(state.clone()),
             response_handler,
             request_handler,
             logger,

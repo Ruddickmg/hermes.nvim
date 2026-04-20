@@ -1,11 +1,9 @@
 pub mod manager;
 pub mod stdio;
 pub mod tcp;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
-use tokio::runtime::Runtime;
 use tracing::{debug, error, warn};
 
 use crate::acp::{Result, error::Error};
@@ -44,7 +42,6 @@ pub enum UserRequest {
 
 #[derive(Debug)]
 pub struct Connection {
-    runtime: Rc<Runtime>,
     sender: Option<Sender<UserRequest>>,
     handle: Option<JoinHandle<Result<()>>>,
     /// Shared child process handle for stdio connections, enabling concurrent
@@ -150,12 +147,10 @@ impl Connection {
         sender: Sender<UserRequest>,
         handle: JoinHandle<Result<()>>,
         child: Option<Arc<stdio::child::Child>>,
-        runtime: Rc<Runtime>,
     ) -> Self {
         Self {
             sender: Some(sender),
             handle: Some(handle),
-            runtime,
             child,
         }
     }
@@ -234,15 +229,47 @@ impl Connection {
 }
 
 impl Drop for Connection {
+    /// Best-effort synchronous cleanup.
+    ///
+    /// The full async `disconnect()` should be called explicitly before dropping.
+    /// This `Drop` impl is a safety net that performs only synchronous operations
+    /// to avoid panicking from a nested `block_on` on the `current_thread` runtime.
     fn drop(&mut self) {
-        let rt = self.runtime.clone();
-        let disconnect = self.disconnect();
+        // Phase 1: Drop the sender to signal the message loop to exit.
+        // When the receiver sees the channel closed, it breaks the loop and the
+        // connection thread will begin shutting down on its own.
+        if let Some(sender) = self.sender.take() {
+            drop(sender);
+        }
 
-        rt.block_on(async move {
-            disconnect.await.unwrap_or_else(|e| {
-                error!("Error during connection shutdown: {}", e);
-            });
-        });
+        // Phase 2: If the connection thread already exited, nothing more to do.
+        if let Some(ref handle) = self.handle {
+            if handle.is_finished() {
+                debug!("Connection thread already exited during drop");
+                return;
+            }
+        }
+
+        // Phase 3: If there's a child process, send a kill signal synchronously.
+        // This is non-blocking (just sends the signal). The child's own `Drop` impl
+        // also calls `start_kill()` and the process was spawned with `kill_on_drop(true)`,
+        // providing additional insurance.
+        if let Some(ref child) = self.child {
+            if let Err(e) = child.try_kill_sync() {
+                warn!("Failed to kill child process during connection drop: {}", e);
+            }
+        }
+
+        // We intentionally do NOT block waiting for the thread to exit.
+        // The thread will exit on its own once the channel is closed and/or
+        // the child process is killed. Blocking here would risk deadlocking
+        // or panicking inside a nested `block_on`.
+        if self.handle.is_some() {
+            warn!(
+                "Connection dropped without explicit disconnect. \
+                 The connection thread may still be running briefly."
+            );
+        }
     }
 }
 
@@ -259,27 +286,24 @@ mod tests {
         std::thread::spawn(|| Ok::<(), Error>(()))
     }
 
-    fn mock_runtime() -> Rc<Runtime> {
-        Rc::new(
-            tokio::runtime::Builder::new_current_thread()
-                .enable_time()
-                .build()
-                .unwrap(),
-        )
+    fn mock_runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap()
     }
 
     #[test]
     fn test_connection_initialize() {
         let rt = mock_runtime();
         let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
-        let connection = Arc::new(Connection::new(sender, mock_handle(), None, rt.clone()));
+        let connection = Arc::new(Connection::new(sender, mock_handle(), None));
         let request = InitializeRequest::new(ProtocolVersion::LATEST);
 
         rt.block_on(async {
             connection.initialize(request.clone()).await.unwrap();
         });
 
-        // Drop connection outside the runtime context so Drop's block_on works
         drop(connection);
 
         rt.block_on(async {
@@ -296,7 +320,7 @@ mod tests {
         use agent_client_protocol::NewSessionRequest;
         let rt = mock_runtime();
         let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
-        let connection = Arc::new(Connection::new(sender, mock_handle(), None, rt.clone()));
+        let connection = Arc::new(Connection::new(sender, mock_handle(), None));
 
         let request = NewSessionRequest::new(std::path::PathBuf::from("/"));
 

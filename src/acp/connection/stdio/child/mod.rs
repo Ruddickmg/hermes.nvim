@@ -192,6 +192,27 @@ impl Child {
         debug!("Sending kill signal to child process");
         sys::force_kill(&inner.child)
     }
+
+    /// Synchronous, non-blocking kill attempt for use in `Drop` contexts where
+    /// no async runtime is available.
+    ///
+    /// Uses `try_lock()` to avoid blocking if the mutex is held. If the lock
+    /// cannot be acquired, the kill is skipped (the child's own `Drop` impl
+    /// and `kill_on_drop(true)` provide fallback cleanup).
+    pub fn try_kill_sync(&self) -> io::Result<()> {
+        let Ok(mut inner) = self.inner.try_lock() else {
+            debug!("Could not acquire child lock for sync kill, skipping");
+            return Ok(());
+        };
+        let Some(ref mut inner) = *inner else {
+            return Ok(());
+        };
+        if let ChildState::Exited(_) = inner.state {
+            return Ok(());
+        }
+        debug!("Sending kill signal to child process (sync)");
+        inner.child.start_kill()
+    }
 }
 
 impl Drop for Child {
@@ -328,6 +349,31 @@ mod tests {
         let child = Child::spawn(&mut cmd).await.unwrap();
         let _ = child.wait().await.unwrap();
         assert!(child.terminate().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn try_kill_sync_terminates_running_child() {
+        let mut cmd = Command::new("sleep");
+        cmd.arg("60");
+        let child = Child::spawn(&mut cmd).await.unwrap();
+        assert!(child.try_kill_sync().is_ok());
+        let status = child.wait().await.unwrap();
+        assert!(!status.success());
+    }
+
+    #[tokio::test]
+    async fn try_kill_sync_on_exited_child_is_ok() {
+        let mut cmd = Command::new("echo");
+        cmd.arg("hello");
+        let child = Child::spawn(&mut cmd).await.unwrap();
+        let _ = child.wait().await.unwrap();
+        assert!(child.try_kill_sync().is_ok());
+    }
+
+    #[tokio::test]
+    async fn try_kill_sync_on_uninitialized_child_is_ok() {
+        let child = Child::new();
+        assert!(child.try_kill_sync().is_ok());
     }
 
     #[tokio::test]
