@@ -254,14 +254,9 @@ mod tests {
     use agent_client_protocol::{InitializeRequest, ProtocolVersion};
     use pretty_assertions::assert_eq;
 
-    /// Creates a mock thread handle that is guaranteed to be finished.
+    /// Creates a mock thread handle that immediately returns Ok for testing
     fn mock_handle() -> JoinHandle<Result<()>> {
-        let handle = std::thread::spawn(|| Ok::<(), Error>(()));
-        // Ensure the thread has completed so Drop's fast-path works
-        while !handle.is_finished() {
-            std::thread::yield_now();
-        }
-        handle
+        std::thread::spawn(|| Ok::<(), Error>(()))
     }
 
     fn mock_runtime() -> Rc<Runtime> {
@@ -276,13 +271,18 @@ mod tests {
     #[test]
     fn test_connection_initialize() {
         let rt = mock_runtime();
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+        let connection = Arc::new(Connection::new(sender, mock_handle(), None, rt.clone()));
+        let request = InitializeRequest::new(ProtocolVersion::LATEST);
+
         rt.block_on(async {
-            let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
-            let connection = Arc::new(Connection::new(sender, mock_handle(), None, rt.clone()));
-            let request = InitializeRequest::new(ProtocolVersion::LATEST);
-
             connection.initialize(request.clone()).await.unwrap();
+        });
 
+        // Drop connection outside the runtime context so Drop's block_on works
+        drop(connection);
+
+        rt.block_on(async {
             if let Some(UserRequest::Initialize(received)) = receiver.recv().await {
                 assert_eq!(received.protocol_version, request.protocol_version);
             } else {
@@ -295,14 +295,18 @@ mod tests {
     fn test_connection_create_session() {
         use agent_client_protocol::NewSessionRequest;
         let rt = mock_runtime();
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+        let connection = Arc::new(Connection::new(sender, mock_handle(), None, rt.clone()));
+
+        let request = NewSessionRequest::new(std::path::PathBuf::from("/"));
+
         rt.block_on(async {
-            let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
-            let connection = Arc::new(Connection::new(sender, mock_handle(), None, rt.clone()));
-
-            let request = NewSessionRequest::new(std::path::PathBuf::from("/"));
-
             connection.create_session(request).await.unwrap();
+        });
 
+        drop(connection);
+
+        rt.block_on(async {
             assert!(matches!(
                 receiver.recv().await,
                 Some(UserRequest::CreateSession(_))
