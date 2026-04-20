@@ -19,7 +19,6 @@ use tracing::debug;
 pub struct NvimRuntime {
     runtime: Rc<Runtime>,
     local_set: Rc<LocalSet>,
-    /// Whether we are currently inside a [`NvimRuntime::run`] call.
     running: Rc<Cell<bool>>,
 }
 
@@ -97,7 +96,15 @@ impl NvimRuntime {
         );
         let _guard = RunningGuard(&self.running);
         self.running.set(true);
-        self.local_set.block_on(&self.runtime, future)
+        self.local_set.block_on(&self.runtime, async {
+            let result = future.await;
+            // Yield to allow the LocalSet to poll any tasks that were
+            // spawned during execution of the main future (e.g., from
+            // re-entrant run() calls triggered by Lua autocommand
+            // listeners calling Hermes APIs during exec_autocmds).
+            tokio::task::yield_now().await;
+            result
+        })
     }
 }
 
@@ -171,6 +178,24 @@ mod tests {
 
         // The spawned task should have been driven to completion
         // by the outer block_on before it returned
+        assert!(flag.get());
+    }
+
+    #[test]
+    fn block_on_primary_drains_spawned_tasks() {
+        let nvim_rt = NvimRuntime::new(create_runtime());
+        let inner_rt = nvim_rt.clone();
+        let flag = Rc::new(Cell::new(false));
+        let flag_clone = flag.clone();
+
+        nvim_rt.block_on_primary(async move {
+            // Simulate re-entrant call from a Lua autocommand listener
+            // (e.g., hermes.list_sessions() called during exec_autocmds)
+            inner_rt.run(async move {
+                flag_clone.set(true);
+            });
+        });
+
         assert!(flag.get());
     }
 
