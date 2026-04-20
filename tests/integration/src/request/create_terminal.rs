@@ -42,7 +42,8 @@ fn setup_terminal_request(
     oneshot::Receiver<Result<CreateTerminalResponse>>,
 ) {
     let runtime = mock_runtime();
-    let requests = Arc::new(Requests::new(runtime, Arc::new(Mutex::new(PluginState::default()))).unwrap());
+    let requests =
+        Arc::new(Requests::new(runtime, Arc::new(Mutex::new(PluginState::default()))).unwrap());
     let (sender, receiver) = oneshot::channel::<Result<CreateTerminalResponse>>();
     let responder = Responder::TerminalCreate(sender, create_terminal_request(command, args));
     let request_id = block_on(requests.add_request("test-session".to_string(), responder));

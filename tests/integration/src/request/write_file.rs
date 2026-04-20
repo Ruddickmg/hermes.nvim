@@ -43,9 +43,9 @@ fn open_buffer_marked_modified() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
-            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?,
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
     );
     let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
@@ -94,9 +94,9 @@ fn open_buffer_disk_content_unchanged() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
-            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?,
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
     );
     let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
@@ -126,9 +126,9 @@ fn new_file_created() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
-            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?,
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
     );
     let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
@@ -156,9 +156,9 @@ fn file_exists_but_closed() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
-            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?,
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
     );
     let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
@@ -186,9 +186,9 @@ fn responder_send_failure_returns_error() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
-            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?,
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
     );
     let (sender, receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder =
@@ -208,9 +208,9 @@ fn responder_send_failure_contains_acp_message() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
-            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?,
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
     );
     let (sender, receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder =
@@ -235,9 +235,9 @@ fn buffer_already_open_marked_modified() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
-            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?,
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
     );
     let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
@@ -282,9 +282,9 @@ fn buffer_already_open_disk_unchanged() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
-            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?,
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
     );
     let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
@@ -317,9 +317,9 @@ fn buffer_already_open_response_sent() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
-            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?,
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
     );
     let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
@@ -347,9 +347,9 @@ fn write_file_cleanup_request_exists_before_response() -> nvim_oxi::Result<()> {
 
     // Use Requests handler to verify cleanup
     let requests = Arc::new(
-        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
-            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?,
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
     );
 
     let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
@@ -371,9 +371,9 @@ fn write_file_cleanup_default_response_succeeds() -> nvim_oxi::Result<()> {
 
     // Use Requests handler to verify cleanup
     let requests = Arc::new(
-        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
-            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?,
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
     );
 
     let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
@@ -396,9 +396,9 @@ fn write_file_cleanup_request_removed_after_response() -> nvim_oxi::Result<()> {
 
     // Use Requests handler to verify cleanup
     let requests = Arc::new(
-        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
-            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
-        })?,
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
     );
 
     let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();

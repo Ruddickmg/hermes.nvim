@@ -69,7 +69,8 @@ fn test_handler_new_creates_valid_instance() -> nvim_oxi::Result<()> {
     // This tests the constructor which sets up mpsc channel and AsyncHandle
     let state = Arc::new(Mutex::new(PluginState::default()));
     let requests = Rc::new(Requests::new(mock_runtime(), state.clone())?);
-    let handler = Handler::new(state, mock_runtime(), requests).expect("Handler creation should succeed");
+    let handler =
+        Handler::new(state, mock_runtime(), requests).expect("Handler creation should succeed");
 
     // If we get here without error, the integration worked
     // The instance is valid and ready to use
@@ -84,7 +85,8 @@ fn test_execute_autocommand_sends_to_channel() -> nvim_oxi::Result<()> {
     // Uses: channel.send(), AsyncHandle.send()
     let state = Arc::new(Mutex::new(PluginState::default()));
     let requests = Rc::new(Requests::new(mock_runtime(), state.clone())?);
-    let handler = Handler::new(state, mock_runtime(), requests).expect("Handler creation should succeed");
+    let handler =
+        Handler::new(state, mock_runtime(), requests).expect("Handler creation should succeed");
 
     // Execute an autocommand with test data
     let test_data = serde_json::json!({"test": "data"});

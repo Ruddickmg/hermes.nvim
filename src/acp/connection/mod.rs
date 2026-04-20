@@ -300,12 +300,7 @@ mod tests {
     #[tokio::test]
     async fn test_connection_initialize() {
         let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
-        let connection = Arc::new(Connection::new(
-            sender,
-            mock_handle(),
-            None,
-            mock_runtime(),
-        ));
+        let connection = Arc::new(Connection::new(sender, mock_handle(), None, mock_runtime()));
         let request = InitializeRequest::new(ProtocolVersion::LATEST);
 
         // Call the async method directly
@@ -322,12 +317,7 @@ mod tests {
     async fn test_connection_create_session() {
         use agent_client_protocol::NewSessionRequest;
         let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
-        let connection = Arc::new(Connection::new(
-            sender,
-            mock_handle(),
-            None,
-            mock_runtime(),
-        ));
+        let connection = Arc::new(Connection::new(sender, mock_handle(), None, mock_runtime()));
 
         let request = NewSessionRequest::new(std::path::PathBuf::from("/"));
 

@@ -22,9 +22,12 @@ fn create_test_api(
     logger: &'static hermes::utilities::Logger,
 ) -> hermes::api::Api {
     let runtime = mock_runtime();
-    let requests = Rc::new(Requests::new(runtime.clone(), plugin_state.clone()).expect("Failed to create requests"));
+    let requests = Rc::new(
+        Requests::new(runtime.clone(), plugin_state.clone()).expect("Failed to create requests"),
+    );
     let handler = Arc::new(
-        Handler::new(plugin_state.clone(), runtime.clone(), requests.clone()).expect("Failed to create handler"),
+        Handler::new(plugin_state.clone(), runtime.clone(), requests.clone())
+            .expect("Failed to create handler"),
     );
     Api::new(plugin_state, logger, handler, requests, runtime)
 }

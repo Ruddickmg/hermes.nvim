@@ -70,8 +70,12 @@ async fn setup_agent_with_capabilities(
 #[nvim_oxi::test]
 fn test_agent_with_all_capabilities_disabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    let handler = Handler::new(state.clone(), mock_runtime(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     // Set up agent with all capabilities disabled
     tokio_test::block_on(setup_agent_with_capabilities(
@@ -105,8 +109,12 @@ fn test_agent_with_all_capabilities_disabled() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_agent_with_all_capabilities_enabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    let handler = Handler::new(state.clone(), mock_runtime(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     // Set up agent with all capabilities enabled
     tokio_test::block_on(setup_agent_with_capabilities(
@@ -138,8 +146,12 @@ fn test_agent_with_all_capabilities_enabled() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_agent_with_mixed_capabilities() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    let handler = Handler::new(state.clone(), mock_runtime(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     // Set up agent with mixed capabilities
     tokio_test::block_on(setup_agent_with_capabilities(
