@@ -81,6 +81,12 @@ impl Connection {
         }
 
         if let Some(ref handle) = self.handle {
+            // Fast path: if the thread already finished, no async work needed
+            if handle.is_finished() {
+                debug!("Connection thread already exited");
+                return Ok(());
+            }
+
             // Phase 2: Wait for graceful exit
             if Self::wait_for_thread(handle, GRACEFUL_SHUTDOWN_TIMEOUT).await {
                 debug!("Connection thread exited gracefully");
@@ -229,49 +235,14 @@ impl Connection {
 
 impl Drop for Connection {
     fn drop(&mut self) {
-        // Phase 1: Drop the channel sender to signal the message loop to exit
-        if let Some(sender) = self.sender.take() {
-            drop(sender);
-        }
+        let rt = self.runtime.clone();
+        let disconnect = self.disconnect();
 
-        if let Some(handle) = self.handle.take() {
-            self.runtime.block_on(async {
-                // Phase 2: Wait for graceful exit
-                if Self::wait_for_thread(&handle, GRACEFUL_SHUTDOWN_TIMEOUT).await {
-                    debug!("Connection thread exited gracefully");
-                    return Some(handle);
-                }
-
-                // Phase 3: Terminate the child process (SIGTERM on Unix, TerminateProcess on Windows)
-                if let Some(ref child) = self.child {
-                    if let Err(e) = child.terminate().await {
-                        warn!("Failed to send terminate signal to child: {}", e);
-                    }
-                }
-                if Self::wait_for_thread(&handle, FORCE_KILL_TIMEOUT).await {
-                    debug!("Connection thread exited after terminate");
-                    return Some(handle);
-                }
-
-                // Phase 4: Force-kill the child process (SIGKILL on Unix, TerminateProcess on Windows)
-                if let Some(ref child) = self.child {
-                    if let Err(e) = child.kill().await {
-                        warn!("Failed to force-kill child: {}", e);
-                    }
-                }
-                if Self::wait_for_thread(&handle, FORCE_KILL_TIMEOUT).await {
-                    debug!("Connection thread exited after force-kill");
-                    return Some(handle);
-                }
-
-                // Phase 5: Abandon the thread - don't block Neovim
-                error!(
-                    "Connection thread did not exit within timeout, abandoning. \
-             The child process may still be running."
-                );
-                None
+        rt.block_on(async move {
+            disconnect.await.unwrap_or_else(|e| {
+                error!("Error during connection shutdown: {}", e);
             });
-        }
+        });
     }
 }
 
@@ -283,49 +254,59 @@ mod tests {
     use agent_client_protocol::{InitializeRequest, ProtocolVersion};
     use pretty_assertions::assert_eq;
 
-    /// Creates a mock thread handle that immediately returns Ok for testing
+    /// Creates a mock thread handle that is guaranteed to be finished.
     fn mock_handle() -> JoinHandle<Result<()>> {
-        std::thread::spawn(|| Ok::<(), Error>(()))
+        let handle = std::thread::spawn(|| Ok::<(), Error>(()));
+        // Ensure the thread has completed so Drop's fast-path works
+        while !handle.is_finished() {
+            std::thread::yield_now();
+        }
+        handle
     }
 
     fn mock_runtime() -> Rc<Runtime> {
         Rc::new(
             tokio::runtime::Builder::new_current_thread()
+                .enable_time()
                 .build()
                 .unwrap(),
         )
     }
 
-    #[tokio::test]
-    async fn test_connection_initialize() {
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
-        let connection = Arc::new(Connection::new(sender, mock_handle(), None, mock_runtime()));
-        let request = InitializeRequest::new(ProtocolVersion::LATEST);
+    #[test]
+    fn test_connection_initialize() {
+        let rt = mock_runtime();
+        rt.block_on(async {
+            let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+            let connection = Arc::new(Connection::new(sender, mock_handle(), None, rt.clone()));
+            let request = InitializeRequest::new(ProtocolVersion::LATEST);
 
-        // Call the async method directly
-        connection.initialize(request.clone()).await.unwrap();
+            connection.initialize(request.clone()).await.unwrap();
 
-        if let Some(UserRequest::Initialize(received)) = receiver.recv().await {
-            assert_eq!(received.protocol_version, request.protocol_version);
-        } else {
-            panic!("Expected Initialize request");
-        }
+            if let Some(UserRequest::Initialize(received)) = receiver.recv().await {
+                assert_eq!(received.protocol_version, request.protocol_version);
+            } else {
+                panic!("Expected Initialize request");
+            }
+        });
     }
 
-    #[tokio::test]
-    async fn test_connection_create_session() {
+    #[test]
+    fn test_connection_create_session() {
         use agent_client_protocol::NewSessionRequest;
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
-        let connection = Arc::new(Connection::new(sender, mock_handle(), None, mock_runtime()));
+        let rt = mock_runtime();
+        rt.block_on(async {
+            let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+            let connection = Arc::new(Connection::new(sender, mock_handle(), None, rt.clone()));
 
-        let request = NewSessionRequest::new(std::path::PathBuf::from("/"));
+            let request = NewSessionRequest::new(std::path::PathBuf::from("/"));
 
-        // Call the async method directly
-        connection.create_session(request).await.unwrap();
+            connection.create_session(request).await.unwrap();
 
-        assert!(matches!(
-            receiver.recv().await,
-            Some(UserRequest::CreateSession(_))
-        ));
+            assert!(matches!(
+                receiver.recv().await,
+                Some(UserRequest::CreateSession(_))
+            ));
+        });
     }
 }
