@@ -47,6 +47,7 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
         logger,
         event_handler,
         request_handler,
+        runtime.clone(),
     )));
     let cloned = api.clone();
     let shutdown_runtime = runtime.clone();
