@@ -1,9 +1,11 @@
 pub mod manager;
 pub mod stdio;
 pub mod tcp;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+use tokio::runtime::Runtime;
 use tracing::{debug, error, warn};
 
 pub use manager::*;
@@ -43,6 +45,7 @@ pub enum UserRequest {
 
 #[derive(Debug)]
 pub struct Connection {
+    runtime: Rc<Runtime>,
     sender: Option<Sender<UserRequest>>,
     handle: Option<JoinHandle<Result<()>>>,
     /// Shared child process handle for stdio connections, enabling concurrent
@@ -119,22 +122,15 @@ impl Connection {
 
     /// Wait for the connection thread to finish within the given timeout.
     /// Returns true if the thread has finished, false if it's still running.
-    fn wait_for_thread(&mut self, timeout: Duration) -> bool {
-        let handle = match self.handle.as_ref() {
-            Some(h) => h,
-            None => return true, // No thread to wait for
-        };
-
+    fn wait_for_thread(handle: JoinHandle<Result<()>>, timeout: Duration) -> bool {
         let start = Instant::now();
         while start.elapsed() < timeout {
             if handle.is_finished() {
                 // Thread is done, join it to collect the result
-                if let Some(handle) = self.handle.take() {
-                    match handle.join() {
-                        Ok(Ok(_)) => {}
-                        Ok(Err(e)) => warn!("Connection thread exited with error: {:?}", e),
-                        Err(e) => warn!("Connection thread panicked: {:?}", e),
-                    }
+                match handle.join() {
+                    Ok(Ok(_)) => {}
+                    Ok(Err(e)) => warn!("Connection thread exited with error: {:?}", e),
+                    Err(e) => warn!("Connection thread panicked: {:?}", e),
                 }
                 return true;
             }
@@ -154,10 +150,12 @@ impl Connection {
         sender: Sender<UserRequest>,
         handle: JoinHandle<Result<()>>,
         child: Option<Arc<stdio::child::Child>>,
+        runtime: Rc<Runtime>,
     ) -> Self {
         Self {
             sender: Some(sender),
             handle: Some(handle),
+            runtime,
             child,
         }
     }
@@ -242,42 +240,51 @@ impl Drop for Connection {
             drop(sender);
         }
 
-        // Phase 2: Wait for graceful exit
-        if self.wait_for_thread(GRACEFUL_SHUTDOWN_TIMEOUT) {
-            debug!("Connection thread exited gracefully");
-            return;
-        }
+        if let Some(handle) = self.handle.take() {
+            // Phase 2: Wait for graceful exit
+            if Self::wait_for_thread(handle, GRACEFUL_SHUTDOWN_TIMEOUT) {
+                debug!("Connection thread exited gracefully");
+                return;
+            }
 
-        // Phase 3: Terminate the child process (SIGTERM on Unix, TerminateProcess on Windows)
-        if let Some(ref child) = self.child
-            && let Err(e) = child.terminate_blocking()
-        {
-            warn!("Failed to send terminate signal to child: {}", e);
-        }
-        if self.wait_for_thread(FORCE_KILL_TIMEOUT) {
-            debug!("Connection thread exited after terminate");
-            return;
-        }
+            let finished = self
+                .runtime
+                .block_on(tokio::task::LocalSet::new().run_until(async {
+                    // Phase 3: Terminate the child process (SIGTERM on Unix, TerminateProcess on Windows)
+                    if let Some(ref child) = self.child
+                        && let Err(e) = child.terminate().await
+                    {
+                        warn!("Failed to send terminate signal to child: {}", e);
+                    }
+                    if Self::wait_for_thread(handle, FORCE_KILL_TIMEOUT) {
+                        debug!("Connection thread exited after terminate");
+                        return true;
+                    }
 
-        // Phase 4: Force-kill the child process (SIGKILL on Unix, TerminateProcess on Windows)
-        if let Some(ref child) = self.child
-            && let Err(e) = child.kill_blocking()
-        {
-            warn!("Failed to force-kill child: {}", e);
-        }
-        if self.wait_for_thread(FORCE_KILL_TIMEOUT) {
-            debug!("Connection thread exited after force-kill");
-            return;
-        }
+                    // Phase 4: Force-kill the child process (SIGKILL on Unix, TerminateProcess on Windows)
+                    if let Some(ref child) = self.child
+                        && let Err(e) = child.kill().await
+                    {
+                        warn!("Failed to force-kill child: {}", e);
+                    }
+                    if Self::wait_for_thread(handle, FORCE_KILL_TIMEOUT) {
+                        debug!("Connection thread exited after force-kill");
+                        return true;
+                    }
+                    false
+                }));
 
-        // Phase 5: Abandon the thread - don't block Neovim
-        error!(
-            "Connection thread did not exit within timeout, abandoning. \
+            if !finished {
+                // Phase 5: Abandon the thread - don't block Neovim
+                error!(
+                    "Connection thread did not exit within timeout, abandoning. \
              The child process may still be running."
-        );
-        // Intentionally leak the JoinHandle to avoid blocking.
-        // The thread will eventually exit when the child process dies or the OS cleans up.
-        self.handle.take();
+                );
+                // Intentionally leak the JoinHandle to avoid blocking.
+                // The thread will eventually exit when the child process dies or the OS cleans up.
+                self.handle.take();
+            }
+        }
     }
 }
 

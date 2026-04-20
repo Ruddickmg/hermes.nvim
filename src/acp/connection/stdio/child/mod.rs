@@ -126,26 +126,8 @@ impl Child {
         sys::terminate(&inner.child)
     }
 
-    pub fn terminate_blocking(&self) -> io::Result<()> {
-        let inner = self.inner.blocking_lock();
-        if let ChildState::Exited(_) = inner.state {
-            return Ok(()); // Already exited
-        }
-        debug!("Sending terminate signal to child process");
-        sys::terminate(&inner.child)
-    }
-
     pub async fn kill(&self) -> io::Result<()> {
         let inner = self.inner.lock().await;
-        if let ChildState::Exited(_) = inner.state {
-            return Ok(()); // Already exited
-        }
-        debug!("Sending kill signal to child process");
-        sys::force_kill(&inner.child)
-    }
-
-    pub fn kill_blocking(&self) -> io::Result<()> {
-        let inner = self.inner.blocking_lock();
         if let ChildState::Exited(_) = inner.state {
             return Ok(()); // Already exited
         }

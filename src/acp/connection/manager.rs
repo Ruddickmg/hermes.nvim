@@ -6,7 +6,9 @@ use agent_client_protocol::{
     ClientCapabilities, FileSystemCapabilities, Implementation, InitializeRequest, ProtocolVersion,
 };
 use serde::{Deserialize, Serialize};
+use tokio::runtime::Runtime;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -130,14 +132,16 @@ pub struct ConnectionDetails {
 
 pub struct ConnectionManager {
     connection: HashMap<Assistant, Connection>,
+    runtime: Rc<tokio::runtime::Runtime>,
     state: Arc<Mutex<PluginState>>,
 }
 
 impl ConnectionManager {
     #[instrument(level = "trace")]
-    pub fn new(state: Arc<Mutex<PluginState>>) -> Self {
+    pub fn new(state: Arc<Mutex<PluginState>>, runtime: Rc<Runtime>) -> Self {
         Self {
             connection: HashMap::new(),
+            runtime,
             state,
         }
     }
@@ -285,7 +289,7 @@ impl ConnectionManager {
 
         self.add_connection(
             agent.clone(),
-            Connection::new(sender, handle, stdio_connection),
+            Connection::new(sender, handle, stdio_connection, self.runtime.clone()),
         );
         self.set_agent(agent.clone()).await;
         let connection = self.get_connection(&agent).unwrap();
