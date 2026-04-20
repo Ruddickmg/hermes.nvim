@@ -23,6 +23,8 @@ pub async fn stdio_connection(
 ) -> Result<(), Error> {
     let local_set = tokio::task::LocalSet::new();
 
+    stdio.initialize(&mut agent.command()?).await?;
+
     let outgoing = stdio
         .take_stdin()
         .await

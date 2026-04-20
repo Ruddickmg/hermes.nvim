@@ -8,8 +8,6 @@ use std::time::{Duration, Instant};
 use tokio::runtime::Runtime;
 use tracing::{debug, error, warn};
 
-pub use manager::*;
-
 use crate::acp::{Result, error::Error};
 use agent_client_protocol::{
     AuthenticateRequest, CancelNotification, ForkSessionRequest, InitializeRequest,
@@ -17,6 +15,7 @@ use agent_client_protocol::{
     ResumeSessionRequest, SetSessionConfigOptionRequest, SetSessionModeRequest,
     SetSessionModelRequest,
 };
+pub use manager::*;
 use tokio::sync::mpsc::Sender;
 
 /// Maximum time to wait for a connection thread to exit gracefully before force-killing

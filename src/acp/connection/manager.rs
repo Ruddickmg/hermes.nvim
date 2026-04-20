@@ -82,8 +82,12 @@ impl std::fmt::Display for Assistant {
 }
 
 impl Assistant {
-    pub fn connection(&self) -> crate::acp::Result<stdio::child::Child> {
-        let (command, args) = match self {
+    /// Build the `tokio::process::Command` for this agent without spawning it.
+    ///
+    /// The caller is responsible for spawning the command on the correct tokio
+    /// runtime (the one whose reactor will handle the child's IO).
+    pub fn command(&self) -> crate::acp::Result<tokio::process::Command> {
+        let (program, args) = match self {
             Assistant::Copilot => ("copilot", vec!["--acp"]),
             Assistant::Opencode => ("opencode", vec!["acp"]),
             Assistant::Gemini => ("gemini", vec!["--acp"]),
@@ -96,11 +100,9 @@ impl Assistant {
                 ));
             }
         };
-        let cmd_str = command.to_string();
-        let args_vec: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-        let mut cmd = tokio::process::Command::new(&cmd_str);
-        cmd.args(&args_vec);
-        stdio::child::Child::spawn(&mut cmd)
+        let mut cmd = tokio::process::Command::new(program);
+        cmd.args(args);
+        Ok(cmd)
     }
 }
 
@@ -220,12 +222,12 @@ impl ConnectionManager {
         let thread_agent = agent.clone();
         trace!("Starting agent communication in new thread");
 
-        let connection = if protocol == Protocol::Stdio {
-            Some(Arc::new(agent.connection()?))
+        let child = if protocol == Protocol::Stdio {
+            Some(Arc::new(stdio::child::Child::new()))
         } else {
             None
         };
-        let stdio_connection = connection.clone();
+        let stdio_child = child.clone();
 
         let handle = std::thread::spawn(move || {
             // TODO: figure out whether this is actually necessary, this should be pure rust, no FFI panics
@@ -239,13 +241,8 @@ impl ConnectionManager {
                 runtime.block_on(async {
                     match protocol {
                         Protocol::Stdio => {
-                            stdio::connect(
-                                handler,
-                                thread_agent.clone(),
-                                receiver,
-                                connection.unwrap(),
-                            )
-                            .await
+                            stdio::connect(handler, thread_agent.clone(), receiver, child.unwrap())
+                                .await
                         }
                         Protocol::Http => {
                             error!("HTTP protocol is not yet implemented");
@@ -289,7 +286,7 @@ impl ConnectionManager {
 
         self.add_connection(
             agent.clone(),
-            Connection::new(sender, handle, stdio_connection, self.runtime.clone()),
+            Connection::new(sender, handle, stdio_child, self.runtime.clone()),
         );
         self.set_agent(agent.clone()).await;
         let connection = self.get_connection(&agent).unwrap();
