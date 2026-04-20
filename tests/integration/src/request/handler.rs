@@ -7,20 +7,21 @@ use agent_client_protocol::{
 use hermes::acp::Result;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
+use hermes::utilities::NvimRuntime;
 use pretty_assertions::assert_eq;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::runtime::Runtime;
 use tokio::sync::{Mutex, oneshot};
 use uuid::Uuid;
 
-fn mock_runtime() -> Rc<Runtime> {
-    Rc::new(
+fn mock_runtime() -> NvimRuntime {
+    NvimRuntime::new(Rc::new(
         tokio::runtime::Builder::new_current_thread()
+            .enable_all()
             .build()
             .expect("Failed to create mock runtime"),
-    )
+    ))
 }
 
 /// Helper to block on an async future in synchronous tests
@@ -735,7 +736,7 @@ fn test_request_terminal_true_for_terminal_create() -> nvim_oxi::Result<()> {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let requests = Arc::new(
         Requests::new(
-            Rc::new(runtime),
+            NvimRuntime::new(Rc::new(runtime)),
             Arc::new(Mutex::new(PluginState::default())),
         )
         .map_err(|e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)))?,

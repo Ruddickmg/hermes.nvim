@@ -10,7 +10,7 @@ use crate::{
     Handler,
     acp::error::Error,
     api::{DisconnectArgs, Hermes},
-    utilities::{Logger, detect_project_storage_path},
+    utilities::{Logger, NvimRuntime, detect_project_storage_path},
 };
 use nvim_oxi::{
     Dictionary,
@@ -32,14 +32,15 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
             .build()
             .map_err(|e| Error::Internal(e.to_string()))?,
     );
+    let nvim_runtime = NvimRuntime::new(runtime);
     let plugin_state = Arc::new(Mutex::new(state::PluginState::new()));
     let request_handler = Rc::new(requests::Requests::new(
-        runtime.clone(),
+        nvim_runtime.clone(),
         plugin_state.clone(),
     )?);
     let event_handler = Arc::new(Handler::new(
         plugin_state.clone(),
-        runtime.clone(),
+        nvim_runtime.clone(),
         request_handler.clone(),
     )?);
     let api = Rc::new(RefCell::new(api::Api::new(
@@ -49,8 +50,8 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
         request_handler,
     )));
     let cloned = api.clone();
-    let shutdown_runtime = runtime.clone();
-    let hermes = Hermes::new(runtime, api)?;
+    let shutdown_runtime = nvim_runtime.clone();
+    let hermes = Hermes::new(nvim_runtime, api)?;
 
     let group =
         nvim_oxi::api::create_augroup(GROUP, &CreateAugroupOpts::default()).map_err(|e| {
@@ -68,7 +69,7 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
             .callback(move |_| {
                 match cloned.try_borrow_mut() {
                     Ok(mut app) => {
-                        shutdown_runtime.block_on(async {
+                        shutdown_runtime.block_on_primary(async move {
                             app.disconnect(DisconnectArgs::All)
                                 .await
                                 .inspect_err(|e| error!("Error disconnecting: {:?}", e))

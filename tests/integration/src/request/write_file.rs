@@ -5,19 +5,20 @@ use assert_fs::prelude::*;
 use assert_fs::{NamedTempFile, TempDir};
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
+use hermes::utilities::NvimRuntime;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::runtime::Runtime;
 use tokio::sync::{Mutex, oneshot};
 
-fn mock_runtime() -> Rc<Runtime> {
-    Rc::new(
+fn mock_runtime() -> NvimRuntime {
+    NvimRuntime::new(Rc::new(
         tokio::runtime::Builder::new_current_thread()
+            .enable_all()
             .build()
             .expect("Failed to create mock runtime"),
-    )
+    ))
 }
 
 /// Helper to block on an async future in synchronous tests

@@ -2,20 +2,20 @@
 //!
 //! Tests the NvimMessenger helper which bridges async Tokio runtime with Neovim's synchronous API.
 //! These tests verify the actual cross-thread communication flow using wait_for helpers.
-use hermes::utilities::{NvimMessenger, TransmitToNvim};
+use hermes::utilities::{NvimMessenger, NvimRuntime, TransmitToNvim};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::runtime::Runtime;
 
 use crate::helpers::ui::wait_for;
 
-fn mock_runtime() -> Rc<Runtime> {
-    Rc::new(
+fn mock_runtime() -> NvimRuntime {
+    NvimRuntime::new(Rc::new(
         tokio::runtime::Builder::new_current_thread()
+            .enable_all()
             .build()
             .expect("Failed to create mock runtime"),
-    )
+    ))
 }
 
 // === Cross-thread communication tests ===

@@ -5,6 +5,7 @@ pub mod notification_messenger;
 pub mod nvim;
 pub mod project;
 pub mod prompt;
+pub mod runtime;
 pub mod ui;
 
 pub use file::*;
@@ -14,4 +15,5 @@ pub use notification_messenger::*;
 pub use nvim::*;
 pub use project::*;
 pub use prompt::*;
+pub use runtime::*;
 pub use ui::*;

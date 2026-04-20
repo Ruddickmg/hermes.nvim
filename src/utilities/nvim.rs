@@ -1,9 +1,8 @@
 use crate::acp::{Result, error::Error};
+use crate::utilities::NvimRuntime;
 use nvim_oxi::IntoResult;
 use nvim_oxi::libuv::AsyncHandle;
-use std::rc::Rc;
 use std::sync::Arc;
-use tokio::runtime::Runtime;
 use tracing::error;
 
 #[derive(Clone)]
@@ -13,7 +12,7 @@ pub struct NvimMessenger<T: 'static> {
 }
 
 impl<T> NvimMessenger<T> {
-    pub fn initialize<F, R, Fut>(runtime: Rc<Runtime>, mut callback: F) -> Result<Self>
+    pub fn initialize<F, R, Fut>(nvim_runtime: NvimRuntime, mut callback: F) -> Result<Self>
     where
         F: FnMut(T) -> Fut + 'static,
         Fut: Future<Output = R>,
@@ -29,13 +28,13 @@ impl<T> NvimMessenger<T> {
                 // prevent remaining queued items from being processed.
                 // Note: We do NOT attempt to log panics here - if the logging
                 // infrastructure is broken, we can't log. Silently swallow instead.
-                let rt = runtime.clone();
+                let nvim_rt = nvim_runtime.clone();
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    rt.block_on(tokio::task::LocalSet::new().run_until(async {
+                    nvim_rt.block_on_primary(async {
                         if let Err(err) = callback(data).await.into_result() {
                             error!("Error in NvimMessenger callback: {}", err);
                         }
-                    }))
+                    });
                 }))
                 .ok();
             }

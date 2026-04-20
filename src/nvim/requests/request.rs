@@ -6,7 +6,6 @@ use agent_client_protocol::{
     WriteTextFileRequest, WriteTextFileResponse,
 };
 use nvim_oxi::conversion::FromObject;
-use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::{Mutex, oneshot};
 use tracing::error;
@@ -19,8 +18,8 @@ use crate::nvim::autocommands::Commands;
 use crate::nvim::configuration::dict_from_object;
 use crate::nvim::terminal::{Terminal, TerminalManager, parse_exit_code};
 use crate::utilities::{
-    NvimMessenger, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified, refresh_view,
-    save_buffer_to_disk, show_permission_ui, update_buffer_content,
+    NvimMessenger, NvimRuntime, TransmitToNvim, acquire_or_create_buffer, mark_buffer_modified,
+    refresh_view, save_buffer_to_disk, show_permission_ui, update_buffer_content,
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
@@ -72,7 +71,7 @@ impl From<Responder> for Commands {
 #[derive(Clone)]
 pub struct Request {
     id: Uuid,
-    runtime: Rc<tokio::runtime::Runtime>,
+    nvim_runtime: NvimRuntime,
     session_id: String,
     responder: Arc<Mutex<Option<Responder>>>,
     remove: NvimMessenger<Uuid>,
@@ -89,11 +88,11 @@ impl Request {
         remove: NvimMessenger<Uuid>,
         responder: Responder,
         state: Arc<Mutex<PluginState>>,
-        runtime: Rc<tokio::runtime::Runtime>,
+        nvim_runtime: NvimRuntime,
     ) -> Self {
         Self {
             state,
-            runtime,
+            nvim_runtime,
             id: Uuid::new_v4(),
             session_id,
             is_permission_request: matches!(responder, Responder::PermissionResponse(..)),
@@ -353,19 +352,19 @@ impl Request {
         let session_id = self.session_id.clone();
         let response_handler = self.clone();
         let prompt = get_permission_prompt();
-        let runtime = self.runtime.clone();
+        let nvim_runtime = self.nvim_runtime.clone();
         show_permission_ui(&data.options, &prompt, move |option_id| {
             let response_handler = response_handler.clone();
             let request_id = request_id.clone();
             let session_id = session_id.clone();
-            runtime.block_on(tokio::task::LocalSet::new().run_until(async move {
+            nvim_runtime.run(async move {
                 response_handler.respond(option_id.into()).await.unwrap_or_else(|e| {
                     error!(
                         "Failed to send permission response for request '{}', session '{}': {:?}",
                         request_id, session_id, e
                     )
                 })
-            }));
+            });
         })
     }
 

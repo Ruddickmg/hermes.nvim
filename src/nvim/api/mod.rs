@@ -28,11 +28,10 @@ pub use prompt::*;
 pub use respond::*;
 pub use set_mode::*;
 pub use setup::*;
-use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
 use tracing::{debug, error};
 
-use crate::utilities::Logger;
+use crate::utilities::{Logger, NvimRuntime};
 use crate::{
     Handler, PluginState,
     acp::{Result, connection::ConnectionManager},
@@ -40,31 +39,32 @@ use crate::{
 
 pub struct Hermes {
     api: Rc<RefCell<Api>>,
-    runtime: Rc<Runtime>,
+    nvim_runtime: NvimRuntime,
 }
 
 impl Hermes {
-    pub fn new(runtime: Rc<Runtime>, api: Rc<RefCell<Api>>) -> Result<Self> {
-        Ok(Self { api, runtime })
+    pub fn new(nvim_runtime: NvimRuntime, api: Rc<RefCell<Api>>) -> Result<Self> {
+        Ok(Self { api, nvim_runtime })
     }
 
     fn api_method<A, R, F, Fut>(&self, func: F) -> Object
     where
         F: Fn(Rc<RefCell<Api>>, A) -> Fut + 'static,
-        Fut: Future<Output = Result<R>>,
+        Fut: Future<Output = Result<R>> + 'static,
         A: Poppable,
-        R: Pushable,
+        R: Pushable + 'static,
     {
-        let runtime = self.runtime.clone();
+        let nvim_runtime = self.nvim_runtime.clone();
         let api = self.api.clone();
         let function: Function<A, Result<()>> = Function::from_fn(move |args: A| -> Result<()> {
             let api = api.clone();
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                runtime.block_on(tokio::task::LocalSet::new().run_until(func(api, args)))
+                nvim_runtime.run(func(api, args))
             }))
             .map(|result| match result {
-                Err(e) => error!("An error occurred while executing api method: {:?}", e),
-                Ok(_) => debug!("API method executed successfully"),
+                Some(Err(e)) => error!("An error occurred while executing api method: {:?}", e),
+                Some(Ok(_)) => debug!("API method executed successfully"),
+                None => debug!("API method scheduled (re-entrant call)"),
             })
             .inspect_err(|e| error!("A panic occurred while executing api method: {:?}", e))
             .ok();

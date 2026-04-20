@@ -9,12 +9,12 @@ use crate::{
         GROUP,
         requests::{RequestHandler, Responder},
     },
-    utilities::{NvimMessenger, TransmitToNvim},
+    utilities::{NvimMessenger, NvimRuntime, TransmitToNvim},
 };
 use nvim_oxi::{Array, Dictionary, Object, api::opts::ExecAutocmdsOpts};
 use serde::Serialize;
 use std::{fmt::Debug, fmt::Display, rc::Rc, sync::Arc};
-use tokio::{runtime::Runtime, sync::Mutex};
+use tokio::sync::Mutex;
 use tracing::{debug, error, instrument, warn};
 
 type NvimHandleArgs = (String, serde_json::Value, Option<(Responder, String)>);
@@ -28,11 +28,11 @@ impl Handler {
     #[instrument(level = "trace", skip_all)]
     pub fn new<R: RequestHandler + 'static>(
         state: Arc<Mutex<PluginState>>,
-        runtime: Rc<Runtime>,
+        nvim_runtime: NvimRuntime,
         requests: Rc<R>,
     ) -> Result<Self> {
         let channel = NvimMessenger::<NvimHandleArgs>::initialize(
-            runtime,
+            nvim_runtime,
             move |(command, request_data, response_data)| {
                 let datas = request_data.clone();
                 let nvim_requests = requests.clone();

@@ -29,7 +29,7 @@ fn create_test_api(
         Handler::new(plugin_state.clone(), runtime.clone(), requests.clone())
             .expect("Failed to create handler"),
     );
-    Api::new(plugin_state, logger, handler, requests, runtime)
+    Api::new(plugin_state, logger, handler, requests)
 }
 
 /// Helper to block on an async future in synchronous tests

@@ -3,11 +3,11 @@ use crate::{
     PluginState,
     acp::{Result, error::Error},
     nvim::terminal::{TerminalInfo, TerminalManager},
-    utilities::NvimMessenger,
+    utilities::{NvimMessenger, NvimRuntime},
 };
 use async_trait::async_trait;
-use std::{collections::HashMap, rc::Rc, sync::Arc};
-use tokio::{runtime::Runtime, sync::Mutex};
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::Mutex;
 
 use tracing::error;
 use uuid::Uuid;
@@ -19,14 +19,14 @@ pub struct Requests {
     nvim_handler: NvimMessenger<Uuid>,
     terminal_manager: TerminalManager<TerminalInfo>,
     state: Arc<Mutex<PluginState>>,
-    runtime: Rc<Runtime>,
+    nvim_runtime: NvimRuntime,
 }
 
 impl Requests {
-    pub fn new(runtime: Rc<Runtime>, state: Arc<Mutex<PluginState>>) -> Result<Self> {
+    pub fn new(nvim_runtime: NvimRuntime, state: Arc<Mutex<PluginState>>) -> Result<Self> {
         let list = Arc::new(Mutex::new(HashMap::new()));
         let pending = list.clone();
-        let nvim_handler = NvimMessenger::initialize(runtime.clone(), move |id| {
+        let nvim_handler = NvimMessenger::initialize(nvim_runtime.clone(), move |id| {
             let list = list.clone();
             async move {
                 let mut lock = list.lock().await;
@@ -35,7 +35,7 @@ impl Requests {
             }
         })?;
         Ok(Self {
-            runtime,
+            nvim_runtime,
             state: state.clone(),
             pending,
             nvim_handler,
@@ -77,7 +77,7 @@ impl RequestHandler for Requests {
             finisher,
             responder,
             self.state.clone(),
-            self.runtime.clone(),
+            self.nvim_runtime.clone(),
         );
         let request_id = request.id();
         pending.insert(request_id, request);
