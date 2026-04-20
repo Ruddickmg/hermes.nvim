@@ -5,9 +5,19 @@ use agent_client_protocol::{CreateTerminalRequest, CreateTerminalResponse, Sessi
 use hermes::acp::Result;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
+use std::rc::Rc;
 use std::sync::Arc;
+use tokio::runtime::Runtime;
 use tokio::sync::{Mutex, oneshot};
 use uuid::Uuid;
+
+fn mock_runtime() -> Rc<Runtime> {
+    Rc::new(
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("Failed to create mock runtime"),
+    )
+}
 
 /// Helper to block on an async future in synchronous tests
 fn block_on<F>(fut: F) -> F::Output
@@ -31,7 +41,8 @@ fn setup_terminal_request(
     Uuid,
     oneshot::Receiver<Result<CreateTerminalResponse>>,
 ) {
-    let requests = Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).unwrap());
+    let runtime = mock_runtime();
+    let requests = Arc::new(Requests::new(runtime, Arc::new(Mutex::new(PluginState::default()))).unwrap());
     let (sender, receiver) = oneshot::channel::<Result<CreateTerminalResponse>>();
     let responder = Responder::TerminalCreate(sender, create_terminal_request(command, args));
     let request_id = block_on(requests.add_request("test-session".to_string(), responder));

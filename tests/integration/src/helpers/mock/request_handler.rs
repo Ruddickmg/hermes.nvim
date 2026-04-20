@@ -47,16 +47,4 @@ impl RequestHandler for MockRequestHandler {
     async fn get_request(&self, _request_id: &Uuid) -> Option<Request> {
         None
     }
-
-    fn add_request_sync(&self, _session_id: String, _responder: Responder) -> Uuid {
-        Uuid::new_v4()
-    }
-
-    fn default_response_sync(
-        &self,
-        _request_id: &Uuid,
-        _data: serde_json::Value,
-    ) -> hermes::acp::Result<()> {
-        Ok(())
-    }
 }

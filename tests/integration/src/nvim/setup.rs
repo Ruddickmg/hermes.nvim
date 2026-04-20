@@ -1,3 +1,4 @@
+use crate::helpers::mock_runtime;
 use hermes::{
     Handler, PluginState,
     api::{Api, SetupArgs},
@@ -16,16 +17,16 @@ use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-/// Helper function to create an Api instance for testing
 fn create_test_api(
     plugin_state: Arc<Mutex<PluginState>>,
     logger: &'static hermes::utilities::Logger,
 ) -> hermes::api::Api {
-    let requests = Rc::new(Requests::new(plugin_state.clone()).expect("Failed to create requests"));
+    let runtime = mock_runtime();
+    let requests = Rc::new(Requests::new(runtime.clone(), plugin_state.clone()).expect("Failed to create requests"));
     let handler = Arc::new(
-        Handler::new(plugin_state.clone(), requests.clone()).expect("Failed to create handler"),
+        Handler::new(plugin_state.clone(), runtime.clone(), requests.clone()).expect("Failed to create handler"),
     );
-    Api::new(plugin_state, logger, handler, requests)
+    Api::new(plugin_state, logger, handler, requests, runtime)
 }
 
 /// Helper to block on an async future in synchronous tests

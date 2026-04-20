@@ -9,8 +9,18 @@ use agent_client_protocol::{
 };
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
+use std::rc::Rc;
 use std::sync::Arc;
+use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
+
+fn mock_runtime() -> Rc<Runtime> {
+    Rc::new(
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("Failed to create mock runtime"),
+    )
+}
 
 /// Helper to block on an async future in synchronous tests
 fn block_on<F>(fut: F) -> F::Output
@@ -52,7 +62,7 @@ fn invalid_json_data_returns_error() -> nvim_oxi::Result<()> {
     // Create Requests handler and add a permission request
     let state = Arc::new(Mutex::new(PluginState::default()));
     let requests =
-        Arc::new(Requests::new(state.clone()).map_err(|e| {
+        Arc::new(Requests::new(mock_runtime(), state.clone()).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let (sender, _receiver) = tokio::sync::oneshot::channel::<RequestPermissionOutcome>();

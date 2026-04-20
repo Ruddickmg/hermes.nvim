@@ -5,6 +5,7 @@
 //! and UI window detection (without requiring user interaction).
 //!
 
+use crate::helpers::mock_runtime;
 use crate::helpers::ui::{wait_for_floating_window, wait_for_some};
 use agent_client_protocol::{
     PermissionOption, PermissionOptionId, PermissionOptionKind, RequestPermissionRequest,
@@ -129,7 +130,7 @@ fn test_non_permission_request_not_permission() -> nvim_oxi::Result<()> {
     // Create Requests handler and add a write file request
     let state = Arc::new(Mutex::new(PluginState::default()));
     let requests =
-        Arc::new(Requests::new(state.clone()).map_err(|e| {
+        Arc::new(Requests::new(mock_runtime(), state.clone()).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let (sender, _receiver) =

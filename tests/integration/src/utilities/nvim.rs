@@ -3,10 +3,20 @@
 //! Tests the NvimMessenger helper which bridges async Tokio runtime with Neovim's synchronous API.
 //! These tests verify the actual cross-thread communication flow using wait_for helpers.
 use hermes::utilities::{NvimMessenger, TransmitToNvim};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::runtime::Runtime;
 
 use crate::helpers::ui::wait_for;
+
+fn mock_runtime() -> Rc<Runtime> {
+    Rc::new(
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("Failed to create mock runtime"),
+    )
+}
 
 // === Cross-thread communication tests ===
 
@@ -15,12 +25,12 @@ fn blocking_send_from_thread_reaches_callback() -> nvim_oxi::Result<()> {
     let received = Arc::new(Mutex::new(Vec::new()));
     let received_clone = received.clone();
 
-    let callback = move |data: String| -> nvim_oxi::Result<()> {
+    let callback = move |data: String| -> std::future::Ready<nvim_oxi::Result<()>> {
         received_clone.lock().unwrap().push(data);
-        Ok(())
+        std::future::ready(Ok(()))
     };
 
-    let handler = NvimMessenger::initialize(callback).expect("Handler should initialize");
+    let handler = NvimMessenger::initialize(mock_runtime(), callback).expect("Handler should initialize");
 
     // Spawn thread that sends data
     std::thread::spawn(move || {
@@ -47,12 +57,12 @@ fn async_send_from_thread_reaches_callback() -> nvim_oxi::Result<()> {
     let received = Arc::new(Mutex::new(Vec::new()));
     let received_clone = received.clone();
 
-    let callback = move |data: String| -> nvim_oxi::Result<()> {
+    let callback = move |data: String| -> std::future::Ready<nvim_oxi::Result<()>> {
         received_clone.lock().unwrap().push(data);
-        Ok(())
+        std::future::ready(Ok(()))
     };
 
-    let handler = NvimMessenger::initialize(callback).expect("Handler should initialize");
+    let handler = NvimMessenger::initialize(mock_runtime(), callback).expect("Handler should initialize");
 
     // Spawn thread with tokio runtime that sends data asynchronously
     std::thread::spawn(move || {
@@ -83,12 +93,12 @@ fn cloned_handler_sends_from_thread_reaches_callback() -> nvim_oxi::Result<()> {
     let received = Arc::new(Mutex::new(Vec::new()));
     let received_clone = received.clone();
 
-    let callback = move |data: String| -> nvim_oxi::Result<()> {
+    let callback = move |data: String| -> std::future::Ready<nvim_oxi::Result<()>> {
         received_clone.lock().unwrap().push(data);
-        Ok(())
+        std::future::ready(Ok(()))
     };
 
-    let handler = NvimMessenger::initialize(callback).expect("Handler should initialize");
+    let handler = NvimMessenger::initialize(mock_runtime(), callback).expect("Handler should initialize");
     let cloned_handler = handler.clone();
 
     // Spawn thread that sends data through cloned handler
@@ -116,12 +126,12 @@ fn multiple_sends_from_thread_all_received() -> nvim_oxi::Result<()> {
     let received = Arc::new(Mutex::new(Vec::new()));
     let received_clone = received.clone();
 
-    let callback = move |data: String| -> nvim_oxi::Result<()> {
+    let callback = move |data: String| -> std::future::Ready<nvim_oxi::Result<()>> {
         received_clone.lock().unwrap().push(data);
-        Ok(())
+        std::future::ready(Ok(()))
     };
 
-    let handler = NvimMessenger::initialize(callback).expect("Handler should initialize");
+    let handler = NvimMessenger::initialize(mock_runtime(), callback).expect("Handler should initialize");
 
     // Spawn thread that sends multiple messages
     std::thread::spawn(move || {
@@ -150,12 +160,12 @@ fn preserves_order_across_thread_boundary() -> nvim_oxi::Result<()> {
     let received = Arc::new(Mutex::new(Vec::new()));
     let received_clone = received.clone();
 
-    let callback = move |data: String| -> nvim_oxi::Result<()> {
+    let callback = move |data: String| -> std::future::Ready<nvim_oxi::Result<()>> {
         received_clone.lock().unwrap().push(data);
-        Ok(())
+        std::future::ready(Ok(()))
     };
 
-    let handler = NvimMessenger::initialize(callback).expect("Handler should initialize");
+    let handler = NvimMessenger::initialize(mock_runtime(), callback).expect("Handler should initialize");
 
     // Spawn thread that sends messages in specific order
     std::thread::spawn(move || {
@@ -188,12 +198,12 @@ fn numeric_type_from_thread_reaches_callback() -> nvim_oxi::Result<()> {
     let received = Arc::new(Mutex::new(Vec::new()));
     let received_clone = received.clone();
 
-    let callback = move |data: i32| -> nvim_oxi::Result<()> {
+    let callback = move |data: i32| -> std::future::Ready<nvim_oxi::Result<()>> {
         received_clone.lock().unwrap().push(data);
-        Ok(())
+        std::future::ready(Ok(()))
     };
 
-    let handler = NvimMessenger::initialize(callback).expect("Handler should initialize");
+    let handler = NvimMessenger::initialize(mock_runtime(), callback).expect("Handler should initialize");
 
     // Spawn thread that sends numeric data
     std::thread::spawn(move || {
@@ -220,13 +230,13 @@ fn callback_error_is_handled_gracefully() -> nvim_oxi::Result<()> {
     // The error!() macro logs the error, and the send operation should still succeed
 
     // Callback that returns an error - error should be logged via error!()
-    let callback = move |_data: String| -> nvim_oxi::Result<()> {
-        Err(nvim_oxi::Error::Api(nvim_oxi::api::Error::Other(
+    let callback = move |_data: String| -> std::future::Ready<nvim_oxi::Result<()>> {
+        std::future::ready(Err(nvim_oxi::Error::Api(nvim_oxi::api::Error::Other(
             "Test callback error".to_string(),
-        )))
+        ))))
     };
 
-    let handler = NvimMessenger::initialize(callback).expect("Handler should initialize");
+    let handler = NvimMessenger::initialize(mock_runtime(), callback).expect("Handler should initialize");
 
     // Spawn thread that sends data - this should succeed even though callback returns error
     let send_result = std::thread::spawn(move || handler.blocking_send("test message".to_string()))
@@ -248,11 +258,11 @@ fn callback_panic_is_caught_without_crashing() -> nvim_oxi::Result<()> {
     // The process should NOT crash, and send should still succeed
 
     // Callback that panics - this tests the catch_unwind protection
-    let callback = move |_data: String| -> nvim_oxi::Result<()> {
+    let callback = move |_data: String| -> std::future::Ready<nvim_oxi::Result<()>> {
         panic!("intentional test panic in NvimMessenger callback");
     };
 
-    let handler = NvimMessenger::initialize(callback).expect("Handler should initialize");
+    let handler = NvimMessenger::initialize(mock_runtime(), callback).expect("Handler should initialize");
 
     // Spawn thread that sends data - this should succeed even though callback panics
     let send_result =

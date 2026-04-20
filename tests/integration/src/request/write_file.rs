@@ -6,9 +6,19 @@ use assert_fs::{NamedTempFile, TempDir};
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
 use std::path::Path;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::runtime::Runtime;
 use tokio::sync::{Mutex, oneshot};
+
+fn mock_runtime() -> Rc<Runtime> {
+    Rc::new(
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("Failed to create mock runtime"),
+    )
+}
 
 /// Helper to block on an async future in synchronous tests
 fn block_on<F>(fut: F) -> F::Output
@@ -33,7 +43,7 @@ fn open_buffer_marked_modified() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?,
     );
@@ -84,7 +94,7 @@ fn open_buffer_disk_content_unchanged() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?,
     );
@@ -116,7 +126,7 @@ fn new_file_created() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?,
     );
@@ -146,7 +156,7 @@ fn file_exists_but_closed() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?,
     );
@@ -176,7 +186,7 @@ fn responder_send_failure_returns_error() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?,
     );
@@ -198,7 +208,7 @@ fn responder_send_failure_contains_acp_message() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?,
     );
@@ -225,7 +235,7 @@ fn buffer_already_open_marked_modified() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?,
     );
@@ -272,7 +282,7 @@ fn buffer_already_open_disk_unchanged() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?,
     );
@@ -307,7 +317,7 @@ fn buffer_already_open_response_sent() -> nvim_oxi::Result<()> {
 
     // Create Requests handler and add a write file request
     let requests = Arc::new(
-        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?,
     );
@@ -337,7 +347,7 @@ fn write_file_cleanup_request_exists_before_response() -> nvim_oxi::Result<()> {
 
     // Use Requests handler to verify cleanup
     let requests = Arc::new(
-        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?,
     );
@@ -361,7 +371,7 @@ fn write_file_cleanup_default_response_succeeds() -> nvim_oxi::Result<()> {
 
     // Use Requests handler to verify cleanup
     let requests = Arc::new(
-        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?,
     );
@@ -386,7 +396,7 @@ fn write_file_cleanup_request_removed_after_response() -> nvim_oxi::Result<()> {
 
     // Use Requests handler to verify cleanup
     let requests = Arc::new(
-        Requests::new(Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?,
     );
