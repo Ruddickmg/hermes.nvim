@@ -149,7 +149,7 @@ impl From<Hermes> for Dictionary {
         Dictionary::from_iter([
             ("cancel", hermes.cancel_method()),
             ("connect", hermes.connect_method()),
-            ("session", hermes.create_session_method()),
+            ("create_session", hermes.create_session_method()),
             ("disconnect", hermes.disconnect_method()),
             ("list_sessions", hermes.list_sessions_method()),
             ("load_session", hermes.load_session_method()),

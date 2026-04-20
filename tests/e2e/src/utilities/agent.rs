@@ -17,7 +17,7 @@ pub fn test_agent_prompt(agent: Assistant) -> Result<(), nvim_oxi::Error> {
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
     let create_session: Function<CreateSessionArgs, ()> =
-        FromObject::from_object(dict.get("session").unwrap().clone())?;
+        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
     let prompt: Function<PromptArgs, ()> =
         FromObject::from_object(dict.get("prompt").unwrap().clone())?;
 
@@ -61,7 +61,7 @@ pub fn test_session_creation(agent: Assistant) -> Result<(), nvim_oxi::Error> {
     let disconnect: Function<DisconnectArgs, ()> =
         FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
     let create_session: Function<CreateSessionArgs, ()> =
-        FromObject::from_object(dict.get("session").unwrap().clone())?;
+        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
 
     let wait_for_initialization =
         autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
