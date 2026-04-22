@@ -185,7 +185,7 @@ end
 ---@private
 -- luacov: enable
 function M.build_from_source(dest_dir)
-  local notification_options = { title = "Hermes - build" }
+	local notification_options = { title = "Hermes - build" }
 	local logging = require("hermes.logging")
 
 	-- Ensure destination directory exists
@@ -254,12 +254,16 @@ end
 ---@private
 -- luacov: enable
 function M.build_from_source_async(dest_dir, on_complete)
-  local notification_options = { title = "Hermes - build" }
+	local notification_options = { title = "Hermes - build" }
 	local logging = require("hermes.logging")
 	-- Check if build already in progress
 	if _build_in_progress then
 		-- Use logging.notify directly to ensure this always shows regardless of log level
-		logging.notify("Build already in progress. Use :Hermes cancel to stop.", vim.log.levels.WARN, notification_options)
+		logging.notify(
+			"Build already in progress. Use :Hermes cancel to stop.",
+			vim.log.levels.WARN,
+			notification_options
+		)
 		return false
 	end
 
@@ -320,7 +324,11 @@ function M.build_from_source_async(dest_dir, on_complete)
 				_build_job = nil
 
 				if exit_code ~= 0 then
-					logging.notify("Build failed with exit code: " .. exit_code, vim.log.levels.ERROR, notification_options)
+					logging.notify(
+						"Build failed with exit code: " .. exit_code,
+						vim.log.levels.ERROR,
+						notification_options
+					)
 					on_complete(false, "Build failed")
 					return
 				end
@@ -343,8 +351,7 @@ function M.build_from_source_async(dest_dir, on_complete)
 
 				if not copy_ok then
 					local err_msg = "Failed to copy built library from " .. built_lib .. " to " .. dest_lib
-					logging.notify(err_msg, vim.log.levels.ERROR, no
-      )
+					logging.notify(err_msg, vim.log.levels.ERROR, notification_options)
 					on_complete(false, err_msg)
 					return
 				end
@@ -404,7 +411,7 @@ end
 ---@private
 -- luacov: enable
 function M.cancel_build()
-  local notification_options = { title = "Hermes - build" }
+	local notification_options = { title = "Hermes - build" }
 	local logging = require("hermes.logging")
 
 	if _build_job ~= nil then
