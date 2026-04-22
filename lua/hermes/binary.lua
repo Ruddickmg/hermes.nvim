@@ -351,7 +351,7 @@ function M.build_from_source_async(dest_dir, on_complete)
 
 				local elapsed = math.floor((uv.now() - start_time) / 1000)
 				vim.notify(
-					"Build successful! Hermes has been built from source in " .. elapsed .. " seconds.",
+					"Success: Hermes has been built from source in " .. elapsed .. " seconds.",
 					vim.log.levels.INFO,
 					{ title = "Hermes" }
 				)
