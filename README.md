@@ -433,8 +433,8 @@ hermes.create_session({
     name = "Human readable name for MCP server",
     url = "http://url-to-mcp-server.com",
     headers = {
-    { ["Content-Type"] = "application/json" },
-    { headerName = "header value" },
+      { ["Content-Type"] = "application/json" },
+      { headerName = "header value" },
     },
   },
   {  -- Stdio MCP server definition
@@ -444,7 +444,7 @@ hermes.create_session({
     args = { "run", "--flag", "something" },
     -- Environment variables to set when launching the MCP server.
     env = {
-    { name = "ENVIRONMENT_VAR_NAME", value = "value" },
+      { name = "ENVIRONMENT_VAR_NAME", value = "value" },
     },
   },
   },
@@ -599,7 +599,7 @@ vim.api.nvim_create_autocmd("User", {
 When an agent makes a request that requires user input (such as a permission request), it triggers an autocommand and pauses until the user responds. Use the `respond` method with the request ID to resume the agent's operation. If no autocommand handler is defined, a default workflow will be triggered. Requests can be disabled via the setup configuration. 
 
 > [!WARNING]
-> While Hermes is a complete ACP client, most agents available today don't fully utilize the protocol. The following are autocommands are [optional features](https://agentclientprotocol.com/protocol/overview#optional-methods-2) and often handled through agent-specific tools rather than calling the ACP methods that trigger them. This means some Hermes capabilities may not be exercised depending on which agent you use.
+> While Hermes is a complete ACP client, most agents available today don't fully utilize the protocol. The following autocommands are [optional features](https://agentclientprotocol.com/protocol/overview#optional-methods-2) and often handled through agent-specific tools rather than calling the ACP methods that trigger them. This means some Hermes capabilities may not be exercised depending on which agent you use.
 
 #### Permission request
 
@@ -1645,14 +1645,7 @@ Available formats:
 
 ## TODO:
 -- infra
-- [x] consolidate api generation logic
-  - [x] move into struct with impl methods
-  - [x] store async runtime in struct
-  - [x] clean up runtime on shutdown
-  - [x] make callback wrapper that houses async logic
-  - [x] capture errors and return ok from callback wrapper instead of in each callback
 - [ ] use smol instead of tokio to reduce build size
-- [x] use async for all the things
 
 -- functionality
 - [x] Allow connecting to Agents
