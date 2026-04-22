@@ -4,7 +4,8 @@
 export default {
   branches: [
     "main",
-    {name: "development", prerelease: "beta"}
+    {name: "development", prerelease: "beta"},
+    {name: "use-smol-instead-of-tokio", prerelease: "beta"}
   ],
   plugins: [
     "@semantic-release/commit-analyzer",
