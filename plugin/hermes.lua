@@ -161,7 +161,7 @@ vim.api.nvim_create_user_command("Hermes", function(args)
 		local data_dir = binary.get_data_dir()
 		local started = binary.build_from_source_async(data_dir, function(success, err)
 			if success then
-				logger.notify("Hermes built from source successfully!", vim.log.levels.INFO)
+				logger.notify("Hermes built from source successfully!", vim.log.levels.DEBUG)
 
 				-- Reset state and load immediately so no restart is needed
 				local hermes = require("hermes")
@@ -186,7 +186,7 @@ vim.api.nvim_create_user_command("Hermes", function(args)
 
 					-- Success! Use the handle_load_success function to properly set _native and state
 					hermes._handle_load_success(loaded, function()
-						logging.notify("Hermes is ready to use!", vim.log.levels.INFO)
+						logging.notify("Hermes is ready to use!", vim.log.levels.DEBUG)
 					end)
 				end)
 			else
