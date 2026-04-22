@@ -44,11 +44,9 @@ fn send_from_spawned_thread_succeeds() {
     let messenger = MessageMessenger::initialize().expect("Failed to create messenger");
     let messenger_clone = messenger.clone();
 
-    let result = thread::spawn(move || {
-        messenger_clone.send("test_msg_spawned_thread".to_string())
-    })
-    .join()
-    .expect("Thread panicked");
+    let result = thread::spawn(move || messenger_clone.send("test_msg_spawned_thread".to_string()))
+        .join()
+        .expect("Thread panicked");
 
     assert!(result.is_ok(), "Failed to send message from spawned thread");
 }

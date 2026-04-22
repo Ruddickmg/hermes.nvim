@@ -149,10 +149,7 @@ fn test_notification_delivered_via_schedule() -> nvim_oxi::Result<()> {
     // Send from a background thread to exercise the cross-thread path
     thread::spawn(move || {
         messenger_clone
-            .send(
-                "hermes_notif_schedule_test".to_string(),
-                LogLevel::Info,
-            )
+            .send("hermes_notif_schedule_test".to_string(), LogLevel::Info)
             .expect("Send should succeed");
     })
     .join()
