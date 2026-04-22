@@ -285,3 +285,75 @@ fn callback_panic_is_caught_without_crashing() -> nvim_oxi::Result<()> {
     );
     Ok(())
 }
+
+#[nvim_oxi::test]
+fn blocking_send_delivers_correct_data_value() -> nvim_oxi::Result<()> {
+    let received = Arc::new(Mutex::new(Vec::new()));
+    let received_clone = received.clone();
+
+    let callback = move |data: String| -> std::future::Ready<nvim_oxi::Result<()>> {
+        received_clone.lock().unwrap().push(data);
+        std::future::ready(Ok(()))
+    };
+
+    let handler =
+        NvimMessenger::initialize(mock_runtime(), callback).expect("Handler should initialize");
+
+    std::thread::spawn(move || {
+        handler
+            .blocking_send("expected_value_42".to_string())
+            .expect("Send should succeed");
+    });
+
+    let correct_value = wait_for(
+        || {
+            let data = received.lock().unwrap();
+            data.first().map(|s| s.as_str()) == Some("expected_value_42")
+        },
+        Duration::from_millis(500),
+    );
+
+    assert!(
+        correct_value,
+        "Callback should receive the exact value that was sent"
+    );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn async_send_delivers_correct_data_value() -> nvim_oxi::Result<()> {
+    let received = Arc::new(Mutex::new(Vec::new()));
+    let received_clone = received.clone();
+
+    let callback = move |data: String| -> std::future::Ready<nvim_oxi::Result<()>> {
+        received_clone.lock().unwrap().push(data);
+        std::future::ready(Ok(()))
+    };
+
+    let handler =
+        NvimMessenger::initialize(mock_runtime(), callback).expect("Handler should initialize");
+
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            handler
+                .send("async_expected_value".to_string())
+                .await
+                .expect("Async send should succeed");
+        });
+    });
+
+    let correct_value = wait_for(
+        || {
+            let data = received.lock().unwrap();
+            data.first().map(|s| s.as_str()) == Some("async_expected_value")
+        },
+        Duration::from_millis(500),
+    );
+
+    assert!(
+        correct_value,
+        "Callback should receive the exact async value that was sent"
+    );
+    Ok(())
+}
