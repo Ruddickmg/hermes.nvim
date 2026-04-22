@@ -94,15 +94,20 @@ impl RequestHandler for Requests {
 
     async fn cancel_session_requests(&self, session_id: String) -> Result<()> {
         let mut pending = self.pending.lock().await;
+        let requests: Vec<_> = pending
+            .extract_if(|_, request| {
+                request.is_permission_request() && request.is_session(session_id.clone())
+            })
+            .map(|(_, request)| request)
+            .collect();
+        drop(pending);
+
         futures::future::try_join_all(
-            pending
-                .extract_if(|_, request| {
-                    request.is_permission_request() && request.is_session(session_id.clone())
-                })
-                .map(|(_, request)| async move { request.cancel().await }),
+            requests
+                .into_iter()
+                .map(|request| async move { request.cancel().await }),
         )
         .await?;
-        drop(pending);
         Ok(())
     }
 
