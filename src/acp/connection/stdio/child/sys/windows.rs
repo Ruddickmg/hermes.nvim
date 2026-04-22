@@ -22,7 +22,7 @@ unsafe impl Send for Handle {}
 
 #[link(name = "kernel32")]
 #[allow(non_snake_case)]
-extern "system" {
+unsafe extern "system" {
     fn WaitForSingleObject(hHandle: *mut std::ffi::c_void, dwMilliseconds: u32) -> u32;
     fn OpenProcess(
         dwDesiredAccess: u32,
@@ -42,7 +42,7 @@ const PROCESS_TERMINATE: u32 = 0x0001;
 /// # Panics
 /// Panics if the child has already been reaped (id() returns None).
 pub fn get_handle(child: &Child) -> Handle {
-    Handle(child.as_raw_handle())
+    Handle(child.raw_handle())
 }
 
 /// Block until the child exits, **without reaping it**.
