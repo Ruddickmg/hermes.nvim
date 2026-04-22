@@ -58,31 +58,11 @@ impl<T> NvimMessenger<T> {
 
 #[async_trait::async_trait(?Send)]
 pub trait TransmitToNvim<T> {
-    fn blocking_send(&self, data: T) -> Result<()>;
     async fn send(&self, data: T) -> Result<()>;
 }
 
 #[async_trait::async_trait(?Send)]
 impl<T: Send + 'static> TransmitToNvim<T> for NvimMessenger<T> {
-    fn blocking_send(&self, data: T) -> Result<()> {
-        // Spawn a new thread with a tokio runtime to handle the blocking send
-        // This avoids requiring a tokio runtime on the current thread
-        let sender = self.sender.clone();
-        let handle = self.handle.clone();
-        std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async {
-                sender
-                    .send(data)
-                    .await
-                    .map_err(|e| Error::Internal(e.to_string()))
-            })?;
-            handle.send().map_err(|e| Error::Internal(e.to_string()))
-        })
-        .join()
-        .map_err(|_| Error::Internal("Thread panicked".to_string()))?
-    }
-
     async fn send(&self, data: T) -> Result<()> {
         self.sender
             .send(data)
