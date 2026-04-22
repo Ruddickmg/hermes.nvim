@@ -36,15 +36,16 @@ impl MessageMessenger {
 
         let handle = AsyncHandle::new(move || {
             while let Ok(message) = receiver.try_recv() {
-                // CRITICAL: This callback runs on Neovim's main thread
-                // We use catch_unwind per-item to prevent panics from crossing the FFI boundary
-                // and ensure remaining messages are processed even if one panics.
-                // Note: We do NOT attempt to log panics here - if the logging
-                // infrastructure is broken, we can't log. Silently swallow instead.
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    Self::send_message(message);
-                }))
-                .ok();
+                // CRITICAL: Defer Neovim API calls via vim.schedule to avoid
+                // calling them during uv_run() which can crash Neovim.
+                // See NvimMessenger::initialize for full explanation.
+                nvim_oxi::schedule(move |_| {
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        Self::send_message(message);
+                    }))
+                    .ok();
+                    Ok::<_, nvim_oxi::Error>(())
+                });
             }
         })
         .map_err(|e| Error::Internal(e.to_string()))?;

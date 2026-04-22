@@ -732,6 +732,8 @@ dependencies = [
  "criterion",
  "crossbeam-channel",
  "env_logger",
+ "futures",
+ "libc",
  "mlua",
  "mockall",
  "nvim-oxi",

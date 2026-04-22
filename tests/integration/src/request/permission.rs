@@ -9,8 +9,27 @@ use agent_client_protocol::{
 };
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
+use hermes::utilities::NvimRuntime;
+use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+fn mock_runtime() -> NvimRuntime {
+    NvimRuntime::new(Rc::new(
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create mock runtime"),
+    ))
+}
+
+/// Helper to block on an async future in synchronous tests
+fn block_on<F>(fut: F) -> F::Output
+where
+    F: std::future::Future,
+{
+    futures::executor::block_on(fut)
+}
 
 fn _create_permission_option(id: &str, name: &str) -> PermissionOption {
     PermissionOption::new(
@@ -44,12 +63,12 @@ fn invalid_json_data_returns_error() -> nvim_oxi::Result<()> {
     // Create Requests handler and add a permission request
     let state = Arc::new(Mutex::new(PluginState::default()));
     let requests =
-        Arc::new(Requests::new(state.clone()).map_err(|e| {
+        Arc::new(Requests::new(mock_runtime(), state.clone()).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let (sender, _receiver) = tokio::sync::oneshot::channel::<RequestPermissionOutcome>();
     let responder = Responder::PermissionResponse(sender);
-    let request_id = requests.add_request("test-session".to_string(), responder);
+    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
 
     // Invalid JSON that doesn't match RequestPermissionRequest structure
     let invalid_data = serde_json::json!({
@@ -57,7 +76,7 @@ fn invalid_json_data_returns_error() -> nvim_oxi::Result<()> {
         "another_field": 123
     });
 
-    let result = requests.default_response(&request_id, invalid_data);
+    let result = block_on(requests.default_response(&request_id, invalid_data));
     assert!(result.is_err(), "Should return error for invalid JSON data");
 
     Ok(())

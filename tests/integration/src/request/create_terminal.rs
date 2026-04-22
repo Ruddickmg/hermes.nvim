@@ -5,9 +5,28 @@ use agent_client_protocol::{CreateTerminalRequest, CreateTerminalResponse, Sessi
 use hermes::acp::Result;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
+use hermes::utilities::NvimRuntime;
+use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::{Mutex, oneshot};
 use uuid::Uuid;
+
+fn mock_runtime() -> NvimRuntime {
+    NvimRuntime::new(Rc::new(
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create mock runtime"),
+    ))
+}
+
+/// Helper to block on an async future in synchronous tests
+fn block_on<F>(fut: F) -> F::Output
+where
+    F: std::future::Future,
+{
+    futures::executor::block_on(fut)
+}
 
 fn create_terminal_request(command: &str, args: Vec<String>) -> CreateTerminalRequest {
     let mut request = CreateTerminalRequest::new(SessionId::from("test-session"), command);
@@ -23,10 +42,12 @@ fn setup_terminal_request(
     Uuid,
     oneshot::Receiver<Result<CreateTerminalResponse>>,
 ) {
-    let requests = Arc::new(Requests::new(Arc::new(Mutex::new(PluginState::default()))).unwrap());
+    let runtime = mock_runtime();
+    let requests =
+        Arc::new(Requests::new(runtime, Arc::new(Mutex::new(PluginState::default()))).unwrap());
     let (sender, receiver) = oneshot::channel::<Result<CreateTerminalResponse>>();
     let responder = Responder::TerminalCreate(sender, create_terminal_request(command, args));
-    let request_id = requests.add_request("test-session".to_string(), responder);
+    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
     (requests, request_id, receiver)
 }
 
@@ -40,13 +61,12 @@ fn create_terminal_cleanup_after_response() -> nvim_oxi::Result<()> {
 
     // User responds with their generated terminal ID
     let response_obj = nvim_oxi::Object::from(terminal_id);
-    requests
-        .handle_response(&request_id, response_obj)
+    block_on(requests.handle_response(&request_id, response_obj))
         .expect("Failed to handle response");
 
     // Wait for cleanup
     let cleaned_up = crate::helpers::ui::wait_for(
-        || requests.get_request(&request_id).is_none(),
+        || block_on(requests.get_request(&request_id)).is_none(),
         std::time::Duration::from_millis(500),
     );
 
@@ -66,8 +86,7 @@ fn create_terminal_user_handler_response_received() -> nvim_oxi::Result<()> {
 
     // User responds with their generated terminal ID
     let response_obj = nvim_oxi::Object::from(terminal_id);
-    requests
-        .handle_response(&request_id, response_obj)
+    block_on(requests.handle_response(&request_id, response_obj))
         .expect("Failed to handle response");
 
     // Agent should receive the response with user-generated ID
@@ -92,8 +111,7 @@ fn create_terminal_invalid_response_sends_error() -> nvim_oxi::Result<()> {
 
     // Send invalid response (integer instead of string)
     let response_obj = nvim_oxi::Object::from(42i64);
-    requests
-        .handle_response(&request_id, response_obj)
+    block_on(requests.handle_response(&request_id, response_obj))
         .expect("Failed to handle response");
 
     // Agent should receive an error

@@ -5,6 +5,7 @@
 //! and UI window detection (without requiring user interaction).
 //!
 
+use crate::helpers::mock_runtime;
 use crate::helpers::ui::{wait_for_floating_window, wait_for_some};
 use agent_client_protocol::{
     PermissionOption, PermissionOptionId, PermissionOptionKind, RequestPermissionRequest,
@@ -19,6 +20,14 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tracing::debug;
+
+/// Helper to block on an async future in synchronous tests
+fn block_on<F>(fut: F) -> F::Output
+where
+    F: std::future::Future,
+{
+    futures::executor::block_on(fut)
+}
 
 fn create_permission_option(id: &str, name: &str) -> PermissionOption {
     PermissionOption::new(
@@ -121,7 +130,7 @@ fn test_non_permission_request_not_permission() -> nvim_oxi::Result<()> {
     // Create Requests handler and add a write file request
     let state = Arc::new(Mutex::new(PluginState::default()));
     let requests =
-        Arc::new(Requests::new(state.clone()).map_err(|e| {
+        Arc::new(Requests::new(mock_runtime(), state.clone()).map_err(|e| {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let (sender, _receiver) =
@@ -132,12 +141,10 @@ fn test_non_permission_request_not_permission() -> nvim_oxi::Result<()> {
         "test content",
     );
     let responder = Responder::WriteFileResponse(sender, write_request);
-    let request_id = requests.add_request("test-session".to_string(), responder);
+    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
 
     // Get the request and check if it's a permission request
-    let request = requests
-        .get_request(&request_id)
-        .expect("Request should exist");
+    let request = block_on(requests.get_request(&request_id)).expect("Request should exist");
 
     // Verify this is NOT a permission request
     assert!(

@@ -1,30 +1,53 @@
+use crate::helpers::mock_runtime;
 use hermes::{
-    PluginState,
-    api::{SetupArgs, setup},
-    nvim::configuration::{
-        BufferConfigPartial, ClientConfigPartial, LogConfigPartial, LogFileConfigPartial,
-        LogTargetConfigPartial,
+    Handler, PluginState,
+    api::{Api, SetupArgs},
+    nvim::{
+        configuration::{
+            BufferConfigPartial, ClientConfigPartial, LogConfigPartial, LogFileConfigPartial,
+            LogTargetConfigPartial,
+        },
+        requests::Requests,
     },
     utilities::detect_project_storage_path,
 };
 use nvim_oxi;
 use pretty_assertions::assert_eq;
+use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+fn create_test_api(
+    plugin_state: Arc<Mutex<PluginState>>,
+    logger: &'static hermes::utilities::Logger,
+) -> hermes::api::Api {
+    let runtime = mock_runtime();
+    let requests = Rc::new(
+        Requests::new(runtime.clone(), plugin_state.clone()).expect("Failed to create requests"),
+    );
+    let handler = Arc::new(
+        Handler::new(plugin_state.clone(), runtime.clone(), requests.clone())
+            .expect("Failed to create handler"),
+    );
+    Api::new(plugin_state, logger, handler, requests)
+}
+
+/// Helper to block on an async future in synchronous tests
+fn block_on<F>(fut: F) -> F::Output
+where
+    F: std::future::Future,
+{
+    futures::executor::block_on(fut)
+}
 
 /// Test: setup() updates permissions correctly
 #[nvim_oxi::test]
 fn setup_updates_permissions_correctly() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(
-        plugin_state.clone(),
+    let logger =
         hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap())
-            .unwrap(),
-    );
-
-    let func: nvim_oxi::Function<SetupArgs, ()> =
-        nvim_oxi::conversion::FromObject::from_object(setup_fn)
-            .expect("Failed to convert setup function");
+            .unwrap();
+    let api = create_test_api(plugin_state.clone(), logger);
 
     let config = ClientConfigPartial {
         permissions: Some(hermes::nvim::configuration::PermissionsPartial {
@@ -34,8 +57,7 @@ fn setup_updates_permissions_correctly() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    func.call(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     assert!(!state.config.permissions.fs_write_access); // Single assertion
@@ -46,15 +68,10 @@ fn setup_updates_permissions_correctly() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_updates_buffer_config_correctly() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(
-        plugin_state.clone(),
+    let logger =
         hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap())
-            .unwrap(),
-    );
-
-    let func: nvim_oxi::Function<SetupArgs, ()> =
-        nvim_oxi::conversion::FromObject::from_object(setup_fn)
-            .expect("Failed to convert setup function");
+            .unwrap();
+    let api = create_test_api(plugin_state.clone(), logger);
 
     let config = ClientConfigPartial {
         buffer: Some(BufferConfigPartial {
@@ -63,8 +80,7 @@ fn setup_updates_buffer_config_correctly() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    func.call(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     assert!(state.config.buffer.auto_save); // Single assertion
@@ -75,15 +91,10 @@ fn setup_updates_buffer_config_correctly() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_updates_stdio_log_level() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(
-        plugin_state.clone(),
+    let logger =
         hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap())
-            .unwrap(),
-    );
-
-    let func: nvim_oxi::Function<SetupArgs, ()> =
-        nvim_oxi::conversion::FromObject::from_object(setup_fn)
-            .expect("Failed to convert setup function");
+            .unwrap();
+    let api = create_test_api(plugin_state.clone(), logger);
 
     let config = ClientConfigPartial {
         log: Some(LogConfigPartial {
@@ -98,8 +109,7 @@ fn setup_updates_stdio_log_level() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    func.call(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     assert_eq!(
@@ -113,15 +123,10 @@ fn setup_updates_stdio_log_level() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_updates_notification_log_level() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(
-        plugin_state.clone(),
+    let logger =
         hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap())
-            .unwrap(),
-    );
-
-    let func: nvim_oxi::Function<SetupArgs, ()> =
-        nvim_oxi::conversion::FromObject::from_object(setup_fn)
-            .expect("Failed to convert setup function");
+            .unwrap();
+    let api = create_test_api(plugin_state.clone(), logger);
 
     let config = ClientConfigPartial {
         log: Some(LogConfigPartial {
@@ -136,8 +141,7 @@ fn setup_updates_notification_log_level() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    func.call(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     assert_eq!(
@@ -151,15 +155,10 @@ fn setup_updates_notification_log_level() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_updates_message_log_level() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(
-        plugin_state.clone(),
+    let logger =
         hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap())
-            .unwrap(),
-    );
-
-    let func: nvim_oxi::Function<SetupArgs, ()> =
-        nvim_oxi::conversion::FromObject::from_object(setup_fn)
-            .expect("Failed to convert setup function");
+            .unwrap();
+    let api = create_test_api(plugin_state.clone(), logger);
 
     let config = ClientConfigPartial {
         log: Some(LogConfigPartial {
@@ -174,8 +173,7 @@ fn setup_updates_message_log_level() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    func.call(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     assert_eq!(
@@ -189,33 +187,28 @@ fn setup_updates_message_log_level() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_preserves_permissions_on_subsequent_calls() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(
-        plugin_state.clone(),
+    let logger =
         hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap())
-            .unwrap(),
-    );
-
-    let func: nvim_oxi::Function<SetupArgs, ()> =
-        nvim_oxi::conversion::FromObject::from_object(setup_fn)
-            .expect("Failed to convert setup function");
+            .unwrap();
+    let api = create_test_api(plugin_state.clone(), logger);
 
     // First call: set permissions
-    func.call(SetupArgs(Some(ClientConfigPartial {
+    block_on(api.setup(SetupArgs(Some(ClientConfigPartial {
         permissions: Some(hermes::nvim::configuration::PermissionsPartial {
             fs_write_access: Some(false),
             ..Default::default()
         }),
         ..Default::default()
-    })))
+    }))))
     .expect("Failed to call setup first time");
 
     // Second call: set buffer config (should keep permissions)
-    func.call(SetupArgs(Some(ClientConfigPartial {
+    block_on(api.setup(SetupArgs(Some(ClientConfigPartial {
         buffer: Some(BufferConfigPartial {
             auto_save: Some(true),
         }),
         ..Default::default()
-    })))
+    }))))
     .expect("Failed to call setup second time");
 
     let state = plugin_state.blocking_lock();
@@ -227,33 +220,28 @@ fn setup_preserves_permissions_on_subsequent_calls() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_updates_buffer_config_on_subsequent_calls() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(
-        plugin_state.clone(),
+    let logger =
         hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap())
-            .unwrap(),
-    );
-
-    let func: nvim_oxi::Function<SetupArgs, ()> =
-        nvim_oxi::conversion::FromObject::from_object(setup_fn)
-            .expect("Failed to convert setup function");
+            .unwrap();
+    let api = create_test_api(plugin_state.clone(), logger);
 
     // First call: set permissions
-    func.call(SetupArgs(Some(ClientConfigPartial {
+    block_on(api.setup(SetupArgs(Some(ClientConfigPartial {
         permissions: Some(hermes::nvim::configuration::PermissionsPartial {
             fs_write_access: Some(false),
             ..Default::default()
         }),
         ..Default::default()
-    })))
+    }))))
     .expect("Failed to call setup first time");
 
     // Second call: set buffer config
-    func.call(SetupArgs(Some(ClientConfigPartial {
+    block_on(api.setup(SetupArgs(Some(ClientConfigPartial {
         buffer: Some(BufferConfigPartial {
             auto_save: Some(true),
         }),
         ..Default::default()
-    })))
+    }))))
     .expect("Failed to call setup second time");
 
     let state = plugin_state.blocking_lock();
@@ -268,18 +256,13 @@ fn setup_with_empty_config_does_not_fail() -> nvim_oxi::Result<()> {
     // The Logger is already initialized by previous tests, so we just verify
     // that calling setup with an empty config doesn't panic.
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(
-        plugin_state.clone(),
+    let logger =
         hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap())
-            .unwrap(),
-    );
-
-    let func: nvim_oxi::Function<SetupArgs, ()> =
-        nvim_oxi::conversion::FromObject::from_object(setup_fn)
-            .expect("Failed to convert setup function");
+            .unwrap();
+    let api = create_test_api(plugin_state.clone(), logger);
 
     // Empty config - should not panic
-    let result = func.call(SetupArgs(None));
+    let result = block_on(api.setup(SetupArgs(None)));
 
     // Verify no error was returned
     assert!(result.is_ok(), "Setup with empty config should not fail");
@@ -291,18 +274,13 @@ fn setup_with_empty_config_does_not_fail() -> nvim_oxi::Result<()> {
 fn setup_with_empty_config_uses_default_permissions() -> nvim_oxi::Result<()> {
     // Test that setup() uses default permissions when given empty config.
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(
-        plugin_state.clone(),
+    let logger =
         hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap())
-            .unwrap(),
-    );
-
-    let func: nvim_oxi::Function<SetupArgs, ()> =
-        nvim_oxi::conversion::FromObject::from_object(setup_fn)
-            .expect("Failed to convert setup function");
+            .unwrap();
+    let api = create_test_api(plugin_state.clone(), logger);
 
     // Empty config - should not panic
-    func.call(SetupArgs(None)).expect("Setup should not fail");
+    block_on(api.setup(SetupArgs(None))).expect("Setup should not fail");
 
     // Verify state uses defaults
     let state = plugin_state.blocking_lock();
@@ -317,18 +295,13 @@ fn setup_with_empty_config_uses_default_permissions() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_works_with_none() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(
-        plugin_state.clone(),
+    let logger =
         hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap())
-            .unwrap(),
-    );
-
-    let func: nvim_oxi::Function<SetupArgs, ()> =
-        nvim_oxi::conversion::FromObject::from_object(setup_fn)
-            .expect("Failed to convert setup function");
+            .unwrap();
+    let api = create_test_api(plugin_state.clone(), logger);
 
     // None config
-    func.call(SetupArgs(None)).expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(None))).expect("Failed to call setup");
 
     // Should use defaults
     let state = plugin_state.blocking_lock();
@@ -340,15 +313,10 @@ fn setup_works_with_none() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_enables_log_file_config() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(
-        plugin_state.clone(),
+    let logger =
         hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap())
-            .unwrap(),
-    );
-
-    let func: nvim_oxi::Function<SetupArgs, ()> =
-        nvim_oxi::conversion::FromObject::from_object(setup_fn)
-            .expect("Failed to convert setup function");
+            .unwrap();
+    let api = create_test_api(plugin_state.clone(), logger);
 
     let temp_dir = std::env::temp_dir();
     let log_path = temp_dir.join("test_log_file.log");
@@ -367,8 +335,7 @@ fn setup_enables_log_file_config() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    func.call(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     let file_config = state.config.log.file.clone();
@@ -380,15 +347,10 @@ fn setup_enables_log_file_config() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_sets_log_file_path() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(
-        plugin_state.clone(),
+    let logger =
         hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap())
-            .unwrap(),
-    );
-
-    let func: nvim_oxi::Function<SetupArgs, ()> =
-        nvim_oxi::conversion::FromObject::from_object(setup_fn)
-            .expect("Failed to convert setup function");
+            .unwrap();
+    let api = create_test_api(plugin_state.clone(), logger);
 
     let config = ClientConfigPartial {
         log: Some(LogConfigPartial {
@@ -404,8 +366,7 @@ fn setup_sets_log_file_path() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    func.call(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     let file_config = state.config.log.file.clone();
@@ -417,15 +378,10 @@ fn setup_sets_log_file_path() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_sets_log_file_level() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(
-        plugin_state.clone(),
+    let logger =
         hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap())
-            .unwrap(),
-    );
-
-    let func: nvim_oxi::Function<SetupArgs, ()> =
-        nvim_oxi::conversion::FromObject::from_object(setup_fn)
-            .expect("Failed to convert setup function");
+            .unwrap();
+    let api = create_test_api(plugin_state.clone(), logger);
 
     let config = ClientConfigPartial {
         log: Some(LogConfigPartial {
@@ -441,8 +397,7 @@ fn setup_sets_log_file_level() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    func.call(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     let file_config = state.config.log.file.clone();
@@ -454,15 +409,10 @@ fn setup_sets_log_file_level() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_updates_stdio_log_format() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(
-        plugin_state.clone(),
+    let logger =
         hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap())
-            .unwrap(),
-    );
-
-    let func: nvim_oxi::Function<SetupArgs, ()> =
-        nvim_oxi::conversion::FromObject::from_object(setup_fn)
-            .expect("Failed to convert setup function");
+            .unwrap();
+    let api = create_test_api(plugin_state.clone(), logger);
 
     let config = ClientConfigPartial {
         log: Some(LogConfigPartial {
@@ -477,8 +427,7 @@ fn setup_updates_stdio_log_format() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    func.call(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     assert_eq!(
@@ -492,15 +441,10 @@ fn setup_updates_stdio_log_format() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn setup_updates_notification_log_format() -> nvim_oxi::Result<()> {
     let plugin_state = Arc::new(Mutex::new(PluginState::new()));
-    let setup_fn = setup(
-        plugin_state.clone(),
+    let logger =
         hermes::utilities::logging::Logger::inititalize(&detect_project_storage_path().unwrap())
-            .unwrap(),
-    );
-
-    let func: nvim_oxi::Function<SetupArgs, ()> =
-        nvim_oxi::conversion::FromObject::from_object(setup_fn)
-            .expect("Failed to convert setup function");
+            .unwrap();
+    let api = create_test_api(plugin_state.clone(), logger);
 
     let config = ClientConfigPartial {
         log: Some(LogConfigPartial {
@@ -515,8 +459,7 @@ fn setup_updates_notification_log_format() -> nvim_oxi::Result<()> {
         ..Default::default()
     };
 
-    func.call(SetupArgs(Some(config)))
-        .expect("Failed to call setup");
+    block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
     let state = plugin_state.blocking_lock();
     assert_eq!(

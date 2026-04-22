@@ -8,8 +8,9 @@ pub mod terminal;
 
 use crate::{
     Handler,
-    acp::connection::ConnectionManager,
-    utilities::{Logger, detect_project_storage_path},
+    acp::error::Error,
+    api::{DisconnectArgs, Hermes},
+    utilities::{Logger, NvimRuntime, detect_project_storage_path},
 };
 use nvim_oxi::{
     Dictionary,
@@ -17,7 +18,7 @@ use nvim_oxi::{
 };
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use tokio::sync::Mutex;
-use tracing::{debug, error, info};
+use tracing::error;
 
 pub const GROUP: &str = "hermes";
 
@@ -25,11 +26,32 @@ pub const GROUP: &str = "hermes";
 pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     let storage_path = detect_project_storage_path()?;
     let logger = Logger::inititalize(&storage_path)?;
+    let runtime = Rc::new(
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| Error::Internal(e.to_string()))?,
+    );
+    let nvim_runtime = NvimRuntime::new(runtime);
     let plugin_state = Arc::new(Mutex::new(state::PluginState::new()));
-    let request_handler = Rc::new(requests::Requests::new(plugin_state.clone())?);
-    let event_handler = Arc::new(Handler::new(plugin_state.clone(), request_handler.clone())?);
-    let connection_manager = Rc::new(RefCell::new(ConnectionManager::new(plugin_state.clone())));
-    let connection = connection_manager.clone();
+    let request_handler = Rc::new(requests::Requests::new(
+        nvim_runtime.clone(),
+        plugin_state.clone(),
+    )?);
+    let event_handler = Arc::new(Handler::new(
+        plugin_state.clone(),
+        nvim_runtime.clone(),
+        request_handler.clone(),
+    )?);
+    let api = Rc::new(RefCell::new(api::Api::new(
+        plugin_state,
+        logger,
+        event_handler,
+        request_handler,
+    )));
+    let cloned = api.clone();
+    let shutdown_runtime = nvim_runtime.clone();
+    let hermes = Hermes::new(nvim_runtime, api)?;
 
     let group =
         nvim_oxi::api::create_augroup(GROUP, &CreateAugroupOpts::default()).map_err(|e| {
@@ -45,48 +67,24 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
         &CreateAutocmdOpts::builder()
             .group(group)
             .callback(move |_| {
-                debug!("Closing all agent connections...");
-                match connection.borrow_mut().close_all() {
-                    Ok(_) => info!("All agent connections have been closed"),
-                    Err(e) => error!("Error occurred while exiting neovim: {:?}", e),
+                match cloned.try_borrow_mut() {
+                    Ok(mut app) => {
+                        shutdown_runtime.block_on_primary(async move {
+                            app.disconnect(DisconnectArgs::All)
+                                .await
+                                .inspect_err(|e| error!("Error disconnecting: {:?}", e))
+                                .ok();
+                        });
+                    }
+                    Err(e) => error!(
+                        "An error occurred while disconnecting sessions on exit: {:?}",
+                        e
+                    ),
                 };
                 true
             })
             .build(),
     )?;
 
-    Ok(Dictionary::from_iter([
-        (
-            "cancel",
-            api::cancel(connection_manager.clone(), request_handler.clone()),
-        ),
-        (
-            "connect",
-            api::connect(connection_manager.clone(), event_handler.clone()),
-        ),
-        (
-            "authenticate",
-            api::authenticate(connection_manager.clone()),
-        ),
-        ("disconnect", api::disconnect(connection_manager.clone())),
-        (
-            "create_session",
-            api::create_session(connection_manager.clone(), plugin_state.clone()),
-        ),
-        (
-            "load_session",
-            api::load_session(connection_manager.clone(), plugin_state.clone()),
-        ),
-        (
-            "list_sessions",
-            api::list_sessions(connection_manager.clone(), plugin_state.clone()),
-        ),
-        (
-            "prompt",
-            api::prompt(connection_manager.clone(), plugin_state.clone()),
-        ),
-        ("set_mode", api::set_mode(connection_manager.clone())),
-        ("respond", api::respond(request_handler)),
-        ("setup", api::setup(plugin_state, logger)),
-    ]))
+    Ok(hermes.into())
 }
