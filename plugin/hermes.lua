@@ -228,7 +228,7 @@ vim.api.nvim_create_user_command("Hermes", function(args)
 		end
 	elseif subcmd == "clean" then
 		-- Clear binary
-		logger.notify("Cleaning Hermes installation...", vim.log.levels.INFO)
+		logger.notify("Cleaning Hermes installation...", vim.log.levels.DEBUG)
 		local binary = require("hermes.binary")
 		local data_dir = binary.get_data_dir()
 
