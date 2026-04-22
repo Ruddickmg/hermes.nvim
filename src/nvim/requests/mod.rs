@@ -3,8 +3,9 @@ use crate::{
     PluginState,
     acp::{Result, error::Error},
     nvim::terminal::{TerminalInfo, TerminalManager},
-    utilities::NvimMessenger,
+    utilities::{NvimMessenger, NvimRuntime},
 };
+use async_trait::async_trait;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
@@ -18,18 +19,23 @@ pub struct Requests {
     nvim_handler: NvimMessenger<Uuid>,
     terminal_manager: TerminalManager<TerminalInfo>,
     state: Arc<Mutex<PluginState>>,
+    nvim_runtime: NvimRuntime,
 }
 
 impl Requests {
-    pub fn new(state: Arc<Mutex<PluginState>>) -> Result<Self> {
+    pub fn new(nvim_runtime: NvimRuntime, state: Arc<Mutex<PluginState>>) -> Result<Self> {
         let list = Arc::new(Mutex::new(HashMap::new()));
         let pending = list.clone();
-        let nvim_handler = NvimMessenger::initialize(move |id| {
-            let mut lock = list.blocking_lock();
-            lock.remove(&id);
-            drop(lock);
+        let nvim_handler = NvimMessenger::initialize(nvim_runtime.clone(), move |id| {
+            let list = list.clone();
+            async move {
+                let mut lock = list.lock().await;
+                lock.remove(&id);
+                drop(lock);
+            }
         })?;
         Ok(Self {
+            nvim_runtime,
             state: state.clone(),
             pending,
             nvim_handler,
@@ -38,21 +44,23 @@ impl Requests {
     }
 }
 
+#[async_trait(?Send)]
 pub trait RequestHandler {
-    fn default_response(&self, request_id: &Uuid, data: serde_json::Value) -> Result<()>;
-    fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()>;
-    fn cancel_session_requests(&self, session_id: String) -> Result<()>;
-    fn add_request(&self, session_id: String, responder: Responder) -> Uuid;
-    fn get_request(&self, request_id: &Uuid) -> Option<Request>;
+    async fn default_response(&self, request_id: &Uuid, data: serde_json::Value) -> Result<()>;
+    async fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()>;
+    async fn cancel_session_requests(&self, session_id: String) -> Result<()>;
+    async fn add_request(&self, session_id: String, responder: Responder) -> Uuid;
+    async fn get_request(&self, request_id: &Uuid) -> Option<Request>;
 }
 
+#[async_trait(?Send)]
 impl RequestHandler for Requests {
-    fn default_response(&self, request_id: &Uuid, data: serde_json::Value) -> Result<()> {
-        let pending = self.pending.blocking_lock();
+    async fn default_response(&self, request_id: &Uuid, data: serde_json::Value) -> Result<()> {
+        let pending = self.pending.lock().await;
         let retrieved = pending.get(request_id).cloned();
         drop(pending);
         if let Some(mut request) = retrieved {
-            request.default(data, self.terminal_manager.clone())
+            request.default(data, self.terminal_manager.clone()).await
         } else {
             Err(Error::Internal(format!(
                 "No pending request found for ID: '{}'",
@@ -61,43 +69,57 @@ impl RequestHandler for Requests {
         }
     }
 
-    fn add_request(&self, session_id: String, responder: Responder) -> Uuid {
-        let mut pending = self.pending.blocking_lock();
+    async fn add_request(&self, session_id: String, responder: Responder) -> Uuid {
+        let mut pending = self.pending.lock().await;
         let finisher = self.nvim_handler.clone();
-        let request = Request::new(session_id, finisher, responder, self.state.clone());
+        let request = Request::new(
+            session_id,
+            finisher,
+            responder,
+            self.state.clone(),
+            self.nvim_runtime.clone(),
+        );
         let request_id = request.id();
         pending.insert(request_id, request);
         drop(pending);
         request_id
     }
 
-    fn get_request(&self, request_id: &Uuid) -> Option<Request> {
-        let pending = self.pending.blocking_lock();
+    async fn get_request(&self, request_id: &Uuid) -> Option<Request> {
+        let pending = self.pending.lock().await;
         let request = pending.get(request_id).cloned();
         drop(pending);
         request
     }
 
-    fn cancel_session_requests(&self, session_id: String) -> Result<()> {
-        let mut pending = self.pending.blocking_lock();
-        pending
+    async fn cancel_session_requests(&self, session_id: String) -> Result<()> {
+        let mut pending = self.pending.lock().await;
+        let requests: Vec<_> = pending
             .extract_if(|_, request| {
                 request.is_permission_request() && request.is_session(session_id.clone())
             })
-            .map(|(_, request)| request.cancel())
-            .collect::<Result<Vec<()>>>()?;
+            .map(|(_, request)| request)
+            .collect();
         drop(pending);
+
+        futures::future::try_join_all(
+            requests
+                .into_iter()
+                .map(|request| async move { request.cancel().await }),
+        )
+        .await?;
         Ok(())
     }
 
-    fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()> {
-        let pending = self.pending.blocking_lock();
+    async fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()> {
+        let pending = self.pending.lock().await;
         let retrieved = pending.get(request_id).cloned();
         drop(pending);
 
         if let Some(request) = retrieved {
             request
                 .respond(response)
+                .await
                 .map_err(|e| Error::Internal(format!("Failed to respond to request: {}", e)))?;
             Ok(())
         } else {

@@ -14,6 +14,7 @@ use crate::{
     },
 };
 
+#[tracing::instrument(level = "trace", skip(connection, client))]
 async fn handle_request(
     connection: &ClientSideConnection,
     client: &Arc<Handler>,
@@ -73,7 +74,7 @@ async fn handle_request(
     Ok(())
 }
 
-#[instrument(level = "trace", skip_all)]
+#[instrument(level = "trace", skip(connection, receiver, client))]
 pub async fn handle_requests(
     connection: ClientSideConnection,
     mut receiver: Receiver<UserRequest>,

@@ -253,7 +253,7 @@ end
 local function handle_load_success(loaded_module, fn)
 	_native = loaded_module
 	_loading_state = "READY"
-	logging.notify("Successfully Loaded", vim.log.levels.INFO)
+	logging.notify("Successfully Loaded", vim.log.levels.DEBUG)
 	fn()
 
 	-- Execute any queued calls

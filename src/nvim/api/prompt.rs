@@ -3,15 +3,13 @@ use agent_client_protocol::{
     ImageContent, PromptRequest, ResourceLink, TextContent, TextResourceContents,
 };
 use nvim_oxi::{
-    Array, Dictionary, Function, Object, ObjectKind,
+    Array, Dictionary, Object, ObjectKind,
     conversion::{Error as ConversionError, FromObject},
     lua::{Error, Poppable, Pushable},
 };
-use std::{cell::RefCell, rc::Rc, sync::Arc};
-use tokio::sync::Mutex;
-use tracing::{debug, error, instrument};
+use tracing::instrument;
 
-use crate::{PluginState, acp::connection::ConnectionManager};
+use crate::api::Api;
 
 /// Extracts a required string field from a Lua dictionary.
 fn required_string(dict: &Dictionary, key: &str) -> Result<String, ConversionError> {
@@ -323,49 +321,40 @@ impl Pushable for PromptContent {
 /// Tuple for two positional arguments: (session_id, content)
 pub type PromptArgs = (String, PromptContent);
 
-#[instrument(level = "trace", skip_all)]
-pub fn prompt(
-    connection: Rc<RefCell<ConnectionManager>>,
-    state: Arc<Mutex<PluginState>>,
-) -> Object {
-    let function: Function<PromptArgs, Result<(), Error>> =
-        Function::from_fn(move |(session_id, content): PromptArgs| {
-            debug!("Prompt function called with session_id: {}", session_id);
-            let state = state.blocking_lock();
-            let agent_info = state.agent_info.clone();
-            drop(state);
-            let can_send_images = agent_info.can_send_images();
-            let can_send_audio = agent_info.can_send_audio();
-            let can_send_embedded = agent_info.can_send_embedded_context();
-            let content_blocks: Vec<ContentBlock> = content
-                .into_vec()
-                .into_iter()
-                .map(Into::into)
-                .filter(|content| match content {
-                    ContentBlock::Image(_) => can_send_images,
-                    ContentBlock::Audio(_) => can_send_audio,
-                    ContentBlock::Resource(_) => can_send_embedded,
-                    _ => true,
-                })
-                .collect();
+impl Api {
+    #[instrument(level = "trace", skip_all)]
+    pub async fn prompt(&self, (session_id, content): PromptArgs) -> crate::acp::Result<()> {
+        let state = self.state.lock().await;
+        let agent_info = state.agent_info.clone();
+        drop(state);
+        let can_send_images = agent_info.can_send_images();
+        let can_send_audio = agent_info.can_send_audio();
+        let can_send_embedded = agent_info.can_send_embedded_context();
+        let content_blocks: Vec<ContentBlock> = content
+            .into_vec()
+            .into_iter()
+            .map(Into::into)
+            .filter(|content| match content {
+                ContentBlock::Image(_) => can_send_images,
+                ContentBlock::Audio(_) => can_send_audio,
+                ContentBlock::Resource(_) => can_send_embedded,
+                _ => true,
+            })
+            .collect();
 
-            let request = PromptRequest::new(session_id, content_blocks);
+        let request = PromptRequest::new(session_id, content_blocks);
+        let connection = self
+            .connection
+            .get_current_connection()
+            .await
+            .ok_or_else(|| {
+                crate::acp::error::Error::Connection(
+                    "You are not connected to an agent, call connect before \"prompt\"".to_string(),
+                )
+            })?;
 
-            let conn = match connection.borrow().get_current_connection() {
-                Some(c) => c,
-                None => {
-                    error!("No connection found, call the connect function first");
-                    return Ok(());
-                }
-            };
-
-            if let Err(e) = conn.prompt(request) {
-                error!("Error sending prompt: {:?}", e);
-            }
-
-            Ok(())
-        });
-    function.into()
+        connection.prompt(request).await
+    }
 }
 
 #[cfg(test)]

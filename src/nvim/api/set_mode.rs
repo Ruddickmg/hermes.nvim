@@ -1,38 +1,22 @@
-use agent_client_protocol::SetSessionModeRequest;
-use nvim_oxi::{Function, Object, lua::Error};
-use std::{cell::RefCell, rc::Rc};
-use tracing::{debug, error, instrument};
-
-use crate::acp::connection::ConnectionManager;
+use crate::{
+    acp::{Result, error::Error},
+    api::Api,
+};
 
 /// Tuple for two positional arguments: (session_id, mode_id)
 pub type SetModeArgs = (String, String);
 
-#[instrument(level = "trace", skip_all)]
-pub fn set_mode(connection: Rc<RefCell<ConnectionManager>>) -> Object {
-    let function: Function<SetModeArgs, Result<(), Error>> = Function::from_fn(
-        move |(session_id, mode_id): SetModeArgs| -> Result<(), Error> {
-            debug!(
-                "SetMode function called with session_id: {}, mode_id: {}",
-                session_id, mode_id
-            );
+impl Api {
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub async fn set_mode(&self, (session_id, mode_id): SetModeArgs) -> Result<()> {
+        let request = agent_client_protocol::SetSessionModeRequest::new(session_id, mode_id);
 
-            let request = SetSessionModeRequest::new(session_id, mode_id);
+        let connection = self
+            .connection
+            .get_current_connection()
+            .await
+            .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
 
-            let conn = match connection.borrow().get_current_connection() {
-                Some(c) => c,
-                None => {
-                    error!("No connection found, call the connect function first");
-                    return Ok(());
-                }
-            };
-
-            if let Err(e) = conn.set_mode(request) {
-                error!("Error setting mode: {:?}", e);
-            }
-
-            Ok(())
-        },
-    );
-    function.into()
+        connection.set_mode(request).await
+    }
 }

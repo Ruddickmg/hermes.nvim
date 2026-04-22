@@ -1,37 +1,23 @@
-use nvim_oxi::{Function, Object};
-use std::rc::Rc;
-use tracing::{debug, error, instrument};
+use tracing::instrument;
 use uuid::Uuid;
 
-use crate::nvim::requests::RequestHandler;
+use crate::{
+    acp::{Result, error::Error},
+    api::Api,
+};
 
 pub type RespondArgs = (String, nvim_oxi::Object);
 
-#[instrument(level = "trace", skip_all)]
-pub fn respond<H: RequestHandler + 'static>(requests: Rc<H>) -> Object {
-    let function: Function<RespondArgs, Result<(), nvim_oxi::lua::Error>> = Function::from_fn(
-        move |(request_id, response_data): RespondArgs| -> Result<(), nvim_oxi::lua::Error> {
-            debug!("Respond function called with request_id: {}", request_id);
-
-            // Parse the request ID as UUID
-            let request_uuid = match Uuid::parse_str(&request_id) {
-                Ok(uuid) => uuid,
-                Err(e) => {
-                    error!("Invalid request ID format '{}': {}", request_id, e);
-                    return Ok(());
-                }
-            };
-
-            if let Err(e) = requests.handle_response(&request_uuid, response_data) {
-                error!(
-                    "Error handling response for request {}: {:?}",
-                    request_id, e
-                );
-            }
-
-            debug!("Respond completed for request {}", request_id);
-            Ok(())
-        },
-    );
-    function.into()
+impl Api {
+    #[instrument(level = "trace", skip_all)]
+    pub async fn respond(&self, (request_id, response_data): RespondArgs) -> Result<()> {
+        let request_uuid = Uuid::parse_str(&request_id)
+            .map_err(|e| Error::InvalidInput(format!("Invalid response id: {:?}", e)))?;
+        crate::nvim::requests::RequestHandler::handle_response(
+            &*self.request_handler,
+            &request_uuid,
+            response_data,
+        )
+        .await
+    }
 }

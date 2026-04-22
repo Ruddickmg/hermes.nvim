@@ -1,6 +1,7 @@
 //! Integration tests for application utilities (mirrors src/utilities/)
 pub mod file;
 pub mod logging;
+pub mod message_messenger;
 pub mod notification_messenger;
 pub mod nvim;
 pub mod project;

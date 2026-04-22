@@ -1,13 +1,12 @@
 use nvim_oxi::{
-    Function, Object, ObjectKind,
+    Object, ObjectKind,
     conversion::{self, FromObject},
     lua::{self, Error, Poppable, Pushable},
     serde::SerializeError,
 };
-use std::{cell::RefCell, rc::Rc};
-use tracing::{debug, error, instrument};
+use tracing::instrument;
 
-use crate::acp::connection::{Assistant, ConnectionManager};
+use crate::{acp::connection::Assistant, api::Api};
 
 #[derive(Clone, Debug, Default)]
 pub enum DisconnectArgs {
@@ -106,30 +105,15 @@ impl Pushable for DisconnectArgs {
     }
 }
 
-#[instrument(level = "trace", skip_all)]
-pub fn disconnect(connection: Rc<RefCell<ConnectionManager>>) -> Object {
-    let function: Function<DisconnectArgs, Result<(), Error>> =
-        Function::from_fn(move |args: DisconnectArgs| -> Result<(), Error> {
-            debug!("Disconnect function called with {:#?}", args);
-            let mut manager = match connection.try_borrow_mut() {
-                Ok(m) => m,
-                Err(e) => {
-                    error!("Failed to borrow connection manager: {}", e);
-                    return Ok(());
-                }
-            };
-            let result = match args {
-                DisconnectArgs::Multiple(agents) => manager.disconnect(agents),
-                DisconnectArgs::Single(agent) => manager.disconnect(vec![agent.clone()]),
-                DisconnectArgs::All => manager.close_all(),
-            };
-            if let Err(e) = result {
-                error!("Error during disconnect: {:?}", e);
-            }
-            drop(manager);
-            Ok(())
-        });
-    function.into()
+impl Api {
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub async fn disconnect(&mut self, args: DisconnectArgs) -> crate::acp::Result<()> {
+        match args {
+            DisconnectArgs::Multiple(agents) => self.connection.disconnect(agents),
+            DisconnectArgs::Single(agent) => self.connection.disconnect(vec![agent]),
+            DisconnectArgs::All => self.connection.close_all(),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
 //! Integration tests for Handler notification and permissions
-use crate::helpers::MockRequestHandler;
+use crate::helpers::{MockRequestHandler, mock_runtime};
 use agent_client_protocol::{
     Client, ContentBlock, ContentChunk, Error, SessionNotification, SessionUpdate, TextContent,
     UsageUpdate,
@@ -20,8 +20,12 @@ fn test_session_notification_permissions_denied() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     state.blocking_lock().config.permissions.send_notifications = false;
 
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     let notification = create_test_notification();
     let res = tokio_test::block_on(handler.session_notification(notification));
@@ -38,8 +42,12 @@ fn test_session_notification_permissions_denied() -> nvim_oxi::Result<()> {
 fn test_session_notification_permissions_allowed() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
 
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     let notification = create_test_notification();
     let res: agent_client_protocol::Result<()> =
@@ -54,8 +62,12 @@ fn test_can_write_returns_false_when_disabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     state.blocking_lock().config.permissions.fs_write_access = false;
 
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     let result = tokio_test::block_on(handler.can_write());
     assert!(!result, "Should return false when disabled");
@@ -68,8 +80,12 @@ fn test_can_read_returns_false_when_disabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     state.blocking_lock().config.permissions.fs_read_access = false;
 
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     let result = tokio_test::block_on(handler.can_read());
     assert!(!result, "Should return false when disabled");
@@ -82,8 +98,12 @@ fn test_can_access_terminal_returns_false_when_disabled() -> nvim_oxi::Result<()
     let state = Arc::new(Mutex::new(PluginState::default()));
     state.blocking_lock().config.permissions.terminal_access = false;
 
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     let result = tokio_test::block_on(handler.can_access_terminal());
     assert!(!result, "Should return false when disabled");
@@ -96,8 +116,12 @@ fn test_can_request_permissions_returns_false_when_disabled() -> nvim_oxi::Resul
     let state = Arc::new(Mutex::new(PluginState::default()));
     state.blocking_lock().config.permissions.request_permissions = false;
 
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     let result = tokio_test::block_on(handler.can_request_permissions());
     assert!(!result, "Should return false when disabled");
@@ -113,8 +137,12 @@ fn test_can_request_permissions_returns_false_when_disabled() -> nvim_oxi::Resul
 fn test_can_write_returns_true_when_enabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
 
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     // fs_write_access is true by default - covers the return true path
     let result = tokio_test::block_on(handler.can_write());
@@ -127,8 +155,12 @@ fn test_can_write_returns_true_when_enabled() -> nvim_oxi::Result<()> {
 fn test_can_read_returns_true_when_enabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
 
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     // fs_read_access is true by default - covers the return true path
     let result = tokio_test::block_on(handler.can_read());
@@ -141,8 +173,12 @@ fn test_can_read_returns_true_when_enabled() -> nvim_oxi::Result<()> {
 fn test_can_access_terminal_returns_true_when_enabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
 
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     // terminal_access is true by default - covers the return true path
     let result = tokio_test::block_on(handler.can_access_terminal());
@@ -155,8 +191,12 @@ fn test_can_access_terminal_returns_true_when_enabled() -> nvim_oxi::Result<()> 
 fn test_can_request_permissions_returns_true_when_enabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
 
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     // request_permissions is true by default - covers the return true path
     let result = tokio_test::block_on(handler.can_request_permissions());
@@ -168,8 +208,12 @@ fn test_can_request_permissions_returns_true_when_enabled() -> nvim_oxi::Result<
 #[nvim_oxi::test]
 fn test_set_agent_info_updates_agent_information() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     let agent = hermes::acp::connection::Assistant::from("test-agent");
     let info = agent_client_protocol::InitializeResponse::new(
@@ -191,8 +235,12 @@ fn test_set_agent_info_updates_agent_information() -> nvim_oxi::Result<()> {
 fn test_session_notification_usage_update_succeeds() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
 
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     let usage = UsageUpdate::new(1000, 200000);
     let notification = SessionNotification::new("session_id", SessionUpdate::UsageUpdate(usage));
@@ -211,8 +259,12 @@ fn test_can_receive_notifications_returns_false_when_disabled() -> nvim_oxi::Res
     let state = Arc::new(Mutex::new(PluginState::default()));
     state.blocking_lock().config.permissions.send_notifications = false;
 
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     let result = tokio_test::block_on(handler.can_receive_notifications());
     assert!(!result, "Should return false when disabled");
@@ -224,8 +276,12 @@ fn test_can_receive_notifications_returns_false_when_disabled() -> nvim_oxi::Res
 fn test_can_receive_notifications_returns_true_when_enabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
 
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     // send_notifications is true by default - covers the return true path
     let result = tokio_test::block_on(handler.can_receive_notifications());
@@ -244,8 +300,12 @@ fn test_execute_autocommand_request_sends_with_responder() -> nvim_oxi::Result<(
     use tokio::sync::oneshot;
 
     let state = Arc::new(Mutex::new(PluginState::default()));
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
     let responder = Responder::WriteFileResponse(
@@ -281,10 +341,13 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
     use tokio::sync::oneshot;
     use uuid::Uuid;
 
+    use async_trait::async_trait;
+
     // Create a mock that fails on default_response to trigger error! at lines 74-77
     struct FailingMockRequestHandler;
+    #[async_trait(?Send)]
     impl RequestHandler for FailingMockRequestHandler {
-        fn default_response(
+        async fn default_response(
             &self,
             _request_id: &Uuid,
             _data: serde_json::Value,
@@ -295,7 +358,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
             ))
         }
 
-        fn handle_response(
+        async fn handle_response(
             &self,
             _request_id: &Uuid,
             _response: nvim_oxi::Object,
@@ -303,22 +366,26 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
             Ok(())
         }
 
-        fn cancel_session_requests(&self, _session_id: String) -> hermes::acp::Result<()> {
+        async fn cancel_session_requests(&self, _session_id: String) -> hermes::acp::Result<()> {
             Ok(())
         }
 
-        fn add_request(&self, _session_id: String, _responder: Responder) -> Uuid {
+        async fn add_request(&self, _session_id: String, _responder: Responder) -> Uuid {
             Uuid::new_v4()
         }
 
-        fn get_request(&self, _request_id: &Uuid) -> Option<hermes::nvim::requests::Request> {
+        async fn get_request(&self, _request_id: &Uuid) -> Option<hermes::nvim::requests::Request> {
             None
         }
     }
 
     let state = Arc::new(Mutex::new(PluginState::default()));
-    let handler = Handler::new(state.clone(), std::rc::Rc::new(FailingMockRequestHandler))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        std::rc::Rc::new(FailingMockRequestHandler),
+    )
+    .expect("Handler creation should succeed");
 
     // Create a responder which will generate a request_id
     // But don't attach any autocommand listener for "TestErrorCommand"
@@ -367,8 +434,12 @@ fn test_no_listener_no_request_triggers_warn_path() -> nvim_oxi::Result<()> {
     // Test line 80: "No listener attached for command" warn! path (else branch)
     // This triggers when no autocommand listener is attached AND no request is provided
     let state = Arc::new(Mutex::new(PluginState::default()));
-    let handler = Handler::new(state.clone(), Rc::new(MockRequestHandler::new()))
-        .expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
 
     // Call execute_autocommand (not execute_autocommand_request) with no listener
     // This passes None for response_data, hitting the else branch at line 79-80

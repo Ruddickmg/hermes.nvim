@@ -9,7 +9,7 @@ use crate::{
         GROUP,
         requests::{RequestHandler, Responder},
     },
-    utilities::{NvimMessenger, TransmitToNvim},
+    utilities::{NvimMessenger, NvimRuntime, TransmitToNvim},
 };
 use nvim_oxi::{Array, Dictionary, Object, api::opts::ExecAutocmdsOpts};
 use serde::Serialize;
@@ -28,56 +28,68 @@ impl Handler {
     #[instrument(level = "trace", skip_all)]
     pub fn new<R: RequestHandler + 'static>(
         state: Arc<Mutex<PluginState>>,
+        nvim_runtime: NvimRuntime,
         requests: Rc<R>,
     ) -> Result<Self> {
-        let nvim_requests = requests.clone();
         let channel = NvimMessenger::<NvimHandleArgs>::initialize(
-            move |(command, mut data, response_data)| {
-                debug!("Received autocommand: {}, with data: {:#?}", command, data);
-                let request = response_data.map(|(res, session_id)| {
-                    let request_id = nvim_requests.add_request(session_id, res);
-                    data["requestId"] = serde_json::Value::String(request_id.to_string());
-                    debug!("Request data: {:#?}", data);
-                    request_id
-                });
-                if Self::listener_attached(command.to_string()) {
-                    match serde_json::from_value::<Object>(data) {
-                        Ok(obj) => {
-                            let opts = ExecAutocmdsOpts::builder()
-                                .patterns(command.to_string())
-                                .data(obj)
-                                .group(GROUP)
-                                .build();
-                            debug!(
-                                "Executing autocommand: {} with options: {:#?}",
-                                command, opts
-                            );
-                            if let Err(err) = nvim_oxi::api::exec_autocmds(["User"], &opts) {
-                                error!("Error executing autocommand: '{}': {:#?}", command, err);
-                            }
-                        }
-                        Err(e) => {
-                            error!(
-                                "Failed to convert JSON to Neovim Object for command '{}': {:?}",
-                                command, e
-                            );
-                        }
+            nvim_runtime,
+            move |(command, request_data, response_data)| {
+                let datas = request_data.clone();
+                let nvim_requests = requests.clone();
+                async move {
+                    let mut data = datas.clone();
+                    debug!("Received autocommand: {}, with data: {:#?}", command, data);
+                    let request = if let Some((res, session_id)) = response_data {
+                        let request_id = nvim_requests.add_request(session_id, res).await;
+                        data["requestId"] = serde_json::Value::String(request_id.to_string());
+                        debug!("Request data: {:#?}", data);
+                        Some(request_id)
+                    } else {
+                        None
                     };
-                } else if let Some(request_id) = request {
-                    warn!(
-                        "No listener attached for command '{}'. Using default implementation",
-                        command
-                    );
-                    let _ = nvim_requests
-                        .default_response(&request_id, data)
-                        .map_err(|e| {
-                            error!(
-                                "Failed to send default response for command '{}': {:#?}",
-                                command, e
-                            )
-                        });
-                } else {
-                    warn!("No listener attached for command '{}'", command);
+                    if Self::listener_attached(command.to_string()) {
+                        match serde_json::from_value::<Object>(data.clone()) {
+                            Ok(obj) => {
+                                let opts = ExecAutocmdsOpts::builder()
+                                    .patterns(command.to_string())
+                                    .data(obj)
+                                    .group(GROUP)
+                                    .build();
+                                debug!(
+                                    "Executing autocommand: {} with options: {:#?}",
+                                    command, opts
+                                );
+                                if let Err(err) = nvim_oxi::api::exec_autocmds(["User"], &opts) {
+                                    error!(
+                                        "Error executing autocommand: '{}': {:#?}",
+                                        command, err
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                error!(
+                                    "Failed to convert JSON to Neovim Object for command '{}': {:?}",
+                                    command, e
+                                );
+                            }
+                        };
+                    } else if let Some(request_id) = request {
+                        warn!(
+                            "No listener attached for command '{}'. Using default implementation",
+                            command
+                        );
+                        let _ = nvim_requests
+                            .default_response(&request_id, data)
+                            .await
+                            .map_err(|e| {
+                                error!(
+                                    "Failed to send default response for command '{}': {:#?}",
+                                    command, e
+                                )
+                            });
+                    } else {
+                        warn!("No listener attached for command '{}'", command);
+                    }
                 }
             },
         )?;

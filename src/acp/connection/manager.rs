@@ -6,15 +6,10 @@ use agent_client_protocol::{
     ClientCapabilities, FileSystemCapabilities, Implementation, InitializeRequest, ProtocolVersion,
 };
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::Arc;
-use std::thread::JoinHandle;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, trace, warn};
-
-type ConnectionHandles = Rc<RefCell<HashMap<Assistant, JoinHandle<Result<(), Error>>>>>;
 
 #[derive(PartialEq, Eq, Clone, Copy, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
 pub enum Protocol {
@@ -43,7 +38,7 @@ impl From<&str> for Protocol {
             "socket" => Protocol::Socket,
             "http" => Protocol::Http,
             "stdio" => Protocol::Stdio,
-            _ => Protocol::default(), // Default to Stdio if unrecognized
+            _ => Protocol::Stdio, // default to Stdio for unknown protocols
         }
     }
 }
@@ -84,6 +79,31 @@ impl std::fmt::Display for Assistant {
     }
 }
 
+impl Assistant {
+    /// Build the `tokio::process::Command` for this agent without spawning it.
+    ///
+    /// The caller is responsible for spawning the command on the correct tokio
+    /// runtime (the one whose reactor will handle the child's IO).
+    pub fn command(&self) -> crate::acp::Result<tokio::process::Command> {
+        let (program, args) = match self {
+            Assistant::Copilot => ("copilot", vec!["--acp"]),
+            Assistant::Opencode => ("opencode", vec!["acp"]),
+            Assistant::Gemini => ("gemini", vec!["--acp"]),
+            Assistant::CustomStdio { command, args, .. } => {
+                (command.as_str(), args.iter().map(|s| s.as_str()).collect())
+            }
+            Assistant::CustomUrl { .. } => {
+                return Err(Error::Connection(
+                    "CustomUrl assistants do not use stdio connections".to_string(),
+                ));
+            }
+        };
+        let mut cmd = tokio::process::Command::new(program);
+        cmd.args(args);
+        Ok(cmd)
+    }
+}
+
 impl From<&str> for Assistant {
     fn from(s: &str) -> Self {
         match s.to_lowercase().as_str() {
@@ -110,10 +130,8 @@ pub struct ConnectionDetails {
     pub protocol: Protocol,
 }
 
-#[derive(Clone)]
 pub struct ConnectionManager {
-    handles: ConnectionHandles,
-    connection: HashMap<Assistant, Rc<Connection>>,
+    connection: HashMap<Assistant, Connection>,
     state: Arc<Mutex<PluginState>>,
 }
 
@@ -121,144 +139,154 @@ impl ConnectionManager {
     #[instrument(level = "trace")]
     pub fn new(state: Arc<Mutex<PluginState>>) -> Self {
         Self {
-            handles: Rc::new(RefCell::new(HashMap::new())),
             connection: HashMap::new(),
             state,
         }
     }
 
     #[instrument(level = "trace", skip(self))]
-    fn set_agent(&self, agent: Assistant) {
-        let mut config = self.state.blocking_lock();
+    async fn set_agent(&self, agent: Assistant) {
+        let mut config = self.state.lock().await;
         config.set_agent(agent);
         drop(config);
     }
 
     #[instrument(level = "trace", skip(self))]
-    fn get_agent(&self) -> Assistant {
-        let config = self.state.blocking_lock();
+    async fn get_agent(&self) -> Assistant {
+        let config = self.state.lock().await;
         let agent = config.agent_info.current.clone();
         drop(config);
         agent
     }
 
     #[instrument(level = "trace", skip(self, connection))]
-    fn add_connection(&mut self, agent: Assistant, connection: Rc<Connection>) {
+    fn add_connection(&mut self, agent: Assistant, connection: Connection) {
         self.connection.insert(agent, connection);
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn get_connection(&self, agent: &Assistant) -> Option<Rc<Connection>> {
-        self.connection.get(agent).cloned()
+    pub fn get_connection(&self, agent: &Assistant) -> Option<&Connection> {
+        self.connection.get(agent)
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn get_current_connection(&self) -> Option<Rc<Connection>> {
-        self.get_connection(&self.get_agent())
+    pub async fn get_current_connection(&self) -> Option<&Connection> {
+        self.get_connection(&self.get_agent().await)
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub fn get_permissions(&self) -> Permissions {
-        let config = self.state.blocking_lock();
+    pub async fn get_permissions(&self) -> Permissions {
+        let config = self.state.lock().await;
         let permissions = config.config.permissions.clone();
         drop(config);
         permissions
     }
 
     #[instrument(level = "trace", skip(self, handler))]
-    pub fn connect(
+    pub async fn connect(
         &mut self,
         handler: Arc<Handler>,
         ConnectionDetails { agent, protocol }: ConnectionDetails,
-    ) -> Result<Rc<Connection>, Error> {
-        let permissions = self.get_permissions();
-        Ok(match self.get_connection(&agent) {
-            Some(connection) => {
-                warn!(
-                    "A connection already exists for '{}'. Returning existing connection",
-                    agent
-                );
-                connection
-            }
-            None => {
-                let (sender, receiver) = tokio::sync::mpsc::channel(100);
-                let connection = Rc::new(Connection::new(sender));
-                let thread_agent = agent.clone();
-                let init_config = InitializeRequest::new(ProtocolVersion::LATEST)
-                    .client_info(
-                        Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"),
-                    )
-                    .client_capabilities(
-                        ClientCapabilities::new()
-                            .terminal(permissions.terminal_access)
-                            .fs(FileSystemCapabilities::new()
-                                .read_text_file(permissions.fs_read_access)
-                                .write_text_file(permissions.fs_write_access)),
-                    );
+    ) -> crate::acp::Result<&Connection> {
+        let permissions = self.get_permissions().await;
 
-                trace!("Starting agent communication in new thread");
-                let panic_agent = agent.clone(); // Clone for panic message
-                self.handles
-                    .try_borrow_mut()
-                    .map_err(|e| {
-                        Error::Internal(format!("Failed to borrow connection handles: {}", e))
-                    })?
-                    .insert(
-                        agent.clone(),
-                        std::thread::spawn(move || {
-                            // TODO: figure out whether this is actually necessary, this should be pure rust, no FFI panics
-                            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                let runtime = tokio::runtime::Builder::new_current_thread()
-                                    .enable_all()
-                                    .build()
-                                    .map_err(|e| Error::Internal(e.to_string()))?;
+        // Check if connection already exists without borrowing
+        let already_connected = self.connection.contains_key(&agent);
+        if already_connected {
+            warn!(
+                "A connection already exists for '{}'. Returning existing connection",
+                agent
+            );
+            return self
+                .connection
+                .get(&agent)
+                .ok_or_else(|| Error::Internal("Connection not found".to_string()));
+        }
 
-                                trace!("Starting tokio runtime");
-                                runtime.block_on(async {
-                                    match protocol {
-                                        Protocol::Stdio => {
-                                            stdio::connect(handler, thread_agent, receiver).await
-                                        }
-                                        Protocol::Http => {
-                                            error!("HTTP protocol is not yet implemented");
-                                            Err(Error::Internal(
-                                                "HTTP protocol is not yet implemented".to_string(),
-                                            ))
-                                        }
-                                        Protocol::Socket => {
-                                            error!("Socket protocol is not yet implemented");
-                                            Err(Error::Internal(
-                                                "Socket protocol is not yet implemented"
-                                                    .to_string(),
-                                            ))
-                                        }
-                                        Protocol::Tcp => {
-                                            tcp::connect(handler, thread_agent, receiver).await
-                                        }
-                                    }
-                                })
-                            }))
-                            .inspect_err(|e| {
-                                error!("Connection thread for '{}' panicked: {:?}", panic_agent, e);
-                            })
-                            .inspect(|result| match result {
-                                Ok(_) => {
-                                    info!("Connection to '{}' successfully closed", panic_agent)
-                                }
-                                Err(e) => error!("Connection error for '{}': {:?}", panic_agent, e),
-                            })
-                            .ok();
-                            Ok::<(), Error>(())
-                        }),
-                    );
-                self.add_connection(agent.clone(), connection.clone());
-                self.set_agent(agent.clone());
-                debug!("Stored connection to '{}'", agent);
-                connection.initialize(init_config)?;
-                info!("Initialized connection to '{}'", agent);
-                connection
-            }
-        })
+        // Now we can safely do mutable operations
+        let (sender, receiver) = tokio::sync::mpsc::channel(100);
+        let init_config = InitializeRequest::new(ProtocolVersion::LATEST)
+            .client_info(Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"))
+            .client_capabilities(
+                ClientCapabilities::new()
+                    .terminal(permissions.terminal_access)
+                    .fs(FileSystemCapabilities::new()
+                        .read_text_file(permissions.fs_read_access)
+                        .write_text_file(permissions.fs_write_access)),
+            );
+
+        let thread_agent = agent.clone();
+        trace!("Starting agent communication in new thread");
+
+        let child = if protocol == Protocol::Stdio {
+            Some(Arc::new(stdio::child::Child::new()))
+        } else {
+            None
+        };
+        let stdio_child = child.clone();
+
+        let handle = std::thread::spawn(move || {
+            // TODO: figure out whether this is actually necessary, this should be pure rust, no FFI panics
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|e| Error::Internal(e.to_string()))?;
+
+                trace!("Starting tokio runtime");
+                runtime.block_on(async {
+                    match protocol {
+                        Protocol::Stdio => {
+                            stdio::connect(handler, thread_agent.clone(), receiver, child.unwrap())
+                                .await
+                        }
+                        Protocol::Http => {
+                            error!("HTTP protocol is not yet implemented");
+                            Err(Error::Internal(
+                                "HTTP protocol is not yet implemented".to_string(),
+                            ))
+                        }
+                        Protocol::Socket => {
+                            error!("Socket protocol is not yet implemented");
+                            Err(Error::Internal(
+                                "Socket protocol is not yet implemented".to_string(),
+                            ))
+                        }
+                        Protocol::Tcp => {
+                            tcp::connect(handler, thread_agent.clone(), receiver).await
+                        }
+                    }
+                })
+            }))
+            .map(|result| match result {
+                Ok(_) => info!(
+                    "Agent thread for '{}' exited normally",
+                    thread_agent.clone()
+                ),
+                Err(e) => error!(
+                    "Agent thread for '{}' panicked: {:?}",
+                    thread_agent.clone(),
+                    e
+                ),
+            })
+            .inspect_err(|e| {
+                error!(
+                    "Failed to start agent thread for '{}': {:?}",
+                    thread_agent.clone(),
+                    e
+                )
+            })
+            .ok();
+            Ok::<(), Error>(())
+        });
+
+        self.add_connection(agent.clone(), Connection::new(sender, handle, stdio_child));
+        self.set_agent(agent.clone()).await;
+        let connection = self.get_connection(&agent).unwrap();
+        debug!("Stored connection to '{}'", agent);
+        connection.initialize(init_config).await?;
+        info!("Initialized connection to '{}'", agent);
+        Ok(connection)
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -289,67 +317,11 @@ impl ConnectionManager {
 
     #[instrument(level = "trace", skip(self))]
     fn disconnect_assistant(&mut self, assistant: &Assistant) -> Result<(), Error> {
-        let sender = self.connection.remove(assistant).ok_or_else(|| {
+        let connection = self.connection.remove(assistant).ok_or_else(|| {
             Error::Connection(format!("No connection found for assistant {}", assistant))
         })?;
-        let handle = self
-            .handles
-            .try_borrow_mut()
-            .map_err(|e| Error::Internal(format!("Failed to borrow connection handles: {}", e)))?
-            .remove(assistant)
-            .ok_or_else(|| {
-                Error::Connection(format!("No handle found for assistant {}", assistant))
-            })?;
-        debug!("Disconnecting from agent {} (timeout: 5s)", assistant);
-        drop(sender);
-
-        // Join with timeout - if thread doesn't finish in 5 seconds, we log a warning
-        // but don't fail. This prevents hanging on shutdown if a connection is stuck.
-        let timeout = std::time::Duration::from_secs(5);
-        let start = std::time::Instant::now();
-        let join_result = loop {
-            if start.elapsed() >= timeout {
-                warn!(
-                    "Timeout waiting for connection thread of agent {} (waited {:?})",
-                    assistant,
-                    start.elapsed()
-                );
-                break Err("Thread did not complete within timeout".to_string());
-            }
-            // Poll to check if thread is finished
-            match handle.is_finished() {
-                true => {
-                    break handle
-                        .join()
-                        .map_err(|e| format!("Thread panicked: {:?}", e));
-                }
-                false => {
-                    // Thread not finished, yield to allow it to complete
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                }
-            }
-        };
-
-        match join_result {
-            Ok(Ok(_)) => {
-                debug!("Successfully disconnected from agent {}", assistant);
-                Ok(())
-            }
-            Ok(Err(e)) => {
-                error!("Error in connection thread for agent {}: {}", assistant, e);
-                Err(Error::Connection(format!(
-                    "Error in connection thread for agent {}: {}",
-                    assistant, e
-                )))
-            }
-            Err(e) => {
-                error!("Failed to join thread for agent {}: {}", assistant, e);
-                Err(Error::Internal(format!(
-                    "Failed to join thread for agent {}: {}",
-                    assistant, e
-                )))
-            }
-        }
+        drop(connection);
+        Ok(())
     }
 }
 

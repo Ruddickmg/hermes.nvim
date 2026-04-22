@@ -60,16 +60,18 @@ impl NotificationMessenger {
 
         let handle = AsyncHandle::new(move || {
             while let Ok(notification) = receiver.try_recv() {
-                // CRITICAL: This callback runs on Neovim's main thread
-                // We use catch_unwind per-item to prevent panics from crossing the FFI boundary
-                // and ensure remaining notifications are processed even if one panics.
-                // Note: We do NOT attempt to log panics here - if the logging
-                // infrastructure is broken, we can't log. Silently swallow instead.
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    let level: nvim_oxi::api::types::LogLevel = notification.level.into();
-                    api::notify(&notification.message, level, &config).ok();
-                }))
-                .ok();
+                let config = config.clone();
+                // CRITICAL: Defer Neovim API calls via vim.schedule to avoid
+                // calling them during uv_run() which can crash Neovim.
+                // See NvimMessenger::initialize for full explanation.
+                nvim_oxi::schedule(move |_| {
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let level: nvim_oxi::api::types::LogLevel = notification.level.into();
+                        api::notify(&notification.message, level, &config).ok();
+                    }))
+                    .ok();
+                    Ok::<_, nvim_oxi::Error>(())
+                });
             }
         })
         .map_err(|e| Error::Internal(e.to_string()))?;
