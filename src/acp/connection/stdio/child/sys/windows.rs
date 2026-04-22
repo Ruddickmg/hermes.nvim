@@ -20,6 +20,7 @@ pub struct Handle(RawHandle);
 // in spawn_blocking before the Child is dropped.
 unsafe impl Send for Handle {}
 
+#[link(name = "kernel32")]
 #[allow(non_snake_case)]
 extern "system" {
     fn WaitForSingleObject(hHandle: *mut std::ffi::c_void, dwMilliseconds: u32) -> u32;
