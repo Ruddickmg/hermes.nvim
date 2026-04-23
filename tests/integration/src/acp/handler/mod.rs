@@ -426,7 +426,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
 
     // Wait for async callback to execute (required for coverage capture)
     // Must use nvim_oxi sleep to yield control back to Neovim
-    nvim_oxi::api::command("sleep 100m")?;
+    nvim_oxi::api::command("sleep 10m")?;
 
     // Verify both the warn and error logs were printed
     assert!(
@@ -469,7 +469,7 @@ fn test_no_listener_no_request_triggers_warn_path() -> nvim_oxi::Result<()> {
 
     // Wait for async callback to execute (required for coverage capture)
     // Must use nvim_oxi sleep to yield control back to Neovim
-    nvim_oxi::api::command("sleep 100m")?;
+    nvim_oxi::api::command("sleep 10m")?;
 
     // Verify the warn log was printed (line 80)
     assert!(

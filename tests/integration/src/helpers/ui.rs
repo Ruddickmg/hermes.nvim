@@ -28,7 +28,7 @@ where
                 timeout
             )));
         }
-        nvim_oxi::api::command("sleep 50m").ok();
+        nvim_oxi::api::command("sleep 10m").ok();
     }
 }
 
@@ -79,7 +79,7 @@ pub fn wait_for_outcome<T>(
                 if start.elapsed() > timeout {
                     return None;
                 }
-                nvim_oxi::api::command("sleep 50m").ok();
+                nvim_oxi::api::command("sleep 10m").ok();
             }
         }
     }
