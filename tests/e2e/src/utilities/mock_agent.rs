@@ -18,10 +18,10 @@ use agent_client_protocol::{
 use async_channel::{Receiver, Sender, bounded, unbounded};
 use async_io::{Async, Timer};
 use async_trait::async_trait;
-use futures::future::{Either, select};
+use futures::future::{select, Either};
 use futures::io::AsyncReadExt;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use tracing::{error, info};
 
 use super::mock_agent_handle::MockAgentHandle;
@@ -41,7 +41,10 @@ pub(crate) enum AgentToConnection {
     /// Send a session notification to Hermes
     SessionNotification(SessionNotification, Sender<()>),
     /// Send a permission request to Hermes and return the outcome
-    PermissionRequest(RequestPermissionRequest, Sender<RequestPermissionOutcome>),
+    PermissionRequest(
+        RequestPermissionRequest,
+        Sender<RequestPermissionOutcome>,
+    ),
     /// Send a terminal creation request to Hermes and return the response
     CreateTerminal(
         CreateTerminalRequest,
@@ -108,7 +111,7 @@ impl MockAgent {
     /// 1. Accepts one TCP connection
     /// 2. Sets up an AgentSideConnection
     /// 3. Spawns a task to handle messages from Agent trait methods
-    /// 4. Runs the I/O handler until the connection closes
+    /// 4. Runs the I/O handler until the connection closes or shutdown signal received
     pub fn start(
         agent: MockAgent,
         conn_rx: MockAgentReceiver,
@@ -122,131 +125,158 @@ impl MockAgent {
         let config_clone = agent.config.clone();
 
         let thread_handle = std::thread::spawn(move || {
-            use std::rc::Rc;
             let executor = Rc::new(smol::LocalExecutor::new());
-            let listener = Async::new(std_listener).expect("Failed to create async listener");
+            
+            // Create async listener
+            let listener = match Async::new(std_listener) {
+                Ok(l) => l,
+                Err(e) => {
+                    error!("Failed to create async listener: {}", e);
+                    return;
+                }
+            };
 
-            let executor_clone = executor.clone();
-            smol::block_on(executor.run(async move {
-                // Handle connection accept and I/O
+            // Run the main async task
+            smol::block_on(executor.clone().run(async move {
+                // Race between accept and shutdown signal
                 let accept_fut = async {
                     match listener.accept().await {
                         Ok((stream, addr)) => {
                             info!("Mock agent accepted connection from {}", addr);
+                            Some(stream)
+                        }
+                        Err(e) => {
+                            error!("Failed to accept connection: {}", e);
+                            None
+                        }
+                    }
+                };
 
-                            let (mut read_half, mut write_half) = stream.split();
+                let shutdown_fut = async {
+                    let _ = shutdown_rx.recv().await;
+                    info!("Mock agent received shutdown signal before connection");
+                };
 
-                            // Create AgentSideConnection (implements both Agent and Client traits)
-                            let exec_clone = executor_clone.clone();
+                match select(Box::pin(accept_fut), Box::pin(shutdown_fut)).await {
+                    Either::Left((Some(stream), _)) => {
+                        // Got connection, handle it
+                        let (read_half, write_half) = stream.split();
+                        
+                        // Clone executor for spawned tasks
+                        let exec = executor.clone();
+                        let exec_for_spawn = exec.clone();
+                        let exec_for_msg = exec.clone();
+                        
+                        // Spawn the connection handling task
+                        exec.spawn(async move {
+                            // Create the connection with proper stream halves
                             let (conn, handle_io) = AgentSideConnection::new(
                                 agent,
-                                &mut write_half,
-                                &mut read_half,
+                                write_half,
+                                read_half,
                                 move |fut| {
-                                    exec_clone.spawn(fut).detach();
+                                    exec_for_spawn.spawn(fut).detach();
                                 },
                             );
 
-                            // Spawn task to handle messages from Agent trait methods.
-                            let exec_clone2 = executor_clone.clone();
-                            exec_clone2
-                                .spawn(async move {
-                                    while let Ok(msg) = conn_rx.recv().await {
-                                        match msg {
-                                            AgentToConnection::SessionNotification(
-                                                notification,
-                                                tx,
-                                            ) => {
-                                                let result =
-                                                    conn.session_notification(notification).await;
-                                                if let Err(e) = result {
-                                                    error!(
-                                                        "Error sending session notification: {}",
-                                                        e
-                                                    );
-                                                    break;
+                            // Spawn task to handle messages from Agent trait methods
+                            let msg_handle = exec_for_msg.spawn(async move {
+                                while let Ok(msg) = conn_rx.recv().await {
+                                    match msg {
+                                        AgentToConnection::SessionNotification(notification, tx) => {
+                                            let result = conn.session_notification(notification).await;
+                                            if let Err(e) = result {
+                                                error!("Error sending session notification: {}", e);
+                                                break;
+                                            }
+                                            tx.try_send(()).ok();
+                                        }
+                                        AgentToConnection::PermissionRequest(request, tx) => {
+                                            let result = conn.request_permission(request).await;
+                                            match result {
+                                                Ok(response) => {
+                                                    tx.try_send(response.outcome).ok();
                                                 }
-                                                tx.try_send(()).ok();
-                                            }
-                                            AgentToConnection::PermissionRequest(request, tx) => {
-                                                let result = conn.request_permission(request).await;
-                                                match result {
-                                                    Ok(response) => {
-                                                        tx.try_send(response.outcome).ok();
-                                                    }
-                                                    Err(e) => {
-                                                        error!(
-                                                            "Error sending permission request: {}",
-                                                            e
-                                                        );
-                                                        tx.try_send(
-                                                            RequestPermissionOutcome::Cancelled,
-                                                        )
-                                                        .ok();
-                                                    }
+                                                Err(e) => {
+                                                    error!("Error sending permission request: {}", e);
+                                                    tx.try_send(RequestPermissionOutcome::Cancelled).ok();
                                                 }
-                                            }
-                                            AgentToConnection::CreateTerminal(request, tx) => {
-                                                let result = conn.create_terminal(request).await;
-                                                tx.try_send(result).ok();
-                                            }
-                                            AgentToConnection::TerminalOutput(request, tx) => {
-                                                let result = conn.terminal_output(request).await;
-                                                tx.try_send(result).ok();
-                                            }
-                                            AgentToConnection::WaitForTerminalExit(request, tx) => {
-                                                let result =
-                                                    conn.wait_for_terminal_exit(request).await;
-                                                tx.try_send(result).ok();
-                                            }
-                                            AgentToConnection::ReadTextFile(request, tx) => {
-                                                let result = conn.read_text_file(request).await;
-                                                tx.try_send(result).ok();
-                                            }
-                                            AgentToConnection::WriteTextFile(request, tx) => {
-                                                let result = conn.write_text_file(request).await;
-                                                tx.try_send(result).ok();
-                                            }
-                                            AgentToConnection::ReleaseTerminal(request, tx) => {
-                                                let result = conn.release_terminal(request).await;
-                                                tx.try_send(result).ok();
                                             }
                                         }
+                                        AgentToConnection::CreateTerminal(request, tx) => {
+                                            let result = conn.create_terminal(request).await;
+                                            tx.try_send(result).ok();
+                                        }
+                                        AgentToConnection::TerminalOutput(request, tx) => {
+                                            let result = conn.terminal_output(request).await;
+                                            tx.try_send(result).ok();
+                                        }
+                                        AgentToConnection::WaitForTerminalExit(request, tx) => {
+                                            let result = conn.wait_for_terminal_exit(request).await;
+                                            tx.try_send(result).ok();
+                                        }
+                                        AgentToConnection::ReadTextFile(request, tx) => {
+                                            let result = conn.read_text_file(request).await;
+                                            tx.try_send(result).ok();
+                                        }
+                                        AgentToConnection::WriteTextFile(request, tx) => {
+                                            let result = conn.write_text_file(request).await;
+                                            tx.try_send(result).ok();
+                                        }
+                                        AgentToConnection::ReleaseTerminal(request, tx) => {
+                                            let result = conn.release_terminal(request).await;
+                                            tx.try_send(result).ok();
+                                        }
                                     }
-                                })
-                                .detach();
+                                }
+                                info!("Message handling loop ended");
+                            });
 
-                            // Run I/O handler
+                            // Run I/O handler until complete
                             let io_result = handle_io.await;
                             if let Err(e) = io_result {
                                 error!("Mock agent I/O error: {}", e);
                             }
-                        }
-                        Err(e) => {
-                            error!("Failed to accept connection: {}", e);
-                        }
+                            
+                            info!("I/O handler completed, waiting for message handler...");
+                            
+                            // Give message handler a moment to complete any pending work
+                            // Then stop it by signaling completion
+                            drop(msg_handle);
+                            
+                            info!("Mock agent connection handling complete");
+                        }).detach();
+                        
+                        // Keep executor running to process spawned tasks
+                        // Race between a timer and shutdown signal
+                        let keepalive = async {
+                            loop {
+                                Timer::after(std::time::Duration::from_millis(100)).await;
+                            }
+                        };
+                        
+                        let shutdown_wait = async {
+                            let _ = shutdown_rx.recv().await;
+                            info!("Shutdown received while handling connection");
+                        };
+                        
+                        // Wait for either shutdown or keep the executor alive
+                        let _ = select(Box::pin(keepalive), Box::pin(shutdown_wait)).await;
                     }
-                };
-
-                // Race between accept and shutdown signal
-                let shutdown_fut = async {
-                    let _ = shutdown_rx.recv().await;
-                    info!("Mock agent received shutdown signal");
-                };
-
-                // Use select to race between the two
-                let accept_pinned = Box::pin(accept_fut);
-                let shutdown_pinned = Box::pin(shutdown_fut);
-
-                match select(accept_pinned, shutdown_pinned).await {
-                    Either::Left((_, _)) => {
-                        // Accept completed
+                    Either::Left((None, _)) => {
+                        // Accept failed
+                        info!("Mock agent accept failed, exiting");
                     }
                     Either::Right((_, _)) => {
-                        // Shutdown received
+                        // Shutdown received before connection
+                        info!("Mock agent shutting down before connection established");
                     }
                 }
+                
+                info!("Mock agent main task completed");
             }));
+            
+            info!("Mock agent thread exiting");
         });
 
         Ok(MockAgentHandle::new(
@@ -258,24 +288,6 @@ impl MockAgent {
     }
 }
 
-// Helper function for timeout using smol Timer
-#[allow(dead_code)]
-async fn with_timeout<T, F>(
-    duration: Duration,
-    future: F,
-) -> Result<T, agent_client_protocol::Error>
-where
-    F: std::future::Future<Output = T>,
-{
-    let timeout_fut = Timer::after(duration);
-    let recv_fut = future;
-
-    match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
-        Either::Left((result, _)) => Ok(result),
-        Either::Right((_, _)) => Err(internal_error("operation timed out")),
-    }
-}
-
 #[async_trait(?Send)]
 impl Agent for MockAgent {
     async fn initialize(
@@ -283,9 +295,9 @@ impl Agent for MockAgent {
         _request: InitializeRequest,
     ) -> agent_client_protocol::Result<InitializeResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-
+        
         Timer::after(timeout).await;
-
+        
         Ok(InitializeResponse::new(ProtocolVersion::V1)
             .agent_info(Implementation::new("mock-agent", "0.1.0"))
             .agent_capabilities(
@@ -312,9 +324,9 @@ impl Agent for MockAgent {
         _request: AuthenticateRequest,
     ) -> agent_client_protocol::Result<AuthenticateResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-
+        
         Timer::after(timeout).await;
-
+        
         let config = self.config.lock().unwrap();
         Ok(config.authenticate_response.clone())
     }
@@ -324,7 +336,7 @@ impl Agent for MockAgent {
         request: NewSessionRequest,
     ) -> agent_client_protocol::Result<NewSessionResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-
+        
         let result = async {
             let mut config = self.config.lock().unwrap();
             let response = config.new_session_response.clone();
@@ -337,7 +349,7 @@ impl Agent for MockAgent {
 
             Ok(response)
         };
-
+        
         Timer::after(timeout).await;
         result.await
     }
@@ -347,7 +359,7 @@ impl Agent for MockAgent {
         request: PromptRequest,
     ) -> agent_client_protocol::Result<PromptResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-
+        
         let result = async {
             // Check if we should request permission
             let permission_request = {
@@ -364,10 +376,10 @@ impl Agent for MockAgent {
                     .map_err(|_| internal_error("failed to send permission request"))?;
 
                 let inner_timeout = self.config.lock().unwrap().timeout;
-
+                
                 let timeout_fut = Timer::after(inner_timeout);
                 let recv_fut = rx.recv();
-
+                
                 let _outcome = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
                     Either::Left((Ok(outcome), _)) => outcome,
                     Either::Left((Err(_), _)) => {
@@ -401,7 +413,7 @@ impl Agent for MockAgent {
                 let create_response = {
                     let timeout_fut = Timer::after(timeout);
                     let recv_fut = rx.recv();
-
+                    
                     match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
                         Either::Left((Ok(result), _)) => result,
                         Either::Left((Err(_), _)) => {
@@ -412,7 +424,7 @@ impl Agent for MockAgent {
                         }
                     }
                 }
-                .map_err(|e| internal_error(format!("create_terminal failed: {}", e)))?;
+                    .map_err(|e| internal_error(format!("create_terminal failed: {}", e)))?;
 
                 let terminal_id = create_response.terminal_id;
 
@@ -429,7 +441,7 @@ impl Agent for MockAgent {
                     {
                         let timeout_fut = Timer::after(timeout);
                         let recv_fut = rx.recv();
-
+                        
                         let _ = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
                             Either::Left((Ok(result), _)) => result,
                             Either::Left((Err(_), _)) => {
@@ -439,7 +451,7 @@ impl Agent for MockAgent {
                                 return Err(internal_error("terminal_output timed out"));
                             }
                         }
-                        .map_err(|e| internal_error(format!("terminal_output failed: {}", e)))?;
+                            .map_err(|e| internal_error(format!("terminal_output failed: {}", e)))?;
                     }
                 }
 
@@ -458,21 +470,19 @@ impl Agent for MockAgent {
                     {
                         let timeout_fut = Timer::after(timeout);
                         let recv_fut = rx.recv();
-
+                        
                         let _ = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
                             Either::Left((Ok(result), _)) => result,
                             Either::Left((Err(_), _)) => {
-                                return Err(internal_error(
-                                    "wait_for_terminal_exit channel closed",
-                                ));
+                                return Err(internal_error("wait_for_terminal_exit channel closed"));
                             }
                             Either::Right((_, _)) => {
                                 return Err(internal_error("wait_for_terminal_exit timed out"));
                             }
                         }
-                        .map_err(|e| {
-                            internal_error(format!("wait_for_terminal_exit failed: {}", e))
-                        })?;
+                            .map_err(|e| {
+                                internal_error(format!("wait_for_terminal_exit failed: {}", e))
+                            })?;
                     }
                 }
             }
@@ -493,7 +503,7 @@ impl Agent for MockAgent {
                 {
                     let timeout_fut = Timer::after(timeout);
                     let recv_fut = rx.recv();
-
+                    
                     let _ = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
                         Either::Left((Ok(result), _)) => result,
                         Either::Left((Err(_), _)) => {
@@ -503,7 +513,7 @@ impl Agent for MockAgent {
                             return Err(internal_error("read_text_file timed out"));
                         }
                     }
-                    .map_err(|e| internal_error(format!("read_text_file failed: {}", e)))?;
+                        .map_err(|e| internal_error(format!("read_text_file failed: {}", e)))?;
                 }
             }
 
@@ -523,7 +533,7 @@ impl Agent for MockAgent {
                 {
                     let timeout_fut = Timer::after(timeout);
                     let recv_fut = rx.recv();
-
+                    
                     let _ = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
                         Either::Left((Ok(result), _)) => result,
                         Either::Left((Err(_), _)) => {
@@ -533,7 +543,7 @@ impl Agent for MockAgent {
                             return Err(internal_error("write_text_file timed out"));
                         }
                     }
-                    .map_err(|e| internal_error(format!("write_text_file failed: {}", e)))?;
+                        .map_err(|e| internal_error(format!("write_text_file failed: {}", e)))?;
                 }
             }
 
@@ -553,7 +563,7 @@ impl Agent for MockAgent {
                 {
                     let timeout_fut = Timer::after(timeout);
                     let recv_fut = rx.recv();
-
+                    
                     let _ = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
                         Either::Left((Ok(result), _)) => result,
                         Either::Left((Err(_), _)) => {
@@ -563,7 +573,7 @@ impl Agent for MockAgent {
                             return Err(internal_error("release_terminal timed out"));
                         }
                     }
-                    .map_err(|e| internal_error(format!("release_terminal failed: {}", e)))?;
+                        .map_err(|e| internal_error(format!("release_terminal failed: {}", e)))?;
                 }
             }
 
@@ -595,7 +605,7 @@ impl Agent for MockAgent {
 
             Ok(PromptResponse::new(StopReason::EndTurn))
         };
-
+        
         Timer::after(timeout).await;
         result.await
     }
@@ -609,7 +619,7 @@ impl Agent for MockAgent {
         request: LoadSessionRequest,
     ) -> agent_client_protocol::Result<LoadSessionResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-
+        
         let result = async {
             let config = self.config.lock().unwrap();
 
@@ -628,7 +638,7 @@ impl Agent for MockAgent {
                 )))
             }
         };
-
+        
         Timer::after(timeout).await;
         result.await
     }
@@ -638,7 +648,7 @@ impl Agent for MockAgent {
         _request: SetSessionModeRequest,
     ) -> agent_client_protocol::Result<SetSessionModeResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-
+        
         let result = async {
             let config = self.config.lock().unwrap();
             if let Some(ref response) = config.set_session_mode_response {
@@ -647,7 +657,7 @@ impl Agent for MockAgent {
                 Ok(SetSessionModeResponse::new())
             }
         };
-
+        
         Timer::after(timeout).await;
         result.await
     }
@@ -657,7 +667,7 @@ impl Agent for MockAgent {
         _request: SetSessionConfigOptionRequest,
     ) -> agent_client_protocol::Result<SetSessionConfigOptionResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-
+        
         let result = async {
             let config = self.config.lock().unwrap();
             if let Some(ref response) = config.set_session_config_option_response {
@@ -666,7 +676,7 @@ impl Agent for MockAgent {
                 Ok(SetSessionConfigOptionResponse::new(vec![]))
             }
         };
-
+        
         Timer::after(timeout).await;
         result.await
     }
@@ -676,7 +686,7 @@ impl Agent for MockAgent {
         _request: ListSessionsRequest,
     ) -> agent_client_protocol::Result<ListSessionsResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-
+        
         let result = async {
             let config = self.config.lock().unwrap();
 
@@ -689,14 +699,14 @@ impl Agent for MockAgent {
             let sessions: Vec<_> = config.sessions.values().cloned().collect();
             Ok(ListSessionsResponse::new(sessions))
         };
-
+        
         Timer::after(timeout).await;
         result.await
     }
 
     async fn ext_method(&self, _request: ExtRequest) -> agent_client_protocol::Result<ExtResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-
+        
         let result = async {
             let config = self.config.lock().unwrap();
             if let Some(ref response) = config.ext_response {
@@ -705,7 +715,7 @@ impl Agent for MockAgent {
                 Ok(default_ext_response())
             }
         };
-
+        
         Timer::after(timeout).await;
         result.await
     }
