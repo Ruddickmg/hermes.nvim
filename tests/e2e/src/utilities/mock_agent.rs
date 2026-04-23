@@ -296,86 +296,104 @@ impl MockAgent {
     }
 }
 
+/// Helper: race a future against a timeout, matching tokio::time::timeout semantics.
+async fn timeout<T>(
+    duration: std::time::Duration,
+    future: impl std::future::Future<Output = T>,
+) -> Result<T, agent_client_protocol::Error> {
+    match select(Box::pin(future), Box::pin(Timer::after(duration))).await {
+        Either::Left((result, _)) => Ok(result),
+        Either::Right((_, _)) => Err(internal_error("operation timed out")),
+    }
+}
+
+/// Helper: race a channel recv against a timeout.
+async fn recv_timeout<T>(
+    rx: Receiver<T>,
+    duration: std::time::Duration,
+    timeout_msg: &str,
+    closed_msg: &str,
+) -> Result<T, agent_client_protocol::Error> {
+    match select(Box::pin(rx.recv()), Box::pin(Timer::after(duration))).await {
+        Either::Left((Ok(val), _)) => Ok(val),
+        Either::Left((Err(_), _)) => Err(internal_error(closed_msg)),
+        Either::Right((_, _)) => Err(internal_error(timeout_msg)),
+    }
+}
+
 #[async_trait(?Send)]
 impl Agent for MockAgent {
     async fn initialize(
         &self,
         _request: InitializeRequest,
     ) -> agent_client_protocol::Result<InitializeResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-
-        Timer::after(timeout).await;
-
-        Ok(InitializeResponse::new(ProtocolVersion::V1)
-            .agent_info(Implementation::new("mock-agent", "0.1.0"))
-            .agent_capabilities(
-                AgentCapabilities::new()
-                    .load_session(true)
-                    .prompt_capabilities(
-                        PromptCapabilities::new()
-                            .image(true)
-                            .audio(true)
-                            .embedded_context(true),
-                    )
-                    .mcp_capabilities(McpCapabilities::new().http(true).sse(true))
-                    .session_capabilities(
-                        SessionCapabilities::new()
-                            .list(Some(SessionListCapabilities::new()))
-                            .fork(Some(SessionForkCapabilities::new()))
-                            .resume(Some(SessionResumeCapabilities::new())),
-                    ),
-            ))
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
+            Ok(InitializeResponse::new(ProtocolVersion::V1)
+                .agent_info(Implementation::new("mock-agent", "0.1.0"))
+                .agent_capabilities(
+                    AgentCapabilities::new()
+                        .load_session(true)
+                        .prompt_capabilities(
+                            PromptCapabilities::new()
+                                .image(true)
+                                .audio(true)
+                                .embedded_context(true),
+                        )
+                        .mcp_capabilities(McpCapabilities::new().http(true).sse(true))
+                        .session_capabilities(
+                            SessionCapabilities::new()
+                                .list(Some(SessionListCapabilities::new()))
+                                .fork(Some(SessionForkCapabilities::new()))
+                                .resume(Some(SessionResumeCapabilities::new())),
+                        ),
+                ))
+        })
+        .await
+        .map_err(|_| internal_error("initialize timed out"))?
     }
 
     async fn authenticate(
         &self,
         _request: AuthenticateRequest,
     ) -> agent_client_protocol::Result<AuthenticateResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-
-        Timer::after(timeout).await;
-
-        let config = self.config.lock().unwrap();
-        Ok(config.authenticate_response.clone())
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
+            let config = self.config.lock().unwrap();
+            Ok(config.authenticate_response.clone())
+        })
+        .await
+        .map_err(|_| internal_error("authenticate timed out"))?
     }
 
     async fn new_session(
         &self,
         request: NewSessionRequest,
     ) -> agent_client_protocol::Result<NewSessionResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-
-        let result = async {
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
             let mut config = self.config.lock().unwrap();
             let response = config.new_session_response.clone();
-
-            // Track the session for default load_session/list_sessions behavior
             config.track_session(response.session_id.clone(), request.cwd.clone());
-
-            // Generate a fresh session ID for the next new_session call
             config.new_session_response = NewSessionResponse::new(generate_session_id());
-
             Ok(response)
-        };
-
-        Timer::after(timeout).await;
-        result.await
+        })
+        .await
+        .map_err(|_| internal_error("new_session timed out"))?
     }
 
     async fn prompt(
         &self,
         request: PromptRequest,
     ) -> agent_client_protocol::Result<PromptResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-
-        let result = async {
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
             // Check if we should request permission
             let permission_request = {
                 let config = self.config.lock().unwrap();
                 config.permission_request.clone()
             };
 
-            // If configured, send a permission request to Hermes and wait for the response
             if let Some(perm_req) = permission_request {
                 let (tx, rx) = bounded(1);
                 self.conn_tx
@@ -383,20 +401,14 @@ impl Agent for MockAgent {
                     .await
                     .map_err(|_| internal_error("failed to send permission request"))?;
 
-                let inner_timeout = self.config.lock().unwrap().timeout;
-
-                let timeout_fut = Timer::after(inner_timeout);
-                let recv_fut = rx.recv();
-
-                let _outcome = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
-                    Either::Left((Ok(outcome), _)) => outcome,
-                    Either::Left((Err(_), _)) => {
-                        return Err(internal_error("permission request channel closed"));
-                    }
-                    Either::Right((_, _)) => {
-                        return Err(internal_error("permission request timed out"));
-                    }
-                };
+                let inner_dur = self.config.lock().unwrap().timeout;
+                let _outcome = recv_timeout(
+                    rx,
+                    inner_dur,
+                    "permission request timed out",
+                    "permission request channel closed",
+                )
+                .await?;
             }
 
             // Check if terminal workflow is configured
@@ -409,34 +421,24 @@ impl Agent for MockAgent {
                 )
             };
 
-            // If configured, execute terminal workflow
             if let Some(create_req) = create_terminal {
-                // Step 1: Create terminal - wait for response with terminal_id
                 let (tx, rx) = bounded(1);
                 self.conn_tx
                     .send(AgentToConnection::CreateTerminal(create_req, tx))
                     .await
                     .map_err(|_| internal_error("failed to send create_terminal request"))?;
 
-                let create_response = {
-                    let timeout_fut = Timer::after(timeout);
-                    let recv_fut = rx.recv();
-
-                    match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
-                        Either::Left((Ok(result), _)) => result,
-                        Either::Left((Err(_), _)) => {
-                            return Err(internal_error("create_terminal channel closed"));
-                        }
-                        Either::Right((_, _)) => {
-                            return Err(internal_error("create_terminal timed out"));
-                        }
-                    }
-                }
+                let create_response = recv_timeout(
+                    rx,
+                    dur,
+                    "create_terminal timed out",
+                    "create_terminal channel closed",
+                )
+                .await?
                 .map_err(|e| internal_error(format!("create_terminal failed: {}", e)))?;
 
                 let terminal_id = create_response.terminal_id;
 
-                // Step 2: Get terminal output (if configured)
                 if send_terminal_output {
                     let output_req =
                         TerminalOutputRequest::new(request.session_id.clone(), terminal_id.clone());
@@ -446,24 +448,16 @@ impl Agent for MockAgent {
                         .await
                         .map_err(|_| internal_error("failed to send terminal_output request"))?;
 
-                    {
-                        let timeout_fut = Timer::after(timeout);
-                        let recv_fut = rx.recv();
-
-                        let _ = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
-                            Either::Left((Ok(result), _)) => result,
-                            Either::Left((Err(_), _)) => {
-                                return Err(internal_error("terminal_output channel closed"));
-                            }
-                            Either::Right((_, _)) => {
-                                return Err(internal_error("terminal_output timed out"));
-                            }
-                        }
-                        .map_err(|e| internal_error(format!("terminal_output failed: {}", e)))?;
-                    }
+                    recv_timeout(
+                        rx,
+                        dur,
+                        "terminal_output timed out",
+                        "terminal_output channel closed",
+                    )
+                    .await?
+                    .map_err(|e| internal_error(format!("terminal_output failed: {}", e)))?;
                 }
 
-                // Step 3: Wait for terminal exit (if configured)
                 if send_terminal_exit {
                     let exit_req =
                         WaitForTerminalExitRequest::new(request.session_id.clone(), terminal_id);
@@ -475,25 +469,14 @@ impl Agent for MockAgent {
                             internal_error("failed to send wait_for_terminal_exit request")
                         })?;
 
-                    {
-                        let timeout_fut = Timer::after(timeout);
-                        let recv_fut = rx.recv();
-
-                        let _ = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
-                            Either::Left((Ok(result), _)) => result,
-                            Either::Left((Err(_), _)) => {
-                                return Err(internal_error(
-                                    "wait_for_terminal_exit channel closed",
-                                ));
-                            }
-                            Either::Right((_, _)) => {
-                                return Err(internal_error("wait_for_terminal_exit timed out"));
-                            }
-                        }
-                        .map_err(|e| {
-                            internal_error(format!("wait_for_terminal_exit failed: {}", e))
-                        })?;
-                    }
+                    recv_timeout(
+                        rx,
+                        dur,
+                        "wait_for_terminal_exit timed out",
+                        "wait_for_terminal_exit channel closed",
+                    )
+                    .await?
+                    .map_err(|e| internal_error(format!("wait_for_terminal_exit failed: {}", e)))?;
                 }
             }
 
@@ -510,21 +493,14 @@ impl Agent for MockAgent {
                     .await
                     .map_err(|_| internal_error("failed to send read_text_file request"))?;
 
-                {
-                    let timeout_fut = Timer::after(timeout);
-                    let recv_fut = rx.recv();
-
-                    let _ = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
-                        Either::Left((Ok(result), _)) => result,
-                        Either::Left((Err(_), _)) => {
-                            return Err(internal_error("read_text_file channel closed"));
-                        }
-                        Either::Right((_, _)) => {
-                            return Err(internal_error("read_text_file timed out"));
-                        }
-                    }
-                    .map_err(|e| internal_error(format!("read_text_file failed: {}", e)))?;
-                }
+                recv_timeout(
+                    rx,
+                    dur,
+                    "read_text_file timed out",
+                    "read_text_file channel closed",
+                )
+                .await?
+                .map_err(|e| internal_error(format!("read_text_file failed: {}", e)))?;
             }
 
             // Write text file (if configured)
@@ -540,21 +516,14 @@ impl Agent for MockAgent {
                     .await
                     .map_err(|_| internal_error("failed to send write_text_file request"))?;
 
-                {
-                    let timeout_fut = Timer::after(timeout);
-                    let recv_fut = rx.recv();
-
-                    let _ = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
-                        Either::Left((Ok(result), _)) => result,
-                        Either::Left((Err(_), _)) => {
-                            return Err(internal_error("write_text_file channel closed"));
-                        }
-                        Either::Right((_, _)) => {
-                            return Err(internal_error("write_text_file timed out"));
-                        }
-                    }
-                    .map_err(|e| internal_error(format!("write_text_file failed: {}", e)))?;
-                }
+                recv_timeout(
+                    rx,
+                    dur,
+                    "write_text_file timed out",
+                    "write_text_file channel closed",
+                )
+                .await?
+                .map_err(|e| internal_error(format!("write_text_file failed: {}", e)))?;
             }
 
             // Release terminal (if configured)
@@ -570,21 +539,14 @@ impl Agent for MockAgent {
                     .await
                     .map_err(|_| internal_error("failed to send release_terminal request"))?;
 
-                {
-                    let timeout_fut = Timer::after(timeout);
-                    let recv_fut = rx.recv();
-
-                    let _ = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
-                        Either::Left((Ok(result), _)) => result,
-                        Either::Left((Err(_), _)) => {
-                            return Err(internal_error("release_terminal channel closed"));
-                        }
-                        Either::Right((_, _)) => {
-                            return Err(internal_error("release_terminal timed out"));
-                        }
-                    }
-                    .map_err(|e| internal_error(format!("release_terminal failed: {}", e)))?;
-                }
+                recv_timeout(
+                    rx,
+                    dur,
+                    "release_terminal timed out",
+                    "release_terminal channel closed",
+                )
+                .await?
+                .map_err(|e| internal_error(format!("release_terminal failed: {}", e)))?;
             }
 
             // Echo back the prompt content as agent message chunks
@@ -614,10 +576,9 @@ impl Agent for MockAgent {
             }
 
             Ok(PromptResponse::new(StopReason::EndTurn))
-        };
-
-        Timer::after(timeout).await;
-        result.await
+        })
+        .await
+        .map_err(|_| internal_error("prompt timed out"))?
     }
 
     async fn cancel(&self, _notification: CancelNotification) -> agent_client_protocol::Result<()> {
@@ -628,17 +589,14 @@ impl Agent for MockAgent {
         &self,
         request: LoadSessionRequest,
     ) -> agent_client_protocol::Result<LoadSessionResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-
-        let result = async {
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
             let config = self.config.lock().unwrap();
 
-            // Return user-configured response if set
             if let Some(ref response) = config.load_session_response {
                 return Ok(response.clone());
             }
 
-            // Default: check if session is tracked (session exists)
             if config.sessions.contains_key(&request.session_id) {
                 Ok(LoadSessionResponse::new())
             } else {
@@ -647,87 +605,76 @@ impl Agent for MockAgent {
                     request.session_id
                 )))
             }
-        };
-
-        Timer::after(timeout).await;
-        result.await
+        })
+        .await
+        .map_err(|_| internal_error("load_session timed out"))?
     }
 
     async fn set_session_mode(
         &self,
         _request: SetSessionModeRequest,
     ) -> agent_client_protocol::Result<SetSessionModeResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-
-        let result = async {
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
             let config = self.config.lock().unwrap();
             if let Some(ref response) = config.set_session_mode_response {
                 Ok(response.clone())
             } else {
                 Ok(SetSessionModeResponse::new())
             }
-        };
-
-        Timer::after(timeout).await;
-        result.await
+        })
+        .await
+        .map_err(|_| internal_error("set_session_mode timed out"))?
     }
 
     async fn set_session_config_option(
         &self,
         _request: SetSessionConfigOptionRequest,
     ) -> agent_client_protocol::Result<SetSessionConfigOptionResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-
-        let result = async {
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
             let config = self.config.lock().unwrap();
             if let Some(ref response) = config.set_session_config_option_response {
                 Ok(response.clone())
             } else {
                 Ok(SetSessionConfigOptionResponse::new(vec![]))
             }
-        };
-
-        Timer::after(timeout).await;
-        result.await
+        })
+        .await
+        .map_err(|_| internal_error("set_session_config_option timed out"))?
     }
 
     async fn list_sessions(
         &self,
         _request: ListSessionsRequest,
     ) -> agent_client_protocol::Result<ListSessionsResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-
-        let result = async {
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
             let config = self.config.lock().unwrap();
 
-            // Return user-configured response if set
             if let Some(ref response) = config.list_sessions_response {
                 return Ok(response.clone());
             }
 
-            // Default: return all tracked sessions
             let sessions: Vec<_> = config.sessions.values().cloned().collect();
             Ok(ListSessionsResponse::new(sessions))
-        };
-
-        Timer::after(timeout).await;
-        result.await
+        })
+        .await
+        .map_err(|_| internal_error("list_sessions timed out"))?
     }
 
     async fn ext_method(&self, _request: ExtRequest) -> agent_client_protocol::Result<ExtResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-
-        let result = async {
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
             let config = self.config.lock().unwrap();
             if let Some(ref response) = config.ext_response {
                 Ok(response.clone())
             } else {
                 Ok(default_ext_response())
             }
-        };
-
-        Timer::after(timeout).await;
-        result.await
+        })
+        .await
+        .map_err(|_| internal_error("ext_method timed out"))?
     }
 
     async fn ext_notification(
