@@ -18,7 +18,7 @@ use agent_client_protocol::{
 use async_channel::{Receiver, Sender, bounded, unbounded};
 use async_io::{Async, Timer};
 use async_trait::async_trait;
-use futures::future::{select, Either};
+use futures::future::{Either, select};
 use futures::io::AsyncReadExt;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -41,10 +41,7 @@ pub(crate) enum AgentToConnection {
     /// Send a session notification to Hermes
     SessionNotification(SessionNotification, Sender<()>),
     /// Send a permission request to Hermes and return the outcome
-    PermissionRequest(
-        RequestPermissionRequest,
-        Sender<RequestPermissionOutcome>,
-    ),
+    PermissionRequest(RequestPermissionRequest, Sender<RequestPermissionOutcome>),
     /// Send a terminal creation request to Hermes and return the response
     CreateTerminal(
         CreateTerminalRequest,
@@ -126,7 +123,7 @@ impl MockAgent {
 
         let thread_handle = std::thread::spawn(move || {
             let executor = Rc::new(smol::LocalExecutor::new());
-            
+
             // Create async listener
             let listener = match Async::new(std_listener) {
                 Ok(l) => l,
@@ -161,12 +158,12 @@ impl MockAgent {
                     Either::Left((Some(stream), _)) => {
                         // Got connection, handle it
                         let (read_half, write_half) = stream.split();
-                        
+
                         // Clone executor for spawned tasks
                         let exec = executor.clone();
                         let exec_for_spawn = exec.clone();
                         let exec_for_msg = exec.clone();
-                        
+
                         // Spawn the connection handling task
                         exec.spawn(async move {
                             // Create the connection with proper stream halves
@@ -183,8 +180,12 @@ impl MockAgent {
                             let msg_handle = exec_for_msg.spawn(async move {
                                 while let Ok(msg) = conn_rx.recv().await {
                                     match msg {
-                                        AgentToConnection::SessionNotification(notification, tx) => {
-                                            let result = conn.session_notification(notification).await;
+                                        AgentToConnection::SessionNotification(
+                                            notification,
+                                            tx,
+                                        ) => {
+                                            let result =
+                                                conn.session_notification(notification).await;
                                             if let Err(e) = result {
                                                 error!("Error sending session notification: {}", e);
                                                 break;
@@ -198,8 +199,14 @@ impl MockAgent {
                                                     tx.try_send(response.outcome).ok();
                                                 }
                                                 Err(e) => {
-                                                    error!("Error sending permission request: {}", e);
-                                                    tx.try_send(RequestPermissionOutcome::Cancelled).ok();
+                                                    error!(
+                                                        "Error sending permission request: {}",
+                                                        e
+                                                    );
+                                                    tx.try_send(
+                                                        RequestPermissionOutcome::Cancelled,
+                                                    )
+                                                    .ok();
                                                 }
                                             }
                                         }
@@ -237,16 +244,17 @@ impl MockAgent {
                             if let Err(e) = io_result {
                                 error!("Mock agent I/O error: {}", e);
                             }
-                            
+
                             info!("I/O handler completed, waiting for message handler...");
-                            
+
                             // Give message handler a moment to complete any pending work
                             // Then stop it by signaling completion
                             drop(msg_handle);
-                            
+
                             info!("Mock agent connection handling complete");
-                        }).detach();
-                        
+                        })
+                        .detach();
+
                         // Keep executor running to process spawned tasks
                         // Race between a timer and shutdown signal
                         let keepalive = async {
@@ -254,12 +262,12 @@ impl MockAgent {
                                 Timer::after(std::time::Duration::from_millis(100)).await;
                             }
                         };
-                        
+
                         let shutdown_wait = async {
                             let _ = shutdown_rx.recv().await;
                             info!("Shutdown received while handling connection");
                         };
-                        
+
                         // Wait for either shutdown or keep the executor alive
                         let _ = select(Box::pin(keepalive), Box::pin(shutdown_wait)).await;
                     }
@@ -272,10 +280,10 @@ impl MockAgent {
                         info!("Mock agent shutting down before connection established");
                     }
                 }
-                
+
                 info!("Mock agent main task completed");
             }));
-            
+
             info!("Mock agent thread exiting");
         });
 
@@ -295,9 +303,9 @@ impl Agent for MockAgent {
         _request: InitializeRequest,
     ) -> agent_client_protocol::Result<InitializeResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-        
+
         Timer::after(timeout).await;
-        
+
         Ok(InitializeResponse::new(ProtocolVersion::V1)
             .agent_info(Implementation::new("mock-agent", "0.1.0"))
             .agent_capabilities(
@@ -324,9 +332,9 @@ impl Agent for MockAgent {
         _request: AuthenticateRequest,
     ) -> agent_client_protocol::Result<AuthenticateResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-        
+
         Timer::after(timeout).await;
-        
+
         let config = self.config.lock().unwrap();
         Ok(config.authenticate_response.clone())
     }
@@ -336,7 +344,7 @@ impl Agent for MockAgent {
         request: NewSessionRequest,
     ) -> agent_client_protocol::Result<NewSessionResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-        
+
         let result = async {
             let mut config = self.config.lock().unwrap();
             let response = config.new_session_response.clone();
@@ -349,7 +357,7 @@ impl Agent for MockAgent {
 
             Ok(response)
         };
-        
+
         Timer::after(timeout).await;
         result.await
     }
@@ -359,7 +367,7 @@ impl Agent for MockAgent {
         request: PromptRequest,
     ) -> agent_client_protocol::Result<PromptResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-        
+
         let result = async {
             // Check if we should request permission
             let permission_request = {
@@ -376,10 +384,10 @@ impl Agent for MockAgent {
                     .map_err(|_| internal_error("failed to send permission request"))?;
 
                 let inner_timeout = self.config.lock().unwrap().timeout;
-                
+
                 let timeout_fut = Timer::after(inner_timeout);
                 let recv_fut = rx.recv();
-                
+
                 let _outcome = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
                     Either::Left((Ok(outcome), _)) => outcome,
                     Either::Left((Err(_), _)) => {
@@ -413,7 +421,7 @@ impl Agent for MockAgent {
                 let create_response = {
                     let timeout_fut = Timer::after(timeout);
                     let recv_fut = rx.recv();
-                    
+
                     match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
                         Either::Left((Ok(result), _)) => result,
                         Either::Left((Err(_), _)) => {
@@ -424,7 +432,7 @@ impl Agent for MockAgent {
                         }
                     }
                 }
-                    .map_err(|e| internal_error(format!("create_terminal failed: {}", e)))?;
+                .map_err(|e| internal_error(format!("create_terminal failed: {}", e)))?;
 
                 let terminal_id = create_response.terminal_id;
 
@@ -441,7 +449,7 @@ impl Agent for MockAgent {
                     {
                         let timeout_fut = Timer::after(timeout);
                         let recv_fut = rx.recv();
-                        
+
                         let _ = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
                             Either::Left((Ok(result), _)) => result,
                             Either::Left((Err(_), _)) => {
@@ -451,7 +459,7 @@ impl Agent for MockAgent {
                                 return Err(internal_error("terminal_output timed out"));
                             }
                         }
-                            .map_err(|e| internal_error(format!("terminal_output failed: {}", e)))?;
+                        .map_err(|e| internal_error(format!("terminal_output failed: {}", e)))?;
                     }
                 }
 
@@ -470,19 +478,21 @@ impl Agent for MockAgent {
                     {
                         let timeout_fut = Timer::after(timeout);
                         let recv_fut = rx.recv();
-                        
+
                         let _ = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
                             Either::Left((Ok(result), _)) => result,
                             Either::Left((Err(_), _)) => {
-                                return Err(internal_error("wait_for_terminal_exit channel closed"));
+                                return Err(internal_error(
+                                    "wait_for_terminal_exit channel closed",
+                                ));
                             }
                             Either::Right((_, _)) => {
                                 return Err(internal_error("wait_for_terminal_exit timed out"));
                             }
                         }
-                            .map_err(|e| {
-                                internal_error(format!("wait_for_terminal_exit failed: {}", e))
-                            })?;
+                        .map_err(|e| {
+                            internal_error(format!("wait_for_terminal_exit failed: {}", e))
+                        })?;
                     }
                 }
             }
@@ -503,7 +513,7 @@ impl Agent for MockAgent {
                 {
                     let timeout_fut = Timer::after(timeout);
                     let recv_fut = rx.recv();
-                    
+
                     let _ = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
                         Either::Left((Ok(result), _)) => result,
                         Either::Left((Err(_), _)) => {
@@ -513,7 +523,7 @@ impl Agent for MockAgent {
                             return Err(internal_error("read_text_file timed out"));
                         }
                     }
-                        .map_err(|e| internal_error(format!("read_text_file failed: {}", e)))?;
+                    .map_err(|e| internal_error(format!("read_text_file failed: {}", e)))?;
                 }
             }
 
@@ -533,7 +543,7 @@ impl Agent for MockAgent {
                 {
                     let timeout_fut = Timer::after(timeout);
                     let recv_fut = rx.recv();
-                    
+
                     let _ = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
                         Either::Left((Ok(result), _)) => result,
                         Either::Left((Err(_), _)) => {
@@ -543,7 +553,7 @@ impl Agent for MockAgent {
                             return Err(internal_error("write_text_file timed out"));
                         }
                     }
-                        .map_err(|e| internal_error(format!("write_text_file failed: {}", e)))?;
+                    .map_err(|e| internal_error(format!("write_text_file failed: {}", e)))?;
                 }
             }
 
@@ -563,7 +573,7 @@ impl Agent for MockAgent {
                 {
                     let timeout_fut = Timer::after(timeout);
                     let recv_fut = rx.recv();
-                    
+
                     let _ = match select(Box::pin(recv_fut), Box::pin(timeout_fut)).await {
                         Either::Left((Ok(result), _)) => result,
                         Either::Left((Err(_), _)) => {
@@ -573,7 +583,7 @@ impl Agent for MockAgent {
                             return Err(internal_error("release_terminal timed out"));
                         }
                     }
-                        .map_err(|e| internal_error(format!("release_terminal failed: {}", e)))?;
+                    .map_err(|e| internal_error(format!("release_terminal failed: {}", e)))?;
                 }
             }
 
@@ -605,7 +615,7 @@ impl Agent for MockAgent {
 
             Ok(PromptResponse::new(StopReason::EndTurn))
         };
-        
+
         Timer::after(timeout).await;
         result.await
     }
@@ -619,7 +629,7 @@ impl Agent for MockAgent {
         request: LoadSessionRequest,
     ) -> agent_client_protocol::Result<LoadSessionResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-        
+
         let result = async {
             let config = self.config.lock().unwrap();
 
@@ -638,7 +648,7 @@ impl Agent for MockAgent {
                 )))
             }
         };
-        
+
         Timer::after(timeout).await;
         result.await
     }
@@ -648,7 +658,7 @@ impl Agent for MockAgent {
         _request: SetSessionModeRequest,
     ) -> agent_client_protocol::Result<SetSessionModeResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-        
+
         let result = async {
             let config = self.config.lock().unwrap();
             if let Some(ref response) = config.set_session_mode_response {
@@ -657,7 +667,7 @@ impl Agent for MockAgent {
                 Ok(SetSessionModeResponse::new())
             }
         };
-        
+
         Timer::after(timeout).await;
         result.await
     }
@@ -667,7 +677,7 @@ impl Agent for MockAgent {
         _request: SetSessionConfigOptionRequest,
     ) -> agent_client_protocol::Result<SetSessionConfigOptionResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-        
+
         let result = async {
             let config = self.config.lock().unwrap();
             if let Some(ref response) = config.set_session_config_option_response {
@@ -676,7 +686,7 @@ impl Agent for MockAgent {
                 Ok(SetSessionConfigOptionResponse::new(vec![]))
             }
         };
-        
+
         Timer::after(timeout).await;
         result.await
     }
@@ -686,7 +696,7 @@ impl Agent for MockAgent {
         _request: ListSessionsRequest,
     ) -> agent_client_protocol::Result<ListSessionsResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-        
+
         let result = async {
             let config = self.config.lock().unwrap();
 
@@ -699,14 +709,14 @@ impl Agent for MockAgent {
             let sessions: Vec<_> = config.sessions.values().cloned().collect();
             Ok(ListSessionsResponse::new(sessions))
         };
-        
+
         Timer::after(timeout).await;
         result.await
     }
 
     async fn ext_method(&self, _request: ExtRequest) -> agent_client_protocol::Result<ExtResponse> {
         let timeout = self.config.lock().unwrap().timeout;
-        
+
         let result = async {
             let config = self.config.lock().unwrap();
             if let Some(ref response) = config.ext_response {
@@ -715,7 +725,7 @@ impl Agent for MockAgent {
                 Ok(default_ext_response())
             }
         };
-        
+
         Timer::after(timeout).await;
         result.await
     }
