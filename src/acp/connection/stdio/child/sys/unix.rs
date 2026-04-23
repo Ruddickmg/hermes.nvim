@@ -1,17 +1,17 @@
 use std::io;
 use std::mem::MaybeUninit;
-use tokio::process::Child;
+use async_process::Child;
 
 /// A handle to a child process on Unix. Just the PID, since `waitid()` takes a PID.
 #[derive(Copy, Clone)]
 pub struct Handle(u32);
 
-/// Extract a platform handle from a tokio Child.
+/// Extract a platform handle from an async_process Child.
 ///
 /// # Panics
 /// Panics if the child has already been reaped (id() returns None).
 pub fn get_handle(child: &Child) -> Handle {
-    Handle(child.id().expect("child already reaped"))
+    Handle(child.id())
 }
 
 /// Block until the child exits, **without reaping it**.
@@ -20,7 +20,7 @@ pub fn get_handle(child: &Child) -> Handle {
 /// but does not remove it from the process table. This keeps the PID valid for concurrent
 /// signal delivery via `kill()`.
 ///
-/// This function is meant to be called via `tokio::task::spawn_blocking`.
+/// This function is meant to be called via `blocking::unblock`.
 pub fn wait_noreap(handle: Handle) -> io::Result<()> {
     loop {
         let mut siginfo = MaybeUninit::zeroed();
@@ -47,9 +47,7 @@ pub fn wait_noreap(handle: Handle) -> io::Result<()> {
 
 /// Send SIGTERM to the child process (graceful termination request).
 pub fn terminate(child: &Child) -> io::Result<()> {
-    let pid = child
-        .id()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "child already reaped"))?;
+    let pid = child.id();
 
     // SAFETY: Sending a standard POSIX signal to a process we spawned.
     let ret = unsafe { libc::kill(pid as i32, libc::SIGTERM) };
@@ -62,9 +60,7 @@ pub fn terminate(child: &Child) -> io::Result<()> {
 
 /// Send SIGKILL to the child process (forced termination).
 pub fn force_kill(child: &Child) -> io::Result<()> {
-    let pid = child
-        .id()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "child already reaped"))?;
+    let pid = child.id();
 
     // SAFETY: Sending SIGKILL to a process we spawned. Cannot be caught or ignored.
     let ret = unsafe { libc::kill(pid as i32, libc::SIGKILL) };

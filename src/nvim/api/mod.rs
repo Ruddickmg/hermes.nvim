@@ -28,7 +28,7 @@ pub use prompt::*;
 pub use respond::*;
 pub use set_mode::*;
 pub use setup::*;
-use tokio::sync::Mutex;
+use async_lock::Mutex;
 use tracing::{debug, error};
 
 use crate::utilities::{Logger, NvimRuntime};

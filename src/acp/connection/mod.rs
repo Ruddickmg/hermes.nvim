@@ -14,7 +14,7 @@ use agent_client_protocol::{
     SetSessionModelRequest,
 };
 pub use manager::*;
-use tokio::sync::mpsc::Sender;
+use async_channel::Sender;
 
 /// Maximum time to wait for a connection thread to exit gracefully before force-killing
 /// the child process.
@@ -131,7 +131,7 @@ impl Connection {
             if handle.is_finished() {
                 return true;
             }
-            tokio::time::sleep(Duration::from_millis(10)).await;
+            async_io::Timer::after(Duration::from_millis(10)).await;
         }
         false
     }
@@ -286,27 +286,24 @@ mod tests {
         std::thread::spawn(|| Ok::<(), Error>(()))
     }
 
-    fn mock_runtime() -> tokio::runtime::Runtime {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_time()
-            .build()
-            .unwrap()
+    fn mock_runtime() -> smol::LocalExecutor<'static> {
+        smol::LocalExecutor::new()
     }
 
     #[test]
     fn test_connection_initialize() {
-        let rt = mock_runtime();
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+        let executor = mock_runtime();
+        let (sender, mut receiver) = async_channel::bounded(1);
         let connection = Arc::new(Connection::new(sender, mock_handle(), None));
         let request = InitializeRequest::new(ProtocolVersion::LATEST);
 
-        rt.block_on(async {
+        executor.run(async {
             connection.initialize(request.clone()).await.unwrap();
         });
 
         drop(connection);
 
-        rt.block_on(async {
+        executor.run(async {
             if let Some(UserRequest::Initialize(received)) = receiver.recv().await {
                 assert_eq!(received.protocol_version, request.protocol_version);
             } else {
@@ -318,19 +315,19 @@ mod tests {
     #[test]
     fn test_connection_create_session() {
         use agent_client_protocol::NewSessionRequest;
-        let rt = mock_runtime();
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+        let executor = mock_runtime();
+        let (sender, mut receiver) = async_channel::bounded(1);
         let connection = Arc::new(Connection::new(sender, mock_handle(), None));
 
         let request = NewSessionRequest::new(std::path::PathBuf::from("/"));
 
-        rt.block_on(async {
+        executor.run(async {
             connection.create_session(request).await.unwrap();
         });
 
         drop(connection);
 
-        rt.block_on(async {
+        executor.run(async {
             assert!(matches!(
                 receiver.recv().await,
                 Some(UserRequest::CreateSession(_))

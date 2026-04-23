@@ -6,7 +6,7 @@ use std::{
     cell::{BorrowError, BorrowMutError},
     sync::{PoisonError, mpsc::SendError},
 };
-use tokio::io;
+use std::io;
 
 #[derive(Debug, Clone)]
 pub enum Error {

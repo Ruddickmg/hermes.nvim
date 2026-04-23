@@ -10,7 +10,7 @@ use agent_client_protocol::{
     WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
     WriteTextFileResponse,
 };
-use tokio::sync::oneshot;
+use async_channel::bounded;
 use tracing::{error, info};
 
 #[async_trait::async_trait(?Send)]
@@ -23,7 +23,7 @@ impl Client for Handler {
             return Err(Error::method_not_found());
         }
         let (sender, receiver) =
-            oneshot::channel::<agent_client_protocol::RequestPermissionOutcome>();
+            bounded::<agent_client_protocol::RequestPermissionOutcome>(1);
         info!("Requesting permission for: {:?}", args);
 
         self.execute_autocommand_request(
@@ -34,6 +34,7 @@ impl Client for Handler {
         )
         .await?;
         receiver
+            .recv()
             .await
             .map_err(|e| {
                 error!("{:?}", e);
@@ -84,7 +85,7 @@ impl Client for Handler {
         if !self.can_write().await {
             return Err(Error::method_not_found());
         }
-        let (sender, receiver) = oneshot::channel::<WriteTextFileResponse>();
+        let (sender, receiver) = bounded::<WriteTextFileResponse>(1);
         self.execute_autocommand_request(
             args.session_id.to_string(),
             Commands::WriteTextFile,
@@ -92,7 +93,7 @@ impl Client for Handler {
             Responder::WriteFileResponse(sender, args),
         )
         .await?;
-        receiver.await.map_err(|e| {
+        receiver.recv().await.map_err(|e| {
             error!("{:?}", e);
             Error::internal_error()
         })
@@ -102,7 +103,7 @@ impl Client for Handler {
         if !self.can_read().await {
             return Err(Error::method_not_found());
         }
-        let (sender, receiver) = oneshot::channel::<Result<ReadTextFileResponse>>();
+        let (sender, receiver) = bounded::<Result<ReadTextFileResponse>>(1);
         self.execute_autocommand_request(
             args.session_id.to_string(),
             Commands::ReadTextFile,
@@ -110,7 +111,7 @@ impl Client for Handler {
             Responder::ReadFileResponse(sender, args),
         )
         .await?;
-        receiver.await.map_err(|e| {
+        receiver.recv().await.map_err(|e| {
             error!("{:?}", e);
             Error::internal_error()
         })?
@@ -120,7 +121,7 @@ impl Client for Handler {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
         }
-        let (sender, receiver) = oneshot::channel::<acp::Result<CreateTerminalResponse>>();
+        let (sender, receiver) = bounded::<acp::Result<CreateTerminalResponse>>(1);
         self.execute_autocommand_request(
             args.session_id.to_string(),
             Commands::TerminalCreate,
@@ -128,10 +129,14 @@ impl Client for Handler {
             Responder::TerminalCreate(sender, args),
         )
         .await?;
-        Ok(receiver.await.map_err(|e| {
-            error!("{:?}", e);
-            Error::internal_error()
-        })??)
+        receiver
+            .recv()
+            .await
+            .map_err(|e| {
+                error!("{:?}", e);
+                Error::internal_error()
+            })?
+            .map_err(|e| Error::internal_error())
     }
 
     /// Gets the terminal output and exit status
@@ -139,7 +144,7 @@ impl Client for Handler {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
         }
-        let (sender, receiver) = oneshot::channel::<acp::Result<TerminalOutputResponse>>();
+        let (sender, receiver) = bounded::<acp::Result<TerminalOutputResponse>>(1);
         self.execute_autocommand_request(
             args.session_id.to_string(),
             Commands::TerminalOutput,
@@ -147,10 +152,14 @@ impl Client for Handler {
             Responder::TerminalOutput(sender, args),
         )
         .await?;
-        Ok(receiver.await.map_err(|e| {
-            error!("{:?}", e);
-            Error::internal_error()
-        })??)
+        receiver
+            .recv()
+            .await
+            .map_err(|e| {
+                error!("{:?}", e);
+                Error::internal_error()
+            })?
+            .map_err(|e| Error::internal_error())
     }
 
     /// Waits for a terminal command to exit
@@ -161,7 +170,7 @@ impl Client for Handler {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
         }
-        let (sender, receiver) = oneshot::channel::<acp::Result<(Option<u32>, Option<String>)>>();
+        let (sender, receiver) = bounded::<acp::Result<(Option<u32>, Option<String>)>>(1);
         self.execute_autocommand_request(
             args.session_id.to_string(),
             Commands::TerminalExit,
@@ -170,6 +179,7 @@ impl Client for Handler {
         )
         .await?;
         Ok(receiver
+            .recv()
             .await
             .map_err(|_| Error::internal_error())?
             .and_then(|(exit_code, signal)| {
@@ -200,7 +210,7 @@ impl Client for Handler {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
         }
-        let (sender, receiver) = oneshot::channel::<acp::Result<ReleaseTerminalResponse>>();
+        let (sender, receiver) = bounded::<acp::Result<ReleaseTerminalResponse>>(1);
         self.execute_autocommand_request(
             args.session_id.to_string(),
             Commands::TerminalRelease,
@@ -208,9 +218,13 @@ impl Client for Handler {
             Responder::TerminalRelease(sender, args),
         )
         .await?;
-        Ok(receiver.await.map_err(|e| {
-            error!("{:?}", e);
-            Error::internal_error()
-        })??)
+        receiver
+            .recv()
+            .await
+            .map_err(|e| {
+                error!("{:?}", e);
+                Error::internal_error()
+            })?
+            .map_err(|e| Error::internal_error())
     }
 }

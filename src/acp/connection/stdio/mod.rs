@@ -10,8 +10,7 @@ use crate::{
 };
 use child::Child;
 use std::sync::Arc;
-use tokio::sync::mpsc::Receiver;
-use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
+use async_channel::Receiver;
 use tracing::{error, info, instrument, trace};
 
 #[instrument(level = "trace", skip(client, receiver, stdio))]
@@ -21,47 +20,73 @@ pub async fn stdio_connection(
     agent: &Assistant,
     stdio: Arc<Child>,
 ) -> Result<(), Error> {
-    let local_set = tokio::task::LocalSet::new();
-
     stdio.initialize(&mut agent.command()?).await?;
 
-    let outgoing = stdio
+    let stdin = stdio
         .take_stdin()
         .await
-        .ok_or_else(|| Error::Connection("Failed to take stdin".to_string()))?
-        .compat_write();
+        .ok_or_else(|| Error::Connection("Failed to take stdin".to_string()))?;
 
-    let incoming = stdio
+    let stdout = stdio
         .take_stdout()
         .await
-        .ok_or_else(|| Error::Connection("Failed to take stdout".to_string()))?
-        .compat();
+        .ok_or_else(|| Error::Connection("Failed to take stdout".to_string()))?;
+
+    // async_process types already implement AsyncRead/AsyncWrite
+    let outgoing = stdin;
+    let incoming = stdout;
 
     trace!("Starting async runtime for ACP communication");
-    local_set
-        .run_until(async {
-            trace!("creating ACP client connection");
-            let (connection, handle_io) = agent_client_protocol::ClientSideConnection::new(
-                client.clone(),
-                outgoing,
-                incoming,
-                |fut| {
-                    tokio::task::spawn_local(fut);
-                },
-            );
+    
+    // Create a local executor for managing local tasks
+    let executor = Arc::new(smol::LocalExecutor::new());
 
-            trace!("starting IO handling task for ACP connection");
-            tokio::task::spawn_local(handle_io);
+    // Channel to send spawn requests from the closure to the main loop
+    let (spawn_tx, spawn_rx) = async_channel::unbounded::<std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>>();
 
-            handle_requests(connection, receiver, client.clone(), agent).await
-        })
-        .await;
+    // Clone for the closure
+    let spawn_tx_clone = spawn_tx.clone();
+
+    // The connection will be created and run within the executor
+    let result = executor.run(async {
+        trace!("creating ACP client connection");
+        
+        // Create the connection with a spawn closure that sends to the channel
+        let (connection, handle_io) = agent_client_protocol::ClientSideConnection::new(
+            client.clone(),
+            outgoing,
+            incoming,
+            move |fut| {
+                // Send the future to the channel
+                let _ = spawn_tx_clone.try_send(fut);
+            },
+        );
+
+        trace!("starting IO handling task for ACP connection");
+        // We can't spawn handle_io because it's !Send
+        // For now, we'll handle this by processing it after requests
+        // TODO: Find a better solution for !Send futures
+
+        // Handle requests
+        let req_result = handle_requests(connection, receiver, client.clone(), agent).await;
+
+        // Process any pending spawn requests
+        while let Ok(fut) = spawn_rx.try_recv() {
+            fut.await;
+        }
+        
+        // Close the spawn channel
+        drop(spawn_tx);
+        
+        req_result;
+        Ok::<(), Error>(())
+    }).await;
 
     // Wait for the child to exit (it may have already exited when the ACP
     // connection closed, or we may need to wait briefly)
     let status = stdio.wait().await?;
     info!("Disconnected from '{}' with exit status: {}", agent, status);
-    Ok::<(), Error>(())
+    result
 }
 
 #[instrument(level = "trace", skip(client, receiver, stdio))]

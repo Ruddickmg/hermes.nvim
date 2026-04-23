@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tokio::sync::mpsc::Receiver;
+use async_channel::Receiver;
 
 use agent_client_protocol::{Agent, ClientSideConnection};
 use tracing::{debug, error, instrument};
@@ -81,7 +81,7 @@ pub async fn handle_requests(
     client: Arc<Handler>,
     agent: &Assistant,
 ) {
-    while let Some(msg) = receiver.recv().await {
+    while let Ok(msg) = receiver.recv().await {
         debug!("Received request from '{}': {:#?}", agent, msg);
         if msg == UserRequest::Close {
             break;

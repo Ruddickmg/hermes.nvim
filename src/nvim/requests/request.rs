@@ -7,7 +7,8 @@ use agent_client_protocol::{
 };
 use nvim_oxi::conversion::FromObject;
 use std::sync::Arc;
-use tokio::sync::{Mutex, oneshot};
+use async_lock::Mutex;
+use async_channel::Sender;
 use tracing::error;
 use uuid::Uuid;
 
@@ -23,32 +24,35 @@ use crate::utilities::{
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
+/// Type alias for oneshot channel sender (async_channel::bounded(1))
+pub type OneshotSender<T> = Sender<T>;
+
 #[derive(Debug)]
 pub enum Responder {
-    PermissionResponse(oneshot::Sender<RequestPermissionOutcome>),
+    PermissionResponse(OneshotSender<RequestPermissionOutcome>),
     ReadFileResponse(
-        oneshot::Sender<agent_client_protocol::Result<ReadTextFileResponse>>,
+        OneshotSender<agent_client_protocol::Result<ReadTextFileResponse>>,
         ReadTextFileRequest,
     ),
-    WriteFileResponse(oneshot::Sender<WriteTextFileResponse>, WriteTextFileRequest),
+    WriteFileResponse(OneshotSender<WriteTextFileResponse>, WriteTextFileRequest),
     TerminalCreate(
-        oneshot::Sender<Result<CreateTerminalResponse>>,
+        OneshotSender<Result<CreateTerminalResponse>>,
         CreateTerminalRequest,
     ),
     TerminalOutput(
-        oneshot::Sender<Result<TerminalOutputResponse>>,
+        OneshotSender<Result<TerminalOutputResponse>>,
         TerminalOutputRequest,
     ),
     TerminalExit(
-        oneshot::Sender<Result<(Option<u32>, Option<String>)>>,
+        OneshotSender<Result<(Option<u32>, Option<String>)>>,
         WaitForTerminalExitRequest,
     ),
     TerminalRelease(
-        oneshot::Sender<Result<ReleaseTerminalResponse>>,
+        OneshotSender<Result<ReleaseTerminalResponse>>,
         ReleaseTerminalRequest,
     ),
     TerminalKill(
-        oneshot::Sender<Result<KillTerminalResponse>>,
+        OneshotSender<Result<KillTerminalResponse>>,
         KillTerminalRequest,
     ),
 }
@@ -154,6 +158,7 @@ impl Request {
         if let Responder::PermissionResponse(sender, ..) = self.get_responder().await? {
             sender
                 .send(RequestPermissionOutcome::Cancelled)
+                .await
                 .map_err(|e| {
                     Error::Internal(format!(
                         "Failed to send cancellation for request '{}', in session '{}': {:?}",
@@ -264,6 +269,7 @@ impl Request {
                     String::from_object(response).map_err(|e| Error::Internal(e.to_string()))?;
                 sender
                     .send(Ok(ReadTextFileResponse::new(outcome)))
+                    .await
                     .map_err(|e| {
                         Error::Internal(format!(
                             "Failed to send response for request '{}': {:?}",
@@ -272,7 +278,7 @@ impl Request {
                     })?;
             }
             Responder::WriteFileResponse(sender, _) => {
-                sender.send(WriteTextFileResponse::new()).map_err(|e| {
+                sender.send(WriteTextFileResponse::new()).await.map_err(|e| {
                     Error::Internal(format!(
                         "Failed to send response for request '{}': {:?}",
                         self.id, e
@@ -287,7 +293,7 @@ impl Request {
                 } else {
                     RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(option_id))
                 };
-                sender.send(outcome).map_err(|e| {
+                sender.send(outcome).await.map_err(|e| {
                     Error::Internal(format!(
                         "Failed to send response for request '{}': {:?}",
                         self.id, e
@@ -298,7 +304,7 @@ impl Request {
                 let result = String::from_object(response)
                     .map(CreateTerminalResponse::new)
                     .map_err(|e| Error::InvalidInput(e.to_string()));
-                sender.send(result).map_err(|e| {
+                sender.send(result).await.map_err(|e| {
                     Error::Internal(format!(
                         "Failed to send terminal response for request '{}': {:?}",
                         self.id, e
@@ -308,7 +314,7 @@ impl Request {
             Responder::TerminalOutput(sender, _) => {
                 let result = Self::parse_terminal_output_response(response)
                     .map(|(output, truncated)| TerminalOutputResponse::new(output, truncated));
-                sender.send(result).map_err(|e| {
+                sender.send(result).await.map_err(|e| {
                     Error::Internal(format!(
                         "Failed to send terminal output response for request '{}': {:?}",
                         self.id, e
@@ -317,7 +323,7 @@ impl Request {
             }
             Responder::TerminalExit(sender, _) => {
                 let result = Self::parse_terminal_exit_response(response);
-                sender.send(result).map_err(|e| {
+                sender.send(result).await.map_err(|e| {
                     Error::Internal(format!(
                         "Failed to send terminal exit response for request '{}': {:?}",
                         self.id, e
@@ -327,6 +333,7 @@ impl Request {
             Responder::TerminalRelease(sender, _) => {
                 sender
                     .send(Ok(ReleaseTerminalResponse::new()))
+                    .await
                     .map_err(|e| {
                         Error::Internal(format!(
                             "Failed to send terminal release response for request '{}': {:?}",
@@ -335,7 +342,7 @@ impl Request {
                     })?;
             }
             Responder::TerminalKill(sender, _) => {
-                sender.send(Ok(KillTerminalResponse::new())).map_err(|e| {
+                sender.send(Ok(KillTerminalResponse::new())).await.map_err(|e| {
                     Error::Internal(format!(
                         "Failed to send terminal kill response for request '{}': {:?}",
                         self.id, e
@@ -431,7 +438,7 @@ impl Request {
                     ));
                 }
                 Responder::ReadFileResponse(responder, data) => {
-                    responder.send(Self::read_file(data)).map_err(|e| {
+                    responder.send(Self::read_file(data)).await.map_err(|e| {
                         Error::Internal(format!(
                             "Failed to send file content response for request '{}': {:?}",
                             self.id, e
@@ -457,7 +464,7 @@ impl Request {
                         save_buffer_to_disk(&buffer)?;
                     }
 
-                    responder.send(WriteTextFileResponse::new()).map_err(|_| {
+                    responder.send(WriteTextFileResponse::new()).await.map_err(|_| {
                         Error::Internal(
                             "Failed to respond to ACP about successful file write".to_string(),
                         )
@@ -473,6 +480,7 @@ impl Request {
                     terminal_manager.initialize_terminal(terminal_id.clone(), terminal);
                     sender
                         .send(response.map(|_| CreateTerminalResponse::new(terminal_id)))
+                        .await
                         .map_err(|e| {
                             Error::Internal(format!(
                                 "Failed to send terminal creation response for request '{}': {:?}",
@@ -487,7 +495,7 @@ impl Request {
                             TerminalOutputResponse::new(terminal.content(), terminal.truncated())
                         })
                         .ok_or_else(|| Error::Internal("No terminal found".to_string()));
-                    sender.send(result).map_err(|e| {
+                    sender.send(result).await.map_err(|e| {
                         Error::Internal(
                             format!("Failed to send terminal output response: {:?}", e,),
                         )
@@ -510,7 +518,7 @@ impl Request {
                             }
                         });
 
-                    sender.send(response).map_err(|e| {
+                    sender.send(response).await.map_err(|e| {
                         Error::Internal(format!(
                             "Failed to send terminal release response for request '{}': {:?}",
                             self.id, e
@@ -521,7 +529,7 @@ impl Request {
                     let response = terminal_manager
                         .kill(&data.terminal_id.to_string())
                         .map(|_| KillTerminalResponse::new());
-                    sender.send(response).map_err(|e| {
+                    sender.send(response).await.map_err(|e| {
                         Error::Internal(format!(
                             "Failed to send terminal kill response for request '{}': {:?}",
                             self.id, e
@@ -727,7 +735,7 @@ mod tests {
     // Tests for Responder -> Commands conversion
     #[test]
     fn responder_terminal_output_maps_to_terminal_output_command() {
-        let (sender, _) = oneshot::channel::<Result<TerminalOutputResponse>>();
+        let (sender, _receiver) = async_channel::bounded::<Result<TerminalOutputResponse>>(1);
         let responder = Responder::TerminalOutput(
             sender,
             TerminalOutputRequest::new(
@@ -741,7 +749,7 @@ mod tests {
 
     #[test]
     fn responder_terminal_kill_maps_to_terminal_kill_command() {
-        let (sender, _) = oneshot::channel::<Result<KillTerminalResponse>>();
+        let (sender, _receiver) = async_channel::bounded::<Result<KillTerminalResponse>>(1);
         let responder = Responder::TerminalKill(
             sender,
             KillTerminalRequest::new(
@@ -755,7 +763,7 @@ mod tests {
 
     #[test]
     fn responder_read_file_maps_to_read_text_file_command() {
-        let (sender, _) = oneshot::channel::<agent_client_protocol::Result<ReadTextFileResponse>>();
+        let (sender, _receiver) = async_channel::bounded::<agent_client_protocol::Result<ReadTextFileResponse>>(1);
         let responder = Responder::ReadFileResponse(
             sender,
             ReadTextFileRequest::new(
@@ -769,7 +777,7 @@ mod tests {
 
     #[test]
     fn responder_permission_maps_to_permission_request_command() {
-        let (sender, _) = oneshot::channel::<RequestPermissionOutcome>();
+        let (sender, _receiver) = async_channel::bounded::<RequestPermissionOutcome>(1);
         let responder = Responder::PermissionResponse(sender);
         let command: Commands = responder.into();
         assert_eq!(command, Commands::PermissionRequest);
@@ -777,7 +785,7 @@ mod tests {
 
     #[test]
     fn responder_write_file_maps_to_write_text_file_command() {
-        let (sender, _) = oneshot::channel::<WriteTextFileResponse>();
+        let (sender, _receiver) = async_channel::bounded::<WriteTextFileResponse>(1);
         let responder = Responder::WriteFileResponse(
             sender,
             WriteTextFileRequest::new(
@@ -792,7 +800,7 @@ mod tests {
 
     #[test]
     fn responder_terminal_create_maps_to_terminal_create_command() {
-        let (sender, _) = oneshot::channel::<Result<CreateTerminalResponse>>();
+        let (sender, _receiver) = async_channel::bounded::<Result<CreateTerminalResponse>>(1);
         let responder = Responder::TerminalCreate(
             sender,
             CreateTerminalRequest::new(
@@ -806,7 +814,7 @@ mod tests {
 
     #[test]
     fn responder_terminal_exit_maps_to_terminal_exit_command() {
-        let (sender, _) = oneshot::channel::<Result<(Option<u32>, Option<String>)>>();
+        let (sender, _receiver) = async_channel::bounded::<Result<(Option<u32>, Option<String>)>>(1);
         let responder = Responder::TerminalExit(
             sender,
             WaitForTerminalExitRequest::new(
@@ -820,7 +828,7 @@ mod tests {
 
     #[test]
     fn responder_terminal_release_maps_to_terminal_release_command() {
-        let (sender, _) = oneshot::channel::<Result<ReleaseTerminalResponse>>();
+        let (sender, _receiver) = async_channel::bounded::<Result<ReleaseTerminalResponse>>(1);
         let responder = Responder::TerminalRelease(
             sender,
             ReleaseTerminalRequest::new(

@@ -9,7 +9,7 @@
 
 use std::io;
 use std::os::windows::io::{AsRawHandle, RawHandle};
-use tokio::process::Child;
+use async_process::Child;
 
 /// A handle to a child process on Windows. Uses the raw OS handle.
 #[derive(Copy, Clone)]
@@ -17,7 +17,7 @@ pub struct Handle(RawHandle);
 
 // SAFETY: RawHandle is just a pointer-sized integer on Windows.
 // The handle is valid as long as the Child exists, and we only use it
-// in spawn_blocking before the Child is dropped.
+// via blocking operations before the Child is dropped.
 unsafe impl Send for Handle {}
 
 #[link(name = "kernel32")]
@@ -37,10 +37,7 @@ const INFINITE: u32 = 0xFFFFFFFF;
 const WAIT_OBJECT_0: u32 = 0;
 const PROCESS_TERMINATE: u32 = 0x0001;
 
-/// Extract a platform handle from a tokio Child.
-///
-/// # Panics
-/// Panics if the child has already been reaped (id() returns None).
+/// Extract a platform handle from an async_process Child.
 pub fn get_handle(child: &Child) -> Handle {
     Handle(child.raw_handle())
 }
@@ -50,7 +47,7 @@ pub fn get_handle(child: &Child) -> Handle {
 /// On Windows, `WaitForSingleObject` does not "reap" the process - the handle
 /// remains valid until explicitly closed. This makes concurrent wait/kill safe.
 ///
-/// This function is meant to be called via `tokio::task::spawn_blocking`.
+/// This function is meant to be called via `blocking::unblock`.
 pub fn wait_noreap(handle: Handle) -> io::Result<()> {
     // SAFETY: We call WaitForSingleObject with a valid process handle.
     // INFINITE means we block until the process exits.

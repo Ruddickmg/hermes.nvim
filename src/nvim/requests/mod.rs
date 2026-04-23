@@ -7,7 +7,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::Mutex;
+use async_lock::Mutex;
 
 use tracing::error;
 use uuid::Uuid;

@@ -17,7 +17,7 @@ use nvim_oxi::{
     api::opts::{CreateAugroupOpts, CreateAutocmdOpts},
 };
 use std::{cell::RefCell, rc::Rc, sync::Arc};
-use tokio::sync::Mutex;
+use async_lock::Mutex;
 use tracing::error;
 
 pub const GROUP: &str = "hermes";
@@ -26,13 +26,7 @@ pub const GROUP: &str = "hermes";
 pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     let storage_path = detect_project_storage_path()?;
     let logger = Logger::inititalize(&storage_path)?;
-    let runtime = Rc::new(
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| Error::Internal(e.to_string()))?,
-    );
-    let nvim_runtime = NvimRuntime::new(runtime);
+    let nvim_runtime = NvimRuntime::new();
     let plugin_state = Arc::new(Mutex::new(state::PluginState::new()));
     let request_handler = Rc::new(requests::Requests::new(
         nvim_runtime.clone(),
