@@ -9,7 +9,7 @@ use agent_client_protocol::{
 };
 use async_trait::async_trait;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use async_lock::Mutex;
 
 #[derive(Clone)]
 #[allow(dead_code)]

@@ -68,7 +68,7 @@ pub fn wait_for_floating_window(timeout: Duration) -> Option<nvim_oxi::api::Wind
 
 /// Wait for channel to receive outcome
 pub fn wait_for_outcome<T>(
-    receiver: &mut tokio::sync::oneshot::Receiver<T>,
+    receiver: &mut async_channel::Receiver<T>,
     timeout: Duration,
 ) -> Option<T> {
     let start = Instant::now();

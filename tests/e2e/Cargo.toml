@@ -34,4 +34,3 @@ nvim-oxi = { version = "0.6.0", features = ["neovim-0-10", "test"] }
 
 # [profile.test]
 # opt-level = 0
-

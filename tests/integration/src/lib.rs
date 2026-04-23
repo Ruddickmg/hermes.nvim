@@ -10,7 +10,7 @@ use hermes::nvim::{autocommands::Commands, requests::Requests, state::PluginStat
 use nvim_oxi::api::opts::{CreateAugroupOpts, CreateAutocmdOpts};
 use std::rc::Rc;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use async_lock::Mutex;
 
 pub mod acp;
 pub mod helpers;
@@ -90,7 +90,7 @@ fn test_execute_autocommand_sends_to_channel() -> nvim_oxi::Result<()> {
 
     // Execute an autocommand with test data
     let test_data = serde_json::json!({"test": "data"});
-    tokio_test::block_on(async {
+    smol::block_on(async {
         handler
             .execute_autocommand(Commands::ToolCall, test_data)
             .await

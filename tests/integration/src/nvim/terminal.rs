@@ -4,7 +4,7 @@
 
 use hermes::nvim::configuration::TerminalConfig;
 use hermes::nvim::terminal::{Terminal, TerminalInfo};
-use tokio::sync::oneshot;
+use hermes::acp::Result;
 
 /// Integration test: Verifies report_exit_to sends exit code when already occurred
 #[nvim_oxi::test]
@@ -18,10 +18,10 @@ fn terminal_info_report_exit_to_sends_exit_code_when_already_occurred() -> nvim_
         .expect("Failed to borrow exit_status for test setup") =
         Some((Some(5), Some("error".to_string())));
 
-    let (sender, mut receiver) = oneshot::channel();
+    let (sender, mut receiver) = async_channel::bounded::<Result<(Option<u32>, Option<String>)>>(1);
     terminal.report_exit_to(sender).expect("report failed");
 
-    let received = receiver.try_recv().unwrap();
+    let received = receiver.try_recv().expect("Should receive message");
     assert!(received.is_ok());
     assert_eq!(received.unwrap(), (Some(5), Some("error".to_string())));
 
@@ -33,7 +33,7 @@ fn terminal_info_report_exit_to_sends_exit_code_when_already_occurred() -> nvim_
 fn terminal_info_report_exit_to_stores_sender_for_later() -> nvim_oxi::Result<()> {
     let terminal = TerminalInfo::new(None);
 
-    let (sender, _receiver) = oneshot::channel();
+    let (sender, _receiver) = async_channel::bounded::<Result<(Option<u32>, Option<String>)>>(1);
     terminal.report_exit_to(sender).expect("report failed");
 
     // Verify the sender was stored by checking the exit_response field has a value
