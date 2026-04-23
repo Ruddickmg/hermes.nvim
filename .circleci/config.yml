@@ -56,7 +56,6 @@ workflows:
               only: 
                 - main
                 - development
-                - use-smol-instead-of-tokio
       - build-windows-x86_64:
           requires:
             - update-cargo-version
