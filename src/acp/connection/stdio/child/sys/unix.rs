@@ -6,10 +6,7 @@ use std::mem::MaybeUninit;
 #[derive(Copy, Clone)]
 pub struct Handle(u32);
 
-/// Extract a platform handle from an async_process Child.
-///
-/// # Panics
-/// Panics if the child has already been reaped (id() returns None).
+/// Extract a platform handle from an `async_process::Child`.
 pub fn get_handle(child: &Child) -> Handle {
     Handle(child.id())
 }
