@@ -1,12 +1,12 @@
 mod sys;
 
 use crate::acp::Result;
+use async_lock::Mutex;
+use async_process::{Child as AsyncChild, ChildStderr, ChildStdin, ChildStdout, Command};
+use event_listener::Event;
 use std::io;
 use std::process::ExitStatus;
 use std::sync::Arc;
-use async_process::{Child as AsyncChild, ChildStderr, ChildStdin, ChildStdout, Command};
-use async_lock::Mutex;
-use event_listener::Event;
 use tracing::{debug, trace, warn};
 
 #[derive(Debug)]

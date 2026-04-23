@@ -5,10 +5,10 @@ use crate::{Handler, acp::error::Error};
 use agent_client_protocol::{
     ClientCapabilities, FileSystemCapabilities, Implementation, InitializeRequest, ProtocolVersion,
 };
+use async_lock::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use async_lock::Mutex;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 #[derive(PartialEq, Eq, Clone, Copy, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
@@ -230,7 +230,7 @@ impl ConnectionManager {
             let agent_name = thread_agent.to_string();
 
             trace!("Starting smol executor for {}", agent_name);
-            
+
             // Run the connection in the executor.
             // smol::block_on drives the top-level future, while executor.run()
             // continuously polls all tasks spawned onto the LocalExecutor.
@@ -238,7 +238,8 @@ impl ConnectionManager {
             let run_result = smol::block_on(executor.run(async {
                 match protocol {
                     Protocol::Stdio => {
-                        stdio::connect(handler, thread_agent, receiver, child.unwrap(), &executor).await
+                        stdio::connect(handler, thread_agent, receiver, child.unwrap(), &executor)
+                            .await
                     }
                     Protocol::Http => {
                         error!("HTTP protocol is not yet implemented");
@@ -252,17 +253,18 @@ impl ConnectionManager {
                             "Socket protocol is not yet implemented".to_string(),
                         ))
                     }
-                    Protocol::Tcp => {
-                        tcp::connect(handler, thread_agent, receiver, &executor).await
-                    }
+                    Protocol::Tcp => tcp::connect(handler, thread_agent, receiver, &executor).await,
                 }
             }));
-            
+
             match &run_result {
                 Ok(()) => info!("Agent thread for '{}' exited normally", agent_name),
-                Err(e) => error!("Agent thread for '{}' exited with error: {:?}", agent_name, e),
+                Err(e) => error!(
+                    "Agent thread for '{}' exited with error: {:?}",
+                    agent_name, e
+                ),
             }
-            
+
             run_result
         });
 
@@ -320,7 +322,6 @@ impl Drop for ConnectionManager {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

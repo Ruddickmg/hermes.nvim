@@ -1,6 +1,6 @@
+use async_process::Child;
 use std::io;
 use std::mem::MaybeUninit;
-use async_process::Child;
 
 /// A handle to a child process on Unix. Just the PID, since `waitid()` takes a PID.
 #[derive(Copy, Clone)]

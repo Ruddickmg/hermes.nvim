@@ -5,12 +5,12 @@
 #![allow(clippy::arc_with_non_send_sync)]
 
 use crate::helpers::mock_runtime;
+use async_lock::Mutex;
 use hermes::acp::handler::Handler;
 use hermes::nvim::{autocommands::Commands, requests::Requests, state::PluginState};
 use nvim_oxi::api::opts::{CreateAugroupOpts, CreateAutocmdOpts};
 use std::rc::Rc;
 use std::sync::Arc;
-use async_lock::Mutex;
 
 pub mod acp;
 pub mod helpers;

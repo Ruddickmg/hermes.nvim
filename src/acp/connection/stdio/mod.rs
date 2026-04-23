@@ -8,10 +8,10 @@ use crate::{
         handler::message::handle_requests,
     },
 };
+use async_channel::Receiver;
 use child::Child;
 use std::rc::Rc;
 use std::sync::Arc;
-use async_channel::Receiver;
 use tracing::{error, info, instrument, trace};
 
 #[instrument(level = "trace", skip(client, receiver, stdio, executor))]

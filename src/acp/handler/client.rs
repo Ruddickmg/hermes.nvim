@@ -22,8 +22,7 @@ impl Client for Handler {
         if !self.can_request_permissions().await {
             return Err(Error::method_not_found());
         }
-        let (sender, receiver) =
-            bounded::<agent_client_protocol::RequestPermissionOutcome>(1);
+        let (sender, receiver) = bounded::<agent_client_protocol::RequestPermissionOutcome>(1);
         info!("Requesting permission for: {:?}", args);
 
         self.execute_autocommand_request(

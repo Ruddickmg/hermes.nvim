@@ -4,6 +4,8 @@ use agent_client_protocol::{
     CreateTerminalResponse, RequestPermissionOutcome, RequestPermissionRequest, SessionId,
     ToolCallId, ToolCallUpdate, ToolCallUpdateFields, WriteTextFileRequest, WriteTextFileResponse,
 };
+use async_channel::bounded as oneshot_channel;
+use async_lock::Mutex;
 use hermes::acp::Result;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
@@ -12,8 +14,6 @@ use pretty_assertions::assert_eq;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
-use async_lock::Mutex;
-use async_channel::bounded as oneshot_channel;
 use uuid::Uuid;
 
 fn mock_runtime() -> NvimRuntime {

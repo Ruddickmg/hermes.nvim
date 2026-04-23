@@ -11,6 +11,7 @@ use agent_client_protocol::{
     PermissionOption, PermissionOptionId, PermissionOptionKind, RequestPermissionRequest,
     SessionId, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
 };
+use async_lock::Mutex;
 use hermes::nvim::requests::Responder;
 use hermes::nvim::state::PluginState;
 use hermes::utilities::ui::show_permission_ui;
@@ -18,7 +19,6 @@ use std::cell::RefCell;
 #[allow(unused_imports)]
 use std::sync::Arc;
 use std::time::Duration;
-use async_lock::Mutex;
 use tracing::debug;
 
 /// Helper to block on an async future in synchronous tests

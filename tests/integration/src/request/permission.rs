@@ -7,12 +7,12 @@ use agent_client_protocol::{
     PermissionOption, PermissionOptionId, PermissionOptionKind, RequestPermissionOutcome,
     RequestPermissionRequest, SessionId, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
 };
+use async_lock::Mutex;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
 use hermes::utilities::NvimRuntime;
 use std::rc::Rc;
 use std::sync::Arc;
-use async_lock::Mutex;
 
 fn mock_runtime() -> NvimRuntime {
     NvimRuntime::new()

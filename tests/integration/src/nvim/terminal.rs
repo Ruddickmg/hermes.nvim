@@ -2,9 +2,9 @@
 //!
 //! These tests verify that TerminalInfo works correctly within the Neovim runtime.
 
+use hermes::acp::Result;
 use hermes::nvim::configuration::TerminalConfig;
 use hermes::nvim::terminal::{Terminal, TerminalInfo};
-use hermes::acp::Result;
 
 /// Integration test: Verifies report_exit_to sends exit code when already occurred
 #[nvim_oxi::test]

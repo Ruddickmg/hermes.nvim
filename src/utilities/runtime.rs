@@ -1,8 +1,8 @@
+use futures_lite::future::yield_now;
+use smol::LocalExecutor;
 use std::cell::Cell;
 use std::future::Future;
 use std::rc::Rc;
-use smol::LocalExecutor;
-use futures_lite::future::yield_now;
 use tracing::debug;
 
 /// Manages async execution on the Neovim main thread.
@@ -48,9 +48,11 @@ impl NvimRuntime {
     {
         if self.running.get() {
             debug!("Re-entrant call detected, spawning onto existing LocalExecutor");
-            self.executor.spawn(async move {
-                let _ = future.await;
-            }).detach();
+            self.executor
+                .spawn(async move {
+                    let _ = future.await;
+                })
+                .detach();
             None
         } else {
             // Use a guard to ensure the flag is reset even if the future panics,

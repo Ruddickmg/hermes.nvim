@@ -11,12 +11,12 @@ use crate::{
     api::{DisconnectArgs, Hermes},
     utilities::{Logger, NvimRuntime, detect_project_storage_path},
 };
+use async_lock::Mutex;
 use nvim_oxi::{
     Dictionary,
     api::opts::{CreateAugroupOpts, CreateAutocmdOpts},
 };
 use std::{cell::RefCell, rc::Rc, sync::Arc};
-use async_lock::Mutex;
 use tracing::error;
 
 pub const GROUP: &str = "hermes";

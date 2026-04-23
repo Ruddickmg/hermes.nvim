@@ -1,11 +1,11 @@
 use crate::acp::{Result, error::Error};
 use crate::utilities::NvimRuntime;
+use async_channel::Sender;
 use nvim_oxi::IntoResult;
 use nvim_oxi::libuv::AsyncHandle;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
-use async_channel::Sender;
 use tracing::error;
 
 #[derive(Clone)]

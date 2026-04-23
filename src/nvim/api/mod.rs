@@ -15,6 +15,7 @@ use std::sync::Arc;
 use std::{cell::RefCell, rc::Rc};
 
 use super::requests::Requests;
+use async_lock::Mutex;
 pub use connect::*;
 pub use create_session::*;
 pub use disconnect::*;
@@ -28,7 +29,6 @@ pub use prompt::*;
 pub use respond::*;
 pub use set_mode::*;
 pub use setup::*;
-use async_lock::Mutex;
 use tracing::{debug, error};
 
 use crate::utilities::{Logger, NvimRuntime};

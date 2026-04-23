@@ -5,9 +5,9 @@
 //!
 //! See request/handler.rs for examples of actual integration tests.
 
+use async_lock::Mutex;
 use std::rc::Rc;
 use std::sync::Arc;
-use async_lock::Mutex;
 
 use crate::helpers::mock_runtime;
 use hermes::acp::handler::Handler;

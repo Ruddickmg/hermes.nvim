@@ -4,11 +4,11 @@ use agent_client_protocol::{
     Client, ContentBlock, ContentChunk, Error, SessionNotification, SessionUpdate, TextContent,
     UsageUpdate,
 };
+use async_lock::Mutex;
 use hermes::acp::handler::Handler;
 use hermes::nvim::state::PluginState;
 use std::rc::Rc;
 use std::sync::Arc;
-use async_lock::Mutex;
 
 fn create_test_notification() -> SessionNotification {
     let chunk = ContentChunk::new(ContentBlock::Text(TextContent::new("test message")));
@@ -18,7 +18,9 @@ fn create_test_notification() -> SessionNotification {
 #[nvim_oxi::test]
 fn test_session_notification_permissions_denied() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    smol::block_on(async { state.lock().await.config.permissions.send_notifications = false; });
+    smol::block_on(async {
+        state.lock().await.config.permissions.send_notifications = false;
+    });
 
     let handler = Handler::new(
         state.clone(),
@@ -60,7 +62,9 @@ fn test_session_notification_permissions_allowed() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_can_write_returns_false_when_disabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    smol::block_on(async { state.lock().await.config.permissions.fs_write_access = false; });
+    smol::block_on(async {
+        state.lock().await.config.permissions.fs_write_access = false;
+    });
 
     let handler = Handler::new(
         state.clone(),
@@ -78,7 +82,9 @@ fn test_can_write_returns_false_when_disabled() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_can_read_returns_false_when_disabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    smol::block_on(async { state.lock().await.config.permissions.fs_read_access = false; });
+    smol::block_on(async {
+        state.lock().await.config.permissions.fs_read_access = false;
+    });
 
     let handler = Handler::new(
         state.clone(),
@@ -96,7 +102,10 @@ fn test_can_read_returns_false_when_disabled() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_can_access_terminal_returns_false_when_disabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    smol::block_on(state.lock()).config.permissions.terminal_access = false;
+    smol::block_on(state.lock())
+        .config
+        .permissions
+        .terminal_access = false;
 
     let handler = Handler::new(
         state.clone(),
@@ -114,7 +123,10 @@ fn test_can_access_terminal_returns_false_when_disabled() -> nvim_oxi::Result<()
 #[nvim_oxi::test]
 fn test_can_request_permissions_returns_false_when_disabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    smol::block_on(state.lock()).config.permissions.request_permissions = false;
+    smol::block_on(state.lock())
+        .config
+        .permissions
+        .request_permissions = false;
 
     let handler = Handler::new(
         state.clone(),
@@ -257,7 +269,10 @@ fn test_session_notification_usage_update_succeeds() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_can_receive_notifications_returns_false_when_disabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    smol::block_on(state.lock()).config.permissions.send_notifications = false;
+    smol::block_on(state.lock())
+        .config
+        .permissions
+        .send_notifications = false;
 
     let handler = Handler::new(
         state.clone(),

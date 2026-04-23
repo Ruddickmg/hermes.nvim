@@ -3,6 +3,8 @@ use crate::helpers::ui::wait_for;
 use agent_client_protocol::{SessionId, WriteTextFileRequest, WriteTextFileResponse};
 use assert_fs::prelude::*;
 use assert_fs::{NamedTempFile, TempDir};
+use async_channel::bounded as oneshot_channel;
+use async_lock::Mutex;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
 use hermes::utilities::NvimRuntime;
@@ -10,8 +12,6 @@ use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
-use async_lock::Mutex;
-use async_channel::bounded as oneshot_channel;
 
 fn mock_runtime() -> NvimRuntime {
     NvimRuntime::new()

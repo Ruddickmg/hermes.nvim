@@ -7,9 +7,9 @@ use agent_client_protocol::{
     WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
     WriteTextFileResponse,
 };
+use async_lock::Mutex;
 use async_trait::async_trait;
 use std::sync::Arc;
-use async_lock::Mutex;
 
 #[derive(Clone)]
 #[allow(dead_code)]

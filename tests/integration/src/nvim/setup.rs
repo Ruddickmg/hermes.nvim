@@ -1,4 +1,5 @@
 use crate::helpers::mock_runtime;
+use async_lock::Mutex;
 use hermes::{
     Handler, PluginState,
     api::{Api, SetupArgs},
@@ -15,7 +16,6 @@ use nvim_oxi;
 use pretty_assertions::assert_eq;
 use std::rc::Rc;
 use std::sync::Arc;
-use async_lock::Mutex;
 
 fn create_test_api(
     plugin_state: Arc<Mutex<PluginState>>,

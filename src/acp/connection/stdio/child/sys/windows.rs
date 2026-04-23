@@ -7,9 +7,9 @@
 //! Windows prevents PID reuse while process handles are open, so concurrent
 //! wait/kill is inherently safe as long as we hold a handle.
 
+use async_process::Child;
 use std::io;
 use std::os::windows::io::{AsRawHandle, RawHandle};
-use async_process::Child;
 
 /// A handle to a child process on Windows. Uses the raw OS handle.
 #[derive(Copy, Clone)]

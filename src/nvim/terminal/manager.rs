@@ -1,7 +1,7 @@
+use async_channel::Sender;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use async_channel::Sender;
 
 use crate::acp::Result;
 use crate::acp::error::Error;

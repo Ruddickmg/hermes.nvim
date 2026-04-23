@@ -3,13 +3,13 @@ use crate::{
     nvim::{configuration::TerminalConfig, terminal::parse_exit_code},
 };
 use agent_client_protocol::EnvVariable;
+use async_channel::Sender;
 use nvim_oxi::{
     Array, Dictionary, Function, Object,
     api::opts::{BufDeleteOpts, OptionOpts},
 };
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 use strip_ansi_escapes;
-use async_channel::Sender;
 use uuid::Uuid;
 
 pub type ExitStatus = (Option<u32>, Option<String>);

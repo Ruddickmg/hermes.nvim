@@ -2,14 +2,14 @@
 //!
 //! Each test verifies exactly ONE behavior with exactly ONE assertion.
 use agent_client_protocol::{CreateTerminalRequest, CreateTerminalResponse, SessionId};
+use async_channel::bounded as oneshot_channel;
+use async_lock::Mutex;
 use hermes::acp::Result;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
 use hermes::utilities::NvimRuntime;
 use std::rc::Rc;
 use std::sync::Arc;
-use async_lock::Mutex;
-use async_channel::bounded as oneshot_channel;
 use uuid::Uuid;
 
 fn mock_runtime() -> NvimRuntime {

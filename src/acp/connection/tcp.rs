@@ -6,11 +6,11 @@ use crate::{
         handler::message::handle_requests,
     },
 };
+use async_channel::Receiver;
+use async_net::TcpStream;
+use futures_lite::io::split;
 use std::rc::Rc;
 use std::sync::Arc;
-use async_net::TcpStream;
-use async_channel::Receiver;
-use futures_lite::io::split;
 use tracing::{debug, error, info, instrument, trace};
 
 /// Connect to an agent via TCP tcp

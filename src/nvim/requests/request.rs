@@ -5,10 +5,10 @@ use agent_client_protocol::{
     TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
     WriteTextFileRequest, WriteTextFileResponse,
 };
+use async_channel::Sender;
+use async_lock::Mutex;
 use nvim_oxi::conversion::FromObject;
 use std::sync::Arc;
-use async_lock::Mutex;
-use async_channel::Sender;
 use tracing::error;
 use uuid::Uuid;
 
@@ -278,12 +278,15 @@ impl Request {
                     })?;
             }
             Responder::WriteFileResponse(sender, _) => {
-                sender.send(WriteTextFileResponse::new()).await.map_err(|e| {
-                    Error::Internal(format!(
-                        "Failed to send response for request '{}': {:?}",
-                        self.id, e
-                    ))
-                })?;
+                sender
+                    .send(WriteTextFileResponse::new())
+                    .await
+                    .map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send response for request '{}': {:?}",
+                            self.id, e
+                        ))
+                    })?;
             }
             Responder::PermissionResponse(sender, ..) => {
                 let option_id: String =
@@ -342,12 +345,15 @@ impl Request {
                     })?;
             }
             Responder::TerminalKill(sender, _) => {
-                sender.send(Ok(KillTerminalResponse::new())).await.map_err(|e| {
-                    Error::Internal(format!(
-                        "Failed to send terminal kill response for request '{}': {:?}",
-                        self.id, e
-                    ))
-                })?;
+                sender
+                    .send(Ok(KillTerminalResponse::new()))
+                    .await
+                    .map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send terminal kill response for request '{}': {:?}",
+                            self.id, e
+                        ))
+                    })?;
             }
         };
         self.finish().await
@@ -464,11 +470,14 @@ impl Request {
                         save_buffer_to_disk(&buffer)?;
                     }
 
-                    responder.send(WriteTextFileResponse::new()).await.map_err(|_| {
-                        Error::Internal(
-                            "Failed to respond to ACP about successful file write".to_string(),
-                        )
-                    })?;
+                    responder
+                        .send(WriteTextFileResponse::new())
+                        .await
+                        .map_err(|_| {
+                            Error::Internal(
+                                "Failed to respond to ACP about successful file write".to_string(),
+                            )
+                        })?;
                 }
                 Responder::TerminalCreate(sender, data) => {
                     let state = self.state.lock().await;
@@ -763,7 +772,8 @@ mod tests {
 
     #[test]
     fn responder_read_file_maps_to_read_text_file_command() {
-        let (sender, _receiver) = async_channel::bounded::<agent_client_protocol::Result<ReadTextFileResponse>>(1);
+        let (sender, _receiver) =
+            async_channel::bounded::<agent_client_protocol::Result<ReadTextFileResponse>>(1);
         let responder = Responder::ReadFileResponse(
             sender,
             ReadTextFileRequest::new(
@@ -814,7 +824,8 @@ mod tests {
 
     #[test]
     fn responder_terminal_exit_maps_to_terminal_exit_command() {
-        let (sender, _receiver) = async_channel::bounded::<Result<(Option<u32>, Option<String>)>>(1);
+        let (sender, _receiver) =
+            async_channel::bounded::<Result<(Option<u32>, Option<String>)>>(1);
         let responder = Responder::TerminalExit(
             sender,
             WaitForTerminalExitRequest::new(

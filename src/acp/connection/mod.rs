@@ -13,8 +13,8 @@ use agent_client_protocol::{
     ResumeSessionRequest, SetSessionConfigOptionRequest, SetSessionModeRequest,
     SetSessionModelRequest,
 };
-pub use manager::*;
 use async_channel::Sender;
+pub use manager::*;
 
 /// Maximum time to wait for a connection thread to exit gracefully before force-killing
 /// the child process.
