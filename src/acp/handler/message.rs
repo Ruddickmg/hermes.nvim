@@ -77,7 +77,7 @@ async fn handle_request(
 #[instrument(level = "trace", skip(connection, receiver, client))]
 pub async fn handle_requests(
     connection: ClientSideConnection,
-    mut receiver: Receiver<UserRequest>,
+    receiver: Receiver<UserRequest>,
     client: Arc<Handler>,
     agent: &Assistant,
 ) {

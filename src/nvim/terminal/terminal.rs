@@ -540,7 +540,7 @@ mod tests {
         let mut exit_status: Option<ExitStatus> = None;
         let mut exit_response: Option<OneshotSender<Result<ExitStatus>>>;
 
-        let (sender, mut receiver) = async_channel::bounded(1);
+        let (sender, receiver) = async_channel::bounded(1);
         exit_response = Some(sender);
 
         let _result = handle_terminal_exit(

@@ -8,7 +8,6 @@ pub mod terminal;
 
 use crate::{
     Handler,
-    acp::error::Error,
     api::{DisconnectArgs, Hermes},
     utilities::{Logger, NvimRuntime, detect_project_storage_path},
 };

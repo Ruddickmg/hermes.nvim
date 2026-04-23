@@ -9,16 +9,18 @@ use crate::{
     },
 };
 use child::Child;
+use std::rc::Rc;
 use std::sync::Arc;
 use async_channel::Receiver;
 use tracing::{error, info, instrument, trace};
 
-#[instrument(level = "trace", skip(client, receiver, stdio))]
+#[instrument(level = "trace", skip(client, receiver, stdio, executor))]
 pub async fn stdio_connection(
     receiver: Receiver<UserRequest>,
     client: Arc<Handler>,
     agent: &Assistant,
     stdio: Arc<Child>,
+    executor: &Rc<smol::LocalExecutor<'static>>,
 ) -> Result<(), Error> {
     stdio.initialize(&mut agent.command()?).await?;
 
@@ -32,69 +34,49 @@ pub async fn stdio_connection(
         .await
         .ok_or_else(|| Error::Connection("Failed to take stdout".to_string()))?;
 
-    // async_process types already implement AsyncRead/AsyncWrite
+    // async_process types already implement futures::AsyncRead/AsyncWrite
     let outgoing = stdin;
     let incoming = stdout;
 
     trace!("Starting async runtime for ACP communication");
-    
-    // Create a local executor for managing local tasks
-    let executor = Arc::new(smol::LocalExecutor::new());
 
-    // Channel to send spawn requests from the closure to the main loop
-    let (spawn_tx, spawn_rx) = async_channel::unbounded::<std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>>();
+    // Clone the executor Rc for the spawn closure (must be 'static)
+    let exec_for_spawn = executor.clone();
 
-    // Clone for the closure
-    let spawn_tx_clone = spawn_tx.clone();
+    trace!("creating ACP client connection");
+    let (connection, handle_io) = agent_client_protocol::ClientSideConnection::new(
+        client.clone(),
+        outgoing,
+        incoming,
+        move |fut| {
+            // Spawn onto the same LocalExecutor that drives this entire thread.
+            // The outer smol::block_on(executor.run(...)) in manager.rs will
+            // poll these tasks, matching the Tokio LocalSet::spawn_local pattern.
+            exec_for_spawn.spawn(fut).detach();
+        },
+    );
 
-    // The connection will be created and run within the executor
-    let result = executor.run(async {
-        trace!("creating ACP client connection");
-        
-        // Create the connection with a spawn closure that sends to the channel
-        let (connection, handle_io) = agent_client_protocol::ClientSideConnection::new(
-            client.clone(),
-            outgoing,
-            incoming,
-            move |fut| {
-                // Send the future to the channel
-                let _ = spawn_tx_clone.try_send(fut);
-            },
-        );
+    trace!("starting IO handling task for ACP connection");
+    // Spawn the IO driver onto the executor so it runs concurrently
+    // with handle_requests. This is the critical piece that was missing.
+    executor.spawn(handle_io).detach();
 
-        trace!("starting IO handling task for ACP connection");
-        // We can't spawn handle_io because it's !Send
-        // For now, we'll handle this by processing it after requests
-        // TODO: Find a better solution for !Send futures
-
-        // Handle requests
-        let req_result = handle_requests(connection, receiver, client.clone(), agent).await;
-
-        // Process any pending spawn requests
-        while let Ok(fut) = spawn_rx.try_recv() {
-            fut.await;
-        }
-        
-        // Close the spawn channel
-        drop(spawn_tx);
-        
-        req_result;
-        Ok::<(), Error>(())
-    }).await;
+    handle_requests(connection, receiver, client.clone(), agent).await;
 
     // Wait for the child to exit (it may have already exited when the ACP
     // connection closed, or we may need to wait briefly)
     let status = stdio.wait().await?;
     info!("Disconnected from '{}' with exit status: {}", agent, status);
-    result
+    Ok::<(), Error>(())
 }
 
-#[instrument(level = "trace", skip(client, receiver, stdio))]
+#[instrument(level = "trace", skip(client, receiver, stdio, executor))]
 pub async fn connect(
     client: Arc<Handler>,
     agent: Assistant,
     receiver: Receiver<UserRequest>,
     stdio: Arc<Child>,
+    executor: &Rc<smol::LocalExecutor<'static>>,
 ) -> Result<(), Error> {
     match agent.clone() {
         Assistant::Copilot
@@ -102,7 +84,7 @@ pub async fn connect(
         | Assistant::Gemini
         | Assistant::CustomStdio { .. } => {
             trace!("Starting stdio connection for '{}'", agent);
-            stdio_connection(receiver, client, &agent, stdio).await
+            stdio_connection(receiver, client, &agent, stdio, executor).await
         }
         _ => {
             error!("Unsupported agent type for stdio connection: {}", agent);

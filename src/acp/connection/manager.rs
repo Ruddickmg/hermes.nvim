@@ -226,17 +226,19 @@ impl ConnectionManager {
         let stdio_child = child.clone();
 
         let handle = std::thread::spawn(move || {
-            let executor = smol::LocalExecutor::new();
+            let executor = std::rc::Rc::new(smol::LocalExecutor::new());
             let agent_name = thread_agent.to_string();
 
             trace!("Starting smol executor for {}", agent_name);
             
-            // Run the connection in the executor
-            // Note: executor.run() is async and returns a Future, so we need to block on it
-            let run_result = smol::block_on(executor.run(async move {
+            // Run the connection in the executor.
+            // smol::block_on drives the top-level future, while executor.run()
+            // continuously polls all tasks spawned onto the LocalExecutor.
+            // This matches the Tokio pattern of LocalSet::run_until().
+            let run_result = smol::block_on(executor.run(async {
                 match protocol {
                     Protocol::Stdio => {
-                        stdio::connect(handler, thread_agent, receiver, child.unwrap()).await
+                        stdio::connect(handler, thread_agent, receiver, child.unwrap(), &executor).await
                     }
                     Protocol::Http => {
                         error!("HTTP protocol is not yet implemented");
@@ -251,7 +253,7 @@ impl ConnectionManager {
                         ))
                     }
                     Protocol::Tcp => {
-                        tcp::connect(handler, thread_agent, receiver).await
+                        tcp::connect(handler, thread_agent, receiver, &executor).await
                     }
                 }
             }));

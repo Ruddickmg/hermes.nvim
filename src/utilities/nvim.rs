@@ -5,8 +5,7 @@ use nvim_oxi::libuv::AsyncHandle;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
-use async_channel::{Sender, Receiver};
-use futures_lite::future::yield_now;
+use async_channel::Sender;
 use tracing::error;
 
 #[derive(Clone)]

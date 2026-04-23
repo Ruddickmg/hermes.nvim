@@ -293,45 +293,45 @@ mod tests {
     #[test]
     fn test_connection_initialize() {
         let executor = mock_runtime();
-        let (sender, mut receiver) = async_channel::bounded(1);
+        let (sender, receiver) = async_channel::bounded(1);
         let connection = Arc::new(Connection::new(sender, mock_handle(), None));
         let request = InitializeRequest::new(ProtocolVersion::LATEST);
 
-        executor.run(async {
+        smol::block_on(executor.run(async {
             connection.initialize(request.clone()).await.unwrap();
-        });
+        }));
 
         drop(connection);
 
-        executor.run(async {
-            if let Some(UserRequest::Initialize(received)) = receiver.recv().await {
+        smol::block_on(executor.run(async {
+            if let Ok(UserRequest::Initialize(received)) = receiver.recv().await {
                 assert_eq!(received.protocol_version, request.protocol_version);
             } else {
                 panic!("Expected Initialize request");
             }
-        });
+        }));
     }
 
     #[test]
     fn test_connection_create_session() {
         use agent_client_protocol::NewSessionRequest;
         let executor = mock_runtime();
-        let (sender, mut receiver) = async_channel::bounded(1);
+        let (sender, receiver) = async_channel::bounded(1);
         let connection = Arc::new(Connection::new(sender, mock_handle(), None));
 
         let request = NewSessionRequest::new(std::path::PathBuf::from("/"));
 
-        executor.run(async {
+        smol::block_on(executor.run(async {
             connection.create_session(request).await.unwrap();
-        });
+        }));
 
         drop(connection);
 
-        executor.run(async {
+        smol::block_on(executor.run(async {
             assert!(matches!(
                 receiver.recv().await,
-                Some(UserRequest::CreateSession(_))
+                Ok(UserRequest::CreateSession(_))
             ));
-        });
+        }));
     }
 }

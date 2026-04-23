@@ -136,7 +136,7 @@ impl Client for Handler {
                 error!("{:?}", e);
                 Error::internal_error()
             })?
-            .map_err(|e| Error::internal_error())
+            .map_err(|_e| Error::internal_error())
     }
 
     /// Gets the terminal output and exit status
@@ -159,7 +159,7 @@ impl Client for Handler {
                 error!("{:?}", e);
                 Error::internal_error()
             })?
-            .map_err(|e| Error::internal_error())
+            .map_err(|_| Error::internal_error())
     }
 
     /// Waits for a terminal command to exit
@@ -225,6 +225,6 @@ impl Client for Handler {
                 error!("{:?}", e);
                 Error::internal_error()
             })?
-            .map_err(|e| Error::internal_error())
+            .map_err(|_| Error::internal_error())
     }
 }

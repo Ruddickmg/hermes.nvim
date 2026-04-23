@@ -6,6 +6,7 @@ use crate::{
         handler::message::handle_requests,
     },
 };
+use std::rc::Rc;
 use std::sync::Arc;
 use async_net::TcpStream;
 use async_channel::Receiver;
@@ -20,13 +21,15 @@ use tracing::{debug, error, info, instrument, trace};
 /// * `agent` - Assistant identifier for logging
 /// * `host` - Host address (e.g., "localhost")
 /// * `port` - TCP port number
-#[instrument(level = "trace", skip(client, receiver))]
+/// * `executor` - The LocalExecutor driving this thread's async tasks
+#[instrument(level = "trace", skip(client, receiver, executor))]
 pub async fn tcp_connection(
     receiver: Receiver<UserRequest>,
     client: Arc<Handler>,
     agent: &Assistant,
     host: &str,
     port: u16,
+    executor: &Rc<smol::LocalExecutor<'static>>,
 ) -> Result<(), Error> {
     let address = format!("{}:{}", host, port);
     debug!("Connecting to agent at {}", address);
@@ -38,77 +41,46 @@ pub async fn tcp_connection(
 
     info!("Connected to agent '{}' via tcp at {}", agent, address);
 
-    // Split the stream into read and write halves using futures_lite::io::split
+    // Split the stream into read and write halves
     let (reader, writer) = split(stream);
 
-    // Create a local executor for managing local tasks
-    let executor = Arc::new(smol::LocalExecutor::new());
+    // Clone the executor Rc for the spawn closure (must be 'static)
+    let exec_for_spawn = executor.clone();
 
-    // Channel to send spawn requests from the closure to the main loop
-    let (spawn_tx, spawn_rx) = async_channel::unbounded::<std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>>();
+    trace!("creating ACP client connection");
+    let (connection, handle_io) = agent_client_protocol::ClientSideConnection::new(
+        client.clone(),
+        writer,
+        reader,
+        move |fut| {
+            exec_for_spawn.spawn(fut).detach();
+        },
+    );
 
-    // Clone for the closure
-    let spawn_tx_clone = spawn_tx.clone();
+    trace!("starting IO handling task for ACP connection");
+    executor.spawn(handle_io).detach();
 
-    // The connection will be created and run within the executor
-    let result = executor.run(async {
-        trace!("creating ACP client connection");
-        
-        // Create the connection with a spawn closure that sends to the channel
-        let (connection, handle_io) = agent_client_protocol::ClientSideConnection::new(
-            client.clone(),
-            writer,
-            reader,
-            move |fut| {
-                // Send the future to the channel
-                let _ = spawn_tx_clone.try_send(fut);
-            },
-        );
-
-        trace!("starting IO handling task for ACP connection");
-        // Spawn handle_io using smol::spawn - but this requires Send
-        // For now, we need to work around this
-        // The handle_io from ACP is !Send, so we can't use smol::spawn
-        // We'll need to use a different approach
-        
-        // Actually, let's just run handle_io concurrently with a select
-        // We can't easily do that with the current structure
-        // For now, let's just spawn it and hope it works (it won't compile)
-        // TODO: Find a better solution for !Send futures
-        
-        // Handle requests
-        let req_result = handle_requests(connection, receiver, client.clone(), agent).await;
-
-        // Process any pending spawn requests
-        while let Ok(fut) = spawn_rx.try_recv() {
-            fut.await;
-        }
-        
-        // Close the spawn channel
-        drop(spawn_tx);
-        
-        req_result;
-        Ok::<(), Error>(())
-    }).await;
+    handle_requests(connection, receiver, client.clone(), agent).await;
 
     info!("Disconnected from '{}' via tcp", agent);
-    result
+    Ok::<(), Error>(())
 }
 
 /// Connect to an agent using tcp protocol
 ///
 /// This is the entry point for tcp-based connections, matching the
 /// signature of stdio::connect for consistency.
-#[instrument(level = "trace", skip(client, receiver))]
+#[instrument(level = "trace", skip(client, receiver, executor))]
 pub async fn connect(
     client: Arc<Handler>,
     agent: Assistant,
     receiver: Receiver<UserRequest>,
+    executor: &Rc<smol::LocalExecutor<'static>>,
 ) -> Result<(), Error> {
     match agent.clone() {
         Assistant::CustomUrl { host, port, .. } => {
             trace!("Starting custom agent connection: {}", agent);
-            tcp_connection(receiver, client, &agent, &host, port).await
+            tcp_connection(receiver, client, &agent, &host, port, executor).await
         }
         _ => {
             error!("Unsupported agent type for tcp connection: {}", agent);
