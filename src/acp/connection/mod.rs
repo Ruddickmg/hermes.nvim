@@ -296,9 +296,10 @@ mod tests {
         let handle = std::thread::spawn(|| Ok::<(), Error>(()));
         // Give thread time to finish
         std::thread::sleep(Duration::from_millis(10));
-        let result = smol::block_on(executor.run(async {
-            Connection::wait_for_thread(&handle, Duration::from_millis(500)).await
-        }));
+        let result =
+            smol::block_on(executor.run(async {
+                Connection::wait_for_thread(&handle, Duration::from_millis(500)).await
+            }));
         assert!(result);
     }
 
@@ -310,9 +311,10 @@ mod tests {
             let _ = rx.recv(); // Block until signaled
             Ok::<(), Error>(())
         });
-        let result = smol::block_on(executor.run(async {
-            Connection::wait_for_thread(&handle, Duration::from_millis(50)).await
-        }));
+        let result =
+            smol::block_on(executor.run(async {
+                Connection::wait_for_thread(&handle, Duration::from_millis(50)).await
+            }));
         assert!(!result);
         // Cleanup: unblock the thread
         let _ = tx.send(());
