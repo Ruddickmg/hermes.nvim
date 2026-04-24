@@ -13,8 +13,8 @@ use agent_client_protocol::{
     ResumeSessionRequest, SetSessionConfigOptionRequest, SetSessionModeRequest,
     SetSessionModelRequest,
 };
+use async_channel::Sender;
 pub use manager::*;
-use tokio::sync::mpsc::Sender;
 
 /// Maximum time to wait for a connection thread to exit gracefully before force-killing
 /// the child process.
@@ -131,7 +131,7 @@ impl Connection {
             if handle.is_finished() {
                 return true;
             }
-            tokio::time::sleep(Duration::from_millis(10)).await;
+            async_io::Timer::after(Duration::from_millis(10)).await;
         }
         false
     }
@@ -286,55 +286,83 @@ mod tests {
         std::thread::spawn(|| Ok::<(), Error>(()))
     }
 
-    fn mock_runtime() -> tokio::runtime::Runtime {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_time()
-            .build()
-            .unwrap()
+    fn mock_runtime() -> smol::LocalExecutor<'static> {
+        smol::LocalExecutor::new()
+    }
+
+    #[test]
+    fn test_wait_for_thread_returns_true_when_finished() {
+        let executor = mock_runtime();
+        let handle = std::thread::spawn(|| Ok::<(), Error>(()));
+        // Give thread time to finish
+        std::thread::sleep(Duration::from_millis(10));
+        let result =
+            smol::block_on(executor.run(async {
+                Connection::wait_for_thread(&handle, Duration::from_millis(500)).await
+            }));
+        assert!(result);
+    }
+
+    #[test]
+    fn test_wait_for_thread_returns_false_on_timeout() {
+        let executor = mock_runtime();
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        let handle = std::thread::spawn(move || {
+            let _ = rx.recv(); // Block until signaled
+            Ok::<(), Error>(())
+        });
+        let result =
+            smol::block_on(executor.run(async {
+                Connection::wait_for_thread(&handle, Duration::from_millis(50)).await
+            }));
+        assert!(!result);
+        // Cleanup: unblock the thread
+        let _ = tx.send(());
+        let _ = handle.join();
     }
 
     #[test]
     fn test_connection_initialize() {
-        let rt = mock_runtime();
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+        let executor = mock_runtime();
+        let (sender, receiver) = async_channel::bounded(1);
         let connection = Arc::new(Connection::new(sender, mock_handle(), None));
         let request = InitializeRequest::new(ProtocolVersion::LATEST);
 
-        rt.block_on(async {
+        smol::block_on(executor.run(async {
             connection.initialize(request.clone()).await.unwrap();
-        });
+        }));
 
         drop(connection);
 
-        rt.block_on(async {
-            if let Some(UserRequest::Initialize(received)) = receiver.recv().await {
+        smol::block_on(executor.run(async {
+            if let Ok(UserRequest::Initialize(received)) = receiver.recv().await {
                 assert_eq!(received.protocol_version, request.protocol_version);
             } else {
                 panic!("Expected Initialize request");
             }
-        });
+        }));
     }
 
     #[test]
     fn test_connection_create_session() {
         use agent_client_protocol::NewSessionRequest;
-        let rt = mock_runtime();
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+        let executor = mock_runtime();
+        let (sender, receiver) = async_channel::bounded(1);
         let connection = Arc::new(Connection::new(sender, mock_handle(), None));
 
         let request = NewSessionRequest::new(std::path::PathBuf::from("/"));
 
-        rt.block_on(async {
+        smol::block_on(executor.run(async {
             connection.create_session(request).await.unwrap();
-        });
+        }));
 
         drop(connection);
 
-        rt.block_on(async {
+        smol::block_on(executor.run(async {
             assert!(matches!(
                 receiver.recv().await,
-                Some(UserRequest::CreateSession(_))
+                Ok(UserRequest::CreateSession(_))
             ));
-        });
+        }));
     }
 }

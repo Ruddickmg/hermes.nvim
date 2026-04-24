@@ -1,11 +1,14 @@
+use async_channel::Sender;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use tokio::sync::oneshot;
 
 use crate::acp::Result;
 use crate::acp::error::Error;
 use crate::nvim::terminal::Terminal;
+
+/// Type alias for oneshot channel sender
+pub type OneshotSender<T> = Sender<T>;
 
 /// Manages all terminal (job) instances for a session
 #[derive(Debug, Clone)]
@@ -36,7 +39,7 @@ impl<T: Terminal + Clone> TerminalManager<T> {
     pub fn notify_when_finished(
         &self,
         id: &str,
-        sender: oneshot::Sender<Result<(Option<u32>, Option<String>)>>,
+        sender: OneshotSender<Result<(Option<u32>, Option<String>)>>,
     ) -> Result<()> {
         let terminals = self.terminals.borrow();
         let terminal = terminals.get(id);
@@ -103,7 +106,7 @@ mod tests {
     struct MockTerminal {
         id: Uuid,
         content: String,
-        exit_sender: Rc<RefCell<Option<oneshot::Sender<Result<ExitStatus>>>>>,
+        exit_sender: Rc<RefCell<Option<OneshotSender<Result<ExitStatus>>>>>,
         killed: Rc<RefCell<bool>>,
     }
 
@@ -137,7 +140,7 @@ mod tests {
 
         fn report_exit_to(
             &self,
-            sender: oneshot::Sender<Result<(Option<u32>, Option<String>)>>,
+            sender: OneshotSender<Result<(Option<u32>, Option<String>)>>,
         ) -> Result<()> {
             *self.exit_sender.borrow_mut() = Some(sender);
             Ok(())
@@ -213,7 +216,7 @@ mod tests {
         let terminal = MockTerminal::new("term-1", "");
         manager.initialize_terminal("term-1".to_string(), terminal.clone());
 
-        let (sender, _receiver) = oneshot::channel();
+        let (sender, _receiver) = async_channel::bounded(1);
         let result = manager.notify_when_finished("term-1", sender);
         assert!(result.is_ok());
 
@@ -225,7 +228,7 @@ mod tests {
     #[test]
     fn terminal_manager_notify_when_finished_fails_for_missing_terminal() {
         let manager: TerminalManager<MockTerminal> = TerminalManager::default();
-        let (sender, _receiver) = oneshot::channel();
+        let (sender, _receiver) = async_channel::bounded(1);
         let result = manager.notify_when_finished("nonexistent", sender);
         assert!(result.is_err());
     }

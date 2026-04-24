@@ -7,9 +7,9 @@
 //! Windows prevents PID reuse while process handles are open, so concurrent
 //! wait/kill is inherently safe as long as we hold a handle.
 
+use async_process::Child;
 use std::io;
-use std::os::windows::io::{AsRawHandle, RawHandle};
-use tokio::process::Child;
+use std::os::windows::io::RawHandle;
 
 /// A handle to a child process on Windows. Uses the raw OS handle.
 #[derive(Copy, Clone)]
@@ -17,12 +17,12 @@ pub struct Handle(RawHandle);
 
 // SAFETY: RawHandle is just a pointer-sized integer on Windows.
 // The handle is valid as long as the Child exists, and we only use it
-// in spawn_blocking before the Child is dropped.
+// via blocking operations before the Child is dropped.
 unsafe impl Send for Handle {}
 
 #[link(name = "kernel32")]
 #[allow(non_snake_case)]
-extern "system" {
+unsafe extern "system" {
     fn WaitForSingleObject(hHandle: *mut std::ffi::c_void, dwMilliseconds: u32) -> u32;
     fn OpenProcess(
         dwDesiredAccess: u32,
@@ -37,11 +37,9 @@ const INFINITE: u32 = 0xFFFFFFFF;
 const WAIT_OBJECT_0: u32 = 0;
 const PROCESS_TERMINATE: u32 = 0x0001;
 
-/// Extract a platform handle from a tokio Child.
-///
-/// # Panics
-/// Panics if the child has already been reaped (id() returns None).
+/// Extract a platform handle from an async_process Child.
 pub fn get_handle(child: &Child) -> Handle {
+    use std::os::windows::io::AsRawHandle;
     Handle(child.as_raw_handle())
 }
 
@@ -50,7 +48,7 @@ pub fn get_handle(child: &Child) -> Handle {
 /// On Windows, `WaitForSingleObject` does not "reap" the process - the handle
 /// remains valid until explicitly closed. This makes concurrent wait/kill safe.
 ///
-/// This function is meant to be called via `tokio::task::spawn_blocking`.
+/// This function is meant to be called via `blocking::unblock`.
 pub fn wait_noreap(handle: Handle) -> io::Result<()> {
     // SAFETY: We call WaitForSingleObject with a valid process handle.
     // INFINITE means we block until the process exits.
@@ -67,9 +65,8 @@ pub fn wait_noreap(handle: Handle) -> io::Result<()> {
 /// Windows has no equivalent of Unix SIGTERM. We use `TerminateProcess` for both
 /// graceful and forced termination.
 fn terminate_process(child: &Child) -> io::Result<()> {
-    let pid = child
-        .id()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "child already reaped"))?;
+    // async-process returns u32 directly (not Option<u32> like tokio)
+    let pid = child.id();
 
     // SAFETY: We open the process by PID with PROCESS_TERMINATE access,
     // call TerminateProcess, then close the handle.

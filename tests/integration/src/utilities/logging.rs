@@ -52,7 +52,7 @@ fn test_file_logging_can_be_enabled() -> nvim_oxi::Result<()> {
     tracing::info!("Test message from integration test");
 
     // Give the channel writer time to process and flush
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     // Verify log file contains the message
     let content = std::fs::read_to_string(&log_file).unwrap();
@@ -90,7 +90,7 @@ fn test_file_logging_first_message_written() -> nvim_oxi::Result<()> {
 
     // Log a message
     tracing::info!("First message");
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     // Flush to ensure it's written
     std::io::Write::flush(&mut std::io::stdout()).ok();
@@ -186,7 +186,7 @@ fn test_debug_filtered_at_warn_level_debug() -> nvim_oxi::Result<()> {
 
     // Log different levels
     tracing::debug!("Debug message");
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     // Verify DEBUG is filtered at WARN level
     let content = std::fs::read_to_string(&log_file).unwrap();
@@ -221,7 +221,7 @@ fn test_debug_filtered_at_warn_level_info() -> nvim_oxi::Result<()> {
 
     // Log different levels
     tracing::info!("Info message");
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     // Verify INFO is filtered at WARN level
     let content = std::fs::read_to_string(&log_file).unwrap();
@@ -256,7 +256,7 @@ fn test_debug_filtered_at_warn_level_warn() -> nvim_oxi::Result<()> {
 
     // Log different levels
     tracing::warn!("Warning message");
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     // Verify WARN is written
     let content = std::fs::read_to_string(&log_file).unwrap();
@@ -293,7 +293,7 @@ fn test_log_level_reconfiguration_filtered_before() -> nvim_oxi::Result<()> {
 
     // This should be filtered
     tracing::info!("Should be filtered");
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     // Verify
     let content = std::fs::read_to_string(&log_file).unwrap();
@@ -345,7 +345,7 @@ fn test_log_level_reconfiguration_written_after() -> nvim_oxi::Result<()> {
 
     // This should be written
     tracing::info!("Should be written");
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     // Verify
     let content = std::fs::read_to_string(&log_file).unwrap();
@@ -383,7 +383,7 @@ fn test_log_rotation() -> nvim_oxi::Result<()> {
         tracing::info!("Message {} with padding", i);
     }
 
-    std::thread::sleep(std::time::Duration::from_millis(200));
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     // Verify current log has recent messages
     let current_content = std::fs::read_to_string(&log_file).unwrap();
@@ -434,7 +434,7 @@ fn test_reconfigure_to_second_path() -> nvim_oxi::Result<()> {
     );
     logger.configure(first_config).unwrap();
     tracing::info!("First path message");
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     // Reconfigure to second path
     let second_config = create_log_config_with_file(
@@ -450,7 +450,7 @@ fn test_reconfigure_to_second_path() -> nvim_oxi::Result<()> {
     );
     logger.configure(second_config).unwrap();
     tracing::info!("Second path message");
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     // Verify first log has first message only
     let first_content = std::fs::read_to_string(&first_file).unwrap();
@@ -548,7 +548,7 @@ fn test_log_format_can_be_changed_via_configure() -> nvim_oxi::Result<()> {
 
     // Log first message
     tracing::info!("First message in compact format");
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     // Now reconfigure with Json format
     let json_config = LogConfig {
@@ -573,7 +573,7 @@ fn test_log_format_can_be_changed_via_configure() -> nvim_oxi::Result<()> {
 
     // Log second message
     tracing::info!("Second message in json format");
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     // Verify log file contains both messages
     let content = std::fs::read_to_string(&log_file).expect("Should be able to read log file");
@@ -641,7 +641,7 @@ fn test_all_layers_off_prevents_any_logging() -> nvim_oxi::Result<()> {
     tracing::warn!("Warning message");
     tracing::error!("Error message");
 
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     // Verify log file doesn't exist (no layers created means no file written)
     assert!(
@@ -688,7 +688,7 @@ fn test_all_layers_transition_from_off_to_enabled() -> nvim_oxi::Result<()> {
 
     // Log a message - should be discarded
     tracing::info!("First message while off");
-    std::thread::sleep(std::time::Duration::from_millis(200));
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     // Verify no file created yet
     let _file_exists_before = log_file.exists();
@@ -720,7 +720,7 @@ fn test_all_layers_transition_from_off_to_enabled() -> nvim_oxi::Result<()> {
 
     // Log another message - should be written
     tracing::info!("Second message after enabling");
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     // Verify file now exists and contains only second message
     assert!(

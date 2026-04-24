@@ -24,8 +24,15 @@ nvim-oxi = { version = "0.6.0", features = ["libuv", "mlua", "neovim-0-11"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 strip-ansi-escapes = "0.2"
-tokio = { version = "1.49", features = ["full"] }
-tokio-util = { version = "0.7", features = ["compat"] }
+smol = "2"
+async-channel = "2"
+async-lock = "3"
+async-process = "2"
+async-net = "2"
+async-io = "2"
+futures-lite = "2"
+blocking = "1"
+event-listener = "5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.0", features = ["json", "env-filter"] }
 futures = "0.3"
@@ -43,7 +50,7 @@ nvim-oxi = { version = "0.6.0", features = ["test", "neovim-0-11"] }
 [dev-dependencies]
 env_logger = "0.11"
 tempfile = "3.14"
-tokio-test = "0.4"
+
 mockall  = "0.14.0"
 proptest = "1.10.0"
 criterion = "0.8.2"

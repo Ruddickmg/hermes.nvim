@@ -160,7 +160,7 @@ fn test_notification_delivered_via_schedule() -> nvim_oxi::Result<()> {
     // We can't easily observe vim.notify output, but we can verify
     // the send succeeded and the process didn't crash (which was the
     // original bug this schedule fix addresses).
-    nvim_oxi::api::command("sleep 100m")?;
+    nvim_oxi::api::command("sleep 10m")?;
 
     // If we reach here without crash, the schedule path worked correctly
     assert!(true, "Notification delivery via schedule did not crash");

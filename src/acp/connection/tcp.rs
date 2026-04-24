@@ -6,10 +6,11 @@ use crate::{
         handler::message::handle_requests,
     },
 };
+use async_channel::Receiver;
+use async_net::TcpStream;
+use futures_lite::io::split;
+use std::rc::Rc;
 use std::sync::Arc;
-use tokio::net::TcpStream;
-use tokio::sync::mpsc::Receiver;
-use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::{debug, error, info, instrument, trace};
 
 /// Connect to an agent via TCP tcp
@@ -20,13 +21,15 @@ use tracing::{debug, error, info, instrument, trace};
 /// * `agent` - Assistant identifier for logging
 /// * `host` - Host address (e.g., "localhost")
 /// * `port` - TCP port number
-#[instrument(level = "trace", skip(client, receiver))]
+/// * `executor` - The LocalExecutor driving this thread's async tasks
+#[instrument(level = "trace", skip(client, receiver, executor))]
 pub async fn tcp_connection(
     receiver: Receiver<UserRequest>,
     client: Arc<Handler>,
     agent: &Assistant,
     host: &str,
     port: u16,
+    executor: &Rc<smol::LocalExecutor<'static>>,
 ) -> Result<(), Error> {
     let address = format!("{}:{}", host, port);
     debug!("Connecting to agent at {}", address);
@@ -39,30 +42,25 @@ pub async fn tcp_connection(
     info!("Connected to agent '{}' via tcp at {}", agent, address);
 
     // Split the stream into read and write halves
-    let (reader, writer) = tokio::io::split(stream);
+    let (reader, writer) = split(stream);
 
-    // Convert to compat streams for ACP protocol
-    let outgoing = writer.compat_write();
-    let incoming = reader.compat();
+    // Clone the executor Rc for the spawn closure (must be 'static)
+    let exec_for_spawn = executor.clone();
 
-    // Run the ACP protocol handler in a LocalSet
-    let local_set = tokio::task::LocalSet::new();
-    local_set
-        .run_until(async {
-            let (connection, handle_io) = agent_client_protocol::ClientSideConnection::new(
-                client.clone(),
-                outgoing,
-                incoming,
-                |fut| {
-                    tokio::task::spawn_local(fut);
-                },
-            );
+    trace!("creating ACP client connection");
+    let (connection, handle_io) = agent_client_protocol::ClientSideConnection::new(
+        client.clone(),
+        writer,
+        reader,
+        move |fut| {
+            exec_for_spawn.spawn(fut).detach();
+        },
+    );
 
-            tokio::task::spawn_local(handle_io);
+    trace!("starting IO handling task for ACP connection");
+    executor.spawn(handle_io).detach();
 
-            handle_requests(connection, receiver, client.clone(), agent).await
-        })
-        .await;
+    handle_requests(connection, receiver, client.clone(), agent).await;
 
     info!("Disconnected from '{}' via tcp", agent);
     Ok::<(), Error>(())
@@ -72,16 +70,17 @@ pub async fn tcp_connection(
 ///
 /// This is the entry point for tcp-based connections, matching the
 /// signature of stdio::connect for consistency.
-#[instrument(level = "trace", skip(client, receiver))]
+#[instrument(level = "trace", skip(client, receiver, executor))]
 pub async fn connect(
     client: Arc<Handler>,
     agent: Assistant,
     receiver: Receiver<UserRequest>,
+    executor: &Rc<smol::LocalExecutor<'static>>,
 ) -> Result<(), Error> {
     match agent.clone() {
         Assistant::CustomUrl { host, port, .. } => {
             trace!("Starting custom agent connection: {}", agent);
-            tcp_connection(receiver, client, &agent, &host, port).await
+            tcp_connection(receiver, client, &agent, &host, port, executor).await
         }
         _ => {
             error!("Unsupported agent type for tcp connection: {}", agent);

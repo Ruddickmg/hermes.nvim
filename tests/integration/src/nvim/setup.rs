@@ -1,4 +1,5 @@
 use crate::helpers::mock_runtime;
+use async_lock::Mutex;
 use hermes::{
     Handler, PluginState,
     api::{Api, SetupArgs},
@@ -15,7 +16,6 @@ use nvim_oxi;
 use pretty_assertions::assert_eq;
 use std::rc::Rc;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 fn create_test_api(
     plugin_state: Arc<Mutex<PluginState>>,
@@ -59,7 +59,7 @@ fn setup_updates_permissions_correctly() -> nvim_oxi::Result<()> {
 
     block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
-    let state = plugin_state.blocking_lock();
+    let state = smol::block_on(plugin_state.lock());
     assert!(!state.config.permissions.fs_write_access); // Single assertion
     Ok(())
 }
@@ -82,7 +82,7 @@ fn setup_updates_buffer_config_correctly() -> nvim_oxi::Result<()> {
 
     block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
-    let state = plugin_state.blocking_lock();
+    let state = smol::block_on(plugin_state.lock());
     assert!(state.config.buffer.auto_save); // Single assertion
     Ok(())
 }
@@ -111,7 +111,7 @@ fn setup_updates_stdio_log_level() -> nvim_oxi::Result<()> {
 
     block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
-    let state = plugin_state.blocking_lock();
+    let state = smol::block_on(plugin_state.lock());
     assert_eq!(
         state.config.log.stdio.level,
         hermes::utilities::LogLevel::Debug
@@ -143,7 +143,7 @@ fn setup_updates_notification_log_level() -> nvim_oxi::Result<()> {
 
     block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
-    let state = plugin_state.blocking_lock();
+    let state = smol::block_on(plugin_state.lock());
     assert_eq!(
         state.config.log.notification.level,
         hermes::utilities::LogLevel::Info
@@ -175,7 +175,7 @@ fn setup_updates_message_log_level() -> nvim_oxi::Result<()> {
 
     block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
-    let state = plugin_state.blocking_lock();
+    let state = smol::block_on(plugin_state.lock());
     assert_eq!(
         state.config.log.message.level,
         hermes::utilities::LogLevel::Warn
@@ -211,7 +211,7 @@ fn setup_preserves_permissions_on_subsequent_calls() -> nvim_oxi::Result<()> {
     }))))
     .expect("Failed to call setup second time");
 
-    let state = plugin_state.blocking_lock();
+    let state = smol::block_on(plugin_state.lock());
     assert!(!state.config.permissions.fs_write_access);
     Ok(())
 }
@@ -244,7 +244,7 @@ fn setup_updates_buffer_config_on_subsequent_calls() -> nvim_oxi::Result<()> {
     }))))
     .expect("Failed to call setup second time");
 
-    let state = plugin_state.blocking_lock();
+    let state = smol::block_on(plugin_state.lock());
     assert!(state.config.buffer.auto_save);
     Ok(())
 }
@@ -283,7 +283,7 @@ fn setup_with_empty_config_uses_default_permissions() -> nvim_oxi::Result<()> {
     block_on(api.setup(SetupArgs(None))).expect("Setup should not fail");
 
     // Verify state uses defaults
-    let state = plugin_state.blocking_lock();
+    let state = smol::block_on(plugin_state.lock());
     assert!(
         state.config.permissions.fs_read_access,
         "Default fs_read_access should be true"
@@ -304,7 +304,7 @@ fn setup_works_with_none() -> nvim_oxi::Result<()> {
     block_on(api.setup(SetupArgs(None))).expect("Failed to call setup");
 
     // Should use defaults
-    let state = plugin_state.blocking_lock();
+    let state = smol::block_on(plugin_state.lock());
     assert!(state.config.permissions.fs_read_access); // Default true
     Ok(())
 }
@@ -337,7 +337,7 @@ fn setup_enables_log_file_config() -> nvim_oxi::Result<()> {
 
     block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
-    let state = plugin_state.blocking_lock();
+    let state = smol::block_on(plugin_state.lock());
     let file_config = state.config.log.file.clone();
     assert_eq!(file_config.path, log_path.to_string_lossy().to_string());
     Ok(())
@@ -368,7 +368,7 @@ fn setup_sets_log_file_path() -> nvim_oxi::Result<()> {
 
     block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
-    let state = plugin_state.blocking_lock();
+    let state = smol::block_on(plugin_state.lock());
     let file_config = state.config.log.file.clone();
     assert_eq!(file_config.path, "/tmp/test.log");
     Ok(())
@@ -399,7 +399,7 @@ fn setup_sets_log_file_level() -> nvim_oxi::Result<()> {
 
     block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
-    let state = plugin_state.blocking_lock();
+    let state = smol::block_on(plugin_state.lock());
     let file_config = state.config.log.file.clone();
     assert_eq!(file_config.level, hermes::utilities::LogLevel::Warn);
     Ok(())
@@ -429,7 +429,7 @@ fn setup_updates_stdio_log_format() -> nvim_oxi::Result<()> {
 
     block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
-    let state = plugin_state.blocking_lock();
+    let state = smol::block_on(plugin_state.lock());
     assert_eq!(
         state.config.log.stdio.format,
         hermes::utilities::logging::LogFormat::Json
@@ -461,7 +461,7 @@ fn setup_updates_notification_log_format() -> nvim_oxi::Result<()> {
 
     block_on(api.setup(SetupArgs(Some(config)))).expect("Failed to call setup");
 
-    let state = plugin_state.blocking_lock();
+    let state = smol::block_on(plugin_state.lock());
     assert_eq!(
         state.config.log.notification.format,
         hermes::utilities::logging::LogFormat::Pretty

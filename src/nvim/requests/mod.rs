@@ -5,9 +5,9 @@ use crate::{
     nvim::terminal::{TerminalInfo, TerminalManager},
     utilities::{NvimMessenger, NvimRuntime},
 };
+use async_lock::Mutex;
 use async_trait::async_trait;
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::Mutex;
 
 use tracing::error;
 use uuid::Uuid;

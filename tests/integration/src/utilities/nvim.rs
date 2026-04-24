@@ -1,6 +1,6 @@
 //! Integration tests for NvimMessenger
 //!
-//! Tests the NvimMessenger helper which bridges async Tokio runtime with Neovim's synchronous API.
+//! Tests the NvimMessenger helper which bridges smol async runtime with Neovim's synchronous API.
 //! These tests verify the actual cross-thread communication flow using wait_for helpers.
 use hermes::acp::error::Error;
 use hermes::utilities::{NvimMessenger, NvimRuntime, TransmitToNvim};
@@ -11,25 +11,20 @@ use std::time::Duration;
 use crate::helpers::ui::wait_for;
 
 fn mock_runtime() -> NvimRuntime {
-    NvimRuntime::new(Rc::new(
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to create mock runtime"),
-    ))
+    NvimRuntime::new()
 }
 
 /// Test helper: sends data from a spawned thread using the async `send` method.
 ///
 /// This is equivalent to the old `blocking_send` but lives only in tests.
-/// It spawns a thread with its own Tokio runtime to call the async `send`.
+/// It spawns a thread with its own smol LocalExecutor to call the async `send`.
 fn blocking_send<T: Send + 'static>(
     messenger: NvimMessenger<T>,
     data: T,
 ) -> hermes::acp::Result<()> {
     std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async { messenger.send(data).await })
+        let executor = smol::LocalExecutor::new();
+        smol::block_on(executor.run(async { messenger.send(data).await }))
     })
     .join()
     .map_err(|_| Error::Internal("Thread panicked".to_string()))?
@@ -81,15 +76,15 @@ fn async_send_from_thread_reaches_callback() -> nvim_oxi::Result<()> {
     let handler =
         NvimMessenger::initialize(mock_runtime(), callback).expect("Handler should initialize");
 
-    // Spawn thread with tokio runtime that sends data asynchronously
+    // Spawn thread with smol runtime that sends data asynchronously
     std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
+        let executor = smol::LocalExecutor::new();
+        smol::block_on(executor.run(async {
             handler
                 .send("async test message".to_string())
                 .await
                 .expect("Async send should succeed");
-        });
+        }));
     });
 
     // Wait for callback to receive data
@@ -341,13 +336,13 @@ fn async_send_delivers_correct_data_value() -> nvim_oxi::Result<()> {
         NvimMessenger::initialize(mock_runtime(), callback).expect("Handler should initialize");
 
     std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
+        let executor = smol::LocalExecutor::new();
+        smol::block_on(executor.run(async {
             handler
                 .send("async_expected_value".to_string())
                 .await
                 .expect("Async send should succeed");
-        });
+        }));
     });
 
     let correct_value = wait_for(
