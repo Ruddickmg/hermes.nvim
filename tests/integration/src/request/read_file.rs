@@ -6,6 +6,8 @@ use crate::helpers::ui::wait_for;
 use agent_client_protocol::{ReadTextFileRequest, ReadTextFileResponse, SessionId};
 use assert_fs::NamedTempFile;
 use assert_fs::prelude::*;
+use async_channel::bounded as oneshot_channel;
+use async_lock::Mutex;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
 use hermes::utilities::NvimRuntime;
@@ -14,16 +16,10 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{Mutex, oneshot};
 use uuid::Uuid;
 
 fn mock_runtime() -> NvimRuntime {
-    NvimRuntime::new(Rc::new(
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to create mock runtime"),
-    ))
+    NvimRuntime::new()
 }
 
 /// Helper to block on an async future in synchronous tests
@@ -65,13 +61,13 @@ fn setup_read_request(
 ) -> (
     Arc<Requests>,
     Uuid,
-    oneshot::Receiver<agent_client_protocol::Result<ReadTextFileResponse>>,
+    async_channel::Receiver<agent_client_protocol::Result<ReadTextFileResponse>>,
 ) {
     let requests = Arc::new(
         Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).unwrap(),
     );
     let (sender, receiver) =
-        oneshot::channel::<agent_client_protocol::Result<ReadTextFileResponse>>();
+        oneshot_channel::<agent_client_protocol::Result<ReadTextFileResponse>>(1);
     let responder = Responder::ReadFileResponse(sender, create_read_request(path, start, limit));
     let request_id = block_on(requests.add_request("test-session".to_string(), responder));
     (requests, request_id, receiver)
@@ -477,7 +473,7 @@ fn read_file_missing_file_returns_error() -> nvim_oxi::Result<()> {
     let requests = Arc::new(
         Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).unwrap(),
     );
-    let (sender, mut receiver) = oneshot::channel::<Result<ReadTextFileResponse, _>>();
+    let (sender, mut receiver) = oneshot_channel::<Result<ReadTextFileResponse, _>>(1);
     let responder = Responder::ReadFileResponse(
         sender,
         create_read_request(PathBuf::from("/nonexistent/file.txt").as_path(), None, None),
@@ -497,7 +493,7 @@ fn read_file_missing_file_cleanup_works() -> nvim_oxi::Result<()> {
     let requests = Arc::new(
         Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).unwrap(),
     );
-    let (sender, _receiver) = oneshot::channel::<Result<ReadTextFileResponse, _>>();
+    let (sender, _receiver) = async_channel::bounded::<Result<ReadTextFileResponse, _>>(1);
     let responder = Responder::ReadFileResponse(
         sender,
         create_read_request(PathBuf::from("/nonexistent/file.txt").as_path(), None, None),
@@ -592,7 +588,7 @@ fn read_file_respond_path_sends_custom_content() -> nvim_oxi::Result<()> {
     let requests = Arc::new(
         Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).unwrap(),
     );
-    let (sender, mut receiver) = oneshot::channel::<Result<ReadTextFileResponse, _>>();
+    let (sender, mut receiver) = oneshot_channel::<Result<ReadTextFileResponse, _>>(1);
     let responder = Responder::ReadFileResponse(sender, create_read_request(&path, None, None));
     let request_id = block_on(requests.add_request("test-session".to_string(), responder));
 
@@ -616,7 +612,7 @@ fn read_file_respond_path_cleanup_works() -> nvim_oxi::Result<()> {
     let requests = Arc::new(
         Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).unwrap(),
     );
-    let (sender, _receiver) = oneshot::channel::<Result<ReadTextFileResponse, _>>();
+    let (sender, _receiver) = async_channel::bounded::<Result<ReadTextFileResponse, _>>(1);
     let responder = Responder::ReadFileResponse(sender, create_read_request(&path, None, None));
     let request_id = block_on(requests.add_request("test-session".to_string(), responder));
 

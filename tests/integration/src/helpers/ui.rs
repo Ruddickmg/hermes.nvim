@@ -28,7 +28,7 @@ where
                 timeout
             )));
         }
-        nvim_oxi::api::command("sleep 50m").ok();
+        nvim_oxi::api::command("sleep 10m").ok();
     }
 }
 
@@ -68,7 +68,7 @@ pub fn wait_for_floating_window(timeout: Duration) -> Option<nvim_oxi::api::Wind
 
 /// Wait for channel to receive outcome
 pub fn wait_for_outcome<T>(
-    receiver: &mut tokio::sync::oneshot::Receiver<T>,
+    receiver: &mut async_channel::Receiver<T>,
     timeout: Duration,
 ) -> Option<T> {
     let start = Instant::now();
@@ -79,7 +79,7 @@ pub fn wait_for_outcome<T>(
                 if start.elapsed() > timeout {
                     return None;
                 }
-                nvim_oxi::api::command("sleep 50m").ok();
+                nvim_oxi::api::command("sleep 10m").ok();
             }
         }
     }

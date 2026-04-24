@@ -8,16 +8,15 @@ pub mod terminal;
 
 use crate::{
     Handler,
-    acp::error::Error,
     api::{DisconnectArgs, Hermes},
     utilities::{Logger, NvimRuntime, detect_project_storage_path},
 };
+use async_lock::Mutex;
 use nvim_oxi::{
     Dictionary,
     api::opts::{CreateAugroupOpts, CreateAutocmdOpts},
 };
 use std::{cell::RefCell, rc::Rc, sync::Arc};
-use tokio::sync::Mutex;
 use tracing::error;
 
 pub const GROUP: &str = "hermes";
@@ -26,13 +25,7 @@ pub const GROUP: &str = "hermes";
 pub fn hermes() -> nvim_oxi::Result<Dictionary> {
     let storage_path = detect_project_storage_path()?;
     let logger = Logger::inititalize(&storage_path)?;
-    let runtime = Rc::new(
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| Error::Internal(e.to_string()))?,
-    );
-    let nvim_runtime = NvimRuntime::new(runtime);
+    let nvim_runtime = NvimRuntime::new();
     let plugin_state = Arc::new(Mutex::new(state::PluginState::new()));
     let request_handler = Rc::new(requests::Requests::new(
         nvim_runtime.clone(),

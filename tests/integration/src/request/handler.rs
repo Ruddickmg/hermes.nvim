@@ -4,6 +4,8 @@ use agent_client_protocol::{
     CreateTerminalResponse, RequestPermissionOutcome, RequestPermissionRequest, SessionId,
     ToolCallId, ToolCallUpdate, ToolCallUpdateFields, WriteTextFileRequest, WriteTextFileResponse,
 };
+use async_channel::bounded as oneshot_channel;
+use async_lock::Mutex;
 use hermes::acp::Result;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
@@ -12,16 +14,10 @@ use pretty_assertions::assert_eq;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{Mutex, oneshot};
 use uuid::Uuid;
 
 fn mock_runtime() -> NvimRuntime {
-    NvimRuntime::new(Rc::new(
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to create mock runtime"),
-    ))
+    NvimRuntime::new()
 }
 
 /// Helper to block on an async future in synchronous tests
@@ -51,7 +47,7 @@ fn test_handle_response_success() -> nvim_oxi::Result<()> {
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
     let request_id = block_on(requests.add_request(session_id, responder));
@@ -71,7 +67,7 @@ fn test_handle_response_outcome_contains_option_id() -> nvim_oxi::Result<()> {
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (sender, mut receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
     let request_id = block_on(requests.add_request(session_id, responder));
@@ -114,7 +110,7 @@ fn test_cancel_session_requests_returns_ok() -> nvim_oxi::Result<()> {
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
 
     block_on(requests.add_request(session_id.clone(), Responder::PermissionResponse(sender)));
 
@@ -146,8 +142,8 @@ fn test_cancel_session_requests_only_affects_target_session() -> nvim_oxi::Resul
     );
     let session_id = String::from("target-session");
     let other_session_id = String::from("other-session");
-    let (target_sender, mut target_receiver) = oneshot::channel::<RequestPermissionOutcome>();
-    let (other_sender, other_receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (target_sender, mut target_receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
+    let (other_sender, other_receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
 
     block_on(requests.add_request(
         session_id.clone(),
@@ -182,8 +178,8 @@ fn test_other_session_not_cancelled() -> nvim_oxi::Result<()> {
     );
     let session_id = String::from("target-session");
     let other_session_id = String::from("other-session");
-    let (target_sender, _target_receiver) = oneshot::channel::<RequestPermissionOutcome>();
-    let (other_sender, mut other_receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (target_sender, _target_receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
+    let (other_sender, mut other_receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
 
     block_on(requests.add_request(
         session_id.clone(),
@@ -212,7 +208,7 @@ fn test_get_request_returns_some_for_existing() -> nvim_oxi::Result<()> {
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
     let request_id = block_on(requests.add_request(session_id, responder));
@@ -245,7 +241,7 @@ fn test_handle_response_removes_request_from_pending() -> nvim_oxi::Result<()> {
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
     let request_id = block_on(requests.add_request(session_id, responder));
@@ -276,7 +272,7 @@ fn test_request_exists_before_response_handled() -> nvim_oxi::Result<()> {
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
     let request_id = block_on(requests.add_request(session_id, responder));
@@ -300,7 +296,7 @@ fn test_write_file_request_cleanup_via_handle_response() -> nvim_oxi::Result<()>
         )?,
     );
 
-    let (sender, receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let write_request = WriteTextFileRequest::new(
         SessionId::from("test-session"),
         temp_file.path().to_path_buf(),
@@ -329,7 +325,7 @@ fn test_write_file_handle_response_succeeds() -> nvim_oxi::Result<()> {
         )?,
     );
 
-    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, _receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let write_request = WriteTextFileRequest::new(
         SessionId::from("test-session"),
         temp_file.path().to_path_buf(),
@@ -363,7 +359,7 @@ fn test_write_file_request_cleaned_up_after_response() -> nvim_oxi::Result<()> {
         )?,
     );
 
-    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, _receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let write_request = WriteTextFileRequest::new(
         SessionId::from("test-session"),
         temp_file.path().to_path_buf(),
@@ -404,7 +400,7 @@ fn test_multiple_requests_exist_after_adding() -> nvim_oxi::Result<()> {
     let mut receivers = vec![];
     for i in 0..3 {
         let session_id = format!("test-session-{}", i);
-        let (sender, receiver) = oneshot::channel::<RequestPermissionOutcome>();
+        let (sender, receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
         let responder = Responder::PermissionResponse(sender);
         let request_id = block_on(requests.add_request(session_id, responder));
         request_ids.push(request_id);
@@ -436,7 +432,7 @@ fn test_multiple_requests_all_handled_successfully() -> nvim_oxi::Result<()> {
     let receivers: Vec<_> = (0..3)
         .map(|i| {
             let session_id = format!("test-session-{}", i);
-            let (sender, receiver) = oneshot::channel::<RequestPermissionOutcome>();
+            let (sender, receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
             let responder = Responder::PermissionResponse(sender);
             let request_id = block_on(requests.add_request(session_id, responder));
             request_ids.push(request_id);
@@ -470,7 +466,7 @@ fn test_multiple_requests_all_cleaned_up() -> nvim_oxi::Result<()> {
     let receivers: Vec<_> = (0..3)
         .map(|i| {
             let session_id = format!("test-session-{}", i);
-            let (sender, receiver) = oneshot::channel::<RequestPermissionOutcome>();
+            let (sender, receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
             let responder = Responder::PermissionResponse(sender);
             let request_id = block_on(requests.add_request(session_id, responder));
             request_ids.push(request_id);
@@ -513,7 +509,7 @@ fn test_first_response_to_request_succeeds() -> nvim_oxi::Result<()> {
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
     let request_id = block_on(requests.add_request(session_id, responder));
@@ -534,7 +530,7 @@ fn test_second_response_to_cleaned_up_request_fails() -> nvim_oxi::Result<()> {
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (sender, receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
     let request_id = block_on(requests.add_request(session_id, responder));
@@ -572,7 +568,7 @@ fn test_request_respond_with_permission_response_sends_outcome() -> nvim_oxi::Re
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (sender, mut receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
     let request_id = block_on(requests.add_request(session_id, responder));
@@ -602,7 +598,7 @@ fn test_request_respond_with_permission_empty_string_sends_cancelled() -> nvim_o
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (sender, mut receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
     let request_id = block_on(requests.add_request(session_id, responder));
@@ -631,7 +627,7 @@ fn test_request_cancel_sends_cancelled_outcome() -> nvim_oxi::Result<()> {
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, mut receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (sender, mut receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
     let request_id = block_on(requests.add_request(session_id, responder));
@@ -661,7 +657,7 @@ fn test_request_cancel_on_non_permission_request_returns_ok() -> nvim_oxi::Resul
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, _receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let write_request = WriteTextFileRequest::new(
         SessionId::from("test-session"),
         temp_file.path().to_path_buf(),
@@ -689,7 +685,7 @@ fn test_request_is_permission_request_true_for_permission() -> nvim_oxi::Result<
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
     let request_id = block_on(requests.add_request(session_id, responder));
@@ -713,7 +709,7 @@ fn test_request_is_permission_request_false_for_write_file() -> nvim_oxi::Result
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, _receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let write_request = WriteTextFileRequest::new(
         SessionId::from("test-session"),
         temp_file.path().to_path_buf(),
@@ -733,16 +729,15 @@ fn test_request_is_permission_request_false_for_write_file() -> nvim_oxi::Result
 
 #[nvim_oxi::test]
 fn test_request_terminal_true_for_terminal_create() -> nvim_oxi::Result<()> {
-    let runtime = tokio::runtime::Runtime::new().unwrap();
     let requests = Arc::new(
         Requests::new(
-            NvimRuntime::new(Rc::new(runtime)),
+            NvimRuntime::new(),
             Arc::new(Mutex::new(PluginState::default())),
         )
         .map_err(|e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)))?,
     );
     let session_id = String::from("test-session");
-    let (sender, _receiver) = oneshot::channel::<Result<CreateTerminalResponse>>();
+    let (sender, _receiver) = oneshot_channel::<Result<CreateTerminalResponse>>(1);
     let create_request = agent_client_protocol::CreateTerminalRequest::new(
         SessionId::from("test-session"),
         "echo".to_string(),
@@ -767,7 +762,7 @@ fn test_request_terminal_false_for_permission() -> nvim_oxi::Result<()> {
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
     let request_id = block_on(requests.add_request(session_id, responder));
@@ -788,7 +783,7 @@ fn test_request_is_session_true_for_matching() -> nvim_oxi::Result<()> {
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
     let request_id = block_on(requests.add_request(session_id.clone(), responder));
@@ -806,7 +801,7 @@ fn test_request_is_session_false_for_non_matching() -> nvim_oxi::Result<()> {
         )?,
     );
     let session_id = String::from("test-session");
-    let (sender, _receiver) = oneshot::channel::<RequestPermissionOutcome>();
+    let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
     let request_id = block_on(requests.add_request(session_id, responder));

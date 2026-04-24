@@ -1644,8 +1644,6 @@ Available formats:
 - **json** - Machine-readable JSON format
 
 ## TODO:
--- infra
-- [ ] use smol instead of tokio to reduce build size
 
 -- functionality
 - [x] Allow connecting to Agents

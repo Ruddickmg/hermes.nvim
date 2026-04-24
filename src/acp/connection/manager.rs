@@ -5,10 +5,10 @@ use crate::{Handler, acp::error::Error};
 use agent_client_protocol::{
     ClientCapabilities, FileSystemCapabilities, Implementation, InitializeRequest, ProtocolVersion,
 };
+use async_lock::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 #[derive(PartialEq, Eq, Clone, Copy, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
@@ -80,11 +80,11 @@ impl std::fmt::Display for Assistant {
 }
 
 impl Assistant {
-    /// Build the `tokio::process::Command` for this agent without spawning it.
+    /// Build the `async_process::Command` for this agent without spawning it.
     ///
-    /// The caller is responsible for spawning the command on the correct tokio
-    /// runtime (the one whose reactor will handle the child's IO).
-    pub fn command(&self) -> crate::acp::Result<tokio::process::Command> {
+    /// The caller is responsible for spawning the command on the correct
+    /// executor (the one whose reactor will handle the child's IO).
+    pub fn command(&self) -> crate::acp::Result<async_process::Command> {
         let (program, args) = match self {
             Assistant::Copilot => ("copilot", vec!["--acp"]),
             Assistant::Opencode => ("opencode", vec!["acp"]),
@@ -98,7 +98,7 @@ impl Assistant {
                 ));
             }
         };
-        let mut cmd = tokio::process::Command::new(program);
+        let mut cmd = async_process::Command::new(program);
         cmd.args(args);
         Ok(cmd)
     }
@@ -204,7 +204,7 @@ impl ConnectionManager {
         }
 
         // Now we can safely do mutable operations
-        let (sender, receiver) = tokio::sync::mpsc::channel(100);
+        let (sender, receiver) = async_channel::bounded(100);
         let init_config = InitializeRequest::new(ProtocolVersion::LATEST)
             .client_info(Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"))
             .client_capabilities(
@@ -226,58 +226,46 @@ impl ConnectionManager {
         let stdio_child = child.clone();
 
         let handle = std::thread::spawn(move || {
-            // TODO: figure out whether this is actually necessary, this should be pure rust, no FFI panics
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let runtime = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .map_err(|e| Error::Internal(e.to_string()))?;
+            let executor = std::rc::Rc::new(smol::LocalExecutor::new());
+            let agent_name = thread_agent.to_string();
 
-                trace!("Starting tokio runtime");
-                runtime.block_on(async {
-                    match protocol {
-                        Protocol::Stdio => {
-                            stdio::connect(handler, thread_agent.clone(), receiver, child.unwrap())
-                                .await
-                        }
-                        Protocol::Http => {
-                            error!("HTTP protocol is not yet implemented");
-                            Err(Error::Internal(
-                                "HTTP protocol is not yet implemented".to_string(),
-                            ))
-                        }
-                        Protocol::Socket => {
-                            error!("Socket protocol is not yet implemented");
-                            Err(Error::Internal(
-                                "Socket protocol is not yet implemented".to_string(),
-                            ))
-                        }
-                        Protocol::Tcp => {
-                            tcp::connect(handler, thread_agent.clone(), receiver).await
-                        }
+            trace!("Starting smol executor for {}", agent_name);
+
+            // Run the connection in the executor.
+            // smol::block_on drives the top-level future, while executor.run()
+            // continuously polls all tasks spawned onto the LocalExecutor.
+            // This matches the Tokio pattern of LocalSet::run_until().
+            let run_result = smol::block_on(executor.run(async {
+                match protocol {
+                    Protocol::Stdio => {
+                        stdio::connect(handler, thread_agent, receiver, child.unwrap(), &executor)
+                            .await
                     }
-                })
-            }))
-            .map(|result| match result {
-                Ok(_) => info!(
-                    "Agent thread for '{}' exited normally",
-                    thread_agent.clone()
-                ),
+                    Protocol::Http => {
+                        error!("HTTP protocol is not yet implemented");
+                        Err(Error::Internal(
+                            "HTTP protocol is not yet implemented".to_string(),
+                        ))
+                    }
+                    Protocol::Socket => {
+                        error!("Socket protocol is not yet implemented");
+                        Err(Error::Internal(
+                            "Socket protocol is not yet implemented".to_string(),
+                        ))
+                    }
+                    Protocol::Tcp => tcp::connect(handler, thread_agent, receiver, &executor).await,
+                }
+            }));
+
+            match &run_result {
+                Ok(()) => info!("Agent thread for '{}' exited normally", agent_name),
                 Err(e) => error!(
-                    "Agent thread for '{}' panicked: {:?}",
-                    thread_agent.clone(),
-                    e
+                    "Agent thread for '{}' exited with error: {:?}",
+                    agent_name, e
                 ),
-            })
-            .inspect_err(|e| {
-                error!(
-                    "Failed to start agent thread for '{}': {:?}",
-                    thread_agent.clone(),
-                    e
-                )
-            })
-            .ok();
-            Ok::<(), Error>(())
+            }
+
+            run_result
         });
 
         self.add_connection(agent.clone(), Connection::new(sender, handle, stdio_child));

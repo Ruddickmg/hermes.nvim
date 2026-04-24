@@ -4,11 +4,11 @@ use agent_client_protocol::{
     Client, ContentBlock, ContentChunk, Error, SessionNotification, SessionUpdate, TextContent,
     UsageUpdate,
 };
+use async_lock::Mutex;
 use hermes::acp::handler::Handler;
 use hermes::nvim::state::PluginState;
 use std::rc::Rc;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 fn create_test_notification() -> SessionNotification {
     let chunk = ContentChunk::new(ContentBlock::Text(TextContent::new("test message")));
@@ -18,7 +18,9 @@ fn create_test_notification() -> SessionNotification {
 #[nvim_oxi::test]
 fn test_session_notification_permissions_denied() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    state.blocking_lock().config.permissions.send_notifications = false;
+    smol::block_on(async {
+        state.lock().await.config.permissions.send_notifications = false;
+    });
 
     let handler = Handler::new(
         state.clone(),
@@ -28,7 +30,7 @@ fn test_session_notification_permissions_denied() -> nvim_oxi::Result<()> {
     .expect("Handler creation should succeed");
 
     let notification = create_test_notification();
-    let res = tokio_test::block_on(handler.session_notification(notification));
+    let res = smol::block_on(handler.session_notification(notification));
     assert_eq!(
         res.unwrap_err(),
         Error::method_not_found(),
@@ -51,7 +53,7 @@ fn test_session_notification_permissions_allowed() -> nvim_oxi::Result<()> {
 
     let notification = create_test_notification();
     let res: agent_client_protocol::Result<()> =
-        tokio_test::block_on(handler.session_notification(notification));
+        smol::block_on(handler.session_notification(notification));
     assert!(res.is_ok(), "Should succeed when permissions allowed");
 
     Ok(())
@@ -60,7 +62,9 @@ fn test_session_notification_permissions_allowed() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_can_write_returns_false_when_disabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    state.blocking_lock().config.permissions.fs_write_access = false;
+    smol::block_on(async {
+        state.lock().await.config.permissions.fs_write_access = false;
+    });
 
     let handler = Handler::new(
         state.clone(),
@@ -69,7 +73,7 @@ fn test_can_write_returns_false_when_disabled() -> nvim_oxi::Result<()> {
     )
     .expect("Handler creation should succeed");
 
-    let result = tokio_test::block_on(handler.can_write());
+    let result = smol::block_on(handler.can_write());
     assert!(!result, "Should return false when disabled");
 
     Ok(())
@@ -78,7 +82,9 @@ fn test_can_write_returns_false_when_disabled() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_can_read_returns_false_when_disabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    state.blocking_lock().config.permissions.fs_read_access = false;
+    smol::block_on(async {
+        state.lock().await.config.permissions.fs_read_access = false;
+    });
 
     let handler = Handler::new(
         state.clone(),
@@ -87,7 +93,7 @@ fn test_can_read_returns_false_when_disabled() -> nvim_oxi::Result<()> {
     )
     .expect("Handler creation should succeed");
 
-    let result = tokio_test::block_on(handler.can_read());
+    let result = smol::block_on(handler.can_read());
     assert!(!result, "Should return false when disabled");
 
     Ok(())
@@ -96,7 +102,10 @@ fn test_can_read_returns_false_when_disabled() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_can_access_terminal_returns_false_when_disabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    state.blocking_lock().config.permissions.terminal_access = false;
+    smol::block_on(state.lock())
+        .config
+        .permissions
+        .terminal_access = false;
 
     let handler = Handler::new(
         state.clone(),
@@ -105,7 +114,7 @@ fn test_can_access_terminal_returns_false_when_disabled() -> nvim_oxi::Result<()
     )
     .expect("Handler creation should succeed");
 
-    let result = tokio_test::block_on(handler.can_access_terminal());
+    let result = smol::block_on(handler.can_access_terminal());
     assert!(!result, "Should return false when disabled");
 
     Ok(())
@@ -114,7 +123,10 @@ fn test_can_access_terminal_returns_false_when_disabled() -> nvim_oxi::Result<()
 #[nvim_oxi::test]
 fn test_can_request_permissions_returns_false_when_disabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    state.blocking_lock().config.permissions.request_permissions = false;
+    smol::block_on(state.lock())
+        .config
+        .permissions
+        .request_permissions = false;
 
     let handler = Handler::new(
         state.clone(),
@@ -123,7 +135,7 @@ fn test_can_request_permissions_returns_false_when_disabled() -> nvim_oxi::Resul
     )
     .expect("Handler creation should succeed");
 
-    let result = tokio_test::block_on(handler.can_request_permissions());
+    let result = smol::block_on(handler.can_request_permissions());
     assert!(!result, "Should return false when disabled");
 
     Ok(())
@@ -145,7 +157,7 @@ fn test_can_write_returns_true_when_enabled() -> nvim_oxi::Result<()> {
     .expect("Handler creation should succeed");
 
     // fs_write_access is true by default - covers the return true path
-    let result = tokio_test::block_on(handler.can_write());
+    let result = smol::block_on(handler.can_write());
     assert!(result);
 
     Ok(())
@@ -163,7 +175,7 @@ fn test_can_read_returns_true_when_enabled() -> nvim_oxi::Result<()> {
     .expect("Handler creation should succeed");
 
     // fs_read_access is true by default - covers the return true path
-    let result = tokio_test::block_on(handler.can_read());
+    let result = smol::block_on(handler.can_read());
     assert!(result);
 
     Ok(())
@@ -181,7 +193,7 @@ fn test_can_access_terminal_returns_true_when_enabled() -> nvim_oxi::Result<()> 
     .expect("Handler creation should succeed");
 
     // terminal_access is true by default - covers the return true path
-    let result = tokio_test::block_on(handler.can_access_terminal());
+    let result = smol::block_on(handler.can_access_terminal());
     assert!(result);
 
     Ok(())
@@ -199,7 +211,7 @@ fn test_can_request_permissions_returns_true_when_enabled() -> nvim_oxi::Result<
     .expect("Handler creation should succeed");
 
     // request_permissions is true by default - covers the return true path
-    let result = tokio_test::block_on(handler.can_request_permissions());
+    let result = smol::block_on(handler.can_request_permissions());
     assert!(result);
 
     Ok(())
@@ -220,10 +232,10 @@ fn test_set_agent_info_updates_agent_information() -> nvim_oxi::Result<()> {
         agent_client_protocol::ProtocolVersion::LATEST,
     );
 
-    tokio_test::block_on(handler.set_agent_info(agent.clone(), info.clone()));
+    smol::block_on(handler.set_agent_info(agent.clone(), info.clone()));
 
     // Verify agent info was set by setting current agent and checking info
-    let mut state_guard = state.blocking_lock();
+    let mut state_guard = smol::block_on(state.lock());
     state_guard.agent_info.set_agent(agent.clone());
     let stored_info = state_guard.agent_info.get_current_info();
     assert!(stored_info.is_some(), "Agent info should be stored");
@@ -245,7 +257,7 @@ fn test_session_notification_usage_update_succeeds() -> nvim_oxi::Result<()> {
     let usage = UsageUpdate::new(1000, 200000);
     let notification = SessionNotification::new("session_id", SessionUpdate::UsageUpdate(usage));
     let res: agent_client_protocol::Result<()> =
-        tokio_test::block_on(handler.session_notification(notification));
+        smol::block_on(handler.session_notification(notification));
     assert!(
         res.is_ok(),
         "UsageUpdate should succeed and fire autocommand"
@@ -257,7 +269,10 @@ fn test_session_notification_usage_update_succeeds() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn test_can_receive_notifications_returns_false_when_disabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
-    state.blocking_lock().config.permissions.send_notifications = false;
+    smol::block_on(state.lock())
+        .config
+        .permissions
+        .send_notifications = false;
 
     let handler = Handler::new(
         state.clone(),
@@ -266,7 +281,7 @@ fn test_can_receive_notifications_returns_false_when_disabled() -> nvim_oxi::Res
     )
     .expect("Handler creation should succeed");
 
-    let result = tokio_test::block_on(handler.can_receive_notifications());
+    let result = smol::block_on(handler.can_receive_notifications());
     assert!(!result, "Should return false when disabled");
 
     Ok(())
@@ -284,7 +299,7 @@ fn test_can_receive_notifications_returns_true_when_enabled() -> nvim_oxi::Resul
     .expect("Handler creation should succeed");
 
     // send_notifications is true by default - covers the return true path
-    let result = tokio_test::block_on(handler.can_receive_notifications());
+    let result = smol::block_on(handler.can_receive_notifications());
     assert!(result);
 
     Ok(())
@@ -297,7 +312,6 @@ fn test_execute_autocommand_request_sends_with_responder() -> nvim_oxi::Result<(
     use agent_client_protocol::WriteTextFileResponse;
     use hermes::nvim::requests::Responder;
     use std::sync::Arc;
-    use tokio::sync::oneshot;
 
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
@@ -307,7 +321,7 @@ fn test_execute_autocommand_request_sends_with_responder() -> nvim_oxi::Result<(
     )
     .expect("Handler creation should succeed");
 
-    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, _receiver) = async_channel::bounded::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         agent_client_protocol::WriteTextFileRequest::new(
@@ -318,7 +332,7 @@ fn test_execute_autocommand_request_sends_with_responder() -> nvim_oxi::Result<(
     );
 
     // This should succeed - covers lines 207-208
-    let result = tokio_test::block_on(handler.execute_autocommand_request(
+    let result = smol::block_on(handler.execute_autocommand_request(
         "test-session".to_string(),
         "TestCommand",
         serde_json::json!({"test": "data"}),
@@ -338,7 +352,6 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
     use agent_client_protocol::WriteTextFileResponse;
     use hermes::nvim::requests::{RequestHandler, Responder};
     use std::sync::Arc;
-    use tokio::sync::oneshot;
     use uuid::Uuid;
 
     use async_trait::async_trait;
@@ -389,7 +402,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
 
     // Create a responder which will generate a request_id
     // But don't attach any autocommand listener for "TestErrorCommand"
-    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, _receiver) = async_channel::bounded::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         agent_client_protocol::WriteTextFileRequest::new(
@@ -401,7 +414,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
 
     // Send with a responder but NO listener attached - triggers lines 71-78
     // With the failing mock, default_response will fail, triggering the error! at 74-77
-    let result = tokio_test::block_on(handler.execute_autocommand_request(
+    let result = smol::block_on(handler.execute_autocommand_request(
         "test-session".to_string(),
         "TestErrorCommand", // No listener for this command
         serde_json::json!({"data": "value"}),
@@ -413,7 +426,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
 
     // Wait for async callback to execute (required for coverage capture)
     // Must use nvim_oxi sleep to yield control back to Neovim
-    nvim_oxi::api::command("sleep 100m")?;
+    nvim_oxi::api::command("sleep 10m")?;
 
     // Verify both the warn and error logs were printed
     assert!(
@@ -443,7 +456,7 @@ fn test_no_listener_no_request_triggers_warn_path() -> nvim_oxi::Result<()> {
 
     // Call execute_autocommand (not execute_autocommand_request) with no listener
     // This passes None for response_data, hitting the else branch at line 79-80
-    let result = tokio_test::block_on(handler.execute_autocommand(
+    let result = smol::block_on(handler.execute_autocommand(
         "TestWarnCommand", // No listener for this command, no request
         serde_json::json!({"data": "value"}),
     ));
@@ -456,7 +469,7 @@ fn test_no_listener_no_request_triggers_warn_path() -> nvim_oxi::Result<()> {
 
     // Wait for async callback to execute (required for coverage capture)
     // Must use nvim_oxi sleep to yield control back to Neovim
-    nvim_oxi::api::command("sleep 100m")?;
+    nvim_oxi::api::command("sleep 10m")?;
 
     // Verify the warn log was printed (line 80)
     assert!(

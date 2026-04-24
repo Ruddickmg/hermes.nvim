@@ -15,11 +15,13 @@ use agent_client_protocol::{
     TerminalOutputRequest, TerminalOutputResponse, TextContent, WaitForTerminalExitRequest,
     WaitForTerminalExitResponse, WriteTextFileRequest, WriteTextFileResponse,
 };
+use async_channel::{Receiver, Sender, bounded, unbounded};
+use async_io::{Async, Timer};
 use async_trait::async_trait;
+use futures::future::{Either, select};
+use futures::io::AsyncReadExt;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use tokio::net::TcpListener;
-use tokio::sync::{mpsc, oneshot};
-use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::{error, info};
 
 use super::mock_agent_handle::MockAgentHandle;
@@ -37,52 +39,49 @@ fn internal_error(message: impl Into<String>) -> agent_client_protocol::Error {
 /// This is an internal detail - callers interact via `MockAgentReceiver`.
 pub(crate) enum AgentToConnection {
     /// Send a session notification to Hermes
-    SessionNotification(SessionNotification, oneshot::Sender<()>),
+    SessionNotification(SessionNotification, Sender<()>),
     /// Send a permission request to Hermes and return the outcome
-    PermissionRequest(
-        RequestPermissionRequest,
-        oneshot::Sender<RequestPermissionOutcome>,
-    ),
+    PermissionRequest(RequestPermissionRequest, Sender<RequestPermissionOutcome>),
     /// Send a terminal creation request to Hermes and return the response
     CreateTerminal(
         CreateTerminalRequest,
-        oneshot::Sender<agent_client_protocol::Result<CreateTerminalResponse>>,
+        Sender<agent_client_protocol::Result<CreateTerminalResponse>>,
     ),
     /// Send a terminal output request to Hermes and return the response
     TerminalOutput(
         TerminalOutputRequest,
-        oneshot::Sender<agent_client_protocol::Result<TerminalOutputResponse>>,
+        Sender<agent_client_protocol::Result<TerminalOutputResponse>>,
     ),
     /// Send a wait for terminal exit request to Hermes and return the response
     WaitForTerminalExit(
         WaitForTerminalExitRequest,
-        oneshot::Sender<agent_client_protocol::Result<WaitForTerminalExitResponse>>,
+        Sender<agent_client_protocol::Result<WaitForTerminalExitResponse>>,
     ),
     /// Send a read text file request to Hermes and return the response
     ReadTextFile(
         ReadTextFileRequest,
-        oneshot::Sender<agent_client_protocol::Result<ReadTextFileResponse>>,
+        Sender<agent_client_protocol::Result<ReadTextFileResponse>>,
     ),
     /// Send a write text file request to Hermes and return the response
     WriteTextFile(
         WriteTextFileRequest,
-        oneshot::Sender<agent_client_protocol::Result<WriteTextFileResponse>>,
+        Sender<agent_client_protocol::Result<WriteTextFileResponse>>,
     ),
     /// Send a release terminal request to Hermes and return the response
     ReleaseTerminal(
         ReleaseTerminalRequest,
-        oneshot::Sender<agent_client_protocol::Result<ReleaseTerminalResponse>>,
+        Sender<agent_client_protocol::Result<ReleaseTerminalResponse>>,
     ),
 }
 
 /// Opaque receiver type passed from `MockAgent::new()` to `MockAgent::start()`.
-pub type MockAgentReceiver = mpsc::UnboundedReceiver<AgentToConnection>;
+pub type MockAgentReceiver = Receiver<AgentToConnection>;
 
 /// Mock agent implementing the ACP Agent trait
 pub struct MockAgent {
     config: Arc<Mutex<MockConfig>>,
     /// Channel to send messages to the connection handler task
-    conn_tx: mpsc::UnboundedSender<AgentToConnection>,
+    conn_tx: Sender<AgentToConnection>,
 }
 
 impl MockAgent {
@@ -90,7 +89,7 @@ impl MockAgent {
     ///
     /// Returns the agent and the receiver end of the connection channel.
     pub fn new() -> (Self, MockAgentReceiver) {
-        let (conn_tx, conn_rx) = mpsc::unbounded_channel();
+        let (conn_tx, conn_rx) = unbounded();
         let agent = Self {
             config: Arc::new(Mutex::new(MockConfig::default())),
             conn_tx,
@@ -105,137 +104,187 @@ impl MockAgent {
 
     /// Start the mock agent on a random available port.
     ///
-    /// Spawns a thread with a Tokio LocalSet runtime that:
+    /// Spawns a thread with a smol LocalExecutor that:
     /// 1. Accepts one TCP connection
     /// 2. Sets up an AgentSideConnection
     /// 3. Spawns a task to handle messages from Agent trait methods
-    /// 4. Runs the I/O handler until the connection closes
+    /// 4. Runs the I/O handler until the connection closes or shutdown signal received
     pub fn start(
         agent: MockAgent,
         conn_rx: MockAgentReceiver,
     ) -> Result<MockAgentHandle, std::io::Error> {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
-        let port = listener.local_addr()?.port();
+        let std_listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+        let port = std_listener.local_addr()?.port();
 
         info!("Mock agent starting on port {}", port);
 
-        let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
+        let (shutdown_tx, shutdown_rx) = bounded::<()>(1);
         let config_clone = agent.config.clone();
 
         let thread_handle = std::thread::spawn(move || {
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("Failed to create Tokio runtime");
+            let executor = Rc::new(smol::LocalExecutor::new());
 
-            rt.block_on(async {
-                let local_set = tokio::task::LocalSet::new();
+            // Create async listener
+            let listener = match Async::new(std_listener) {
+                Ok(l) => l,
+                Err(e) => {
+                    error!("Failed to create async listener: {}", e);
+                    return;
+                }
+            };
 
-                local_set
-                    .run_until(async {
-                        listener
-                            .set_nonblocking(true)
-                            .expect("Failed to set nonblocking");
-                        let tokio_listener = TcpListener::from_std(listener)
-                            .expect("Failed to convert to tokio listener");
+            // Run the main async task
+            smol::block_on(executor.clone().run(async move {
+                // Race between accept and shutdown signal
+                let accept_fut = async {
+                    match listener.accept().await {
+                        Ok((stream, addr)) => {
+                            info!("Mock agent accepted connection from {}", addr);
+                            Some(stream)
+                        }
+                        Err(e) => {
+                            error!("Failed to accept connection: {}", e);
+                            None
+                        }
+                    }
+                };
 
-                        // Wait for either a connection or shutdown signal
-                        let stream = tokio::select! {
-                            result = tokio_listener.accept() => {
-                                match result {
-                                    Ok((stream, addr)) => {
-                                        info!("Mock agent accepted connection from {}", addr);
-                                        stream
-                                    }
-                                    Err(e) => {
-                                        error!("Failed to accept connection: {}", e);
-                                        return;
+                let shutdown_fut = async {
+                    let _ = shutdown_rx.recv().await;
+                    info!("Mock agent received shutdown signal before connection");
+                };
+
+                match select(Box::pin(accept_fut), Box::pin(shutdown_fut)).await {
+                    Either::Left((Some(stream), _)) => {
+                        // Got connection, handle it
+                        let (read_half, write_half) = stream.split();
+
+                        // Clone executor for spawned tasks
+                        let exec = executor.clone();
+                        let exec_for_spawn = exec.clone();
+                        let exec_for_msg = exec.clone();
+
+                        // Spawn the connection handling task
+                        exec.spawn(async move {
+                            // Create the connection with proper stream halves
+                            let (conn, handle_io) = AgentSideConnection::new(
+                                agent,
+                                write_half,
+                                read_half,
+                                move |fut| {
+                                    exec_for_spawn.spawn(fut).detach();
+                                },
+                            );
+
+                            // Spawn task to handle messages from Agent trait methods
+                            let msg_handle = exec_for_msg.spawn(async move {
+                                while let Ok(msg) = conn_rx.recv().await {
+                                    match msg {
+                                        AgentToConnection::SessionNotification(
+                                            notification,
+                                            tx,
+                                        ) => {
+                                            let result =
+                                                conn.session_notification(notification).await;
+                                            if let Err(e) = result {
+                                                error!("Error sending session notification: {}", e);
+                                                break;
+                                            }
+                                            tx.try_send(()).ok();
+                                        }
+                                        AgentToConnection::PermissionRequest(request, tx) => {
+                                            let result = conn.request_permission(request).await;
+                                            match result {
+                                                Ok(response) => {
+                                                    tx.try_send(response.outcome).ok();
+                                                }
+                                                Err(e) => {
+                                                    error!(
+                                                        "Error sending permission request: {}",
+                                                        e
+                                                    );
+                                                    tx.try_send(
+                                                        RequestPermissionOutcome::Cancelled,
+                                                    )
+                                                    .ok();
+                                                }
+                                            }
+                                        }
+                                        AgentToConnection::CreateTerminal(request, tx) => {
+                                            let result = conn.create_terminal(request).await;
+                                            tx.try_send(result).ok();
+                                        }
+                                        AgentToConnection::TerminalOutput(request, tx) => {
+                                            let result = conn.terminal_output(request).await;
+                                            tx.try_send(result).ok();
+                                        }
+                                        AgentToConnection::WaitForTerminalExit(request, tx) => {
+                                            let result = conn.wait_for_terminal_exit(request).await;
+                                            tx.try_send(result).ok();
+                                        }
+                                        AgentToConnection::ReadTextFile(request, tx) => {
+                                            let result = conn.read_text_file(request).await;
+                                            tx.try_send(result).ok();
+                                        }
+                                        AgentToConnection::WriteTextFile(request, tx) => {
+                                            let result = conn.write_text_file(request).await;
+                                            tx.try_send(result).ok();
+                                        }
+                                        AgentToConnection::ReleaseTerminal(request, tx) => {
+                                            let result = conn.release_terminal(request).await;
+                                            tx.try_send(result).ok();
+                                        }
                                     }
                                 }
+                                info!("Message handling loop ended");
+                            });
+
+                            // Run I/O handler until complete
+                            let io_result = handle_io.await;
+                            if let Err(e) = io_result {
+                                error!("Mock agent I/O error: {}", e);
                             }
-                            _ = &mut shutdown_rx => {
-                                info!("Mock agent shutdown before connection");
-                                return;
+
+                            info!("I/O handler completed, waiting for message handler...");
+
+                            // Give message handler a moment to complete any pending work
+                            // Then stop it by signaling completion
+                            drop(msg_handle);
+
+                            info!("Mock agent connection handling complete");
+                        })
+                        .detach();
+
+                        // Keep executor running to process spawned tasks
+                        // Race between a timer and shutdown signal
+                        let keepalive = async {
+                            loop {
+                                Timer::after(std::time::Duration::from_millis(100)).await;
                             }
                         };
 
-                        let (read_half, write_half) = tokio::io::split(stream);
-                        let outgoing = write_half.compat_write();
-                        let incoming = read_half.compat();
+                        let shutdown_wait = async {
+                            let _ = shutdown_rx.recv().await;
+                            info!("Shutdown received while handling connection");
+                        };
 
-                        // Create AgentSideConnection (implements both Agent and Client traits)
-                        let (conn, handle_io) =
-                            AgentSideConnection::new(agent, outgoing, incoming, |fut| {
-                                tokio::task::spawn_local(fut);
-                            });
+                        // Wait for either shutdown or keep the executor alive
+                        let _ = select(Box::pin(keepalive), Box::pin(shutdown_wait)).await;
+                    }
+                    Either::Left((None, _)) => {
+                        // Accept failed
+                        info!("Mock agent accept failed, exiting");
+                    }
+                    Either::Right((_, _)) => {
+                        // Shutdown received before connection
+                        info!("Mock agent shutting down before connection established");
+                    }
+                }
 
-                        // Spawn task to handle messages from Agent trait methods.
-                        let mut conn_rx = conn_rx;
-                        tokio::task::spawn_local(async move {
-                            while let Some(msg) = conn_rx.recv().await {
-                                match msg {
-                                    AgentToConnection::SessionNotification(notification, tx) => {
-                                        let result = conn.session_notification(notification).await;
-                                        if let Err(e) = result {
-                                            error!("Error sending session notification: {}", e);
-                                            break;
-                                        }
-                                        tx.send(()).ok();
-                                    }
-                                    AgentToConnection::PermissionRequest(request, tx) => {
-                                        let result = conn.request_permission(request).await;
-                                        match result {
-                                            Ok(response) => {
-                                                tx.send(response.outcome).ok();
-                                            }
-                                            Err(e) => {
-                                                error!("Error sending permission request: {}", e);
-                                                tx.send(RequestPermissionOutcome::Cancelled).ok();
-                                            }
-                                        }
-                                    }
-                                    AgentToConnection::CreateTerminal(request, tx) => {
-                                        let result = conn.create_terminal(request).await;
-                                        tx.send(result).ok();
-                                    }
-                                    AgentToConnection::TerminalOutput(request, tx) => {
-                                        let result = conn.terminal_output(request).await;
-                                        tx.send(result).ok();
-                                    }
-                                    AgentToConnection::WaitForTerminalExit(request, tx) => {
-                                        let result = conn.wait_for_terminal_exit(request).await;
-                                        tx.send(result).ok();
-                                    }
-                                    AgentToConnection::ReadTextFile(request, tx) => {
-                                        let result = conn.read_text_file(request).await;
-                                        tx.send(result).ok();
-                                    }
-                                    AgentToConnection::WriteTextFile(request, tx) => {
-                                        let result = conn.write_text_file(request).await;
-                                        tx.send(result).ok();
-                                    }
-                                    AgentToConnection::ReleaseTerminal(request, tx) => {
-                                        let result = conn.release_terminal(request).await;
-                                        tx.send(result).ok();
-                                    }
-                                }
-                            }
-                        });
+                info!("Mock agent main task completed");
+            }));
 
-                        // Run I/O handler until connection closes OR shutdown signal
-                        tokio::select! {
-                            result = handle_io => {
-                                if let Err(e) = result {
-                                    error!("Mock agent I/O error: {}", e);
-                                }
-                            }
-                            _ = shutdown_rx => {
-                                info!("Mock agent received shutdown signal");
-                            }
-                        }
-                    })
-                    .await;
-            });
+            info!("Mock agent thread exiting");
         });
 
         Ok(MockAgentHandle::new(
@@ -247,14 +296,39 @@ impl MockAgent {
     }
 }
 
+/// Helper: race a future against a timeout, matching tokio::time::timeout semantics.
+async fn timeout<T>(
+    duration: std::time::Duration,
+    future: impl std::future::Future<Output = T>,
+) -> Result<T, agent_client_protocol::Error> {
+    match select(Box::pin(future), Box::pin(Timer::after(duration))).await {
+        Either::Left((result, _)) => Ok(result),
+        Either::Right((_, _)) => Err(internal_error("operation timed out")),
+    }
+}
+
+/// Helper: race a channel recv against a timeout.
+async fn recv_timeout<T>(
+    rx: Receiver<T>,
+    duration: std::time::Duration,
+    timeout_msg: &str,
+    closed_msg: &str,
+) -> Result<T, agent_client_protocol::Error> {
+    match select(Box::pin(rx.recv()), Box::pin(Timer::after(duration))).await {
+        Either::Left((Ok(val), _)) => Ok(val),
+        Either::Left((Err(_), _)) => Err(internal_error(closed_msg)),
+        Either::Right((_, _)) => Err(internal_error(timeout_msg)),
+    }
+}
+
 #[async_trait(?Send)]
 impl Agent for MockAgent {
     async fn initialize(
         &self,
         _request: InitializeRequest,
     ) -> agent_client_protocol::Result<InitializeResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-        tokio::time::timeout(timeout, async {
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
             Ok(InitializeResponse::new(ProtocolVersion::V1)
                 .agent_info(Implementation::new("mock-agent", "0.1.0"))
                 .agent_capabilities(
@@ -283,8 +357,8 @@ impl Agent for MockAgent {
         &self,
         _request: AuthenticateRequest,
     ) -> agent_client_protocol::Result<AuthenticateResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-        tokio::time::timeout(timeout, async {
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
             let config = self.config.lock().unwrap();
             Ok(config.authenticate_response.clone())
         })
@@ -296,17 +370,12 @@ impl Agent for MockAgent {
         &self,
         request: NewSessionRequest,
     ) -> agent_client_protocol::Result<NewSessionResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-        tokio::time::timeout(timeout, async {
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
             let mut config = self.config.lock().unwrap();
             let response = config.new_session_response.clone();
-
-            // Track the session for default load_session/list_sessions behavior
             config.track_session(response.session_id.clone(), request.cwd.clone());
-
-            // Generate a fresh session ID for the next new_session call
             config.new_session_response = NewSessionResponse::new(generate_session_id());
-
             Ok(response)
         })
         .await
@@ -317,26 +386,29 @@ impl Agent for MockAgent {
         &self,
         request: PromptRequest,
     ) -> agent_client_protocol::Result<PromptResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-        tokio::time::timeout(timeout, async {
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
             // Check if we should request permission
             let permission_request = {
                 let config = self.config.lock().unwrap();
                 config.permission_request.clone()
             };
 
-            // If configured, send a permission request to Hermes and wait for the response
             if let Some(perm_req) = permission_request {
-                let (tx, rx) = oneshot::channel();
+                let (tx, rx) = bounded(1);
                 self.conn_tx
                     .send(AgentToConnection::PermissionRequest(perm_req, tx))
+                    .await
                     .map_err(|_| internal_error("failed to send permission request"))?;
 
-                let inner_timeout = self.config.lock().unwrap().timeout;
-                tokio::time::timeout(inner_timeout, rx)
-                    .await
-                    .map_err(|_| internal_error("permission request timed out"))?
-                    .map_err(|_| internal_error("permission request channel closed"))?;
+                let inner_dur = self.config.lock().unwrap().timeout;
+                let _outcome = recv_timeout(
+                    rx,
+                    inner_dur,
+                    "permission request timed out",
+                    "permission request channel closed",
+                )
+                .await?;
             }
 
             // Check if terminal workflow is configured
@@ -349,56 +421,62 @@ impl Agent for MockAgent {
                 )
             };
 
-            // If configured, execute terminal workflow
             if let Some(create_req) = create_terminal {
-                // Step 1: Create terminal - wait for response with terminal_id
-                let (tx, rx) = oneshot::channel();
+                let (tx, rx) = bounded(1);
                 self.conn_tx
                     .send(AgentToConnection::CreateTerminal(create_req, tx))
+                    .await
                     .map_err(|_| internal_error("failed to send create_terminal request"))?;
 
-                let create_response = tokio::time::timeout(timeout, rx)
-                    .await
-                    .map_err(|_| internal_error("create_terminal timed out"))?
-                    .map_err(|_| internal_error("create_terminal channel closed"))?
-                    .map_err(|e| internal_error(format!("create_terminal failed: {}", e)))?;
+                let create_response = recv_timeout(
+                    rx,
+                    dur,
+                    "create_terminal timed out",
+                    "create_terminal channel closed",
+                )
+                .await?
+                .map_err(|e| internal_error(format!("create_terminal failed: {}", e)))?;
 
                 let terminal_id = create_response.terminal_id;
 
-                // Step 2: Get terminal output (if configured)
                 if send_terminal_output {
                     let output_req =
                         TerminalOutputRequest::new(request.session_id.clone(), terminal_id.clone());
-                    let (tx, rx) = oneshot::channel();
+                    let (tx, rx) = bounded(1);
                     self.conn_tx
                         .send(AgentToConnection::TerminalOutput(output_req, tx))
+                        .await
                         .map_err(|_| internal_error("failed to send terminal_output request"))?;
 
-                    tokio::time::timeout(timeout, rx)
-                        .await
-                        .map_err(|_| internal_error("terminal_output timed out"))?
-                        .map_err(|_| internal_error("terminal_output channel closed"))?
-                        .map_err(|e| internal_error(format!("terminal_output failed: {}", e)))?;
+                    recv_timeout(
+                        rx,
+                        dur,
+                        "terminal_output timed out",
+                        "terminal_output channel closed",
+                    )
+                    .await?
+                    .map_err(|e| internal_error(format!("terminal_output failed: {}", e)))?;
                 }
 
-                // Step 3: Wait for terminal exit (if configured)
                 if send_terminal_exit {
                     let exit_req =
                         WaitForTerminalExitRequest::new(request.session_id.clone(), terminal_id);
-                    let (tx, rx) = oneshot::channel();
+                    let (tx, rx) = bounded(1);
                     self.conn_tx
                         .send(AgentToConnection::WaitForTerminalExit(exit_req, tx))
+                        .await
                         .map_err(|_| {
                             internal_error("failed to send wait_for_terminal_exit request")
                         })?;
 
-                    tokio::time::timeout(timeout, rx)
-                        .await
-                        .map_err(|_| internal_error("wait_for_terminal_exit timed out"))?
-                        .map_err(|_| internal_error("wait_for_terminal_exit channel closed"))?
-                        .map_err(|e| {
-                            internal_error(format!("wait_for_terminal_exit failed: {}", e))
-                        })?;
+                    recv_timeout(
+                        rx,
+                        dur,
+                        "wait_for_terminal_exit timed out",
+                        "wait_for_terminal_exit channel closed",
+                    )
+                    .await?
+                    .map_err(|e| internal_error(format!("wait_for_terminal_exit failed: {}", e)))?;
                 }
             }
 
@@ -409,16 +487,20 @@ impl Agent for MockAgent {
             };
 
             if let Some(read_req) = read_file_request {
-                let (tx, rx) = oneshot::channel();
+                let (tx, rx) = bounded(1);
                 self.conn_tx
                     .send(AgentToConnection::ReadTextFile(read_req, tx))
+                    .await
                     .map_err(|_| internal_error("failed to send read_text_file request"))?;
 
-                tokio::time::timeout(timeout, rx)
-                    .await
-                    .map_err(|_| internal_error("read_text_file timed out"))?
-                    .map_err(|_| internal_error("read_text_file channel closed"))?
-                    .map_err(|e| internal_error(format!("read_text_file failed: {}", e)))?;
+                recv_timeout(
+                    rx,
+                    dur,
+                    "read_text_file timed out",
+                    "read_text_file channel closed",
+                )
+                .await?
+                .map_err(|e| internal_error(format!("read_text_file failed: {}", e)))?;
             }
 
             // Write text file (if configured)
@@ -428,16 +510,20 @@ impl Agent for MockAgent {
             };
 
             if let Some(write_req) = write_file_request {
-                let (tx, rx) = oneshot::channel();
+                let (tx, rx) = bounded(1);
                 self.conn_tx
                     .send(AgentToConnection::WriteTextFile(write_req, tx))
+                    .await
                     .map_err(|_| internal_error("failed to send write_text_file request"))?;
 
-                tokio::time::timeout(timeout, rx)
-                    .await
-                    .map_err(|_| internal_error("write_text_file timed out"))?
-                    .map_err(|_| internal_error("write_text_file channel closed"))?
-                    .map_err(|e| internal_error(format!("write_text_file failed: {}", e)))?;
+                recv_timeout(
+                    rx,
+                    dur,
+                    "write_text_file timed out",
+                    "write_text_file channel closed",
+                )
+                .await?
+                .map_err(|e| internal_error(format!("write_text_file failed: {}", e)))?;
             }
 
             // Release terminal (if configured)
@@ -447,16 +533,20 @@ impl Agent for MockAgent {
             };
 
             if let Some(release_req) = release_terminal_request {
-                let (tx, rx) = oneshot::channel();
+                let (tx, rx) = bounded(1);
                 self.conn_tx
                     .send(AgentToConnection::ReleaseTerminal(release_req, tx))
+                    .await
                     .map_err(|_| internal_error("failed to send release_terminal request"))?;
 
-                tokio::time::timeout(timeout, rx)
-                    .await
-                    .map_err(|_| internal_error("release_terminal timed out"))?
-                    .map_err(|_| internal_error("release_terminal channel closed"))?
-                    .map_err(|e| internal_error(format!("release_terminal failed: {}", e)))?;
+                recv_timeout(
+                    rx,
+                    dur,
+                    "release_terminal timed out",
+                    "release_terminal channel closed",
+                )
+                .await?
+                .map_err(|e| internal_error(format!("release_terminal failed: {}", e)))?;
             }
 
             // Echo back the prompt content as agent message chunks
@@ -473,15 +563,16 @@ impl Agent for MockAgent {
                     ))),
                 );
 
-                let (tx, rx) = oneshot::channel();
+                let (tx, rx) = bounded(1);
                 if self
                     .conn_tx
                     .send(AgentToConnection::SessionNotification(notification, tx))
+                    .await
                     .is_err()
                 {
                     break;
                 }
-                let _ = rx.await;
+                let _ = rx.recv().await;
             }
 
             Ok(PromptResponse::new(StopReason::EndTurn))
@@ -498,16 +589,14 @@ impl Agent for MockAgent {
         &self,
         request: LoadSessionRequest,
     ) -> agent_client_protocol::Result<LoadSessionResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-        tokio::time::timeout(timeout, async {
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
             let config = self.config.lock().unwrap();
 
-            // Return user-configured response if set
             if let Some(ref response) = config.load_session_response {
                 return Ok(response.clone());
             }
 
-            // Default: check if session is tracked (session exists)
             if config.sessions.contains_key(&request.session_id) {
                 Ok(LoadSessionResponse::new())
             } else {
@@ -525,8 +614,8 @@ impl Agent for MockAgent {
         &self,
         _request: SetSessionModeRequest,
     ) -> agent_client_protocol::Result<SetSessionModeResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-        tokio::time::timeout(timeout, async {
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
             let config = self.config.lock().unwrap();
             if let Some(ref response) = config.set_session_mode_response {
                 Ok(response.clone())
@@ -542,8 +631,8 @@ impl Agent for MockAgent {
         &self,
         _request: SetSessionConfigOptionRequest,
     ) -> agent_client_protocol::Result<SetSessionConfigOptionResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-        tokio::time::timeout(timeout, async {
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
             let config = self.config.lock().unwrap();
             if let Some(ref response) = config.set_session_config_option_response {
                 Ok(response.clone())
@@ -559,16 +648,14 @@ impl Agent for MockAgent {
         &self,
         _request: ListSessionsRequest,
     ) -> agent_client_protocol::Result<ListSessionsResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-        tokio::time::timeout(timeout, async {
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
             let config = self.config.lock().unwrap();
 
-            // Return user-configured response if set
             if let Some(ref response) = config.list_sessions_response {
                 return Ok(response.clone());
             }
 
-            // Default: return all tracked sessions
             let sessions: Vec<_> = config.sessions.values().cloned().collect();
             Ok(ListSessionsResponse::new(sessions))
         })
@@ -577,8 +664,8 @@ impl Agent for MockAgent {
     }
 
     async fn ext_method(&self, _request: ExtRequest) -> agent_client_protocol::Result<ExtResponse> {
-        let timeout = self.config.lock().unwrap().timeout;
-        tokio::time::timeout(timeout, async {
+        let dur = self.config.lock().unwrap().timeout;
+        timeout(dur, async {
             let config = self.config.lock().unwrap();
             if let Some(ref response) = config.ext_response {
                 Ok(response.clone())

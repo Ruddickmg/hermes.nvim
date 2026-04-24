@@ -11,6 +11,7 @@ use agent_client_protocol::{
     PermissionOption, PermissionOptionId, PermissionOptionKind, RequestPermissionRequest,
     SessionId, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
 };
+use async_lock::Mutex;
 use hermes::nvim::requests::Responder;
 use hermes::nvim::state::PluginState;
 use hermes::utilities::ui::show_permission_ui;
@@ -18,7 +19,6 @@ use std::cell::RefCell;
 #[allow(unused_imports)]
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
 use tracing::debug;
 
 /// Helper to block on an async future in synchronous tests
@@ -57,7 +57,7 @@ fn create_permission_request(
 #[tracing_test::traced_test]
 #[nvim_oxi::test]
 fn show_permission_ui_options_can_be_selected() -> nvim_oxi::Result<()> {
-    let (sender, reciever) = tokio::sync::oneshot::channel::<String>();
+    let (sender, reciever) = async_channel::bounded::<String>(1);
     let options = vec![
         create_permission_option("opt-1", "Option 1"),
         create_permission_option("opt-2", "Option 2"),
@@ -69,7 +69,7 @@ fn show_permission_ui_options_can_be_selected() -> nvim_oxi::Result<()> {
     let _ = show_permission_ui(&options, "Hello!", move |selection| {
         debug!("Calling back! selected: {}", selection);
         if let Some(other) = thing1.take() {
-            other.send(selection.clone()).ok();
+            let _ = futures::executor::block_on(other.send(selection.clone()));
             debug!("Sending selection through channel: {}", selection);
         }
     });
@@ -134,7 +134,7 @@ fn test_non_permission_request_not_permission() -> nvim_oxi::Result<()> {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let (sender, _receiver) =
-        tokio::sync::oneshot::channel::<agent_client_protocol::WriteTextFileResponse>();
+        async_channel::bounded::<agent_client_protocol::WriteTextFileResponse>(1);
     let write_request = WriteTextFileRequest::new(
         SessionId::from("test-session"),
         PathBuf::from("/tmp/test.txt"),

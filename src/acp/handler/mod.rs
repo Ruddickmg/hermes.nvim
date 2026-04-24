@@ -11,10 +11,10 @@ use crate::{
     },
     utilities::{NvimMessenger, NvimRuntime, TransmitToNvim},
 };
+use async_lock::Mutex;
 use nvim_oxi::{Array, Dictionary, Object, api::opts::ExecAutocmdsOpts};
 use serde::Serialize;
 use std::{fmt::Debug, fmt::Display, rc::Rc, sync::Arc};
-use tokio::sync::Mutex;
 use tracing::{debug, error, instrument, warn};
 
 type NvimHandleArgs = (String, serde_json::Value, Option<(Responder, String)>);

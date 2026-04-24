@@ -3,6 +3,8 @@ use crate::helpers::ui::wait_for;
 use agent_client_protocol::{SessionId, WriteTextFileRequest, WriteTextFileResponse};
 use assert_fs::prelude::*;
 use assert_fs::{NamedTempFile, TempDir};
+use async_channel::bounded as oneshot_channel;
+use async_lock::Mutex;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
 use hermes::utilities::NvimRuntime;
@@ -10,15 +12,9 @@ use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{Mutex, oneshot};
 
 fn mock_runtime() -> NvimRuntime {
-    NvimRuntime::new(Rc::new(
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to create mock runtime"),
-    ))
+    NvimRuntime::new()
 }
 
 /// Helper to block on an async future in synchronous tests
@@ -48,7 +44,7 @@ fn open_buffer_marked_modified() -> nvim_oxi::Result<()> {
             |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
         )?,
     );
-    let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, mut receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         create_write_request(temp_file.path(), "updated content"),
@@ -99,7 +95,7 @@ fn open_buffer_disk_content_unchanged() -> nvim_oxi::Result<()> {
             |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
         )?,
     );
-    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, _receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         create_write_request(temp_file.path(), "updated content"),
@@ -131,7 +127,7 @@ fn new_file_created() -> nvim_oxi::Result<()> {
             |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
         )?,
     );
-    let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, mut receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         create_write_request(new_file.path(), "created content"),
@@ -161,7 +157,7 @@ fn file_exists_but_closed() -> nvim_oxi::Result<()> {
             |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
         )?,
     );
-    let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, mut receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         create_write_request(temp_file.path(), "new content"),
@@ -191,7 +187,7 @@ fn responder_send_failure_returns_error() -> nvim_oxi::Result<()> {
             |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
         )?,
     );
-    let (sender, receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder =
         Responder::WriteFileResponse(sender, create_write_request(temp_file.path(), "content"));
     let request_id = block_on(requests.add_request("test-session".to_string(), responder));
@@ -213,7 +209,7 @@ fn responder_send_failure_contains_acp_message() -> nvim_oxi::Result<()> {
             |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
         )?,
     );
-    let (sender, receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder =
         Responder::WriteFileResponse(sender, create_write_request(temp_file.path(), "content"));
     let request_id = block_on(requests.add_request("test-session".to_string(), responder));
@@ -240,7 +236,7 @@ fn buffer_already_open_marked_modified() -> nvim_oxi::Result<()> {
             |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
         )?,
     );
-    let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, mut receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         create_write_request(temp_file.path(), "agent updated content"),
@@ -287,7 +283,7 @@ fn buffer_already_open_disk_unchanged() -> nvim_oxi::Result<()> {
             |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
         )?,
     );
-    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, _receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         create_write_request(temp_file.path(), "agent updated content"),
@@ -322,7 +318,7 @@ fn buffer_already_open_response_sent() -> nvim_oxi::Result<()> {
             |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
         )?,
     );
-    let (sender, mut receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, mut receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         create_write_request(temp_file.path(), "agent updated content"),
@@ -353,7 +349,7 @@ fn write_file_cleanup_request_exists_before_response() -> nvim_oxi::Result<()> {
         )?,
     );
 
-    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, _receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         create_write_request(temp_file.path(), "test content"),
@@ -377,7 +373,7 @@ fn write_file_cleanup_default_response_succeeds() -> nvim_oxi::Result<()> {
         )?,
     );
 
-    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, _receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         create_write_request(temp_file.path(), "test content"),
@@ -402,7 +398,7 @@ fn write_file_cleanup_request_removed_after_response() -> nvim_oxi::Result<()> {
         )?,
     );
 
-    let (sender, _receiver) = oneshot::channel::<WriteTextFileResponse>();
+    let (sender, _receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         create_write_request(temp_file.path(), "test content"),

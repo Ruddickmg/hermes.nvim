@@ -2,7 +2,6 @@
 
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use tokio::sync::oneshot;
 use tracing::{error, info};
 
 use super::mock_config::MockConfig;
@@ -14,7 +13,7 @@ pub struct MockAgentHandle {
     pub config: Arc<Mutex<MockConfig>>,
     pub port: u16,
     thread_handle: Option<JoinHandle<()>>,
-    shutdown_sender: Option<oneshot::Sender<()>>,
+    shutdown_sender: Option<async_channel::Sender<()>>,
 }
 
 impl MockAgentHandle {
@@ -23,7 +22,7 @@ impl MockAgentHandle {
         config: Arc<Mutex<MockConfig>>,
         port: u16,
         thread_handle: JoinHandle<()>,
-        shutdown_sender: oneshot::Sender<()>,
+        shutdown_sender: async_channel::Sender<()>,
     ) -> Self {
         Self {
             config,
@@ -64,7 +63,7 @@ impl Drop for MockAgentHandle {
 
         // Step 1: Send shutdown signal
         if let Some(sender) = self.shutdown_sender.take() {
-            let _ = sender.send(());
+            let _ = sender.try_send(());
         }
 
         // Step 2: Join thread with 10 second timeout

@@ -2,22 +2,18 @@
 //!
 //! Each test verifies exactly ONE behavior with exactly ONE assertion.
 use agent_client_protocol::{CreateTerminalRequest, CreateTerminalResponse, SessionId};
+use async_channel::bounded as oneshot_channel;
+use async_lock::Mutex;
 use hermes::acp::Result;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
 use hermes::utilities::NvimRuntime;
 use std::rc::Rc;
 use std::sync::Arc;
-use tokio::sync::{Mutex, oneshot};
 use uuid::Uuid;
 
 fn mock_runtime() -> NvimRuntime {
-    NvimRuntime::new(Rc::new(
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to create mock runtime"),
-    ))
+    NvimRuntime::new()
 }
 
 /// Helper to block on an async future in synchronous tests
@@ -40,12 +36,12 @@ fn setup_terminal_request(
 ) -> (
     Arc<Requests>,
     Uuid,
-    oneshot::Receiver<Result<CreateTerminalResponse>>,
+    async_channel::Receiver<Result<CreateTerminalResponse>>,
 ) {
     let runtime = mock_runtime();
     let requests =
         Arc::new(Requests::new(runtime, Arc::new(Mutex::new(PluginState::default()))).unwrap());
-    let (sender, receiver) = oneshot::channel::<Result<CreateTerminalResponse>>();
+    let (sender, receiver) = oneshot_channel::<Result<CreateTerminalResponse>>(1);
     let responder = Responder::TerminalCreate(sender, create_terminal_request(command, args));
     let request_id = block_on(requests.add_request("test-session".to_string(), responder));
     (requests, request_id, receiver)
