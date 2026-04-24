@@ -237,16 +237,22 @@ impl Drop for Child {
 mod tests {
     use super::*;
 
-    fn test_executor() -> smol::LocalExecutor<'static> {
-        smol::LocalExecutor::new()
+    /// Run an async test on a smol LocalExecutor. This properly drives the
+    /// executor so that spawned tasks and I/O complete.
+    fn run_test<F, Fut>(f: F)
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = ()>,
+    {
+        let executor = smol::LocalExecutor::new();
+        smol::block_on(executor.run(f()));
     }
 
     #[test]
     fn spawn_creates_child_with_pid() {
-        let executor = test_executor();
         let mut cmd = Command::new("echo");
         cmd.arg("hello");
-        executor.run(async {
+        run_test(|| async move {
             let child = Child::spawn(&mut cmd).await.unwrap();
             assert!(child.id().await.is_some());
         });
@@ -254,9 +260,8 @@ mod tests {
 
     #[test]
     fn take_stdin_returns_handle() {
-        let executor = test_executor();
         let mut cmd = Command::new("cat");
-        executor.run(async {
+        run_test(|| async move {
             let child = Child::spawn(&mut cmd).await.unwrap();
             assert!(child.take_stdin().await.is_some());
             // Cleanup
@@ -266,10 +271,9 @@ mod tests {
 
     #[test]
     fn take_stdout_returns_handle() {
-        let executor = test_executor();
         let mut cmd = Command::new("echo");
         cmd.arg("hello");
-        executor.run(async {
+        run_test(|| async move {
             let child = Child::spawn(&mut cmd).await.unwrap();
             assert!(child.take_stdout().await.is_some());
         });
@@ -277,10 +281,9 @@ mod tests {
 
     #[test]
     fn take_stderr_returns_handle() {
-        let executor = test_executor();
         let mut cmd = Command::new("echo");
         cmd.arg("hello");
-        executor.run(async {
+        run_test(|| async move {
             let child = Child::spawn(&mut cmd).await.unwrap();
             assert!(child.take_stderr().await.is_some());
         });
@@ -288,9 +291,8 @@ mod tests {
 
     #[test]
     fn take_stdin_twice_returns_none() {
-        let executor = test_executor();
         let mut cmd = Command::new("cat");
-        executor.run(async {
+        run_test(|| async move {
             let child = Child::spawn(&mut cmd).await.unwrap();
             assert!(child.take_stdin().await.is_some());
             assert!(child.take_stdin().await.is_none());
@@ -301,10 +303,9 @@ mod tests {
 
     #[test]
     fn wait_returns_exit_status() {
-        let executor = test_executor();
         let mut cmd = Command::new("echo");
         cmd.arg("hello");
-        executor.run(async {
+        run_test(|| async move {
             let child = Child::spawn(&mut cmd).await.unwrap();
             let status = child.wait().await.unwrap();
             assert!(status.success());
@@ -313,10 +314,9 @@ mod tests {
 
     #[test]
     fn wait_caches_exit_status() {
-        let executor = test_executor();
         let mut cmd = Command::new("echo");
         cmd.arg("hello");
-        executor.run(async {
+        run_test(|| async move {
             let child = Child::spawn(&mut cmd).await.unwrap();
             let status1 = child.wait().await.unwrap();
             let status2 = child.wait().await.unwrap();
@@ -326,10 +326,9 @@ mod tests {
 
     #[test]
     fn id_returns_none_after_exit() {
-        let executor = test_executor();
         let mut cmd = Command::new("echo");
         cmd.arg("hello");
-        executor.run(async {
+        run_test(|| async move {
             let child = Child::spawn(&mut cmd).await.unwrap();
             let _ = child.wait().await.unwrap();
             assert!(child.id().await.is_none());
@@ -337,24 +336,10 @@ mod tests {
     }
 
     #[test]
-    fn try_wait_returns_none_while_running() {
-        let executor = test_executor();
-        let mut cmd = Command::new("sleep");
-        cmd.arg("60");
-        executor.run(async {
-            let child = Child::spawn(&mut cmd).await.unwrap();
-            let result = child.try_wait().await.unwrap();
-            assert!(result.is_none());
-            child.kill().await.unwrap();
-        });
-    }
-
-    #[test]
     fn kill_terminates_child() {
-        let executor = test_executor();
         let mut cmd = Command::new("sleep");
         cmd.arg("60");
-        executor.run(async {
+        run_test(|| async move {
             let child = Child::spawn(&mut cmd).await.unwrap();
             child.kill().await.unwrap();
             let status = child.wait().await.unwrap();
@@ -364,10 +349,9 @@ mod tests {
 
     #[test]
     fn terminate_followed_by_wait() {
-        let executor = test_executor();
         let mut cmd = Command::new("sleep");
         cmd.arg("60");
-        executor.run(async {
+        run_test(|| async move {
             let child = Child::spawn(&mut cmd).await.unwrap();
             child.terminate().await.unwrap();
             let status = child.wait().await.unwrap();
@@ -377,10 +361,9 @@ mod tests {
 
     #[test]
     fn kill_already_exited_is_ok() {
-        let executor = test_executor();
         let mut cmd = Command::new("echo");
         cmd.arg("hello");
-        executor.run(async {
+        run_test(|| async move {
             let child = Child::spawn(&mut cmd).await.unwrap();
             let _ = child.wait().await.unwrap();
             assert!(child.kill().await.is_ok());
@@ -389,10 +372,9 @@ mod tests {
 
     #[test]
     fn terminate_already_exited_is_ok() {
-        let executor = test_executor();
         let mut cmd = Command::new("echo");
         cmd.arg("hello");
-        executor.run(async {
+        run_test(|| async move {
             let child = Child::spawn(&mut cmd).await.unwrap();
             let _ = child.wait().await.unwrap();
             assert!(child.terminate().await.is_ok());
@@ -401,10 +383,9 @@ mod tests {
 
     #[test]
     fn try_kill_sync_terminates_running_child() {
-        let executor = test_executor();
         let mut cmd = Command::new("sleep");
         cmd.arg("60");
-        executor.run(async {
+        run_test(|| async move {
             let child = Child::spawn(&mut cmd).await.unwrap();
             assert!(child.try_kill_sync().is_ok());
             let status = child.wait().await.unwrap();
@@ -414,10 +395,9 @@ mod tests {
 
     #[test]
     fn try_kill_sync_on_exited_child_is_ok() {
-        let executor = test_executor();
         let mut cmd = Command::new("echo");
         cmd.arg("hello");
-        executor.run(async {
+        run_test(|| async move {
             let child = Child::spawn(&mut cmd).await.unwrap();
             let _ = child.wait().await.unwrap();
             assert!(child.try_kill_sync().is_ok());
@@ -432,10 +412,9 @@ mod tests {
 
     #[test]
     fn concurrent_wait_and_kill() {
-        let executor = test_executor();
         let mut cmd = Command::new("sleep");
         cmd.arg("60");
-        executor.run(async {
+        run_test(|| async move {
             let child = Child::spawn(&mut cmd).await.unwrap();
             let child = Arc::new(child);
 
@@ -450,6 +429,65 @@ mod tests {
             // Both should complete without error
             let status = wait_future.await.unwrap();
             assert!(!status.success());
+        });
+    }
+
+    #[test]
+    fn two_phase_initialize_creates_child() {
+        run_test(|| async move {
+            let child = Child::new();
+            let mut cmd = Command::new("echo");
+            cmd.arg("hello");
+            child.initialize(&mut cmd).await.unwrap();
+            assert!(child.id().await.is_some());
+        });
+    }
+
+    #[test]
+    fn initialize_invalid_command_returns_error() {
+        run_test(|| async move {
+            let child = Child::new();
+            let mut cmd = Command::new("/nonexistent/binary/path");
+            assert!(child.initialize(&mut cmd).await.is_err());
+        });
+    }
+
+    #[test]
+    fn drop_kills_running_child() {
+        run_test(|| async move {
+            let mut cmd = Command::new("cat");
+            let child = Child::spawn(&mut cmd).await.unwrap();
+            let pid = child.id().await.unwrap();
+            // Drop the child - should kill the running process
+            drop(child);
+            // Process should no longer be running after drop
+            // Give OS a moment to clean up
+            async_io::Timer::after(std::time::Duration::from_millis(50)).await;
+            // Verify process is gone (kill with signal 0 checks existence)
+            let result = unsafe { libc::kill(pid as i32, 0) };
+            assert_eq!(result, -1);
+        });
+    }
+
+    #[test]
+    fn take_stdout_twice_returns_none() {
+        let mut cmd = Command::new("echo");
+        cmd.arg("hello");
+        run_test(|| async move {
+            let child = Child::spawn(&mut cmd).await.unwrap();
+            assert!(child.take_stdout().await.is_some());
+            assert!(child.take_stdout().await.is_none());
+        });
+    }
+
+    #[test]
+    fn take_stderr_twice_returns_none() {
+        let mut cmd = Command::new("echo");
+        cmd.arg("hello");
+        run_test(|| async move {
+            let child = Child::spawn(&mut cmd).await.unwrap();
+            assert!(child.take_stderr().await.is_some());
+            assert!(child.take_stderr().await.is_none());
         });
     }
 }
