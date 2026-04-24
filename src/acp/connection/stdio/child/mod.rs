@@ -490,4 +490,75 @@ mod tests {
             assert!(child.take_stderr().await.is_none());
         });
     }
+
+    #[test]
+    fn wait_returns_cached_status_on_second_call() {
+        // Covers line 134: the ChildState::Exited early return in wait()
+        let mut cmd = Command::new("echo");
+        cmd.arg("hello");
+        run_test(|| async move {
+            let child = Child::spawn(&mut cmd).await.unwrap();
+            let status1 = child.wait().await.unwrap();
+            // Second wait should hit the cached ChildState::Exited path (line 134)
+            let status2 = child.wait().await.unwrap();
+            assert_eq!(status1, status2);
+        });
+    }
+
+    #[test]
+    fn try_wait_on_exited_child_returns_some() {
+        // Covers lines 158-159: try_wait returning cached Exited status
+        let mut cmd = Command::new("echo");
+        cmd.arg("hello");
+        run_test(|| async move {
+            let child = Child::spawn(&mut cmd).await.unwrap();
+            // Wait for it to exit first
+            let _ = child.wait().await.unwrap();
+            // Now try_wait should return the cached status
+            let result = child.try_wait().await.unwrap();
+            assert!(result.is_some());
+        });
+    }
+
+    #[test]
+    fn try_wait_on_uninitialized_returns_none() {
+        // Covers lines 155-156: try_wait on Child::new()
+        run_test(|| async move {
+            let child = Child::new();
+            let result = child.try_wait().await.unwrap();
+            assert!(result.is_none());
+        });
+    }
+
+    #[test]
+    fn terminate_uninitialized_returns_ok() {
+        // Covers lines 178-179: terminate on Child::new()
+        run_test(|| async move {
+            let child = Child::new();
+            assert!(child.terminate().await.is_ok());
+        });
+    }
+
+    #[test]
+    fn kill_uninitialized_returns_ok() {
+        // Covers lines 191-192: kill on Child::new()
+        run_test(|| async move {
+            let child = Child::new();
+            assert!(child.kill().await.is_ok());
+        });
+    }
+
+    #[test]
+    fn try_wait_on_completed_process_returns_status() {
+        // Covers lines 163-167: try_wait on a process that has exited
+        // but whose status hasn't been cached yet
+        let mut cmd = Command::new("true");
+        run_test(|| async move {
+            let child = Child::spawn(&mut cmd).await.unwrap();
+            // Give process time to exit
+            async_io::Timer::after(std::time::Duration::from_millis(100)).await;
+            let result = child.try_wait().await.unwrap();
+            assert!(result.is_some());
+        });
+    }
 }
