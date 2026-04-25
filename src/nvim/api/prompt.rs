@@ -7,7 +7,7 @@ use nvim_oxi::{
     conversion::{Error as ConversionError, FromObject},
     lua::{Error, Poppable, Pushable},
 };
-use tracing::instrument;
+use tracing::{error, instrument, warn};
 
 use crate::api::Api;
 
@@ -259,11 +259,13 @@ impl Pushable for ContentBlockType {
 pub enum PromptContent {
     Single(ContentBlockType),
     Multiple(Vec<ContentBlockType>),
+    Invalid,
 }
 
 impl PromptContent {
     fn into_vec(self) -> Vec<ContentBlockType> {
         match self {
+            PromptContent::Invalid => vec![],
             PromptContent::Single(block) => vec![block],
             PromptContent::Multiple(blocks) => blocks,
         }
@@ -296,13 +298,16 @@ impl FromObject for PromptContent {
 impl Poppable for PromptContent {
     unsafe fn pop(lua_state: *mut nvim_oxi::lua::ffi::State) -> Result<Self, Error> {
         let obj = unsafe { Object::pop(lua_state)? };
-        Self::from_object(obj).map_err(|e| Error::RuntimeError(e.to_string()))
+        Ok(Self::from_object(obj)
+            .inspect_err(|e| error!("{:#?}", e))
+            .unwrap_or(PromptContent::Invalid))
     }
 }
 
 impl Pushable for PromptContent {
     unsafe fn push(self, state: *mut nvim_oxi::lua::ffi::State) -> Result<i32, Error> {
         match self {
+            PromptContent::Invalid => unsafe { Object::nil().push(state) },
             PromptContent::Single(block) => unsafe { block.push(state) },
             PromptContent::Multiple(blocks) => {
                 let content_array: Array = blocks
@@ -324,14 +329,18 @@ pub type PromptArgs = (String, PromptContent);
 impl Api {
     #[instrument(level = "trace", skip_all)]
     pub async fn prompt(&self, (session_id, content): PromptArgs) -> crate::acp::Result<()> {
+        let content_vec = content.into_vec();
+        if content_vec.is_empty() {
+            warn!("No valid content blocks to send in prompt, skipping prompt call");
+            return Ok(());
+        }
         let state = self.state.lock().await;
         let agent_info = state.agent_info.clone();
         drop(state);
         let can_send_images = agent_info.can_send_images();
         let can_send_audio = agent_info.can_send_audio();
         let can_send_embedded = agent_info.can_send_embedded_context();
-        let content_blocks: Vec<ContentBlock> = content
-            .into_vec()
+        let content_blocks: Vec<ContentBlock> = content_vec
             .into_iter()
             .map(Into::into)
             .filter(|content| match content {
@@ -341,6 +350,7 @@ impl Api {
                 _ => true,
             })
             .collect();
+
 
         let request = PromptRequest::new(session_id, content_blocks);
         let connection = self
