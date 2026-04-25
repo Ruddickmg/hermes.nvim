@@ -351,7 +351,6 @@ impl Api {
             })
             .collect();
 
-
         let request = PromptRequest::new(session_id, content_blocks);
         let connection = self
             .connection
