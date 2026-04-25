@@ -3,6 +3,7 @@ use nvim_oxi::{
     conversion::{Error, FromObject},
     lua::{self, Poppable, Pushable},
 };
+use tracing::error;
 
 use super::dict_from_object;
 
@@ -46,11 +47,14 @@ impl Pushable for Permissions {
 impl Poppable for Permissions {
     unsafe fn pop(state: *mut lua::ffi::State) -> Result<Self, lua::Error> {
         let obj = unsafe { Object::pop(state)? };
-        let kind = obj.kind();
-        Self::from_object(obj).map_err(|e| lua::Error::PopError {
-            ty: kind.as_static(),
-            message: Some(format!("Failed to convert object to Permissions: {}", e)),
-        })
+        Ok(Self::from_object(obj)
+            .inspect_err(|e| {
+                error!(
+                    "Error occurred while parsing permissions: {:?}, reverting to defaults",
+                    e
+                )
+            })
+            .unwrap_or_default())
     }
 }
 
