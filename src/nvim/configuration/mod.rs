@@ -11,7 +11,7 @@ pub use log::{
 use nvim_oxi::{
     Array, Dictionary, Object, ObjectKind,
     conversion::{Error, FromObject},
-    lua::{self, Poppable},
+    lua::{self},
 };
 pub use permissions::{Permissions, PermissionsPartial};
 pub use terminal::{TerminalConfig, TerminalConfigPartial};
@@ -237,13 +237,6 @@ impl nvim_oxi::lua::Pushable for ClientConfigPartial {
         }
 
         unsafe { dict.push(lua_state) }
-    }
-}
-
-impl Poppable for ClientConfigPartial {
-    unsafe fn pop(lua_state: *mut lua::ffi::State) -> Result<Self, lua::Error> {
-        let obj = unsafe { Object::pop(lua_state)? };
-        Self::from_object(obj).map_err(|e| lua::Error::RuntimeError(e.to_string()))
     }
 }
 

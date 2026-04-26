@@ -5,6 +5,7 @@ use nvim_oxi::{
     lua::{Poppable, Pushable},
 };
 use std::path::PathBuf;
+use tracing::error;
 
 use crate::api::{Api, mcp_servers::parse_mcp_servers};
 
@@ -44,7 +45,14 @@ impl FromObject for CreateSessionArgs {
 impl Poppable for CreateSessionArgs {
     unsafe fn pop(lua_state: *mut nvim_oxi::lua::ffi::State) -> Result<Self, nvim_oxi::lua::Error> {
         let obj = unsafe { Object::pop(lua_state)? };
-        Self::from_object(obj).map_err(|e| nvim_oxi::lua::Error::RuntimeError(e.to_string()))
+        Ok(Self::from_object(obj)
+            .inspect_err(|e| {
+                error!(
+                    "Error occurred while parsing session arguments: {:?}, reverting to defaults",
+                    e
+                )
+            })
+            .unwrap_or(Self::Default))
     }
 }
 
