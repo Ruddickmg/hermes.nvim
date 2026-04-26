@@ -243,12 +243,7 @@ fn test_load_session() -> Result<(), nvim_oxi::Error> {
     disconnect.call(DisconnectArgs::All)?;
     mock_handle.close();
 
-    loaded_session
-        .clone()
-        .inspect_err(|e| error!("Failed to load session: {:?}", e))?;
-
-    assert!(loaded_session.is_ok());
-
+    loaded_session.inspect_err(|e| error!("Failed to load session: {:?}", e))?;
     Ok(())
 }
 
