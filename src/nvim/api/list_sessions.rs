@@ -5,6 +5,7 @@ use nvim_oxi::{
     lua::{Poppable, Pushable},
 };
 use std::path::PathBuf;
+use tracing::error;
 
 use crate::api::Api;
 
@@ -44,7 +45,9 @@ impl FromObject for ListSessionsConfig {
 impl Poppable for ListSessionsConfig {
     unsafe fn pop(lua_state: *mut nvim_oxi::lua::ffi::State) -> Result<Self, nvim_oxi::lua::Error> {
         let obj = unsafe { Object::pop(lua_state)? };
-        Self::from_object(obj).map_err(|e| nvim_oxi::lua::Error::RuntimeError(e.to_string()))
+        Ok(Self::from_object(obj)
+            .inspect_err(|e| error!("{:?}", e))
+            .unwrap_or_default())
     }
 }
 
