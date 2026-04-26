@@ -34,7 +34,7 @@ fn e2e_setup_handles_invalid_arg() -> nvim_oxi::Result<()> {
     let func: nvim_oxi::Function<Object, ()> = FromObject::from_object(setup)?;
 
     // Pass a number instead of expected table/nil
-    let result = func.call(Object::from(123i64));
+    let result = func.call(Object::from(Some(123i64)));
 
     // Should succeed because Poppable returns default on invalid data
     assert!(result.is_ok(), "setup should succeed with invalid arg");

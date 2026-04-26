@@ -79,7 +79,9 @@ impl FromObject for DisconnectArgs {
 impl Poppable for DisconnectArgs {
     unsafe fn pop(lua: *mut nvim_oxi::lua::ffi::State) -> Result<Self, lua::Error> {
         let obj = unsafe { Object::pop(lua)? };
-        Ok(Self::from_object(obj).inspect_err(|e| error!("An error occurred while parsing the disconnect arguments, failed to disconnect: {:?}", e)).unwrap_or(Self::Multiple(vec![])))
+        Ok(Self::from_object(obj)
+            .inspect_err(|e| error!("An error occurred while parsing the disconnect arguments, failed to disconnect: {:?}", e))
+            .unwrap_or(Self::Multiple(vec![])))
     }
 }
 
