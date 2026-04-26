@@ -16,6 +16,7 @@ use hermes::{
     nvim::{autocommands::Commands, hermes},
 };
 use nvim_oxi::{Array, Dictionary, Function, Object, conversion::FromObject};
+use tracing::error;
 
 #[nvim_oxi::test]
 fn test_setup_returns_list_sessions_function() -> Result<(), nvim_oxi::Error> {
@@ -241,6 +242,10 @@ fn test_load_session() -> Result<(), nvim_oxi::Error> {
 
     disconnect.call(DisconnectArgs::All)?;
     mock_handle.close();
+
+    loaded_session
+        .clone()
+        .inspect_err(|e| error!("Failed to load session: {:?}", e))?;
 
     assert!(loaded_session.is_ok());
 

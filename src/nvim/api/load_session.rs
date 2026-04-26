@@ -52,7 +52,12 @@ impl Poppable for LoadSessionConfig {
     ) -> std::result::Result<Self, nvim_oxi::lua::Error> {
         let obj = unsafe { Object::pop(lua_state)? };
         Ok(Self::from_object(obj)
-            .inspect(|e| error!("An error occurred parsing session load arguments, reverting to defaults:\n {:?}", e))
+            .inspect_err(|e| {
+                error!(
+                    "An error occurred parsing session load arguments, reverting to defaults: {:?}",
+                    e
+                )
+            })
             .unwrap_or_default())
     }
 }
