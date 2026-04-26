@@ -4,6 +4,7 @@ use nvim_oxi::{
     lua::{Poppable, Pushable},
 };
 use std::path::PathBuf;
+use tracing::error;
 
 use crate::{
     acp::{Result, error::Error},
@@ -50,7 +51,14 @@ impl Poppable for LoadSessionConfig {
         lua_state: *mut nvim_oxi::lua::ffi::State,
     ) -> std::result::Result<Self, nvim_oxi::lua::Error> {
         let obj = unsafe { Object::pop(lua_state)? };
-        Self::from_object(obj).map_err(|e| nvim_oxi::lua::Error::RuntimeError(e.to_string()))
+        Ok(Self::from_object(obj)
+            .inspect_err(|e| {
+                error!(
+                    "An error occurred parsing session load arguments, reverting to defaults: {:?}",
+                    e
+                )
+            })
+            .unwrap_or_default())
     }
 }
 

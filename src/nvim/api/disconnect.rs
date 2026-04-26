@@ -1,10 +1,10 @@
 use nvim_oxi::{
     Object, ObjectKind,
-    conversion::{self, FromObject},
+    conversion::FromObject,
     lua::{self, Error, Poppable, Pushable},
     serde::SerializeError,
 };
-use tracing::instrument;
+use tracing::{error, instrument};
 
 use crate::{acp::connection::Assistant, api::Api};
 
@@ -79,13 +79,9 @@ impl FromObject for DisconnectArgs {
 impl Poppable for DisconnectArgs {
     unsafe fn pop(lua: *mut nvim_oxi::lua::ffi::State) -> Result<Self, lua::Error> {
         let obj = unsafe { Object::pop(lua)? };
-        Self::from_object(obj).map_err(|e| match e {
-            conversion::Error::FromWrongType { actual, .. } => lua::Error::PopError {
-                ty: actual,
-                message: Some(format!("Invalid argument passed to \"disconnect\": {}. Expected Nil, String or Array of Strings", actual)),
-            },
-            _ => lua::Error::RuntimeError(e.to_string()),
-        })
+        Ok(Self::from_object(obj)
+            .inspect_err(|e| error!("An error occurred while parsing the disconnect arguments, failed to disconnect: {:?}", e))
+            .unwrap_or(Self::Multiple(vec![])))
     }
 }
 

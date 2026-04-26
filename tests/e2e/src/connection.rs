@@ -3,7 +3,7 @@ use hermes::{
     api::{ConnectionArgs, DisconnectArgs},
     nvim::{autocommands::Commands, hermes},
 };
-use nvim_oxi::{Dictionary, Function, conversion::FromObject};
+use nvim_oxi::{Dictionary, Function, Object, conversion::FromObject};
 use pretty_assertions::assert_eq;
 use std::time::Duration;
 use tracing::warn;
@@ -130,6 +130,20 @@ fn test_authenticate_flow() -> Result<(), nvim_oxi::Error> {
 
     disconnect.call(DisconnectArgs::All)?;
     mock_handle.close();
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_disconnect_with_invalid_arg_succeeds() -> Result<(), nvim_oxi::Error> {
+    let dict: Dictionary = hermes()?;
+    let disconnect: Function<Object, ()> =
+        FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
+
+    // Pass a number instead of the expected string/array/nil
+    let result = disconnect.call(Object::from(42i64));
+
+    assert!(result.is_ok(), "disconnect should succeed with invalid arg");
 
     Ok(())
 }

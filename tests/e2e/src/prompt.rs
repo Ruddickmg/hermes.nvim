@@ -146,3 +146,17 @@ fn test_prompt_multiple_content() -> Result<(), nvim_oxi::Error> {
 
     Ok(())
 }
+
+#[nvim_oxi::test]
+fn test_prompt_with_invalid_content_succeeds() -> Result<(), nvim_oxi::Error> {
+    let dict: Dictionary = hermes()?;
+    let prompt: Function<(String, Object), ()> =
+        FromObject::from_object(dict.get("prompt").unwrap().clone())?;
+
+    // Pass a number as content instead of expected array/table
+    let result = prompt.call(("test-session".to_string(), Object::from(0i64)));
+
+    assert!(result.is_ok(), "prompt should succeed with invalid content");
+
+    Ok(())
+}

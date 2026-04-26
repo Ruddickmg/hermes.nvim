@@ -9,7 +9,6 @@ use hermes::nvim::requests::{RequestHandler, Requests, Responder};
 use hermes::nvim::state::PluginState;
 use hermes::utilities::NvimRuntime;
 use std::path::Path;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -44,7 +43,7 @@ fn open_buffer_marked_modified() -> nvim_oxi::Result<()> {
             |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
         )?,
     );
-    let (sender, mut receiver) = oneshot_channel::<WriteTextFileResponse>(1);
+    let (sender, receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         create_write_request(temp_file.path(), "updated content"),
@@ -127,7 +126,7 @@ fn new_file_created() -> nvim_oxi::Result<()> {
             |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
         )?,
     );
-    let (sender, mut receiver) = oneshot_channel::<WriteTextFileResponse>(1);
+    let (sender, receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         create_write_request(new_file.path(), "created content"),
@@ -157,7 +156,7 @@ fn file_exists_but_closed() -> nvim_oxi::Result<()> {
             |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
         )?,
     );
-    let (sender, mut receiver) = oneshot_channel::<WriteTextFileResponse>(1);
+    let (sender, receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         create_write_request(temp_file.path(), "new content"),
@@ -236,7 +235,7 @@ fn buffer_already_open_marked_modified() -> nvim_oxi::Result<()> {
             |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
         )?,
     );
-    let (sender, mut receiver) = oneshot_channel::<WriteTextFileResponse>(1);
+    let (sender, receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         create_write_request(temp_file.path(), "agent updated content"),
@@ -318,7 +317,7 @@ fn buffer_already_open_response_sent() -> nvim_oxi::Result<()> {
             |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
         )?,
     );
-    let (sender, mut receiver) = oneshot_channel::<WriteTextFileResponse>(1);
+    let (sender, receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
         create_write_request(temp_file.path(), "agent updated content"),
