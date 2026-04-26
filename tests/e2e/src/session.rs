@@ -365,3 +365,63 @@ fn test_list_sessions_with_cwd_filter() -> Result<(), nvim_oxi::Error> {
 
     Ok(())
 }
+
+// ============================================================================
+// Poppable Error Handling Tests
+// ============================================================================
+// These tests verify that Poppable implementations return default values
+// when given invalid Lua data instead of panicking.
+
+#[nvim_oxi::test]
+fn test_create_session_with_invalid_arg_succeeds() -> Result<(), nvim_oxi::Error> {
+    let dict: Dictionary = hermes()?;
+    let create_session: Function<Object, ()> =
+        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
+
+    // Pass a number instead of the expected table/nil
+    // Poppable should convert this to CreateSessionArgs::Default
+    let result = create_session.call(Object::from(42i64));
+
+    // Should succeed because Poppable returns default on invalid data
+    assert!(
+        result.is_ok(),
+        "create_session should succeed with invalid arg"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_list_sessions_with_invalid_arg_succeeds() -> Result<(), nvim_oxi::Error> {
+    let dict: Dictionary = hermes()?;
+    let list_sessions: Function<Object, ()> =
+        FromObject::from_object(dict.get("list_sessions").unwrap().clone())?;
+
+    // Pass a number instead of the expected table/nil
+    let result = list_sessions.call(Object::from(999i64));
+
+    assert!(
+        result.is_ok(),
+        "list_sessions should succeed with invalid arg"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_load_session_with_invalid_config_succeeds() -> Result<(), nvim_oxi::Error> {
+    let dict: Dictionary = hermes()?;
+    let load_session: Function<(String, Object), ()> =
+        FromObject::from_object(dict.get("load_session").unwrap().clone())?;
+
+    // Pass a number as the config instead of expected table
+    // First arg (session_id) is valid, second arg (config) is invalid
+    let result = load_session.call(("test-session".to_string(), Object::from(42i64)));
+
+    assert!(
+        result.is_ok(),
+        "load_session should succeed with invalid config"
+    );
+
+    Ok(())
+}
