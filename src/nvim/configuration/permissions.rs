@@ -1,9 +1,7 @@
 use nvim_oxi::{
-    Dictionary, Object,
+    Object,
     conversion::{Error, FromObject},
-    lua::{self, Poppable, Pushable},
 };
-use tracing::error;
 
 use super::dict_from_object;
 
@@ -25,36 +23,6 @@ impl Default for Permissions {
             request_permissions: true,
             send_notifications: true,
         }
-    }
-}
-
-impl Pushable for Permissions {
-    unsafe fn push(self, state: *mut lua::ffi::State) -> Result<i32, lua::Error> {
-        unsafe {
-            let mut table = Dictionary::new();
-
-            table.insert("fs_write_access", self.fs_write_access);
-            table.insert("fs_read_access", self.fs_read_access);
-            table.insert("terminal_access", self.terminal_access);
-            table.insert("request_permissions", self.request_permissions);
-            table.insert("send_notifications", self.send_notifications);
-
-            table.push(state)
-        }
-    }
-}
-
-impl Poppable for Permissions {
-    unsafe fn pop(state: *mut lua::ffi::State) -> Result<Self, lua::Error> {
-        let obj = unsafe { Object::pop(state)? };
-        Ok(Self::from_object(obj)
-            .inspect_err(|e| {
-                error!(
-                    "Error occurred while parsing permissions: {:?}, reverting to defaults",
-                    e
-                )
-            })
-            .unwrap_or_default())
     }
 }
 
@@ -105,6 +73,7 @@ impl FromObject for Permissions {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nvim_oxi::Dictionary;
     use proptest::prelude::*;
 
     // Strategy for generating Permissions with random boolean values

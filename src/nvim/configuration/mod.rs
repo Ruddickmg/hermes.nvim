@@ -11,11 +11,10 @@ pub use log::{
 use nvim_oxi::{
     Array, Dictionary, Object, ObjectKind,
     conversion::{Error, FromObject},
-    lua::{self, Poppable},
+    lua::{self},
 };
 pub use permissions::{Permissions, PermissionsPartial};
 pub use terminal::{TerminalConfig, TerminalConfigPartial};
-use tracing::error;
 
 /// Converts an [`Object`] to a [`Dictionary`], handling empty Lua tables gracefully.
 ///
@@ -238,15 +237,6 @@ impl nvim_oxi::lua::Pushable for ClientConfigPartial {
         }
 
         unsafe { dict.push(lua_state) }
-    }
-}
-
-impl Poppable for ClientConfigPartial {
-    unsafe fn pop(lua_state: *mut lua::ffi::State) -> Result<Self, lua::Error> {
-        let obj = unsafe { Object::pop(lua_state)? };
-        Ok(Self::from_object(obj)
-            .inspect_err(|e| error!("An error occurred while parsing configuration details, reverting to defaults: {:?}", e))
-            .unwrap_or_default())
     }
 }
 
