@@ -1,7 +1,7 @@
 use nvim_oxi::Object;
 use nvim_oxi::conversion::FromObject;
 use nvim_oxi::lua::{self, Poppable};
-use tracing::instrument;
+use tracing::{error, instrument};
 
 use crate::nvim::configuration::ClientConfigPartial;
 use crate::{acp::Result, api::Api};
@@ -24,9 +24,15 @@ impl Poppable for SetupArgs {
             Ok(Self(None))
         } else {
             // Otherwise, try to parse as ClientConfigPartial
-            ClientConfigPartial::from_object(obj)
+            Ok(ClientConfigPartial::from_object(obj)
                 .map(|c| Self(Some(c)))
-                .map_err(|e| lua::Error::RuntimeError(e.to_string()))
+                .inspect_err(|e| {
+                    error!(
+                        "Error occurred while parsing setup args, reverting to defaults: {:?}",
+                        e
+                    )
+                })
+                .unwrap_or_default())
         }
     }
 }
