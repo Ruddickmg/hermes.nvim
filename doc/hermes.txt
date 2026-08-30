@@ -359,8 +359,10 @@ permissions ~
     • terminal_access: Allow terminal access (default: true)
     • request_permissions: Allow permission requests (default: true)
     • send_notifications: Allow notifications (default: true)
-    • elicitation_form: Allow form elicitation requests (default: true)
-    • elicitation_url: Allow URL elicitation requests (default: true)
+    • elicitation: Elicitation permission settings (nested table) >
+        • form: Allow form elicitation requests (default: true)
+        • url: Allow URL elicitation requests (default: true)
+    <
 
 terminal ~
     Terminal configuration:
@@ -406,8 +408,8 @@ Full autocommand list: |hermes-autocommands-list|
 
 Elicitation ~
 Elicitation lets an agent request structured input from the user. Hermes advertises
-elicitation capabilities to the agent (gated by the `elicitation_form` and
-`elicitation_url` permissions). The agent sends an `elicitation/create` request,
+elicitation capabilities to the agent (gated by the `elicitation.form` and
+`elicitation.url` permissions). The agent sends an `elicitation/create` request,
 which Hermes surfaces via the `FormElicitation` or `UrlElicitation` autocommand.
 Respond with *hermes.respond()* (see below). When a URL elicitation flow finishes
 the agent may send an `elicitation/complete` notification, surfaced via the

@@ -6,14 +6,48 @@ use nvim_oxi::{
 use super::dict_from_object;
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct ElicitationPermissions {
+    pub form: bool,
+    pub url: bool,
+}
+
+impl Default for ElicitationPermissions {
+    fn default() -> Self {
+        Self {
+            form: true,
+            url: true,
+        }
+    }
+}
+
+impl FromObject for ElicitationPermissions {
+    fn from_object(obj: Object) -> Result<Self, Error> {
+        let dict = dict_from_object(obj)?;
+
+        let form = dict
+            .get("form")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?
+            .unwrap_or(true);
+
+        let url = dict
+            .get("url")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?
+            .unwrap_or(true);
+
+        Ok(Self { form, url })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Permissions {
     pub fs_write_access: bool,
     pub fs_read_access: bool,
     pub terminal_access: bool,
     pub request_permissions: bool,
     pub send_notifications: bool,
-    pub elicitation_form: bool,
-    pub elicitation_url: bool,
+    pub elicitation: ElicitationPermissions,
 }
 
 impl Default for Permissions {
@@ -24,8 +58,7 @@ impl Default for Permissions {
             terminal_access: true,
             request_permissions: true,
             send_notifications: true,
-            elicitation_form: true,
-            elicitation_url: true,
+            elicitation: ElicitationPermissions::default(),
         }
     }
 }
@@ -64,17 +97,11 @@ impl FromObject for Permissions {
             .transpose()?
             .unwrap_or(true);
 
-        let elicitation_form = dict
-            .get("elicitation_form")
-            .map(|o| bool::from_object(o.clone()))
+        let elicitation = dict
+            .get("elicitation")
+            .map(|o| ElicitationPermissions::from_object(o.clone()))
             .transpose()?
-            .unwrap_or(true);
-
-        let elicitation_url = dict
-            .get("elicitation_url")
-            .map(|o| bool::from_object(o.clone()))
-            .transpose()?
-            .unwrap_or(true);
+            .unwrap_or_default();
 
         Ok(Self {
             fs_write_access,
@@ -82,8 +109,7 @@ impl FromObject for Permissions {
             terminal_access,
             request_permissions,
             send_notifications,
-            elicitation_form,
-            elicitation_url,
+            elicitation,
         })
     }
 }
@@ -113,8 +139,10 @@ mod tests {
                         terminal_access: terminal,
                         request_permissions: can_request,
                         send_notifications: allow_notif,
-                        elicitation_form: elic_form,
-                        elicitation_url: elic_url,
+                        elicitation: ElicitationPermissions {
+                            form: elic_form,
+                            url: elic_url,
+                        },
                     }
                 },
             )
@@ -131,8 +159,10 @@ mod tests {
             dict.insert("terminal_access", permissions.terminal_access);
             dict.insert("request_permissions", permissions.request_permissions);
             dict.insert("send_notifications", permissions.send_notifications);
-            dict.insert("elicitation_form", permissions.elicitation_form);
-            dict.insert("elicitation_url", permissions.elicitation_url);
+            let mut elicitation = Dictionary::new();
+            elicitation.insert("form", permissions.elicitation.form);
+            elicitation.insert("url", permissions.elicitation.url);
+            dict.insert("elicitation", elicitation);
 
             let obj = Object::from(dict);
             let parsed = Permissions::from_object(obj).expect("Permissions::from_object failed");
@@ -142,21 +172,40 @@ mod tests {
             prop_assert_eq!(parsed.terminal_access, permissions.terminal_access);
             prop_assert_eq!(parsed.request_permissions, permissions.request_permissions);
             prop_assert_eq!(parsed.send_notifications, permissions.send_notifications);
-            prop_assert_eq!(parsed.elicitation_form, permissions.elicitation_form);
-            prop_assert_eq!(parsed.elicitation_url, permissions.elicitation_url);
+            prop_assert_eq!(parsed.elicitation, permissions.elicitation);
         }
     }
 
     #[test]
-    fn test_permissions_default_all_true() {
+    fn test_permissions_elicitation_defaults_to_all_true() {
         let perms = Permissions::default();
-        assert!(perms.fs_write_access);
-        assert!(perms.fs_read_access);
-        assert!(perms.terminal_access);
-        assert!(perms.request_permissions);
-        assert!(perms.send_notifications);
-        assert!(perms.elicitation_form);
-        assert!(perms.elicitation_url);
+        assert_eq!(
+            perms.elicitation,
+            ElicitationPermissions {
+                form: true,
+                url: true
+            }
+        );
+    }
+
+    #[test]
+    fn test_permissions_elicitation_from_object_parses_nested() {
+        let mut elicitation = Dictionary::new();
+        elicitation.insert("form", false);
+        elicitation.insert("url", true);
+        let mut dict = Dictionary::new();
+        dict.insert("elicitation", elicitation);
+
+        let parsed =
+            Permissions::from_object(Object::from(dict)).expect("Permissions::from_object failed");
+
+        assert_eq!(
+            parsed.elicitation,
+            ElicitationPermissions {
+                form: false,
+                url: true
+            }
+        );
     }
 
     #[test]
@@ -167,16 +216,112 @@ mod tests {
             terminal_access: false,
             request_permissions: true,
             send_notifications: false,
-            elicitation_form: false,
-            elicitation_url: true,
+            elicitation: ElicitationPermissions {
+                form: false,
+                url: true,
+            },
         };
-        assert!(!perms.fs_write_access);
-        assert!(perms.fs_read_access);
-        assert!(!perms.terminal_access);
-        assert!(perms.request_permissions);
-        assert!(!perms.send_notifications);
-        assert!(!perms.elicitation_form);
-        assert!(perms.elicitation_url);
+        assert_eq!(
+            perms.elicitation,
+            ElicitationPermissions {
+                form: false,
+                url: true
+            }
+        );
+    }
+
+    #[test]
+    fn test_elicitation_permissions_default_all_true() {
+        let elic = ElicitationPermissions::default();
+        assert_eq!(
+            elic,
+            ElicitationPermissions {
+                form: true,
+                url: true
+            }
+        );
+    }
+
+    #[test]
+    fn test_elicitation_permissions_from_object_parses_nested() {
+        let mut dict = Dictionary::new();
+        dict.insert("form", true);
+        dict.insert("url", false);
+
+        let parsed = ElicitationPermissions::from_object(Object::from(dict))
+            .expect("ElicitationPermissions::from_object failed");
+
+        assert_eq!(
+            parsed,
+            ElicitationPermissions {
+                form: true,
+                url: false
+            }
+        );
+    }
+
+    #[test]
+    fn test_elicitation_permissions_partial_from_object_parses_nested() {
+        let mut dict = Dictionary::new();
+        dict.insert("form", false);
+        dict.insert("url", false);
+
+        let parsed = ElicitationPermissionsPartial::from_object(Object::from(dict))
+            .expect("ElicitationPermissionsPartial::from_object failed");
+
+        assert_eq!(
+            parsed,
+            ElicitationPermissionsPartial {
+                form: Some(false),
+                url: Some(false)
+            }
+        );
+    }
+
+    #[test]
+    fn test_permissions_partial_elicitation_apply_to_nested() {
+        let mut perms = Permissions::default();
+        let partial = PermissionsPartial {
+            elicitation: Some(ElicitationPermissionsPartial {
+                form: Some(false),
+                url: None,
+            }),
+            ..Default::default()
+        };
+
+        partial.apply_to(&mut perms);
+
+        assert_eq!(
+            perms.elicitation,
+            ElicitationPermissions {
+                form: false,
+                url: true
+            }
+        );
+    }
+}
+
+/// Partial permissions configuration where each field is optional
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ElicitationPermissionsPartial {
+    pub form: Option<bool>,
+    pub url: Option<bool>,
+}
+
+impl FromObject for ElicitationPermissionsPartial {
+    fn from_object(obj: Object) -> Result<Self, Error> {
+        let dict = dict_from_object(obj)?;
+
+        let form = dict
+            .get("form")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?;
+        let url = dict
+            .get("url")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?;
+
+        Ok(Self { form, url })
     }
 }
 
@@ -188,8 +333,7 @@ pub struct PermissionsPartial {
     pub terminal_access: Option<bool>,
     pub request_permissions: Option<bool>,
     pub send_notifications: Option<bool>,
-    pub elicitation_form: Option<bool>,
-    pub elicitation_url: Option<bool>,
+    pub elicitation: Option<ElicitationPermissionsPartial>,
 }
 
 impl PermissionsPartial {
@@ -210,11 +354,13 @@ impl PermissionsPartial {
         if let Some(val) = self.send_notifications {
             permissions.send_notifications = val;
         }
-        if let Some(val) = self.elicitation_form {
-            permissions.elicitation_form = val;
-        }
-        if let Some(val) = self.elicitation_url {
-            permissions.elicitation_url = val;
+        if let Some(elicitation) = self.elicitation {
+            if let Some(val) = elicitation.form {
+                permissions.elicitation.form = val;
+            }
+            if let Some(val) = elicitation.url {
+                permissions.elicitation.url = val;
+            }
         }
     }
 }
@@ -243,13 +389,9 @@ impl FromObject for PermissionsPartial {
             .get("send_notifications")
             .map(|o| bool::from_object(o.clone()))
             .transpose()?;
-        let elicitation_form = dict
-            .get("elicitation_form")
-            .map(|o| bool::from_object(o.clone()))
-            .transpose()?;
-        let elicitation_url = dict
-            .get("elicitation_url")
-            .map(|o| bool::from_object(o.clone()))
+        let elicitation = dict
+            .get("elicitation")
+            .map(|o| ElicitationPermissionsPartial::from_object(o.clone()))
             .transpose()?;
 
         Ok(Self {
@@ -258,8 +400,7 @@ impl FromObject for PermissionsPartial {
             terminal_access,
             request_permissions,
             send_notifications,
-            elicitation_form,
-            elicitation_url,
+            elicitation,
         })
     }
 }

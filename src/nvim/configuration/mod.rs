@@ -21,7 +21,9 @@ use nvim_oxi::{
     conversion::{Error, FromObject},
     lua::{self},
 };
-pub use permissions::{Permissions, PermissionsPartial};
+pub use permissions::{
+    ElicitationPermissions, ElicitationPermissionsPartial, Permissions, PermissionsPartial,
+};
 pub use progress::{ProgressConfig, ProgressConfigPartial, show_progress_in_cmdline};
 pub use session::{SessionConfig, SessionConfigPartial};
 pub use terminal::{TerminalConfig, TerminalConfigPartial};
@@ -212,6 +214,16 @@ impl nvim_oxi::lua::Pushable for ClientConfigPartial {
             if let Some(val) = permissions.send_notifications {
                 perms_dict.insert("send_notifications", val);
             }
+            if let Some(elicitation) = permissions.elicitation {
+                let mut elic_dict = Dictionary::new();
+                if let Some(val) = elicitation.form {
+                    elic_dict.insert("form", val);
+                }
+                if let Some(val) = elicitation.url {
+                    elic_dict.insert("url", val);
+                }
+                perms_dict.insert("elicitation", elic_dict);
+            }
             dict.insert("permissions", perms_dict);
         }
 
@@ -397,8 +409,10 @@ mod tests {
                 terminal_access: false,
                 request_permissions: false,
                 send_notifications: false,
-                elicitation_form: false,
-                elicitation_url: false,
+                elicitation: ElicitationPermissions {
+                    form: false,
+                    url: false,
+                },
             },
             terminal: TerminalConfig {
                 delete: true,

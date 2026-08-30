@@ -312,12 +312,14 @@ impl ConnectionManager {
                         ElicitationCapabilities::new()
                             .form(
                                 permissions
-                                    .elicitation_form
+                                    .elicitation
+                                    .form
                                     .then(ElicitationFormCapabilities::new),
                             )
                             .url(
                                 permissions
-                                    .elicitation_url
+                                    .elicitation
+                                    .url
                                     .then(ElicitationUrlCapabilities::new),
                             ),
                     ),
