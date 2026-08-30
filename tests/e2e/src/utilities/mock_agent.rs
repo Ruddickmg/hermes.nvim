@@ -829,6 +829,19 @@ async fn handle_prompt(
                 .map_err(|e| internal_error(format!("release_terminal failed: {}", e)))?;
         }
 
+        // Send elicitation request (if configured)
+        let elicitation_request = {
+            let config = config.lock().unwrap();
+            config.elicitation_request.clone()
+        };
+
+        if let Some(elic_req) = elicitation_request {
+            cx.send_request(elic_req)
+                .block_task()
+                .await
+                .map_err(|e| internal_error(format!("elicitation failed: {}", e)))?;
+        }
+
         // Echo back the prompt content as agent message chunks
         for content in &request.prompt {
             let text = match content {

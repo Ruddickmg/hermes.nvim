@@ -12,6 +12,8 @@ pub struct Permissions {
     pub terminal_access: bool,
     pub request_permissions: bool,
     pub send_notifications: bool,
+    pub elicitation_form: bool,
+    pub elicitation_url: bool,
 }
 
 impl Default for Permissions {
@@ -22,6 +24,8 @@ impl Default for Permissions {
             terminal_access: true,
             request_permissions: true,
             send_notifications: true,
+            elicitation_form: true,
+            elicitation_url: true,
         }
     }
 }
@@ -60,12 +64,26 @@ impl FromObject for Permissions {
             .transpose()?
             .unwrap_or(true);
 
+        let elicitation_form = dict
+            .get("elicitation_form")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?
+            .unwrap_or(true);
+
+        let elicitation_url = dict
+            .get("elicitation_url")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?
+            .unwrap_or(true);
+
         Ok(Self {
             fs_write_access,
             fs_read_access,
             terminal_access,
             request_permissions,
             send_notifications,
+            elicitation_form,
+            elicitation_url,
         })
     }
 }
@@ -84,16 +102,22 @@ mod tests {
             any::<bool>(),
             any::<bool>(),
             any::<bool>(),
+            any::<bool>(),
+            any::<bool>(),
         )
-            .prop_map(|(fs_write, fs_read, terminal, can_request, allow_notif)| {
-                Permissions {
-                    fs_write_access: fs_write,
-                    fs_read_access: fs_read,
-                    terminal_access: terminal,
-                    request_permissions: can_request,
-                    send_notifications: allow_notif,
-                }
-            })
+            .prop_map(
+                |(fs_write, fs_read, terminal, can_request, allow_notif, elic_form, elic_url)| {
+                    Permissions {
+                        fs_write_access: fs_write,
+                        fs_read_access: fs_read,
+                        terminal_access: terminal,
+                        request_permissions: can_request,
+                        send_notifications: allow_notif,
+                        elicitation_form: elic_form,
+                        elicitation_url: elic_url,
+                    }
+                },
+            )
     }
 
     proptest! {
@@ -107,6 +131,8 @@ mod tests {
             dict.insert("terminal_access", permissions.terminal_access);
             dict.insert("request_permissions", permissions.request_permissions);
             dict.insert("send_notifications", permissions.send_notifications);
+            dict.insert("elicitation_form", permissions.elicitation_form);
+            dict.insert("elicitation_url", permissions.elicitation_url);
 
             let obj = Object::from(dict);
             let parsed = Permissions::from_object(obj).expect("Permissions::from_object failed");
@@ -116,6 +142,8 @@ mod tests {
             prop_assert_eq!(parsed.terminal_access, permissions.terminal_access);
             prop_assert_eq!(parsed.request_permissions, permissions.request_permissions);
             prop_assert_eq!(parsed.send_notifications, permissions.send_notifications);
+            prop_assert_eq!(parsed.elicitation_form, permissions.elicitation_form);
+            prop_assert_eq!(parsed.elicitation_url, permissions.elicitation_url);
         }
     }
 
@@ -127,6 +155,8 @@ mod tests {
         assert!(perms.terminal_access);
         assert!(perms.request_permissions);
         assert!(perms.send_notifications);
+        assert!(perms.elicitation_form);
+        assert!(perms.elicitation_url);
     }
 
     #[test]
@@ -137,12 +167,16 @@ mod tests {
             terminal_access: false,
             request_permissions: true,
             send_notifications: false,
+            elicitation_form: false,
+            elicitation_url: true,
         };
         assert!(!perms.fs_write_access);
         assert!(perms.fs_read_access);
         assert!(!perms.terminal_access);
         assert!(perms.request_permissions);
         assert!(!perms.send_notifications);
+        assert!(!perms.elicitation_form);
+        assert!(perms.elicitation_url);
     }
 }
 
@@ -154,6 +188,8 @@ pub struct PermissionsPartial {
     pub terminal_access: Option<bool>,
     pub request_permissions: Option<bool>,
     pub send_notifications: Option<bool>,
+    pub elicitation_form: Option<bool>,
+    pub elicitation_url: Option<bool>,
 }
 
 impl PermissionsPartial {
@@ -173,6 +209,12 @@ impl PermissionsPartial {
         }
         if let Some(val) = self.send_notifications {
             permissions.send_notifications = val;
+        }
+        if let Some(val) = self.elicitation_form {
+            permissions.elicitation_form = val;
+        }
+        if let Some(val) = self.elicitation_url {
+            permissions.elicitation_url = val;
         }
     }
 }
@@ -201,6 +243,14 @@ impl FromObject for PermissionsPartial {
             .get("send_notifications")
             .map(|o| bool::from_object(o.clone()))
             .transpose()?;
+        let elicitation_form = dict
+            .get("elicitation_form")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?;
+        let elicitation_url = dict
+            .get("elicitation_url")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?;
 
         Ok(Self {
             fs_write_access,
@@ -208,6 +258,8 @@ impl FromObject for PermissionsPartial {
             terminal_access,
             request_permissions,
             send_notifications,
+            elicitation_form,
+            elicitation_url,
         })
     }
 }

@@ -1,15 +1,17 @@
 use agent_client_protocol::schema::v1::{
-    CreateTerminalRequest, CreateTerminalResponse, KillTerminalRequest, KillTerminalResponse,
-    ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
-    RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
-    TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
-    WriteTextFileRequest, WriteTextFileResponse,
+    CreateElicitationRequest, CreateElicitationResponse, CreateTerminalRequest,
+    CreateTerminalResponse, ElicitationAcceptAction, ElicitationAction, ElicitationContentValue,
+    KillTerminalRequest, KillTerminalResponse, ReadTextFileRequest, ReadTextFileResponse,
+    ReleaseTerminalRequest, ReleaseTerminalResponse, RequestPermissionOutcome,
+    RequestPermissionRequest, SelectedPermissionOutcome, TerminalOutputRequest,
+    TerminalOutputResponse, WaitForTerminalExitRequest, WriteTextFileRequest,
+    WriteTextFileResponse,
 };
 use async_channel::Sender;
 use async_lock::Mutex;
 use nvim_oxi::conversion::FromObject;
 use std::sync::Arc;
-use tracing::error;
+use tracing::{error, warn};
 use uuid::Uuid;
 
 use crate::PluginState;
@@ -56,6 +58,10 @@ pub enum Responder {
         OneshotSender<Result<KillTerminalResponse>>,
         KillTerminalRequest,
     ),
+    Elicitation(
+        OneshotSender<CreateElicitationResponse>,
+        CreateElicitationRequest,
+    ),
 }
 
 impl From<Responder> for Commands {
@@ -69,6 +75,7 @@ impl From<Responder> for Commands {
             Responder::TerminalCreate(..) => Commands::TerminalCreate,
             Responder::TerminalExit(..) => Commands::TerminalExit,
             Responder::TerminalRelease(..) => Commands::TerminalRelease,
+            Responder::Elicitation(..) => Commands::FormElicitation,
         }
     }
 }
@@ -263,6 +270,66 @@ impl Request {
         }
     }
 
+    fn parse_content_value(data: nvim_oxi::Object) -> Result<ElicitationContentValue> {
+        if let Ok(s) = String::from_object(data.clone()) {
+            return Ok(ElicitationContentValue::String(s));
+        }
+        if let Ok(i) = i64::from_object(data.clone()) {
+            return Ok(ElicitationContentValue::Integer(i));
+        }
+        if let Ok(n) = f64::from_object(data.clone()) {
+            return Ok(ElicitationContentValue::Number(n));
+        }
+        if let Ok(b) = bool::from_object(data.clone()) {
+            return Ok(ElicitationContentValue::Boolean(b));
+        }
+        if let Ok(arr) = <Vec<String>>::from_object(data.clone()) {
+            return Ok(ElicitationContentValue::StringArray(arr));
+        }
+        Err(Error::InvalidInput(
+            "Unsupported content value in elicitation response".to_string(),
+        ))
+    }
+
+    fn parse_elicitation_response(data: nvim_oxi::Object) -> Result<CreateElicitationResponse> {
+        let dict = dict_from_object(data).map_err(|e| Error::InvalidInput(e.to_string()))?;
+
+        let action = dict
+            .get("action")
+            .cloned()
+            .ok_or(Error::InvalidInput(
+                "Missing 'action' field in elicitation response".to_string(),
+            ))
+            .and_then(|o| String::from_object(o).map_err(|e| Error::InvalidInput(e.to_string())))?;
+
+        match action.as_str() {
+            "accept" => {
+                let accept = if let Some(content_obj) = dict.get("content").cloned() {
+                    let content_dict = dict_from_object(content_obj)
+                        .map_err(|e| Error::InvalidInput(e.to_string()))?;
+                    let mut content = std::collections::BTreeMap::new();
+                    for (key, value) in content_dict {
+                        let parsed = Self::parse_content_value(value)
+                            .map_err(|e| Error::InvalidInput(e.to_string()))?;
+                        content.insert(key.to_string(), parsed);
+                    }
+                    ElicitationAcceptAction::new().content(content)
+                } else {
+                    ElicitationAcceptAction::new()
+                };
+                Ok(CreateElicitationResponse::new(ElicitationAction::Accept(
+                    accept,
+                )))
+            }
+            "decline" => Ok(CreateElicitationResponse::new(ElicitationAction::Decline)),
+            "cancel" => Ok(CreateElicitationResponse::new(ElicitationAction::Cancel)),
+            _ => Err(Error::InvalidInput(format!(
+                "Unknown elicitation action: '{}'",
+                action
+            ))),
+        }
+    }
+
     pub async fn respond(&self, response: nvim_oxi::Object) -> Result<()> {
         match self.get_responder().await? {
             Responder::ReadFileResponse(sender, ..) => {
@@ -355,6 +422,15 @@ impl Request {
                             self.id, e
                         ))
                     })?;
+            }
+            Responder::Elicitation(sender, _) => {
+                let result = Self::parse_elicitation_response(response)?;
+                sender.send(result).await.map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send elicitation response for request '{}': {:?}",
+                        self.id, e
+                    ))
+                })?;
             }
         };
         self.finish().await
@@ -539,6 +615,23 @@ impl Request {
                             self.id, e
                         ))
                     })?;
+                }
+                Responder::Elicitation(sender, _) => {
+                    // TODO: Handle the default elicitation case (render the form or
+                    // prompt the user) when no autocommand listener is attached.
+                    warn!(
+                        "No listener attached for elicitation request '{}'. Defaulting to cancel.",
+                        self.id
+                    );
+                    sender
+                        .send(CreateElicitationResponse::new(ElicitationAction::Cancel))
+                        .await
+                        .map_err(|e| {
+                            Error::Internal(format!(
+                                "Failed to send default elicitation response for request '{}': {:?}",
+                                self.id, e
+                            ))
+                        })?;
                 }
             }
             self.finish().await?;
@@ -844,5 +937,135 @@ mod tests {
         );
         let command: Commands = responder.into();
         assert_eq!(command, Commands::TerminalRelease);
+    }
+
+    #[test]
+    fn responder_elicitation_maps_to_form_elicitation_command() {
+        let (sender, _receiver) = async_channel::bounded::<CreateElicitationResponse>(1);
+        let schema =
+            agent_client_protocol::schema::v1::ElicitationSchema::new().string("name", true);
+        let scope = agent_client_protocol::schema::v1::ElicitationScope::Session(
+            agent_client_protocol::schema::v1::ElicitationSessionScope::new("test"),
+        );
+        let mode = agent_client_protocol::schema::v1::ElicitationFormMode::new(scope, schema);
+        let request = agent_client_protocol::schema::v1::CreateElicitationRequest::new(
+            mode,
+            "Please enter your name",
+        );
+        let responder = Responder::Elicitation(sender, request);
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::FormElicitation);
+    }
+
+    #[test]
+    fn parse_elicitation_response_accept_without_content() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("action", Object::from("accept"));
+        let obj = Object::from(dict);
+        let response = Request::parse_elicitation_response(obj).unwrap();
+        assert_eq!(
+            response.action,
+            ElicitationAction::Accept(ElicitationAcceptAction::new())
+        );
+    }
+
+    #[test]
+    fn parse_elicitation_response_accept_with_content() {
+        let mut content = nvim_oxi::Dictionary::default();
+        content.insert("name", Object::from("Alice"));
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("action", Object::from("accept"));
+        dict.insert("content", Object::from(content));
+        let obj = Object::from(dict);
+        let response = Request::parse_elicitation_response(obj).unwrap();
+        let mut expected = std::collections::BTreeMap::new();
+        expected.insert(
+            "name".to_string(),
+            ElicitationContentValue::String("Alice".to_string()),
+        );
+        assert_eq!(
+            response.action,
+            ElicitationAction::Accept(ElicitationAcceptAction::new().content(expected))
+        );
+    }
+
+    #[test]
+    fn parse_elicitation_response_decline() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("action", Object::from("decline"));
+        let obj = Object::from(dict);
+        let response = Request::parse_elicitation_response(obj).unwrap();
+        assert_eq!(response.action, ElicitationAction::Decline);
+    }
+
+    #[test]
+    fn parse_elicitation_response_cancel() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("action", Object::from("cancel"));
+        let obj = Object::from(dict);
+        let response = Request::parse_elicitation_response(obj).unwrap();
+        assert_eq!(response.action, ElicitationAction::Cancel);
+    }
+
+    #[test]
+    fn parse_elicitation_response_missing_action() {
+        let dict = nvim_oxi::Dictionary::default();
+        let obj = Object::from(dict);
+        let result = Request::parse_elicitation_response(obj);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_elicitation_response_unknown_action() {
+        let mut dict = nvim_oxi::Dictionary::default();
+        dict.insert("action", Object::from("something_else"));
+        let obj = Object::from(dict);
+        let result = Request::parse_elicitation_response(obj);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_content_value_accepts_string() {
+        let result = Request::parse_content_value(Object::from("hello"));
+        assert_eq!(
+            result.unwrap(),
+            ElicitationContentValue::String("hello".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_content_value_accepts_integer() {
+        let result = Request::parse_content_value(Object::from(42i64));
+        assert_eq!(result.unwrap(), ElicitationContentValue::Integer(42));
+    }
+
+    #[test]
+    fn parse_content_value_accepts_boolean() {
+        let result = Request::parse_content_value(Object::from(true));
+        assert_eq!(result.unwrap(), ElicitationContentValue::Boolean(true));
+    }
+
+    #[test]
+    fn parse_content_value_accepts_number() {
+        let result = Request::parse_content_value(Object::from(3.14f64));
+        assert_eq!(result.unwrap(), ElicitationContentValue::Number(3.14));
+    }
+
+    #[test]
+    fn parse_content_value_accepts_string_array() {
+        let arr = nvim_oxi::Array::from_iter(vec![Object::from("a"), Object::from("b")]);
+        let result = Request::parse_content_value(Object::from(arr));
+        assert_eq!(
+            result.unwrap(),
+            ElicitationContentValue::StringArray(vec!["a".to_string(), "b".to_string()])
+        );
+    }
+
+    #[test]
+    fn parse_content_value_rejects_unsupported_type() {
+        let mut nested = nvim_oxi::Dictionary::default();
+        nested.insert("field", Object::from("x"));
+        let result = Request::parse_content_value(Object::from(nested));
+        assert!(result.is_err());
     }
 }

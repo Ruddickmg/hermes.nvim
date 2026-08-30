@@ -359,6 +359,8 @@ permissions ~
     • terminal_access: Allow terminal access (default: true)
     • request_permissions: Allow permission requests (default: true)
     • send_notifications: Allow notifications (default: true)
+    • elicitation_form: Allow form elicitation requests (default: true)
+    • elicitation_url: Allow URL elicitation requests (default: true)
 
 terminal ~
     Terminal configuration:
@@ -402,7 +404,40 @@ prompt/response cycle.
 See |hermes-api| sections above for autocommands triggered by each method.
 Full autocommand list: |hermes-autocommands-list|
 
-================================================================================
+Elicitation ~
+Elicitation lets an agent request structured input from the user. Hermes advertises
+elicitation capabilities to the agent (gated by the `elicitation_form` and
+`elicitation_url` permissions). The agent sends an `elicitation/create` request,
+which Hermes surfaces via the `FormElicitation` or `UrlElicitation` autocommand.
+Respond with *hermes.respond()* (see below). When a URL elicitation flow finishes
+the agent may send an `elicitation/complete` notification, surfaced via the
+`ElicitationComplete` autocommand (an informational notification, no response
+required). Example: >
+    vim.api.nvim_create_autocmd("User", {
+        pattern = "FormElicitation",
+        group = "hermes",
+        callback = function(args)
+            local request_id = args.data.requestId
+            require("hermes").respond(request_id, {
+                action = "accept",
+                content = { name = "Alice" },
+            })
+        end,
+    })
+<
+
+Responding to elicitation ~
+*hermes.respond()* for elicitation accepts a dictionary with an `action` field:
+- `"accept"`: provide the requested `content` as a `{ field = value, ... }`
+  dictionary. Content values may be strings, numbers, booleans, or string arrays.
+- `"decline"`: decline the elicitation (no content).
+- `"cancel"`: cancel the elicitation entirely.
+
+Default behavior: If no listener is attached to `FormElicitation` or
+`UrlElicitation`, Hermes automatically cancels the elicitation so the agent does
+not hang. A default UI is planned for the future.
+
+===============================================================================
 7. COMMANDS                                           *hermes-commands*
 
 *:Hermes*                                                 Hermes management

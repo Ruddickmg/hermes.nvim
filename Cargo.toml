@@ -26,6 +26,7 @@ agent-client-protocol = { version = "2.0.0", features = [
     "unstable_session_fork",
     "unstable_mcp_over_acp",
     "unstable_auth_methods",
+    "unstable_elicitation",
     # "unstable_boolean_config",
     # "unstable_llm_providers",
     # "unstable_nes",

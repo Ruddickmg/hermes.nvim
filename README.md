@@ -1176,6 +1176,100 @@ vim.api.nvim_create_autocmd("User", {
 > - Remove the terminal
 > - Delete the attached buffer (can be configured to omit this step)
 
+#### 📋 Responding to form elicitation
+
+[Form elicitation](#formelicitation) lets an agent prompt the user to fill in a form (e.g. capture their name, a project path, or other structured input). The agent sends an `elicitation/create` request, Hermes fires the `FormElicitation` autocommand, and you respond via `hermes.respond(...)`.
+
+```lua
+local hermes = require("hermes")
+
+-- Accept and provide content for the requested fields:
+hermes.respond("requestId", {
+  action = "accept",
+  content = { name = "Alice", age = 30 },
+})
+
+-- Decline without providing content:
+hermes.respond("requestId", { action = "decline" })
+
+-- Cancel the elicitation entirely:
+hermes.respond("requestId", { action = "cancel" })
+
+-- example:
+vim.api.nvim_create_autocmd("User", {
+  group = "hermes",
+  pattern = "FormElicitation",
+  callback = function(args)
+    local requestId = args.data.requestId
+    local mode = args.data.mode -- "form"
+    local message = args.data.message -- the prompt shown to the user
+
+    hermes.respond(requestId, {
+      action = "accept",
+      content = { name = vim.fn.input(message .. ": ") },
+    })
+  end,
+})
+```
+
+> **Responds to:** [FormElicitation](#formelicitation) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for `FormElicitation`, Hermes will:
+> - Automatically cancel the elicitation so the agent does not hang
+> - A default UI is planned for the future (see the TODO in the source)
+
+> **Note:** Elicitation content values may be strings, numbers, booleans, or arrays of strings.
+
+#### 🔗 Responding to URL elicitation
+
+[URL elicitation](#urlelicitation) lets an agent request that the user complete a flow in a web browser (e.g. OAuth authorization). The agent sends an `elicitation/create` request, Hermes fires the `UrlElicitation` autocommand, and you respond via `hermes.respond(...)`.
+
+```lua
+local hermes = require("hermes")
+
+-- Decline without providing content:
+hermes.respond("requestId", { action = "decline" })
+
+-- Cancel the elicitation entirely:
+hermes.respond("requestId", { action = "cancel" })
+
+-- example:
+vim.api.nvim_create_autocmd("User", {
+  group = "hermes",
+  pattern = "UrlElicitation",
+  callback = function(args)
+    local requestId = args.data.requestId
+
+    hermes.respond(requestId, { action = "decline" })
+  end,
+})
+```
+
+> **Responds to:** [UrlElicitation](#urlelicitation) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for `UrlElicitation`, Hermes will:
+> - Automatically cancel the elicitation so the agent does not hang
+> - A default UI is planned for the future (see the TODO in the source)
+
+#### ✅ Handling elicitation completion
+
+When a URL elicitation flow finishes (e.g. the user completed the flow in the browser), the agent may send an `elicitation/complete` [notification](#elicitationcomplete). This is an informational event with no response required.
+
+```lua
+-- example:
+vim.api.nvim_create_autocmd("User", {
+  group = "hermes",
+  pattern = "ElicitationComplete",
+  callback = function(args)
+    print("URL elicitation completed")
+  end,
+})
+```
+
+> **Fired on:** [ElicitationComplete](#elicitationcomplete) autocommand.
+>
+> **Default behavior:** This is an informational notification; no response is required.
+
 ## 📡 Autocommands
 
 Hermes generates autocommands for all communication between agent and client. Here's an example of hooking into one:
@@ -2331,6 +2425,38 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "sessionId": "string",
   "path": "string",
   "content": "string"
+}</code></pre></td>
+    </tr>
+    <tr id="formelicitation">
+      <td><code>FormElicitation</code></td>
+      <td>Agent requests form-based elicitation (structured user input)</td>
+      <td>🤖 Agent (requires -> <a href="#responding-to-form-elicitation">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "mode": "form",
+  "scope": { ... },
+  "schema": { ... },
+  "message": "string"
+}</code></pre></td>
+    </tr>
+    <tr id="urlelicitation">
+      <td><code>UrlElicitation</code></td>
+      <td>Agent requests URL-based elicitation (direct user to a browser URL)</td>
+      <td>🤖 Agent (requires -> <a href="#responding-to-url-elicitation">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "mode": "url",
+  "scope": { ... },
+  "url": "string",
+  "message": "string"
+}</code></pre></td>
+    </tr>
+    <tr id="elicitationcomplete">
+      <td><code>ElicitationComplete</code></td>
+      <td>Agent notifies that an elicitation has completed</td>
+      <td>🤖 Agent (notification)</td>
+      <td><pre><code class="language-json">{
+  "elicitationId": "uuid string"
 }</code></pre></td>
     </tr>
   </tbody>

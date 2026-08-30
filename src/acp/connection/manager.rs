@@ -7,7 +7,8 @@ use crate::nvim::configuration::{DistributionsConfig, Permissions};
 use crate::{Handler, acp::error::Error};
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    ClientCapabilities, FileSystemCapabilities, Implementation, InitializeRequest,
+    ClientCapabilities, ElicitationCapabilities, ElicitationFormCapabilities,
+    ElicitationUrlCapabilities, FileSystemCapabilities, Implementation, InitializeRequest,
 };
 use async_lock::Mutex;
 use serde::{Deserialize, Serialize};
@@ -306,7 +307,20 @@ impl ConnectionManager {
                     .terminal(permissions.terminal_access)
                     .fs(FileSystemCapabilities::new()
                         .read_text_file(permissions.fs_read_access)
-                        .write_text_file(permissions.fs_write_access)),
+                        .write_text_file(permissions.fs_write_access))
+                    .elicitation(
+                        ElicitationCapabilities::new()
+                            .form(
+                                permissions
+                                    .elicitation_form
+                                    .then(ElicitationFormCapabilities::new),
+                            )
+                            .url(
+                                permissions
+                                    .elicitation_url
+                                    .then(ElicitationUrlCapabilities::new),
+                            ),
+                    ),
             );
 
         let thread_agent = agent.clone();

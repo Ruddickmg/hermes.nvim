@@ -14,6 +14,7 @@ agent-client-protocol = { version = "2.0.0", features = [
     "unstable_session_fork",
     "unstable_mcp_over_acp",
     "unstable_auth_methods",
+    "unstable_elicitation",
 ] }
 async-channel = "2"
 async-io = "2"

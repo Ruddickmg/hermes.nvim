@@ -397,6 +397,8 @@ mod tests {
                 terminal_access: false,
                 request_permissions: false,
                 send_notifications: false,
+                elicitation_form: false,
+                elicitation_url: false,
             },
             terminal: TerminalConfig {
                 delete: true,

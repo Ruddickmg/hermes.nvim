@@ -5,10 +5,11 @@ use crate::{
 use agent_client_protocol::{
     Error, Result,
     schema::v1::{
-        CreateTerminalRequest, CreateTerminalResponse, ReadTextFileRequest, ReadTextFileResponse,
-        ReleaseTerminalRequest, ReleaseTerminalResponse, RequestPermissionRequest,
-        RequestPermissionResponse, SessionId, SessionNotification, SessionUpdate,
-        TerminalExitStatus, TerminalOutputRequest, TerminalOutputResponse,
+        CompleteElicitationNotification, CreateElicitationRequest, CreateElicitationResponse,
+        CreateTerminalRequest, CreateTerminalResponse, ElicitationMode, ElicitationScope,
+        ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
+        RequestPermissionRequest, RequestPermissionResponse, SessionId, SessionNotification,
+        SessionUpdate, TerminalExitStatus, TerminalOutputRequest, TerminalOutputResponse,
         WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
         WriteTextFileResponse,
     },
@@ -56,6 +57,63 @@ impl Handler {
                 Error::internal_error()
             })
             .map(RequestPermissionResponse::new)
+    }
+
+    pub async fn create_elicitation(
+        &self,
+        args: CreateElicitationRequest,
+    ) -> Result<CreateElicitationResponse> {
+        let (session_id, command) = match &args.mode {
+            ElicitationMode::Form(mode) => {
+                if !self.can_request_form_elicitation().await {
+                    return Err(Error::method_not_found());
+                }
+                (
+                    session_id_from_scope(&mode.scope),
+                    Commands::FormElicitation,
+                )
+            }
+            ElicitationMode::Url(mode) => {
+                if !self.can_request_url_elicitation().await {
+                    return Err(Error::method_not_found());
+                }
+                (session_id_from_scope(&mode.scope), Commands::UrlElicitation)
+            }
+            _ => return Err(Error::method_not_found()),
+        };
+
+        let (sender, receiver) = bounded::<CreateElicitationResponse>(1);
+        info!("Requesting elicitation: {:?}", args);
+
+        self.execute_autocommand_request(
+            session_id,
+            command,
+            args.clone(),
+            Responder::Elicitation(sender, args),
+        )
+        .await?;
+        let resp = receiver
+            .recv()
+            .await
+            .map_err(|e| {
+                error!("{:?}", e);
+                Error::internal_error()
+            })
+            .map(CreateElicitationResponse::from);
+        resp
+    }
+
+    pub async fn elicitation_complete(
+        &self,
+        notification: CompleteElicitationNotification,
+    ) -> Result<()> {
+        if !self.can_request_url_elicitation().await {
+            return Err(Error::method_not_found());
+        }
+        info!("Elicitation complete: {:?}", notification);
+        Ok(self
+            .execute_autocommand(Commands::ElicitationComplete, notification)
+            .await?)
     }
 
     /// Shared notification processing logic.
@@ -319,5 +377,12 @@ impl Handler {
                 Error::internal_error()
             })?
             .map_err(|_| Error::internal_error())
+    }
+}
+
+fn session_id_from_scope(scope: &ElicitationScope) -> String {
+    match scope {
+        ElicitationScope::Session(s) => s.session_id.to_string(),
+        _ => String::new(),
     }
 }

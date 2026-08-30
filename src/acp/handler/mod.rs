@@ -165,6 +165,22 @@ impl Handler {
     }
 
     #[instrument(level = "trace", skip(self))]
+    pub async fn can_request_form_elicitation(&self) -> bool {
+        let config = self.state.lock().await;
+        let elicitation_form = config.config.permissions.elicitation_form;
+        drop(config);
+        elicitation_form
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub async fn can_request_url_elicitation(&self) -> bool {
+        let config = self.state.lock().await;
+        let elicitation_url = config.config.permissions.elicitation_url;
+        drop(config);
+        elicitation_url
+    }
+
+    #[instrument(level = "trace", skip(self))]
     pub async fn execute_autocommand<C: ToString + Debug, S: Serialize + Debug>(
         &self,
         command: C,
