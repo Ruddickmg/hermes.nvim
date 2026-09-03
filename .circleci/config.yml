@@ -18,14 +18,14 @@ executors:
       xcode: 26.3.0
   rust-linux-x86_64:
     docker:
-      - image: cimg/rust:1.98.0
+      - image: cimg/rust:1.98.1
     resource_class: large
     environment:
       PIPELINE_NUM: << pipeline.number >>
       TZ: "America/Los_Angeles"
   rust-linux-aarch64:
     docker:
-      - image: cimg/rust:1.98.0
+      - image: cimg/rust:1.98.1
     resource_class: arm.medium
     environment:
       PIPELINE_NUM: << pipeline.number >>
