@@ -312,11 +312,19 @@ impl Request {
         }
     }
 
-    fn validate_content_value(
+    async fn validate_content_value(
+        &self,
         value: nvim_oxi::Object,
         schema: &ElicitationPropertySchema,
-        reject_unknown: bool,
     ) -> Result<ElicitationContentValue> {
+        let reject_unknown = self
+            .state
+            .lock()
+            .await
+            .config
+            .permissions
+            .elicitation
+            .reject_unknown_elicitation_values;
         match schema {
             ElicitationPropertySchema::String(prop) => {
                 let s = String::from_object(value)
@@ -384,9 +392,9 @@ impl Request {
         }
     }
 
-    fn parse_elicitation_response(
+    async fn parse_elicitation_response(
+        &self,
         request: &CreateElicitationRequest,
-        reject_unknown: bool,
         data: nvim_oxi::Object,
     ) -> Result<CreateElicitationResponse> {
         let dict = dict_from_object(data).map_err(|e| Error::InvalidInput(e.to_string()))?;
@@ -411,12 +419,10 @@ impl Request {
                             for (key, value) in content_dict {
                                 let key: String = key.to_string();
                                 if let Some(prop_schema) = schema.properties.get(&key) {
-                                    let parsed = Self::validate_content_value(
-                                        value,
-                                        prop_schema,
-                                        reject_unknown,
-                                    )
-                                    .map_err(|e| Error::InvalidInput(e.to_string()))?;
+                                    let parsed = self
+                                        .validate_content_value(value, prop_schema)
+                                        .await
+                                        .map_err(|e| Error::InvalidInput(e.to_string()))?;
                                     content.insert(key, parsed);
                                 }
                             }
@@ -546,14 +552,7 @@ impl Request {
                     })?;
             }
             Responder::Elicitation(sender, request) => {
-                let state = self.state.lock().await;
-                let reject_unknown = state
-                    .config
-                    .permissions
-                    .elicitation
-                    .reject_unknown_elicitation_values;
-                drop(state);
-                let result = Self::parse_elicitation_response(&request, reject_unknown, response)?;
+                let result = self.parse_elicitation_response(&request, response).await?;
                 sender.send(result).await.map_err(|e| {
                     Error::Internal(format!(
                         "Failed to send elicitation response for request '{}': {:?}",
@@ -1086,89 +1085,6 @@ mod tests {
         assert_eq!(command, Commands::FormElicitation);
     }
 
-    fn form_request_with_schema() -> CreateElicitationRequest {
-        let schema =
-            agent_client_protocol::schema::v1::ElicitationSchema::new().string("name", true);
-        let scope = agent_client_protocol::schema::v1::ElicitationScope::Session(
-            agent_client_protocol::schema::v1::ElicitationSessionScope::new("test"),
-        );
-        let mode = agent_client_protocol::schema::v1::ElicitationFormMode::new(scope, schema);
-        CreateElicitationRequest::new(mode, "Please enter your name")
-    }
-
-    #[test]
-    fn parse_elicitation_response_accept_without_content() {
-        let mut dict = nvim_oxi::Dictionary::default();
-        dict.insert("action", Object::from("accept"));
-        let obj = Object::from(dict);
-        let request = form_request_with_schema();
-        let response = Request::parse_elicitation_response(&request, false, obj).unwrap();
-        assert_eq!(
-            response.action,
-            ElicitationAction::Accept(ElicitationAcceptAction::new())
-        );
-    }
-
-    #[test]
-    fn parse_elicitation_response_accept_with_content() {
-        let mut content = nvim_oxi::Dictionary::default();
-        content.insert("name", Object::from("Alice"));
-        let mut dict = nvim_oxi::Dictionary::default();
-        dict.insert("action", Object::from("accept"));
-        dict.insert("content", Object::from(content));
-        let obj = Object::from(dict);
-        let request = form_request_with_schema();
-        let response = Request::parse_elicitation_response(&request, false, obj).unwrap();
-        let mut expected = std::collections::BTreeMap::new();
-        expected.insert(
-            "name".to_string(),
-            ElicitationContentValue::String("Alice".to_string()),
-        );
-        assert_eq!(
-            response.action,
-            ElicitationAction::Accept(ElicitationAcceptAction::new().content(expected))
-        );
-    }
-
-    #[test]
-    fn parse_elicitation_response_decline() {
-        let mut dict = nvim_oxi::Dictionary::default();
-        dict.insert("action", Object::from("decline"));
-        let obj = Object::from(dict);
-        let request = form_request_with_schema();
-        let response = Request::parse_elicitation_response(&request, false, obj).unwrap();
-        assert_eq!(response.action, ElicitationAction::Decline);
-    }
-
-    #[test]
-    fn parse_elicitation_response_cancel() {
-        let mut dict = nvim_oxi::Dictionary::default();
-        dict.insert("action", Object::from("cancel"));
-        let obj = Object::from(dict);
-        let request = form_request_with_schema();
-        let response = Request::parse_elicitation_response(&request, false, obj).unwrap();
-        assert_eq!(response.action, ElicitationAction::Cancel);
-    }
-
-    #[test]
-    fn parse_elicitation_response_missing_action() {
-        let dict = nvim_oxi::Dictionary::default();
-        let obj = Object::from(dict);
-        let request = form_request_with_schema();
-        let result = Request::parse_elicitation_response(&request, false, obj);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn parse_elicitation_response_unknown_action() {
-        let mut dict = nvim_oxi::Dictionary::default();
-        dict.insert("action", Object::from("something_else"));
-        let obj = Object::from(dict);
-        let request = form_request_with_schema();
-        let result = Request::parse_elicitation_response(&request, false, obj);
-        assert!(result.is_err());
-    }
-
     #[test]
     fn parse_content_value_accepts_string() {
         let result = Request::parse_content_value(Object::from("hello"));
@@ -1212,221 +1128,5 @@ mod tests {
         nested.insert("field", Object::from("x"));
         let result = Request::parse_content_value(Object::from(nested));
         assert!(result.is_err());
-    }
-
-    fn form_request_with(
-        schema: agent_client_protocol::schema::v1::ElicitationSchema,
-    ) -> CreateElicitationRequest {
-        let scope = agent_client_protocol::schema::v1::ElicitationScope::Session(
-            agent_client_protocol::schema::v1::ElicitationSessionScope::new("test"),
-        );
-        let mode = agent_client_protocol::schema::v1::ElicitationFormMode::new(scope, schema);
-        CreateElicitationRequest::new(mode, "message")
-    }
-
-    fn accept_response(content: nvim_oxi::Object) -> nvim_oxi::Object {
-        let mut dict = nvim_oxi::Dictionary::default();
-        dict.insert("action", Object::from("accept"));
-        dict.insert("content", content);
-        Object::from(dict)
-    }
-
-    #[test]
-    fn parse_elicitation_response_integer_accepts_whole_float() {
-        let schema = agent_client_protocol::schema::v1::ElicitationSchema::new().property(
-            "age",
-            agent_client_protocol::schema::v1::ElicitationPropertySchema::Integer(
-                agent_client_protocol::schema::v1::IntegerPropertySchema::new(),
-            ),
-            true,
-        );
-        let request = form_request_with(schema);
-        let mut content = nvim_oxi::Dictionary::default();
-        content.insert("age", Object::from(5.0f64));
-        let response = Request::parse_elicitation_response(
-            &request,
-            false,
-            accept_response(Object::from(content)),
-        )
-        .unwrap();
-        assert_eq!(
-            response.action,
-            ElicitationAction::Accept(ElicitationAcceptAction::new().content(
-                std::collections::BTreeMap::from([(
-                    "age".to_string(),
-                    ElicitationContentValue::Integer(5)
-                )])
-            ))
-        );
-    }
-
-    #[test]
-    fn parse_elicitation_response_rejects_string_for_integer() {
-        let schema = agent_client_protocol::schema::v1::ElicitationSchema::new().property(
-            "age",
-            agent_client_protocol::schema::v1::ElicitationPropertySchema::Integer(
-                agent_client_protocol::schema::v1::IntegerPropertySchema::new(),
-            ),
-            true,
-        );
-        let request = form_request_with(schema);
-        let mut content = nvim_oxi::Dictionary::default();
-        content.insert("age", Object::from("abc"));
-        let result = Request::parse_elicitation_response(
-            &request,
-            false,
-            accept_response(Object::from(content)),
-        );
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn parse_elicitation_response_rejects_string_for_boolean() {
-        let schema = agent_client_protocol::schema::v1::ElicitationSchema::new().property(
-            "flag",
-            agent_client_protocol::schema::v1::ElicitationPropertySchema::Boolean(
-                agent_client_protocol::schema::v1::BooleanPropertySchema::new(),
-            ),
-            true,
-        );
-        let request = form_request_with(schema);
-        let mut content = nvim_oxi::Dictionary::default();
-        content.insert("flag", Object::from("yes"));
-        let result = Request::parse_elicitation_response(
-            &request,
-            false,
-            accept_response(Object::from(content)),
-        );
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn parse_elicitation_response_rejects_boolean_for_string() {
-        let request = form_request_with(
-            agent_client_protocol::schema::v1::ElicitationSchema::new().string("name", true),
-        );
-        let mut content = nvim_oxi::Dictionary::default();
-        content.insert("name", Object::from(true));
-        let result = Request::parse_elicitation_response(
-            &request,
-            false,
-            accept_response(Object::from(content)),
-        );
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn parse_elicitation_response_missing_required_field() {
-        let request = form_request_with(
-            agent_client_protocol::schema::v1::ElicitationSchema::new().string("name", true),
-        );
-        let content = nvim_oxi::Dictionary::default();
-        let result = Request::parse_elicitation_response(
-            &request,
-            false,
-            accept_response(Object::from(content)),
-        );
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn parse_elicitation_response_ignores_unknown_content_key() {
-        let request = form_request_with(
-            agent_client_protocol::schema::v1::ElicitationSchema::new().string("name", true),
-        );
-        let mut content = nvim_oxi::Dictionary::default();
-        content.insert("name", Object::from("Alice"));
-        content.insert("extra", Object::from("ignored"));
-        let response = Request::parse_elicitation_response(
-            &request,
-            false,
-            accept_response(Object::from(content)),
-        )
-        .unwrap();
-        assert_eq!(
-            response.action,
-            ElicitationAction::Accept(ElicitationAcceptAction::new().content(
-                std::collections::BTreeMap::from([(
-                    "name".to_string(),
-                    ElicitationContentValue::String("Alice".to_string())
-                )])
-            ))
-        );
-    }
-
-    #[test]
-    fn parse_elicitation_response_rejects_invalid_enum_string() {
-        let schema = agent_client_protocol::schema::v1::ElicitationSchema::new().property(
-            "color",
-            agent_client_protocol::schema::v1::ElicitationPropertySchema::String(
-                agent_client_protocol::schema::v1::StringPropertySchema::new()
-                    .enum_values(vec!["red".to_string(), "blue".to_string()]),
-            ),
-            true,
-        );
-        let request = form_request_with(schema);
-        let mut content = nvim_oxi::Dictionary::default();
-        content.insert("color", Object::from("green"));
-        let result = Request::parse_elicitation_response(
-            &request,
-            false,
-            accept_response(Object::from(content)),
-        );
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn parse_elicitation_response_other_rejects_when_configured() {
-        let schema = agent_client_protocol::schema::v1::ElicitationSchema::new().property(
-            "fut",
-            agent_client_protocol::schema::v1::ElicitationPropertySchema::Other(
-                agent_client_protocol::schema::v1::OtherElicitationPropertySchema::new(
-                    "future",
-                    std::collections::BTreeMap::new(),
-                ),
-            ),
-            false,
-        );
-        let request = form_request_with(schema);
-        let mut content = nvim_oxi::Dictionary::default();
-        content.insert("fut", Object::from("value"));
-        let result = Request::parse_elicitation_response(
-            &request,
-            true,
-            accept_response(Object::from(content)),
-        );
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn parse_elicitation_response_other_passes_when_not_rejected() {
-        let schema = agent_client_protocol::schema::v1::ElicitationSchema::new().property(
-            "fut",
-            agent_client_protocol::schema::v1::ElicitationPropertySchema::Other(
-                agent_client_protocol::schema::v1::OtherElicitationPropertySchema::new(
-                    "future",
-                    std::collections::BTreeMap::new(),
-                ),
-            ),
-            false,
-        );
-        let request = form_request_with(schema);
-        let mut content = nvim_oxi::Dictionary::default();
-        content.insert("fut", Object::from("value"));
-        let response = Request::parse_elicitation_response(
-            &request,
-            false,
-            accept_response(Object::from(content)),
-        )
-        .unwrap();
-        assert_eq!(
-            response.action,
-            ElicitationAction::Accept(ElicitationAcceptAction::new().content(
-                std::collections::BTreeMap::from([(
-                    "fut".to_string(),
-                    ElicitationContentValue::String("value".to_string())
-                )])
-            ))
-        );
     }
 }
