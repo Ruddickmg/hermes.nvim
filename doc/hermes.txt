@@ -362,6 +362,7 @@ permissions ~
     • elicitation: Elicitation permission settings (nested table) >
         • form: Allow form elicitation requests (default: true)
         • url: Allow URL elicitation requests (default: true)
+        • reject_unknown_elicitation_values: Reject responses for unknown/future elicitation property types (default: false)
     <
 
 terminal ~

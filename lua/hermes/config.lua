@@ -36,6 +36,7 @@ local M = {}
 ---@class HermesElicitationConfig
 ---@field form? boolean Allow agent to send form elicitation requests (default: true)
 ---@field url? boolean Allow agent to send URL elicitation requests (default: true)
+---@field reject_unknown_elicitation_values? boolean Reject responses for unknown/future elicitation property types (default: false)
 
 ---@class HermesPermissionsConfig
 ---@field fs_write_access? boolean Allow agent to write files (default: true)
@@ -159,6 +160,7 @@ local default_config = {
 		elicitation = {
 			form = true,
 			url = true,
+			reject_unknown_elicitation_values = false,
 		},
 	},
 	terminal = {

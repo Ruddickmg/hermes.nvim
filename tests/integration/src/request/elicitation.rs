@@ -181,3 +181,52 @@ fn elicitation_default_response_cancels_when_no_listener() -> nvim_oxi::Result<(
     assert_eq!(received.action, ElicitationAction::Cancel);
     Ok(())
 }
+
+#[nvim_oxi::test]
+fn elicitation_response_accept_with_invalid_content_type_returns_error() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let requests =
+        Arc::new(Requests::new(mock_runtime(), state.clone()).map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    // The schema declares `name` as a string.
+    let (request_id, _receiver) = add_elicitation_request(&requests);
+
+    let mut content = nvim_oxi::Dictionary::default();
+    content.insert("name", Object::from(123i64));
+    let mut dict = nvim_oxi::Dictionary::default();
+    dict.insert("action", Object::from("accept"));
+    dict.insert("content", Object::from(content));
+    let response = Object::from(dict);
+
+    let result = block_on(requests.handle_response(&request_id, response));
+    assert!(
+        result.is_err(),
+        "Type-mismatched content should return an error"
+    );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn elicitation_response_accept_missing_required_field_returns_error() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let requests =
+        Arc::new(Requests::new(mock_runtime(), state.clone()).map_err(|e| {
+            nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
+        })?);
+    // The schema requires the `name` field.
+    let (request_id, _receiver) = add_elicitation_request(&requests);
+
+    let content = nvim_oxi::Dictionary::default();
+    let mut dict = nvim_oxi::Dictionary::default();
+    dict.insert("action", Object::from("accept"));
+    dict.insert("content", Object::from(content));
+    let response = Object::from(dict);
+
+    let result = block_on(requests.handle_response(&request_id, response));
+    assert!(
+        result.is_err(),
+        "Missing required field should return an error"
+    );
+    Ok(())
+}

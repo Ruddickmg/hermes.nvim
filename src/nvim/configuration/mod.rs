@@ -222,6 +222,9 @@ impl nvim_oxi::lua::Pushable for ClientConfigPartial {
                 if let Some(val) = elicitation.url {
                     elic_dict.insert("url", val);
                 }
+                if let Some(val) = elicitation.reject_unknown_elicitation_values {
+                    elic_dict.insert("reject_unknown_elicitation_values", val);
+                }
                 perms_dict.insert("elicitation", elic_dict);
             }
             dict.insert("permissions", perms_dict);
@@ -412,6 +415,7 @@ mod tests {
                 elicitation: ElicitationPermissions {
                     form: false,
                     url: false,
+                    reject_unknown_elicitation_values: false,
                 },
             },
             terminal: TerminalConfig {

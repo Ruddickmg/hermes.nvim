@@ -9,6 +9,7 @@ use super::dict_from_object;
 pub struct ElicitationPermissions {
     pub form: bool,
     pub url: bool,
+    pub reject_unknown_elicitation_values: bool,
 }
 
 impl Default for ElicitationPermissions {
@@ -16,6 +17,7 @@ impl Default for ElicitationPermissions {
         Self {
             form: true,
             url: true,
+            reject_unknown_elicitation_values: false,
         }
     }
 }
@@ -36,7 +38,17 @@ impl FromObject for ElicitationPermissions {
             .transpose()?
             .unwrap_or(true);
 
-        Ok(Self { form, url })
+        let reject_unknown_elicitation_values = dict
+            .get("reject_unknown_elicitation_values")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?
+            .unwrap_or(false);
+
+        Ok(Self {
+            form,
+            url,
+            reject_unknown_elicitation_values,
+        })
     }
 }
 
@@ -130,9 +142,19 @@ mod tests {
             any::<bool>(),
             any::<bool>(),
             any::<bool>(),
+            any::<bool>(),
         )
             .prop_map(
-                |(fs_write, fs_read, terminal, can_request, allow_notif, elic_form, elic_url)| {
+                |(
+                    fs_write,
+                    fs_read,
+                    terminal,
+                    can_request,
+                    allow_notif,
+                    elic_form,
+                    elic_url,
+                    reject,
+                )| {
                     Permissions {
                         fs_write_access: fs_write,
                         fs_read_access: fs_read,
@@ -142,6 +164,7 @@ mod tests {
                         elicitation: ElicitationPermissions {
                             form: elic_form,
                             url: elic_url,
+                            reject_unknown_elicitation_values: reject,
                         },
                     }
                 },
@@ -162,6 +185,10 @@ mod tests {
             let mut elicitation = Dictionary::new();
             elicitation.insert("form", permissions.elicitation.form);
             elicitation.insert("url", permissions.elicitation.url);
+            elicitation.insert(
+                "reject_unknown_elicitation_values",
+                permissions.elicitation.reject_unknown_elicitation_values,
+            );
             dict.insert("elicitation", elicitation);
 
             let obj = Object::from(dict);
@@ -183,7 +210,8 @@ mod tests {
             perms.elicitation,
             ElicitationPermissions {
                 form: true,
-                url: true
+                url: true,
+                reject_unknown_elicitation_values: false,
             }
         );
     }
@@ -193,6 +221,7 @@ mod tests {
         let mut elicitation = Dictionary::new();
         elicitation.insert("form", false);
         elicitation.insert("url", true);
+        elicitation.insert("reject_unknown_elicitation_values", true);
         let mut dict = Dictionary::new();
         dict.insert("elicitation", elicitation);
 
@@ -203,7 +232,8 @@ mod tests {
             parsed.elicitation,
             ElicitationPermissions {
                 form: false,
-                url: true
+                url: true,
+                reject_unknown_elicitation_values: true,
             }
         );
     }
@@ -219,13 +249,15 @@ mod tests {
             elicitation: ElicitationPermissions {
                 form: false,
                 url: true,
+                reject_unknown_elicitation_values: true,
             },
         };
         assert_eq!(
             perms.elicitation,
             ElicitationPermissions {
                 form: false,
-                url: true
+                url: true,
+                reject_unknown_elicitation_values: true,
             }
         );
     }
@@ -237,7 +269,8 @@ mod tests {
             elic,
             ElicitationPermissions {
                 form: true,
-                url: true
+                url: true,
+                reject_unknown_elicitation_values: false,
             }
         );
     }
@@ -247,6 +280,7 @@ mod tests {
         let mut dict = Dictionary::new();
         dict.insert("form", true);
         dict.insert("url", false);
+        dict.insert("reject_unknown_elicitation_values", true);
 
         let parsed = ElicitationPermissions::from_object(Object::from(dict))
             .expect("ElicitationPermissions::from_object failed");
@@ -255,7 +289,8 @@ mod tests {
             parsed,
             ElicitationPermissions {
                 form: true,
-                url: false
+                url: false,
+                reject_unknown_elicitation_values: true,
             }
         );
     }
@@ -265,6 +300,7 @@ mod tests {
         let mut dict = Dictionary::new();
         dict.insert("form", false);
         dict.insert("url", false);
+        dict.insert("reject_unknown_elicitation_values", true);
 
         let parsed = ElicitationPermissionsPartial::from_object(Object::from(dict))
             .expect("ElicitationPermissionsPartial::from_object failed");
@@ -273,7 +309,8 @@ mod tests {
             parsed,
             ElicitationPermissionsPartial {
                 form: Some(false),
-                url: Some(false)
+                url: Some(false),
+                reject_unknown_elicitation_values: Some(true),
             }
         );
     }
@@ -285,6 +322,7 @@ mod tests {
             elicitation: Some(ElicitationPermissionsPartial {
                 form: Some(false),
                 url: None,
+                reject_unknown_elicitation_values: Some(true),
             }),
             ..Default::default()
         };
@@ -295,7 +333,8 @@ mod tests {
             perms.elicitation,
             ElicitationPermissions {
                 form: false,
-                url: true
+                url: true,
+                reject_unknown_elicitation_values: true,
             }
         );
     }
@@ -306,6 +345,7 @@ mod tests {
 pub struct ElicitationPermissionsPartial {
     pub form: Option<bool>,
     pub url: Option<bool>,
+    pub reject_unknown_elicitation_values: Option<bool>,
 }
 
 impl FromObject for ElicitationPermissionsPartial {
@@ -320,8 +360,16 @@ impl FromObject for ElicitationPermissionsPartial {
             .get("url")
             .map(|o| bool::from_object(o.clone()))
             .transpose()?;
+        let reject_unknown_elicitation_values = dict
+            .get("reject_unknown_elicitation_values")
+            .map(|o| bool::from_object(o.clone()))
+            .transpose()?;
 
-        Ok(Self { form, url })
+        Ok(Self {
+            form,
+            url,
+            reject_unknown_elicitation_values,
+        })
     }
 }
 
@@ -360,6 +408,9 @@ impl PermissionsPartial {
             }
             if let Some(val) = elicitation.url {
                 permissions.elicitation.url = val;
+            }
+            if let Some(val) = elicitation.reject_unknown_elicitation_values {
+                permissions.elicitation.reject_unknown_elicitation_values = val;
             }
         }
     }
