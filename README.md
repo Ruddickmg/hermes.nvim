@@ -1176,9 +1176,7 @@ vim.api.nvim_create_autocmd("User", {
 > - Remove the terminal
 > - Delete the attached buffer (can be configured to omit this step)
 
-#### 📋 Responding to form elicitation
-
-[Form elicitation](#formelicitation) lets an agent prompt the user to fill in a form (e.g. capture their name, a project path, or other structured input). The agent sends an `elicitation/create` request, Hermes fires the `FormElicitation` autocommand, and you respond via `hermes.respond(...)`.
+#### 📋 Form input
 
 ```lua
 local hermes = require("hermes")
@@ -1220,9 +1218,7 @@ vim.api.nvim_create_autocmd("User", {
 
 > **Note:** Elicitation content values may be strings, numbers, booleans, or arrays of strings.
 
-#### 🔗 Responding to URL elicitation
-
-[URL elicitation](#urlelicitation) lets an agent request that the user complete a flow in a web browser (e.g. OAuth authorization). The agent sends an `elicitation/create` request, Hermes fires the `UrlElicitation` autocommand, and you respond via `hermes.respond(...)`.
+#### 🔗 Browser input
 
 ```lua
 local hermes = require("hermes")
@@ -1249,26 +1245,6 @@ vim.api.nvim_create_autocmd("User", {
 >
 > **Default behavior:** If no autocommand handler is defined for `UrlElicitation`, Hermes will:
 > - Automatically cancel the elicitation so the agent does not hang
-> - A default UI is planned for the future (see the TODO in the source)
-
-#### ✅ Handling elicitation completion
-
-When a URL elicitation flow finishes (e.g. the user completed the flow in the browser), the agent may send an `elicitation/complete` [notification](#elicitationcomplete). This is an informational event with no response required.
-
-```lua
--- example:
-vim.api.nvim_create_autocmd("User", {
-  group = "hermes",
-  pattern = "ElicitationComplete",
-  callback = function(args)
-    print("URL elicitation completed")
-  end,
-})
-```
-
-> **Fired on:** [ElicitationComplete](#elicitationcomplete) autocommand.
->
-> **Default behavior:** This is an informational notification; no response is required.
 
 ## 📡 Autocommands
 
