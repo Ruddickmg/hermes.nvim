@@ -1609,6 +1609,26 @@ Below is a list of all autocommands and their associated data (passed to the cal
   }
 }</code></pre></td>
     </tr>
+    <tr id="elicitationcomplete">
+      <td><code>ElicitationComplete</code></td>
+      <td>Agent notifies that an elicitation has completed</td>
+      <td>🤖 Agent (notification)</td>
+      <td><pre><code class="language-json">{
+  "elicitationId": "uuid string"
+}</code></pre></td>
+    </tr>
+    <tr id="formelicitation">
+      <td><code>FormElicitation</code></td>
+      <td>Agent requests form-based elicitation (structured user input)</td>
+      <td>🤖 Agent (requires -> <a href="#responding-to-form-elicitation">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "mode": "form",
+  "scope": { ... },
+  "schema": { ... },
+  "message": "string"
+}</code></pre></td>
+    </tr>
     <tr id="loggedout">
       <td><code>LoggedOut</code></td>
       <td>Agent logout completed</td>
@@ -2314,6 +2334,18 @@ Below is a list of all autocommands and their associated data (passed to the cal
   }
 }</code></pre></td>
     </tr>
+    <tr id="urlelicitation">
+      <td><code>UrlElicitation</code></td>
+      <td>Agent requests URL-based elicitation (direct user to a browser URL)</td>
+      <td>🤖 Agent (requires -> <a href="#responding-to-url-elicitation">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "mode": "url",
+  "scope": { ... },
+  "url": "string",
+  "message": "string"
+}</code></pre></td>
+    </tr>
     <tr>
       <td><code>UsageUpdate</code></td>
       <td>Session usage metrics update (tokens, cost)</td>
@@ -2427,39 +2459,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "content": "string"
 }</code></pre></td>
     </tr>
-    <tr id="formelicitation">
-      <td><code>FormElicitation</code></td>
-      <td>Agent requests form-based elicitation (structured user input)</td>
-      <td>🤖 Agent (requires -> <a href="#responding-to-form-elicitation">respond()</a>)</td>
-      <td><pre><code class="language-json">{
-  "requestId": "uuid string",
-  "mode": "form",
-  "scope": { ... },
-  "schema": { ... },
-  "message": "string"
-}</code></pre></td>
-    </tr>
-    <tr id="urlelicitation">
-      <td><code>UrlElicitation</code></td>
-      <td>Agent requests URL-based elicitation (direct user to a browser URL)</td>
-      <td>🤖 Agent (requires -> <a href="#responding-to-url-elicitation">respond()</a>)</td>
-      <td><pre><code class="language-json">{
-  "requestId": "uuid string",
-  "mode": "url",
-  "scope": { ... },
-  "url": "string",
-  "message": "string"
-}</code></pre></td>
-    </tr>
-    <tr id="elicitationcomplete">
-      <td><code>ElicitationComplete</code></td>
-      <td>Agent notifies that an elicitation has completed</td>
-      <td>🤖 Agent (notification)</td>
-      <td><pre><code class="language-json">{
-  "elicitationId": "uuid string"
-}</code></pre></td>
-    </tr>
-  </tbody>
+    </tbody>
 </table>
 
 
