@@ -1176,7 +1176,7 @@ vim.api.nvim_create_autocmd("User", {
 > - Remove the terminal
 > - Delete the attached buffer (can be configured to omit this step)
 
-#### 📋 Form input
+#### 📋 User/Form input (elicitation)
 
 ```lua
 local hermes = require("hermes")
@@ -1218,7 +1218,7 @@ vim.api.nvim_create_autocmd("User", {
 
 > **Note:** Elicitation content values may be strings, numbers, booleans, or arrays of strings.
 
-#### 🔗 Browser input
+#### 🔗 Browser input (elicitation)
 
 ```lua
 local hermes = require("hermes")
