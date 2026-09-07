@@ -842,6 +842,17 @@ async fn handle_prompt(
                 .map_err(|e| internal_error(format!("elicitation failed: {}", e)))?;
         }
 
+        // Send elicitation complete notification (if configured)
+        let elicitation_complete_notification = {
+            let config = config.lock().unwrap();
+            config.elicitation_complete_notification.clone()
+        };
+
+        if let Some(complete_notif) = elicitation_complete_notification {
+            cx.send_notification(complete_notif)
+                .map_err(|e| internal_error(format!("elicitation complete failed: {}", e)))?;
+        }
+
         // Echo back the prompt content as agent message chunks
         for content in &request.prompt {
             let text = match content {

@@ -2,16 +2,17 @@
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, AuthenticateResponse, CloseSessionResponse, CreateElicitationRequest,
-    CreateTerminalRequest, DeleteSessionResponse, ExtResponse, Implementation, InitializeResponse,
-    ListSessionsResponse, LoadSessionResponse, McpCapabilities, NewSessionResponse,
-    PermissionOption, PermissionOptionId, PermissionOptionKind, PromptCapabilities,
-    ReadTextFileRequest, ReleaseTerminalRequest, RequestPermissionRequest, ResumeSessionResponse,
-    SessionAdditionalDirectoriesCapabilities, SessionCapabilities, SessionCloseCapabilities,
-    SessionDeleteCapabilities, SessionForkCapabilities, SessionId, SessionInfo,
-    SessionListCapabilities, SessionResumeCapabilities, SetSessionConfigOptionResponse,
-    SetSessionModeResponse, TerminalOutputRequest, ToolCallId, ToolCallUpdate,
-    ToolCallUpdateFields, WaitForTerminalExitRequest, WriteTextFileRequest,
+    AgentCapabilities, AuthenticateResponse, CloseSessionResponse, CompleteElicitationNotification,
+    CreateElicitationRequest, CreateTerminalRequest, DeleteSessionResponse, ElicitationId,
+    ExtResponse, Implementation, InitializeResponse, ListSessionsResponse, LoadSessionResponse,
+    McpCapabilities, NewSessionResponse, PermissionOption, PermissionOptionId,
+    PermissionOptionKind, PromptCapabilities, ReadTextFileRequest, ReleaseTerminalRequest,
+    RequestPermissionRequest, ResumeSessionResponse, SessionAdditionalDirectoriesCapabilities,
+    SessionCapabilities, SessionCloseCapabilities, SessionDeleteCapabilities,
+    SessionForkCapabilities, SessionId, SessionInfo, SessionListCapabilities,
+    SessionResumeCapabilities, SetSessionConfigOptionResponse, SetSessionModeResponse,
+    TerminalOutputRequest, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
+    WaitForTerminalExitRequest, WriteTextFileRequest,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -55,6 +56,8 @@ pub struct MockConfig {
     pub release_terminal_request: Option<ReleaseTerminalRequest>,
     /// Elicitation request to send during prompt (None = skip)
     pub elicitation_request: Option<CreateElicitationRequest>,
+    /// Elicitation complete notification to send during prompt (None = skip)
+    pub elicitation_complete_notification: Option<CompleteElicitationNotification>,
     /// Close session response to return when a CloseSessionRequest is received
     pub close_session_response: Option<CloseSessionResponse>,
     /// Delete session response to return when a DeleteSessionRequest is received
@@ -106,6 +109,7 @@ impl Default for MockConfig {
             write_file_request: None,
             release_terminal_request: None,
             elicitation_request: None,
+            elicitation_complete_notification: None,
             close_session_response: None,
             delete_session_response: None,
         }
@@ -237,6 +241,15 @@ impl MockConfig {
         self
     }
 
+    /// Set an elicitation complete notification to send during prompt
+    pub fn set_elicitation_complete_notification(
+        mut self,
+        notification: CompleteElicitationNotification,
+    ) -> Self {
+        self.elicitation_complete_notification = Some(notification);
+        self
+    }
+
     /// Set a close session response to return on CloseSessionRequest
     pub fn set_close_session_response(mut self, response: CloseSessionResponse) -> Self {
         self.close_session_response = Some(response);
@@ -314,4 +327,11 @@ pub fn create_test_wait_for_terminal_exit_request(
     terminal_id: impl Into<agent_client_protocol::schema::v1::TerminalId>,
 ) -> WaitForTerminalExitRequest {
     WaitForTerminalExitRequest::new(session_id, terminal_id)
+}
+
+/// Create an elicitation complete notification for testing
+pub fn create_test_elicitation_complete_notification(
+    elicitation_id: impl Into<ElicitationId>,
+) -> CompleteElicitationNotification {
+    CompleteElicitationNotification::new(elicitation_id)
 }

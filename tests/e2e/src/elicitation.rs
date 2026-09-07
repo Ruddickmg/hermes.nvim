@@ -14,8 +14,9 @@ use crate::{
     },
 };
 use agent_client_protocol::schema::v1::{
-    CreateElicitationRequest, ElicitationFormMode, ElicitationSchema, ElicitationScope,
-    ElicitationSessionScope, InitializeResponse, NewSessionResponse, PromptResponse, SessionId,
+    CompleteElicitationNotification, CreateElicitationRequest, ElicitationFormMode, ElicitationId,
+    ElicitationSchema, ElicitationScope, ElicitationSessionScope, ElicitationUrlMode,
+    InitializeResponse, NewSessionResponse, PromptResponse, SessionId,
 };
 use hermes::{
     api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
@@ -34,6 +35,23 @@ struct FormElicitationData {
     pub message: String,
 }
 
+/// Data received from the UrlElicitation autocommand.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UrlElicitationData {
+    pub request_id: String,
+    pub mode: String,
+    pub message: String,
+    pub url: String,
+}
+
+/// Data received from the ElicitationComplete autocommand.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ElicitationCompleteData {
+    pub elicitation_id: String,
+}
+
 fn create_func<A, R>(plugin: Dictionary, name: &str) -> Function<A, R> {
     FromObject::from_object(plugin.get(name).unwrap().clone())
         .unwrap_or_else(|_| panic!("Failed to create function for {}", name))
@@ -48,6 +66,20 @@ fn create_form_elicitation_request(session_id: SessionId) -> CreateElicitationRe
     let scope = ElicitationScope::Session(ElicitationSessionScope::new(session_id));
     let mode = ElicitationFormMode::new(scope, schema);
     CreateElicitationRequest::new(mode, "Please enter your name")
+}
+
+fn create_url_elicitation_request(session_id: SessionId) -> CreateElicitationRequest {
+    let scope = ElicitationScope::Session(ElicitationSessionScope::new(session_id));
+    let mode = ElicitationUrlMode::new(
+        scope,
+        ElicitationId::from("url-elicitation"),
+        "https://example.com/auth",
+    );
+    CreateElicitationRequest::new(mode, "Please authorize")
+}
+
+fn create_elicitation_complete_notification() -> CompleteElicitationNotification {
+    CompleteElicitationNotification::new(ElicitationId::from("url-elicitation"))
 }
 
 /// Test that the FormElicitation autocommand fires when the mock agent sends an
@@ -112,6 +144,140 @@ fn test_form_elicitation_fires_and_responds_with_mock_agent() -> Result<(), nvim
 
     assert_eq!(elicitation.mode, "form");
     assert_eq!(elicitation.message, "Please enter your name");
+
+    Ok(())
+}
+
+/// Test that the UrlElicitation autocommand fires when the mock agent sends an
+/// `elicitation/create` request in URL mode, and that responding delivers the
+/// response back to the agent.
+#[nvim_oxi::test]
+fn test_url_elicitation_fires_and_responds_with_mock_agent() -> Result<(), nvim_oxi::Error> {
+    let session_placeholder = SessionId::from("placeholder");
+
+    let agent = MockAgent::new();
+    {
+        let mut config = agent.config().lock().unwrap();
+        *config = MockConfig::new()
+            .set_elicitation_request(create_url_elicitation_request(session_placeholder.clone()));
+    }
+    let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
+
+    let dict: Dictionary = hermes()?;
+    let connect: Function<ConnectionArgs, ()> = create_func(dict.clone(), "connect");
+    let disconnect: Function<DisconnectArgs, ()> = create_func(dict.clone(), "disconnect");
+    let create_session: Function<CreateSessionArgs, ()> =
+        create_func(dict.clone(), "create_session");
+    let prompt = create_func::<PromptArgs, Option<nvim_oxi::String>>(dict.clone(), "prompt");
+    let respond: Function<(String, Object), ()> = create_func(dict.clone(), "respond");
+
+    let wait_for_init =
+        autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
+    let wait_for_session =
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
+    let wait_for_elicitation =
+        autocommand::listen_for_autocommand::<UrlElicitationData>(Commands::UrlElicitation);
+    let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
+
+    connect_to_mock_agent(&connect, &mock_handle)?;
+    wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS)).map_err(|_| make_err("init timeout"))?;
+
+    create_session.call(CreateSessionArgs::Default)?;
+    let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("session timeout"))?;
+
+    let mut content_dict = Dictionary::new();
+    content_dict.insert("type", "text");
+    content_dict.insert("text", "Ask me for my name");
+    let content = PromptContent::Single(FromObject::from_object(Object::from(content_dict))?);
+
+    let _ = prompt.call((session.session_id.to_string(), content))?;
+
+    let elicitation = wait_for_elicitation(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("UrlElicitation autocommand did not fire"))?;
+
+    let mut response_dict = Dictionary::new();
+    response_dict.insert("action", Object::from("decline"));
+    respond.call((elicitation.request_id.clone(), Object::from(response_dict)))?;
+
+    let _prompt_response = wait_for_prompt(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("Prompt did not complete after elicitation workflow"))?;
+
+    disconnect.call(DisconnectArgs::All)?;
+    mock_handle.close();
+
+    assert_eq!(elicitation.mode, "url");
+    assert_eq!(elicitation.message, "Please authorize");
+    assert_eq!(elicitation.url, "https://example.com/auth");
+
+    Ok(())
+}
+
+/// Test that the ElicitationComplete autocommand fires when the mock agent sends
+/// an `elicitation/complete` notification during a prompt.
+#[nvim_oxi::test]
+fn test_elicitation_complete_fires_with_mock_agent() -> Result<(), nvim_oxi::Error> {
+    let session_placeholder = SessionId::from("placeholder");
+
+    let agent = MockAgent::new();
+    {
+        let mut config = agent.config().lock().unwrap();
+        *config = MockConfig::new()
+            .set_elicitation_request(create_url_elicitation_request(session_placeholder.clone()))
+            .set_elicitation_complete_notification(create_elicitation_complete_notification());
+    }
+    let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
+
+    let dict: Dictionary = hermes()?;
+    let connect: Function<ConnectionArgs, ()> = create_func(dict.clone(), "connect");
+    let disconnect: Function<DisconnectArgs, ()> = create_func(dict.clone(), "disconnect");
+    let create_session: Function<CreateSessionArgs, ()> =
+        create_func(dict.clone(), "create_session");
+    let prompt = create_func::<PromptArgs, Option<nvim_oxi::String>>(dict.clone(), "prompt");
+    let respond: Function<(String, Object), ()> = create_func(dict.clone(), "respond");
+
+    let wait_for_init =
+        autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
+    let wait_for_session =
+        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
+    let wait_for_elicitation =
+        autocommand::listen_for_autocommand::<UrlElicitationData>(Commands::UrlElicitation);
+    let wait_for_complete = autocommand::listen_for_autocommand::<ElicitationCompleteData>(
+        Commands::ElicitationComplete,
+    );
+    let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
+
+    connect_to_mock_agent(&connect, &mock_handle)?;
+    wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS)).map_err(|_| make_err("init timeout"))?;
+
+    create_session.call(CreateSessionArgs::Default)?;
+    let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("session timeout"))?;
+
+    let mut content_dict = Dictionary::new();
+    content_dict.insert("type", "text");
+    content_dict.insert("text", "Ask me for my name");
+    let content = PromptContent::Single(FromObject::from_object(Object::from(content_dict))?);
+
+    let _ = prompt.call((session.session_id.to_string(), content))?;
+
+    let elicitation = wait_for_elicitation(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("UrlElicitation autocommand did not fire"))?;
+
+    let mut response_dict = Dictionary::new();
+    response_dict.insert("action", Object::from("decline"));
+    respond.call((elicitation.request_id.clone(), Object::from(response_dict)))?;
+
+    let complete = wait_for_complete(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("ElicitationComplete autocommand did not fire"))?;
+
+    let _prompt_response = wait_for_prompt(Duration::from_secs(TIMEOUT_IN_SECONDS))
+        .map_err(|_| make_err("Prompt did not complete after elicitation workflow"))?;
+
+    disconnect.call(DisconnectArgs::All)?;
+    mock_handle.close();
+
+    assert_eq!(complete.elicitation_id, "url-elicitation");
 
     Ok(())
 }
