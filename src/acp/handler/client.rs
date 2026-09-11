@@ -107,7 +107,7 @@ impl Handler {
         &self,
         notification: CompleteElicitationNotification,
     ) -> Result<()> {
-        if !self.can_request_url_elicitation().await {
+        if !self.elicitation_enabled().await {
             return Err(Error::method_not_found());
         }
         info!("Elicitation complete: {:?}", notification);

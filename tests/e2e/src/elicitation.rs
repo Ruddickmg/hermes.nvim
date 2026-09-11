@@ -142,8 +142,10 @@ fn test_form_elicitation_fires_and_responds_with_mock_agent() -> Result<(), nvim
     disconnect.call(DisconnectArgs::All)?;
     mock_handle.close();
 
-    assert_eq!(elicitation.mode, "form");
-    assert_eq!(elicitation.message, "Please enter your name");
+    assert_eq!(
+        (elicitation.mode.as_str(), elicitation.message.as_str()),
+        ("form", "Please enter your name")
+    );
 
     Ok(())
 }
@@ -206,9 +208,14 @@ fn test_url_elicitation_fires_and_responds_with_mock_agent() -> Result<(), nvim_
     disconnect.call(DisconnectArgs::All)?;
     mock_handle.close();
 
-    assert_eq!(elicitation.mode, "url");
-    assert_eq!(elicitation.message, "Please authorize");
-    assert_eq!(elicitation.url, "https://example.com/auth");
+    assert_eq!(
+        (
+            elicitation.mode.as_str(),
+            elicitation.message.as_str(),
+            elicitation.url.as_str()
+        ),
+        ("url", "Please authorize", "https://example.com/auth")
+    );
 
     Ok(())
 }
@@ -322,7 +329,7 @@ fn test_form_elicitation_default_response_with_mock_agent() -> Result<(), nvim_o
     content_dict.insert("text", "Ask me for my name");
     let content = PromptContent::Single(FromObject::from_object(Object::from(content_dict))?);
 
-    let _ = prompt.call((session.session_id.to_string(), content))?;
+    let prompt_result = prompt.call((session.session_id.to_string(), content))?;
 
     // The default response should let the prompt flow complete even without a listener.
     let _prompt_response = wait_for_prompt(Duration::from_secs(TIMEOUT_IN_SECONDS))
@@ -330,6 +337,13 @@ fn test_form_elicitation_default_response_with_mock_agent() -> Result<(), nvim_o
 
     disconnect.call(DisconnectArgs::All)?;
     mock_handle.close();
+
+    let prompt_id = prompt_result
+        .expect("prompt should return a prompt id when elicitation is defaulted to cancel");
+    assert!(
+        !prompt_id.is_empty(),
+        "prompt id should be a non-empty UUID when the elicitation flow completes"
+    );
 
     Ok(())
 }

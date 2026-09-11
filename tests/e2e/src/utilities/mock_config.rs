@@ -3,16 +3,15 @@
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, AuthenticateResponse, CloseSessionResponse, CompleteElicitationNotification,
-    CreateElicitationRequest, CreateTerminalRequest, DeleteSessionResponse, ElicitationId,
-    ExtResponse, Implementation, InitializeResponse, ListSessionsResponse, LoadSessionResponse,
-    McpCapabilities, NewSessionResponse, PermissionOption, PermissionOptionId,
-    PermissionOptionKind, PromptCapabilities, ReadTextFileRequest, ReleaseTerminalRequest,
-    RequestPermissionRequest, ResumeSessionResponse, SessionAdditionalDirectoriesCapabilities,
-    SessionCapabilities, SessionCloseCapabilities, SessionDeleteCapabilities,
-    SessionForkCapabilities, SessionId, SessionInfo, SessionListCapabilities,
-    SessionResumeCapabilities, SetSessionConfigOptionResponse, SetSessionModeResponse,
-    TerminalOutputRequest, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
-    WaitForTerminalExitRequest, WriteTextFileRequest,
+    CreateElicitationRequest, CreateTerminalRequest, DeleteSessionResponse, ExtResponse,
+    Implementation, InitializeResponse, ListSessionsResponse, LoadSessionResponse, McpCapabilities,
+    NewSessionResponse, PermissionOption, PermissionOptionId, PermissionOptionKind,
+    PromptCapabilities, ReadTextFileRequest, ReleaseTerminalRequest, RequestPermissionRequest,
+    ResumeSessionResponse, SessionAdditionalDirectoriesCapabilities, SessionCapabilities,
+    SessionCloseCapabilities, SessionDeleteCapabilities, SessionForkCapabilities, SessionId,
+    SessionInfo, SessionListCapabilities, SessionResumeCapabilities,
+    SetSessionConfigOptionResponse, SetSessionModeResponse, TerminalOutputRequest, ToolCallId,
+    ToolCallUpdate, ToolCallUpdateFields, WaitForTerminalExitRequest, WriteTextFileRequest,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -327,11 +326,4 @@ pub fn create_test_wait_for_terminal_exit_request(
     terminal_id: impl Into<agent_client_protocol::schema::v1::TerminalId>,
 ) -> WaitForTerminalExitRequest {
     WaitForTerminalExitRequest::new(session_id, terminal_id)
-}
-
-/// Create an elicitation complete notification for testing
-pub fn create_test_elicitation_complete_notification(
-    elicitation_id: impl Into<ElicitationId>,
-) -> CompleteElicitationNotification {
-    CompleteElicitationNotification::new(elicitation_id)
 }

@@ -150,9 +150,9 @@ impl Handler {
 
     #[instrument(level = "trace", skip(self))]
     pub async fn can_request_permissions(&self) -> bool {
-        let config = self.state.lock().await;
-        let can_request_permissions = config.config.permissions.request_permissions;
-        drop(config);
+        let state = self.state.lock().await;
+        let can_request_permissions = state.config.permissions.request_permissions;
+        drop(state);
         can_request_permissions
     }
 
@@ -166,18 +166,27 @@ impl Handler {
 
     #[instrument(level = "trace", skip(self))]
     pub async fn can_request_form_elicitation(&self) -> bool {
-        let config = self.state.lock().await;
-        let elicitation_form = config.config.permissions.elicitation.form;
-        drop(config);
+        let state = self.state.lock().await;
+        let elicitation_form = state.config.permissions.elicitation.form;
+        drop(state);
         elicitation_form
     }
 
     #[instrument(level = "trace", skip(self))]
     pub async fn can_request_url_elicitation(&self) -> bool {
-        let config = self.state.lock().await;
-        let elicitation_url = config.config.permissions.elicitation.url;
-        drop(config);
+        let state = self.state.lock().await;
+        let elicitation_url = state.config.permissions.elicitation.url;
+        drop(state);
         elicitation_url
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub async fn elicitation_enabled(&self) -> bool {
+        let state = self.state.lock().await;
+        let elicitation_url = state.config.permissions.elicitation.url;
+        let elicitation_form = state.config.permissions.elicitation.form;
+        drop(state);
+        elicitation_url || elicitation_form
     }
 
     #[instrument(level = "trace", skip(self))]

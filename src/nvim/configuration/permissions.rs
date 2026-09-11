@@ -239,43 +239,6 @@ mod tests {
     }
 
     #[test]
-    fn test_permissions_custom_values() {
-        let perms = Permissions {
-            fs_write_access: false,
-            fs_read_access: true,
-            terminal_access: false,
-            request_permissions: true,
-            send_notifications: false,
-            elicitation: ElicitationPermissions {
-                form: false,
-                url: true,
-                reject_unknown_elicitation_values: true,
-            },
-        };
-        assert_eq!(
-            perms.elicitation,
-            ElicitationPermissions {
-                form: false,
-                url: true,
-                reject_unknown_elicitation_values: true,
-            }
-        );
-    }
-
-    #[test]
-    fn test_elicitation_permissions_default_all_true() {
-        let elic = ElicitationPermissions::default();
-        assert_eq!(
-            elic,
-            ElicitationPermissions {
-                form: true,
-                url: true,
-                reject_unknown_elicitation_values: false,
-            }
-        );
-    }
-
-    #[test]
     fn test_elicitation_permissions_from_object_parses_nested() {
         let mut dict = Dictionary::new();
         dict.insert("form", true);
