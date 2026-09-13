@@ -81,7 +81,9 @@ impl Handler {
             }
             _ => return Err(Error::method_not_found()),
         };
-
+        if session_id.is_empty() {
+            return Err(Error::invalid_params());
+        }
         let (sender, receiver) = bounded::<CreateElicitationResponse>(1);
         info!("Requesting elicitation: {:?}", args);
 
