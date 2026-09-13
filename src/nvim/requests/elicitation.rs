@@ -130,7 +130,7 @@ impl Request {
                 }
                 Ok(ElicitationContentValue::StringArray(arr))
             }
-            ElicitationPropertySchema::Other(_) | _ => {
+            _ => {
                 if reject_unknown {
                     return Err(Error::InvalidInput(
                         "Unknown elicitation property type was rejected".to_string(),
