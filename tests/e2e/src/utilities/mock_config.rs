@@ -4,14 +4,15 @@ use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, AuthenticateResponse, CloseSessionResponse, CompleteElicitationNotification,
     CreateElicitationRequest, CreateTerminalRequest, DeleteSessionResponse, ExtResponse,
-    Implementation, InitializeResponse, ListSessionsResponse, LoadSessionResponse, McpCapabilities,
-    NewSessionResponse, PermissionOption, PermissionOptionId, PermissionOptionKind,
-    PromptCapabilities, ReadTextFileRequest, ReleaseTerminalRequest, RequestPermissionRequest,
-    ResumeSessionResponse, SessionAdditionalDirectoriesCapabilities, SessionCapabilities,
-    SessionCloseCapabilities, SessionDeleteCapabilities, SessionForkCapabilities, SessionId,
-    SessionInfo, SessionListCapabilities, SessionResumeCapabilities,
-    SetSessionConfigOptionResponse, SetSessionModeResponse, TerminalOutputRequest, ToolCallId,
-    ToolCallUpdate, ToolCallUpdateFields, WaitForTerminalExitRequest, WriteTextFileRequest,
+    Implementation, InitializeRequest, InitializeResponse, ListSessionsResponse,
+    LoadSessionResponse, McpCapabilities, NewSessionResponse, PermissionOption, PermissionOptionId,
+    PermissionOptionKind, PromptCapabilities, ReadTextFileRequest, ReleaseTerminalRequest,
+    RequestPermissionRequest, ResumeSessionResponse, SessionAdditionalDirectoriesCapabilities,
+    SessionCapabilities, SessionCloseCapabilities, SessionDeleteCapabilities,
+    SessionForkCapabilities, SessionId, SessionInfo, SessionListCapabilities,
+    SessionResumeCapabilities, SetSessionConfigOptionResponse, SetSessionModeResponse,
+    TerminalOutputRequest, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
+    WaitForTerminalExitRequest, WriteTextFileRequest,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -21,6 +22,8 @@ use std::time::Duration;
 #[derive(Clone)]
 pub struct MockConfig {
     pub initialize_response: InitializeResponse,
+    /// The InitializeRequest most recently received by the agent (None = not yet received)
+    pub initialize_request: Option<InitializeRequest>,
     pub authenticate_response: AuthenticateResponse,
     pub new_session_response: NewSessionResponse,
     /// Permission request to send during prompt (None = don't request permission)
@@ -91,6 +94,7 @@ impl Default for MockConfig {
                         ),
                 ),
             authenticate_response: AuthenticateResponse::default(),
+            initialize_request: None,
             new_session_response: NewSessionResponse::new(generate_session_id()),
             permission_request: None,
             load_session_response: None,

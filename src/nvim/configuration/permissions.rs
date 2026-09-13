@@ -301,6 +301,101 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn elicitation_changed_returns_true_when_form_enabled() {
+        let old = Permissions {
+            elicitation: ElicitationPermissions {
+                form: false,
+                url: true,
+                reject_unknown_elicitation_values: false,
+            },
+            ..Default::default()
+        };
+        let partial = PermissionsPartial {
+            elicitation: Some(ElicitationPermissionsPartial {
+                form: Some(true),
+                url: None,
+                reject_unknown_elicitation_values: None,
+            }),
+            ..Default::default()
+        };
+
+        assert!(elicitation_changed(Some(&partial), &old));
+    }
+
+    #[test]
+    fn elicitation_changed_returns_true_when_form_disabled() {
+        let old = Permissions {
+            elicitation: ElicitationPermissions {
+                form: true,
+                url: true,
+                reject_unknown_elicitation_values: false,
+            },
+            ..Default::default()
+        };
+        let partial = PermissionsPartial {
+            elicitation: Some(ElicitationPermissionsPartial {
+                form: Some(false),
+                url: None,
+                reject_unknown_elicitation_values: None,
+            }),
+            ..Default::default()
+        };
+
+        assert!(elicitation_changed(Some(&partial), &old));
+    }
+
+    #[test]
+    fn elicitation_changed_returns_true_when_url_enabled() {
+        let old = Permissions {
+            elicitation: ElicitationPermissions {
+                form: true,
+                url: false,
+                reject_unknown_elicitation_values: false,
+            },
+            ..Default::default()
+        };
+        let partial = PermissionsPartial {
+            elicitation: Some(ElicitationPermissionsPartial {
+                form: None,
+                url: Some(true),
+                reject_unknown_elicitation_values: None,
+            }),
+            ..Default::default()
+        };
+
+        assert!(elicitation_changed(Some(&partial), &old));
+    }
+
+    #[test]
+    fn elicitation_changed_returns_false_when_settings_unchanged() {
+        let old = Permissions {
+            elicitation: ElicitationPermissions {
+                form: true,
+                url: true,
+                reject_unknown_elicitation_values: false,
+            },
+            ..Default::default()
+        };
+        let partial = PermissionsPartial {
+            elicitation: Some(ElicitationPermissionsPartial {
+                form: Some(true),
+                url: Some(true),
+                reject_unknown_elicitation_values: None,
+            }),
+            ..Default::default()
+        };
+
+        assert!(!elicitation_changed(Some(&partial), &old));
+    }
+
+    #[test]
+    fn elicitation_changed_returns_false_without_elicitation_partial() {
+        let old = Permissions::default();
+
+        assert!(!elicitation_changed(None, &old));
+    }
 }
 
 /// Partial permissions configuration where each field is optional
@@ -377,6 +472,19 @@ impl PermissionsPartial {
             }
         }
     }
+}
+
+/// Returns whether `partial` changes the connect-time elicitation settings
+/// (`form`/`url`) relative to `old`. Those settings are only advertised at connect
+/// time, so any change requires a reconnect to take effect. The
+/// `reject_unknown_elicitation_values` toggle is intentionally excluded: it is
+/// applied at response-handling time and takes effect immediately.
+pub fn elicitation_changed(partial: Option<&PermissionsPartial>, old: &Permissions) -> bool {
+    let Some(elicitation) = partial.and_then(|p| p.elicitation.as_ref()) else {
+        return false;
+    };
+    elicitation.form.is_some_and(|v| v != old.elicitation.form)
+        || elicitation.url.is_some_and(|v| v != old.elicitation.url)
 }
 
 impl FromObject for PermissionsPartial {

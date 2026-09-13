@@ -1212,11 +1212,9 @@ vim.api.nvim_create_autocmd("User", {
 
 > **Responds to:** [FormElicitation](#formelicitation) autocommand.
 >
-> **Default behavior:** If no autocommand handler is defined for `FormElicitation`, Hermes will:
-> - Automatically cancel the elicitation so the agent does not hang
-> - A default UI is planned for the future (see the TODO in the source)
-
-> **Note:** Elicitation content values may be strings, numbers, booleans, or arrays of strings.
+> **Default behavior:** If no autocommand handler is defined for [FormElicitation](#formelicitation), Hermes will:
+> - Report that form elicitation is not a supported capabilitiy
+> - Cancel any elicitation requests it may recieve (should not happen when capabilities are reported as unsupported)
 
 #### 🔗 Browser input (elicitation)
 
@@ -1243,8 +1241,9 @@ vim.api.nvim_create_autocmd("User", {
 
 > **Responds to:** [UrlElicitation](#urlelicitation) autocommand.
 >
-> **Default behavior:** If no autocommand handler is defined for `UrlElicitation`, Hermes will:
-> - Automatically cancel the elicitation so the agent does not hang
+> **Default behavior:** If no autocommand handler is defined for [UrlElicitation](#urlelicitation), Hermes will:
+> - Report that url elicitation is not a supported capabilitiy
+> - Cancel any elicitation requests it may recieve (should not happen when capabilities are reported as unsupported)
 
 ## 📡 Autocommands
 

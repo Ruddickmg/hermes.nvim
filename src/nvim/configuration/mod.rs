@@ -23,6 +23,7 @@ use nvim_oxi::{
 };
 pub use permissions::{
     ElicitationPermissions, ElicitationPermissionsPartial, Permissions, PermissionsPartial,
+    elicitation_changed,
 };
 pub use progress::{ProgressConfig, ProgressConfigPartial, show_progress_in_cmdline};
 pub use session::{SessionConfig, SessionConfigPartial};

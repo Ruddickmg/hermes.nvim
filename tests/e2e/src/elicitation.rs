@@ -347,3 +347,92 @@ fn test_form_elicitation_default_response_with_mock_agent() -> Result<(), nvim_o
 
     Ok(())
 }
+
+/// Test that no elicitation capabilities are advertised during initialize when no
+/// FormElicitation/UrlElicitation listeners are attached, even if the permissions
+/// are enabled. This is the gate that makes auto-cancel a safety net only.
+#[nvim_oxi::test]
+fn test_elicitation_capabilities_not_advertised_without_listener() -> Result<(), nvim_oxi::Error> {
+    let agent = MockAgent::new();
+    {
+        let mut config = agent.config().lock().unwrap();
+        *config = MockConfig::new();
+    }
+    let config_handle = agent.config().clone();
+    let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
+
+    let dict: Dictionary = hermes()?;
+    let connect: Function<ConnectionArgs, ()> = create_func(dict.clone(), "connect");
+    let disconnect: Function<DisconnectArgs, ()> = create_func(dict.clone(), "disconnect");
+
+    // NOTE: intentionally NOT listening for the elicitation autocommands
+    let wait_for_init =
+        autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
+
+    connect_to_mock_agent(&connect, &mock_handle)?;
+    wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS)).map_err(|_| make_err("init timeout"))?;
+
+    let caps = config_handle
+        .lock()
+        .unwrap()
+        .initialize_request
+        .as_ref()
+        .expect("initialize request should be captured")
+        .client_capabilities
+        .elicitation
+        .clone()
+        .expect("elicitation capabilities should be present in the initialize request");
+
+    disconnect.call(DisconnectArgs::All)?;
+    mock_handle.close();
+
+    assert_eq!((caps.form, caps.url), (None, None));
+
+    Ok(())
+}
+
+/// Test that elicitation capabilities are advertised during initialize when both the
+/// FormElicitation and UrlElicitation listeners are attached and permissions are enabled.
+#[nvim_oxi::test]
+fn test_elicitation_capabilities_advertised_with_listener() -> Result<(), nvim_oxi::Error> {
+    let agent = MockAgent::new();
+    {
+        let mut config = agent.config().lock().unwrap();
+        *config = MockConfig::new();
+    }
+    let config_handle = agent.config().clone();
+    let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
+
+    let dict: Dictionary = hermes()?;
+    let connect: Function<ConnectionArgs, ()> = create_func(dict.clone(), "connect");
+    let disconnect: Function<DisconnectArgs, ()> = create_func(dict.clone(), "disconnect");
+
+    let wait_for_init =
+        autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
+    // Attach both elicitation listeners BEFORE connecting so they gate the advertisement.
+    let _wait_for_form =
+        autocommand::listen_for_autocommand::<FormElicitationData>(Commands::FormElicitation);
+    let _wait_for_url =
+        autocommand::listen_for_autocommand::<UrlElicitationData>(Commands::UrlElicitation);
+
+    connect_to_mock_agent(&connect, &mock_handle)?;
+    wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS)).map_err(|_| make_err("init timeout"))?;
+
+    let caps = config_handle
+        .lock()
+        .unwrap()
+        .initialize_request
+        .as_ref()
+        .expect("initialize request should be captured")
+        .client_capabilities
+        .elicitation
+        .clone()
+        .expect("elicitation capabilities should be present in the initialize request");
+
+    disconnect.call(DisconnectArgs::All)?;
+    mock_handle.close();
+
+    assert_eq!((caps.form.is_some(), caps.url.is_some()), (true, true));
+
+    Ok(())
+}

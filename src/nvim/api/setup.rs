@@ -1,9 +1,9 @@
 use nvim_oxi::Object;
 use nvim_oxi::conversion::FromObject;
 use nvim_oxi::lua::{self, Poppable};
-use tracing::{error, instrument};
+use tracing::{error, instrument, warn};
 
-use crate::nvim::configuration::ClientConfigPartial;
+use crate::nvim::configuration::{ClientConfigPartial, elicitation_changed};
 use crate::{acp::Result, api::Api};
 
 /// Wrapper type for setup arguments that can be nil or a config table
@@ -54,11 +54,16 @@ impl Api {
         let config_update = args.into_inner();
         let mut state = self.state.lock().await;
         let show_cmdline_progress = state.config.progress.cmdline;
+        let old_permissions = state.config.permissions.clone();
         config_update.clone().apply_to(&mut state.config);
         let cmdline = state.config.progress.cmdline;
         let log_config = state.config.log.clone();
         drop(state);
-
+        let elicitation_changed =
+            elicitation_changed(config_update.permissions.as_ref(), &old_permissions);
+        if !self.connection.connected_agents().is_empty() && elicitation_changed {
+            warn!("Enabling or disabling elicitation will only take effect on new connections");
+        }
         if let Some(progress) = config_update.progress.clone() {
             if let Some(show_in_cmdline) = progress.cmdline
                 && show_in_cmdline != show_cmdline_progress
