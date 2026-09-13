@@ -73,7 +73,12 @@ impl From<Responder> for Commands {
             Responder::TerminalCreate(..) => Commands::TerminalCreate,
             Responder::TerminalExit(..) => Commands::TerminalExit,
             Responder::TerminalRelease(..) => Commands::TerminalRelease,
-            Responder::Elicitation(..) => Commands::FormElicitation,
+            Responder::Elicitation(_, req) => match req.mode {
+                agent_client_protocol::schema::v1::ElicitationMode::Url(_) => {
+                    Commands::UrlElicitation
+                }
+                _ => Commands::FormElicitation,
+            },
         }
     }
 }
@@ -800,5 +805,25 @@ mod tests {
         let responder = Responder::Elicitation(sender, request);
         let command: Commands = responder.into();
         assert_eq!(command, Commands::FormElicitation);
+    }
+
+    #[test]
+    fn responder_elicitation_url_maps_to_url_elicitation_command() {
+        let (sender, _receiver) = async_channel::bounded::<CreateElicitationResponse>(1);
+        let scope = agent_client_protocol::schema::v1::ElicitationScope::Session(
+            agent_client_protocol::schema::v1::ElicitationSessionScope::new("test"),
+        );
+        let mode = agent_client_protocol::schema::v1::ElicitationUrlMode::new(
+            scope,
+            agent_client_protocol::schema::v1::ElicitationId::from("url-elicitation"),
+            "https://example.com/auth",
+        );
+        let request = agent_client_protocol::schema::v1::CreateElicitationRequest::new(
+            mode,
+            "Please authorize",
+        );
+        let responder = Responder::Elicitation(sender, request);
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::UrlElicitation);
     }
 }
