@@ -154,6 +154,11 @@ hermes.setup({
     terminal_access = true,      -- Allow terminal access to the agent 
     request_permissions = true,  -- Allow agent to send permission requests 
     send_notifications = true,  -- Allow the agent to send notifications 
+    elicitation = {
+      form = true, -- Allow the agent to send form elicitation requests
+      url = true, -- Allow the agent to send URL elicitation requests
+      reject_unknown_elicitation_values = false, -- Reject responses for unknown/future elicitation property types
+    },
   },
   distributions = { -- path to distributions
     uvx = true, -- allows installing agents via UVX
@@ -1213,8 +1218,8 @@ vim.api.nvim_create_autocmd("User", {
 > **Responds to:** [FormElicitation](#formelicitation) autocommand.
 >
 > **Default behavior:** If no autocommand handler is defined for [FormElicitation](#formelicitation), Hermes will:
-> - Report that form elicitation is not a supported capabilitiy
-> - Cancel any elicitation requests it may recieve (should not happen when capabilities are reported as unsupported)
+> - Report that form elicitation is not a supported capability
+> - Cancel any elicitation requests it may receive (should not happen when capabilities are reported as unsupported)
 
 #### 🔗 Browser input (elicitation)
 
@@ -1242,8 +1247,8 @@ vim.api.nvim_create_autocmd("User", {
 > **Responds to:** [UrlElicitation](#urlelicitation) autocommand.
 >
 > **Default behavior:** If no autocommand handler is defined for [UrlElicitation](#urlelicitation), Hermes will:
-> - Report that url elicitation is not a supported capabilitiy
-> - Cancel any elicitation requests it may recieve (should not happen when capabilities are reported as unsupported)
+> - Report that url elicitation is not a supported capability
+> - Cancel any elicitation requests it may receive (should not happen when capabilities are reported as unsupported)
 
 ## 📡 Autocommands
 
@@ -2534,7 +2539,7 @@ cargo build --release
   - [ ] [ACP over MCP](https://agentclientprotocol.com/rfds/mcp-over-acp)
   - [ ] [Boolean config option](https://agentclientprotocol.com/rfds/boolean-config-option)
   - [ ] [NES (next edit suggestions)](https://agentclientprotocol.com/rfds/next-edit-suggestions)
-  - [ ] ["elicitation"](https://agentclientprotocol.com/rfds/elicitation)
+  - [x] ["elicitation"](https://agentclientprotocol.com/rfds/elicitation)
   - [ ] [Configurable LLM Providers](https://agentclientprotocol.com/rfds/custom-llm-endpoint)
   - [ ] [Plan Operations Support](https://agentclientprotocol.com/rfds/plan-operations)
 

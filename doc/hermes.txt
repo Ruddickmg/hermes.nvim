@@ -11,35 +11,57 @@ CONTENTS                                              *hermes-contents*
   2. Installation .............................. |hermes-installation|
   3. Setup ..................................... |hermes-setup|
   4. API ....................................... |hermes-api|
-    4.1 Connect ................................ |hermes-connect|
-    4.2 Disconnect ............................. |hermes-disconnect|
-    4.3 Logout ................................. |hermes-logout|
-    4.4 List Sessions .......................... |hermes-list-sessions|
+    4.1 Agents ................................. |hermes-agents|
+    4.2 Connect ................................ |hermes-connect|
+    4.3 Disconnect ............................. |hermes-disconnect|
+    4.4 Logout ................................. |hermes-logout|
     4.5 Authenticate ........................... |hermes-authenticate|
-    4.6 Sessions ............................... |hermes-sessions|
-    4.7 Prompt .................................. |hermes-prompt|
-    4.8 Configuration ............................ |hermes-configuration|
-  5. Detailed Configuration .................. |hermes-detailed-config|
+    4.6 List Sessions .......................... |hermes-list-sessions|
+    4.7 Sessions ............................... |hermes-sessions|
+    4.8 Prompt ................................. |hermes-prompt|
+    4.9 Configuration & Selection .............. |hermes-configuration|
+    4.10 Responding to Requests ................ |hermes-respond|
+  5. Detailed Configuration ................... |hermes-detailed-config|
   6. Autocommands .............................. |hermes-autocommands|
   7. Commands .................................. |hermes-commands|
-     7.1 Version Management ...................... |hermes-version-mgmt|
-  8. Troubleshooting ........................... |hermes-troubleshooting|
+     7.1 Version Management .................... |hermes-version-mgmt|
+  8. Building from Source ...................... |hermes-building|
+  9. Troubleshooting ........................... |hermes-troubleshooting|
 
 ================================================================================
 1. INTRODUCTION                                       *hermes-introduction*
 
-Hermes is an ACP (Agent Client Protocol) client for Neovim that provides
-APIs for communicating with AI assistants like opencode, copilot, and gemini.
+Hermes is a messaging layer for Neovim. It has no built-in UI, instead it
+provides APIs and hooks for building your own workflow while routing
+client-agent communication.
+
+Hermes focuses on:
+- APIs for making requests to AI assistants (prompt, connect, authenticate,
+  etc)
+- Hooks into requests from AI assistants that require responses (permission
+  requests, access requests, etc)
+- Autocommands for updates on communication between the user (client) and
+  assistant (agent)
 
 Features:
-- Connect to multiple AI agents simultaneously
-- Create and manage sessions
-- Send prompts with various content types (text, images, links, etc.)
-- Handle agent requests (permissions, file operations, terminal commands)
+- Full implementation of the ACP client (built on the official Rust ACP SDK)
+- Support for all registered ACP agents
+- Configurable capabilities (filesystem, terminal, etc)
+- Autocommands for messages/notifications
+- Communication over Stdio, TCP, Socket, and HTTP protocols
+- Neovim progress integration via `nvim_echo` with `kind="progress"` (0.12+)
+- Luarocks and NixOS integration
 - Full type annotations for IDE support
+
+Requirements:
+- Neovim 0.11 or later
 
 ================================================================================
 2. INSTALLATION                                       *hermes-installation*
+
+Using vim.pack (Neovim 0.12+): >
+    vim.pack.add({ "Ruddickmg/hermes.nvim" })
+<
 
 Using lazy.nvim: >
     {
@@ -50,15 +72,19 @@ Using lazy.nvim: >
     }
 <
 
-Using paq.nvim: >
-    require("paq") {
-        "Ruddickmg/hermes.nvim"
-    }
-    require("hermes").setup()
+Using rocks.nvim: >
+    :Rocks install hermes.nvim
 <
 
-The binary is automatically downloaded once on first use for supported platforms
-(Linux x86_64/aarch64, macOS x86_64/aarch64, Windows x86_64).
+Using NixOS: >
+    programs.nixvim = {
+      extraPlugins = [ pkgs.vimPlugins.hermes-nvim ];
+    };
+<
+
+Hermes will automatically detect and download a pre-built binary for
+supported platforms. The binary is downloaded once on first use for supported
+platforms (Linux x86_64/aarch64, macOS x86_64/aarch64, Windows x86_64).
 
 Once downloaded, the binary is never auto-updated. Use `:Hermes update` to
 manually fetch the latest version when desired.
@@ -73,28 +99,34 @@ To disable automatic binary download and manage the binary manually: >
         },
     })
 <
-With this setting, Hermes will not download or build automatically.
-You must run `:Hermes build` or build manually before using Hermes.
+With this setting, Hermes will not download or build automatically. You must
+run `:Hermes build` or build manually before using Hermes. The auto-download
+setting defaults to false on NixOS environments.
 
 ================================================================================
 3. SETUP                                               *hermes-setup*
 
 *hermes.setup()*                                        Setup the plugin
 
-Configure Hermes with custom options. Multiple calls merge configurations.
+Configure Hermes with custom options. Multiple calls merge configurations:
+only specified fields are updated, all unspecified fields preserve their
+existing values, and configuration changes are applied immediately.
 
 Parameters: ~
     {opts}  (table, optional) Configuration options
 
 Configuration options: ~
     • root_markers:         List of root directory markers (default: {".git"})
-    • permissions:          Permission settings
+    • permissions:          Permission settings (including elicitation)
     • terminal:             Terminal configuration
     • buffer:               Buffer settings
     • session:              Session configuration
+    • distributions:        Agent distribution settings (uvx, npx, binary)
+    • progress:             Download progress display settings
     • log:                  Logging configuration
     • download.version:     Binary version to use (default: "latest")
-    • download.auto:        Auto-download binary on first use (default: true)
+    • download.auto:        Auto-download binary on first use (default: true,
+                            false on NixOS environments)
     • download.timeout:     Download timeout in seconds (default: 60)
 
 Example: >
@@ -111,23 +143,52 @@ Note: setup() is optional - Hermes works with defaults without it.
 ================================================================================
 4. API                                                 *hermes-api*
 
-------------------------------------------------------------------------------
-4.1 CONNECT                                           *hermes-connect*
+Hermes exposes the following functions for sending requests to AI assistants.
+Methods marked "Optional" below are implemented by Hermes but are not
+mandatory for agent implementations.
+
+-------------------------------------------------------------------------------
+4.1 AGENTS                                            *hermes-agents*
+
+*hermes.agents()*                                        List available agents
+
+Retrieve the list of available agents to choose from.
+
+Parameters: ~
+    {opts} (table|nil) Options
+
+Options: ~
+    • update: Pull the most up to date list from the ACP registry (uses the
+              last downloaded/pre-bundled registry if false)
+    • url:    URL to pull the ACP registry from
+
+Autocommands triggered: ~
+    AgentList - On successful retrieval
+    Progress  - If the update option is enabled (registry download progress)
+
+-------------------------------------------------------------------------------
+4.2 CONNECT                                           *hermes-connect*
 
 *hermes.connect()*                                     Connect to agent
 
+Connect to an agent, taking the agent name and the protocol for the
+connection (defaults to "stdio").
+
 Parameters: ~
-    {agent}  (string) Agent name ("opencode", "copilot", "gemini", or custom)
-    {opts}   (table, optional) Connection options
+    {agent} (string) Agent name ("opencode", "copilot", "gemini", or custom)
+    {opts}  (table, optional) Connection options
 
 Options: ~
-    • protocol: Connection protocol ("stdio", "http", "socket")
-    • command:  Custom agent command (for custom agents)
-    • args:     Command arguments
+    • protocol:     Connection protocol ("stdio", "http", "socket", "tcp")
+    • command:      Custom agent command (for custom agents)
+    • args:         Command arguments
+    • host:         Host for tcp connections
+    • port:         Port for tcp connections
+    • distribution: Agent distribution to use ("binary", "npx", "uvx")
 
 Example: >
     require("hermes").connect("opencode")
-    
+
     -- With custom configuration
     require("hermes").connect("my-agent", {
         protocol = "socket",
@@ -136,12 +197,13 @@ Example: >
     })
 <
 
-Autocommand triggered: ~
+Autocommands triggered: ~
     ConnectionInitialized - On successful connection
+    Progress  - If the binary distribution is enabled (binary download
+                progress)
 
-------------------------------------------------------------------------------
-4.2 DISCONNECT                                        *hermes-disconnect*
-
+-------------------------------------------------------------------------------
+4.3 DISCONNECT                                        *hermes-disconnect*
 
 *hermes.disconnect()*                                    Disconnect from agent
 
@@ -151,16 +213,16 @@ Parameters: ~
 Example: >
     -- Disconnect single agent
     require("hermes").disconnect("opencode")
-    
+
     -- Disconnect multiple
     require("hermes").disconnect({"opencode", "copilot"})
-    
+
     -- Disconnect all
     require("hermes").disconnect()
 <
 
-------------------------------------------------------------------------------
-4.3 LOGOUT                                            *hermes-logout*
+-------------------------------------------------------------------------------
+4.4 LOGOUT                                            *hermes-logout*
 
 *hermes.logout()*                                         Logout from agent
 
@@ -170,10 +232,10 @@ Parameters: ~
 Example: >
     -- Logout single agent
     require("hermes").logout("opencode")
-    
+
     -- Logout multiple
     require("hermes").logout({"opencode", "copilot"})
-    
+
     -- Logout all
     require("hermes").logout()
 <
@@ -181,45 +243,14 @@ Example: >
 Autocommands triggered: ~
     LoggedOut - On successful logout
 
-------------------------------------------------------------------------------
-4.4 LIST SESSIONS                                     *hermes-list-sessions*
-
-*hermes.list_sessions()*                                   List all sessions
-
-List sessions with optional filtering by directory or cursor pagination.
-
-Parameters: ~
-    {opts} (table|nil) Filter options
-
-Options: ~
-    • cwd: Filter by working directory path
-    • cursor: Pagination cursor for fetching next page
-
-Example: >
-    -- List all sessions
-    require("hermes").list_sessions()
-    
-    -- Filter by directory
-    require("hermes").list_sessions({
-        cwd = "/path/to/project"
-    })
-    
-    -- With cursor pagination
-    require("hermes").list_sessions({
-        cursor = "abc123"
-    })
-<
-
-Autocommand triggered: ~
-    SessionsListed - On successful list with session data and nextCursor
-
-------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 4.5 AUTHENTICATE                                      *hermes-authenticate*
 
 *hermes.authenticate()*                                  Authenticate with agent
 
 Parameters: ~
-    {auth_method_id} (string) Authentication method ID from ConnectionInitialized
+    {auth_method_id} (string) Authentication method ID from
+                               ConnectionInitialized
 
 Example: >
     vim.api.nvim_create_autocmd("User", {
@@ -234,20 +265,67 @@ Example: >
 Autocommand triggered: ~
     Authenticated - On successful authentication
 
-------------------------------------------------------------------------------
-4.6 SESSIONS                                          *hermes-sessions*
+-------------------------------------------------------------------------------
+4.6 LIST SESSIONS                                     *hermes-list-sessions*
+
+*hermes.list_sessions()*                                   List all sessions
+
+List sessions, can be filtered by project path or cursor pagination.
+
+Parameters: ~
+    {opts} (table|nil) Filter options
+
+Options: ~
+    • cwd:    Filter by working directory path
+    • cursor: Pagination cursor for fetching next page
+
+Example: >
+    -- List all sessions
+    require("hermes").list_sessions()
+
+    -- Filter by directory
+    require("hermes").list_sessions({
+        cwd = "/path/to/project"
+    })
+
+    -- With cursor pagination
+    require("hermes").list_sessions({
+        cursor = "abc123"
+    })
+<
+
+Autocommand triggered: ~
+    SessionsListed - On successful list with session data and nextCursor
+
+-------------------------------------------------------------------------------
+4.7 SESSIONS                                          *hermes-sessions*
 
 *hermes.create_session()*                                Create new session
 *hermes.load_session()*                                   Load existing session
+*hermes.resume_session()*                                 Resume session
+*hermes.close_session()*                                  Close active session
+*hermes.delete_session()*                                 Delete session(s)
 
-Create or load a session with optional MCP server configuration.
+Create, load, resume, close, or delete sessions with optional MCP server
+configuration. load_session replays the session history; resume_session does
+not. create_session with no arguments uses the project root or current
+directory.
 
 Parameters: ~
-    {opts} (table|nil) Session options
+    {session_id} (string|string[]) Session ID(s)
+    {opts}       (table|nil) Session options
 
 Options: ~
     • cwd: Working directory for the session
+    • additional_directories: More directories to include in addition to the
+                              root directory (relative paths are relative
+                              to cwd)
     • mcpServers: Array of MCP server configurations
+    • cancel: Cancel session(s) before deleting them (default: true,
+              delete_session only)
+
+delete_session accepts a single session ID, an array of session IDs, or an
+options table with a cancel field.
 
 MCP Server Options: ~
     • type: Server type ("http", "sse", or "stdio")
@@ -258,39 +336,12 @@ MCP Server Options: ~
     • args: Command arguments for stdio servers
     • env: Environment variables as array of {name, value}
 
-Example: >
-    -- Create session
-    require("hermes").create_session({
-        cwd = "."
-    })
-    
-    -- Create session with MCP servers
-    require("hermes").create_session({
-        cwd = "/project",
-        mcpServers = {
-            {
-                type = "http",
-                name = "Example Server",
-                url = "http://example.com/mcp"
-            },
-            {
-                type = "stdio",
-                name = "Local Server",
-                command = "/path/to/server",
-                args = {"--port", "8080"}
-            }
-        }
-    })
-    
-    -- Load session
-    require("hermes").load_session("session-id-123")
-<
-
 Autocommands triggered: ~
-    SessionCreated, SessionLoaded
+    SessionCreated, SessionLoaded, SessionResumed, SessionClosed,
+    SessionDeleted
 
-------------------------------------------------------------------------------
-4.7 PROMPT                                            *hermes-prompt*
+-------------------------------------------------------------------------------
+4.8 PROMPT                                            *hermes-prompt*
 
 *hermes.prompt()*                                        Send prompt to agent
 
@@ -301,11 +352,17 @@ Parameters: ~
 Content types: ~
     • String: Plain text
     • Table: Structured content with type field
+      - text: Human readable prompts
+      - link: Links to resources (url, file path, etc)
+      - embedded: Similar to a link, but including the contents of the
+                  resource (preferred over link if available)
+      - image: An image (encoded as base64)
+      - audio: Audio content for communication (encoded as base64)
 
 Example: >
     -- Text prompt
     require("hermes").prompt(session_id, "What time is it?")
-    
+
     -- Structured content
     require("hermes").prompt(session_id, {
         type = "link",
@@ -322,26 +379,155 @@ Autocommands triggered: ~
     AgentResourceLinkThought, ToolCall, ToolCallUpdate, Plan,
     AvailableCommands, ModeCurrent
 
-------------------------------------------------------------------------------
-4.8 CONFIGURATION                                     *hermes-configuration*
+-------------------------------------------------------------------------------
+4.9 CONFIGURATION & SELECTION                       *hermes-configuration*
 
-*hermes.cancel()*                                        Cancel operation
-*hermes.set_mode()*                                       Set session mode
-*hermes.respond()*                                        Respond to request
+*hermes.cancel()*                          Cancel operation
+*hermes.set_mode()*                         Set session mode
+*hermes.modes()*                            List session modes
+*hermes.set_model()*                        Set session model
+*hermes.models()*                           List session models
+*hermes.model_configurations()*             List model configurations
+*hermes.configure_model()*                  Configure model option
+*hermes.set_thought_level()*                Set thought level
+*hermes.thought_levels()*                   List thought levels
+
+hermes.cancel() cancels the current operation of the agent (e.g., stop
+generating text, stop a tool call in progress, etc).
+
+set_mode/set_model/set_thought_level take a session ID and the mode/model/
+thought level ID. modes()/models()/thought_levels() fire the corresponding
+autocommand with a Selection payload (options plus current) instead of
+returning it. configure_model() takes a session ID and a table with `id` and
+`value` keys. model_configurations() fires an autocommand with an array of
+model configuration options.
 
 Example: >
     -- Cancel current operation
     require("hermes").cancel(session_id)
-    
+
     -- Set mode
     require("hermes").set_mode(session_id, "plan")
-    
-    -- Respond to permission request
-    require("hermes").respond(request_id, "allow")
+
+    -- Configure a model option
+    require("hermes").configure_model(session_id,
+        { id = "context_size", value = "200k" })
 <
 
 Autocommands triggered: ~
-    ModeUpdated, Prompted
+    ModeUpdated, Modes, SessionModelUpdated, Models, ModelConfigurations,
+    ModelConfigurationUpdated, ThoughtLevelUpdated, ThoughtLevels
+
+-------------------------------------------------------------------------------
+4.10 RESPONDING TO REQUESTS                         *hermes-respond*
+
+*hermes.respond()*                                        Respond to request
+
+When an agent makes a request that requires user input (such as a permission
+request), it triggers an autocommand and pauses until the user responds. Use
+Use hermes.respond() with the request ID (and an optional response value) to
+resume the agent's operation. If no autocommand handler is defined, a default
+workflow is triggered. Requests can be disabled via the setup configuration.
+
+Note: While Hermes is a complete ACP client, most agents available today
+don't fully utilize the protocol. The following autocommands are optional
+methods often handled through agent-specific tools rather than the ACP
+methods that trigger them, so some Hermes capabilities may not be exercised
+depending on which agent you use.
+
+Permission request ~
+    Call signature: >
+        hermes.respond("requestId", "optionId")
+    <
+    Responds to: |PermissionRequest| autocommand.
+    Default behavior: If no autocommand handler is defined for
+    PermissionRequest, Hermes uses the native Neovim select menu to gather a
+    response from the user.
+
+Write to file ~
+    Call signature: >
+        hermes.respond("requestId")
+    <
+    Responds to: |WriteTextFile| autocommand. Writing to a file doesn't take
+    any data, but a notification is required when it is finished.
+    Default behavior: If no autocommand handler is defined for WriteTextFile,
+    Hermes will:
+    - Update buffers if they are open and mark them as modified (will not
+      automatically save)
+    - Refresh the view of any modified buffers
+    - Write to the file on disk if it is not open in a buffer
+
+Read from file ~
+    Call signature: >
+        hermes.respond("requestId", "Hello World!")
+    <
+    Responds to: |ReadTextFile| autocommand.
+    Default behavior: If no autocommand handler is defined for ReadTextFile,
+    Hermes will:
+    - Read the file from disk if one is not open in a buffer
+    - Read the current state of the open buffer if the target file is open
+    - Start at the `line` number if defined
+    - End at the `limit` number if defined
+
+Create Terminal for agent communication ~
+    Call signature: >
+        hermes.respond("requestId", "terminalId")
+    <
+    Responds to: |TerminalCreate| autocommand.
+    Default behavior: If no autocommand handler is defined for TerminalCreate,
+    Hermes will:
+    - Create a terminal attached to a buffer (hidden by default)
+    - Handle byte limit constraints if defined
+    If no TerminalCreate autocommand is registered, Hermes uses default
+    functionality to manage all subsequent terminal interaction.
+
+Provide terminal output ~
+    Call signature (truncated defaults to false): >
+        hermes.respond("requestId", "terminal output text")
+        hermes.respond("requestId", {
+            output = "terminal output text",
+            truncated = true,
+        })
+    <
+    Responds to: |TerminalOutput| autocommand.
+    Default behavior: If no autocommand handler is defined for TerminalCreate,
+    Hermes collects and sends the terminal output to the agent.
+
+Reporting terminal exit ~
+    Call signatures: >
+        hermes.respond("requestId", "SIGTERM")
+        hermes.respond("requestId", 0)
+        hermes.respond("requestId", {
+            exitCode = 9,
+            signal = "SIGKILL",
+        })
+    <
+    Responds to: |TerminalExit| autocommand.
+    Default behavior: If no autocommand handler is defined for TerminalCreate,
+    Hermes waits for and reports terminal exit details.
+
+Kill terminal process ~
+    Call signature: >
+        hermes.respond("requestId")
+    <
+    Responds to: |TerminalKill| autocommand.
+    Default behavior: If no autocommand handler is defined for TerminalCreate,
+    Hermes stops the process running in the terminal.
+
+Release terminal process ~
+    Call signature: >
+        hermes.respond("requestId")
+    <
+    Responds to: |TerminalRelease| autocommand.
+    Default behavior: If no autocommand handler is defined for TerminalCreate,
+    Hermes will:
+    - Stop any process running in the terminal
+    - Remove the terminal
+    - Delete the attached buffer (can be configured to omit this step)
+
+User/Form input (elicitation) ~
+    See |hermes-elicitation| for elicitation respond call signatures, default
+    behavior, and configuration.
 
 ================================================================================
 5. DETAILED CONFIGURATION                           *hermes-detailed-config*
@@ -362,7 +548,8 @@ permissions ~
     • elicitation: Elicitation permission settings (nested table) >
         • form: Allow form elicitation requests (default: true)
         • url: Allow URL elicitation requests (default: true)
-        • reject_unknown_elicitation_values: Reject responses for unknown/future elicitation property types (default: false)
+        • reject_unknown_elicitation_values: Reject responses for
+          unknown/future elicitation property types (default: false)
     <
 
 terminal ~
@@ -375,28 +562,65 @@ buffer ~
     Buffer settings:
     • auto_save: Auto-save files (default: false)
 
+session ~
+    Session configuration:
+    • store_history: Store session history locally when agent does not
+                     support load_session (default: true)
+
+distributions ~
+    Agent distribution settings:
+    • binary: Binary distribution behavior >
+        • path: Path where binaries will be downloaded to
+        • enabled: Allows installing agents via binary (default: true)
+    <
+    • uvx: Allows installing agents via UVX (default: true)
+    • npx: Allows installing agents via NPX (default: true)
+
+progress ~
+    Download progress display settings:
+    • cmdline: Show progress messages in cmdline (Neovim 0.12+ only,
+               default: false)
+    • update_frequency: How often to poll the download for progress in
+                        milliseconds (default: 150)
+
 log ~
-    Logging configuration with targets: stdio, notification, message, file
+    Logging configuration with targets: stdio, notification, message, file.
+    Hermes defaults to INFO log level until configured via |hermes.setup()|.
     Each target supports:
-    • level: Log level (vim.log.levels or "trace"/"debug"/"info"/"warn"/"error"/"off")
-    • format: Format style ("compact", "pretty", "full", "json")
-    
+    • level: Log level (vim.log.levels or "trace"/"debug"/"info"/
+      "warn"/"error"/"off")
+    • format: Format style ("compact", "pretty", "full", "json"),
+              defaults to "compact" if not specified
+    • show_ansi: Show ansi symbols (default: false)
+
     File logging additional options:
     • path: Log file path
+    • name: Log file name (default: "hermes.log")
     • max_size: Max file size in bytes (default: 10485760)
     • max_files: Number of log files (default: 5)
+
+    Available formats:
+    - pretty: Human-readable with colors and formatting
+    - compact: Condensed single-line format (default)
+    - full: Complete information including timestamps and metadata
+    - json: Machine-readable JSON format
 
 ================================================================================
 6. AUTOCOMMANDS                                       *hermes-autocommands*
 
-Hermes generates autocommands for agent communication. Listen to them with: >
+Hermes generates autocommands for all communication between agent and client.
+Listen to them with: >
     vim.api.nvim_create_autocmd("User", {
+        group = "hermes",
         pattern = "ConnectionInitialized",
         callback = function(args)
             print("Connected!", vim.inspect(args.data))
         end
     })
 <
+
+Hermes will only trigger autocommands if there is a listener defined for it
+(i.e. you have created one like the example above).
 
 All agent notification autocommands include a `promptId` field in
 `args.data`. This UUID is generated when a prompt is sent or when a user
@@ -407,15 +631,18 @@ prompt/response cycle.
 See |hermes-api| sections above for autocommands triggered by each method.
 Full autocommand list: |hermes-autocommands-list|
 
-Elicitation ~
-Elicitation lets an agent request structured input from the user. Hermes advertises
-elicitation capabilities to the agent (gated by the `elicitation.form` and
-`elicitation.url` permissions). The agent sends an `elicitation/create` request,
-which Hermes surfaces via the `FormElicitation` or `UrlElicitation` autocommand.
-Respond with *hermes.respond()* (see below). When a URL elicitation flow finishes
-the agent may send an `elicitation/complete` notification, surfaced via the
-`ElicitationComplete` autocommand (an informational notification, no response
-required). Example: >
+Elicitation ~                                              *hermes-elicitation*
+
+Elicitation lets an agent request structured input from the user. Hermes
+advertises elicitation capabilities to the agent (gated by the
+`elicitation.form` and `elicitation.url` permissions AND by whether a
+`FormElicitation`/`UrlElicitation` autocommand listener is attached at
+connect time). The agent sends an `elicitation/create` request, which Hermes
+surfaces via the `FormElicitation` or `UrlElicitation` autocommand.
+Respond with hermes.respond() (see below). When a URL elicitation flow
+finishes the agent may send an `elicitation/complete` notification, surfaced
+via the `ElicitationComplete` autocommand (an informational notification, no
+response required). Example: >
     vim.api.nvim_create_autocmd("User", {
         pattern = "FormElicitation",
         group = "hermes",
@@ -430,15 +657,96 @@ required). Example: >
 <
 
 Responding to elicitation ~
-*hermes.respond()* for elicitation accepts a dictionary with an `action` field:
+hermes.respond() for elicitation accepts a dictionary with an `action`
+field:
 - `"accept"`: provide the requested `content` as a `{ field = value, ... }`
-  dictionary. Content values may be strings, numbers, booleans, or string arrays.
+  dictionary. Content values may be strings, numbers, booleans, or string
+  arrays.
 - `"decline"`: decline the elicitation (no content).
 - `"cancel"`: cancel the elicitation entirely.
 
 Default behavior: If no listener is attached to `FormElicitation` or
-`UrlElicitation`, Hermes automatically cancels the elicitation so the agent does
-not hang. A default UI is planned for the future.
+`UrlElicitation`, Hermes reports the corresponding elicitation capability as
+unsupported to the agent, and cancels any elicitation requests it receives
+(which should not happen when the capability is reported as unsupported).
+
+Autocommand list ~                             *hermes-autocommands-list*
+
+The following autocommands are fired by Hermes (with `args.data` populated
+with the associated schema). Names annotated with an API method name (e.g.
+`(connect())`) are triggered by that method; names annotated `(respond())` are
+agent requests that require a response via hermes.respond(); all others are
+notifications sourced from the agent.
+
+*AgentImageMessage*             An image from the agent
+*AgentImageThought*             Visual reasoning/thought from the agent
+*AgentList*                     List of available agents (agents())
+*AgentResourceLinkMessage*      A resource link from the agent
+*AgentResourceLinkThought*      Resource link thought from the agent
+*AgentResourceMessage*          A resource from the agent
+*AgentResourceThought*          Resource-based thought from the agent
+*AgentTextMessage*              A text message from the agent
+*AgentTextThought*              Textual thought/reasoning from the agent
+*Authenticated*                 Authentication completed (authenticate())
+*AvailableCommands*             Available commands are updated
+*ConfigurationOption*           Configuration option updates
+*ConfigurationUpdated*          Session configuration updated
+*ConnectionInitialized*         Connection established with agent (connect())
+*ElicitationComplete*           Agent notifies that an elicitation has
+                                 completed
+*FormElicitation*               Agent requests form-based elicitation
+                                 (respond())
+*LoggedOut*                     Agent logout completed (logout())
+*ModeCurrent*                   Current mode changes
+*ModelConfigurationUpdated*     Model configuration options updated
+                                 (configure_model())
+*ModelConfigurations*           Available model configuration options
+                                 retrieved (model_configurations())
+*Models*                        Available models retrieved (models())
+*Modes*                         Available modes retrieved (modes())
+*ModeUpdated*                   Session mode changed (set_mode())
+*PermissionRequest*             Agent requests permission to execute a tool
+                                 (respond())
+*Plan*                          Agent generates a plan
+*Progress*                      Download progress update (binary, registry,
+                                 agent)
+*Prompted*                      Agent response received (prompt())
+*ReadTextFile*                  Agent requests to read a text file (respond())
+*SessionClosed*                 Active session closed (close_session())
+*SessionCreated*                New session created (create_session())
+*SessionDeleted*                Session deleted (delete_session())
+*SessionForked*                 Session forked successfully (fork_session())
+*SessionLoaded*                 Session loaded successfully (load_session())
+*SessionModelUpdated*           Session model updated (set_model())
+*SessionResumed*                Session resumed successfully
+                                 (resume_session())
+*SessionUpdate*                 Session metadata updated (title, timestamps,
+                                 etc)
+*SessionsListed*                Session list received (list_sessions())
+*TerminalCreate*                Agent requests to create a terminal
+                                 (respond())
+*TerminalExit*                  Agent requests notification when terminal
+                                 exits (respond())
+*TerminalKill*                  Agent requests to kill a terminal process
+                                 (respond())
+*TerminalOutput*                Agent requests terminal output (respond())
+*TerminalRelease*               Agent requests to release a terminal
+                                 (respond())
+*ThoughtLevels*                 Available thought levels retrieved
+                                 (thought_levels())
+*ThoughtLevelUpdated*           Session thought level updated
+                                 (set_thought_level())
+*ToolCall*                      Agent makes a tool call
+*ToolCallUpdate*                Tool call is updated (e.g. progress, output)
+*UrlElicitation*                Agent requests URL-based elicitation
+                                 (respond())
+*UsageUpdate*                   Session usage metrics update (tokens, cost)
+*UserImageMessage*              An image sent from the client
+*UserResourceLinkMessage*       A resource link from the client
+*UserResourceMessage*           A resource sent from the client
+*UserTextMessage*               Message text sent from the client
+*WriteTextFile*                 Agent requests to write to a text file
+                                 (respond())
 
 ===============================================================================
 7. COMMANDS                                           *hermes-commands*
@@ -446,29 +754,31 @@ not hang. A default UI is planned for the future.
 *:Hermes*                                                 Hermes management
 
 Subcommands: ~
-    status     Show loading status and configuration
-    log        Show recent log messages
-    install    Download and install binary
-    update     Update to latest version from GitHub
-    build      Build binary from source
-    cancel     Cancel in-progress build
-    version    Show version information
-    clean      Remove binary
-    setup      Show current configuration
+    log        Show recent log messages and current state information
+    install    Download the currently configured version
+               (triggers |Progress| autocommand while downloading)
+    update     Fetch the latest release from GitHub and replace the current
+               binary (triggers |Progress| autocommand while downloading)
+    build      Compile from source (requires Rust toolchain). Runs
+               asynchronously without blocking Neovim
+    cancel     Cancel an in-progress source build
+    clean      Remove the binary. Run `:Hermes install` or use the Hermes API
+               to re-download
 
 Example: >
-    :Hermes status     " Check Hermes status
     :Hermes log        " View recent logs
     :Hermes install    " Download binary (first time or specific version)
     :Hermes update     " Fetch and install latest version
     :Hermes build      " Build from source
     :Hermes cancel     " Cancel in-progress build
-    :Hermes version    " Show version info
     :Hermes clean      " Remove binary
-    :Hermes setup      " Show configuration
 <
 
-------------------------------------------------------------------------------
+Additional arguments are passed through to cargo as features, e.g.:
+    :Hermes build with-icons
+See the |hermes-building| section for details.
+
+-------------------------------------------------------------------------------
 7.1 VERSION MANAGEMENT                            *hermes-version-mgmt*
 
 Hermes downloads the binary once on first use and never auto-updates.
@@ -491,8 +801,47 @@ The version is only checked/downloaded:
 - When running `:Hermes install` or `:Hermes update`
 - Never automatically on startup
 
-================================================================================
-8. TROUBLESHOOTING                                    *hermes-troubleshooting*
+===============================================================================
+8. BUILDING FROM SOURCE                             *hermes-building*
+
+If your platform is not supported, or you'd rather build it yourself, you can
+build from source.
+
+Requirements: ~
+    - Rust toolchain (https://rustup.rs/) (1.70 or later)
+
+Scripted: ~
+    Run the build command in Neovim: >
+        :Hermes build
+    <
+    This will:
+    - Compile the Rust code with `cargo build --release`
+    - Install the resulting binary in the correct location
+
+Manual: >
+    git clone https://github.com/Ruddickmg/hermes.nvim.git
+    cd hermes.nvim
+    cargo build --release
+
+    # Copy target/release/libhermes.* to your Neovim data directory
+<
+
+Icons: ~
+    Hermes can pre-render icons during the build step to avoid having to do
+    so at runtime. Using the build script: >
+        :Hermes build with-icons
+    <
+    Or building manually: >
+        cargo build --release --features with-icons
+    <
+
+===============================================================================
+9. TROUBLESHOOTING                                  *hermes-troubleshooting*
+
+Health check: ~
+    Run :checkhealth hermes to see full diagnostics including Neovim version,
+    binary status, platform info, download tools, log files, registry
+    binaries, and configuration.
 
 Platform not supported: ~
 If you see a "Platform not supported" error when starting Hermes:
@@ -521,8 +870,8 @@ https://github.com/Ruddickmg/hermes.nvim/issues
 Include:
 - Operating system and version
 - Architecture (x86_64, aarch64, etc.)
-- Output of `:Hermes version`
+- Output of `:checkhealth hermes`
 - Full error messages
 
-================================================================================
+===============================================================================
 vim:tw=78:ts=8:ft=help:norl:
