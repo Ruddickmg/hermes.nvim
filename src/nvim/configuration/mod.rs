@@ -1,5 +1,6 @@
 mod buffer;
 mod distribution;
+mod elicitation;
 mod log;
 mod permissions;
 pub mod progress;
@@ -12,6 +13,7 @@ pub use buffer::{BufferConfig, BufferConfigPartial};
 pub use distribution::{
     BinaryConfig, BinaryConfigPartial, DistributionsConfig, DistributionsConfigPartial,
 };
+pub use elicitation::{ElicitationPermissions, ElicitationPermissionsPartial, elicitation_changed};
 pub use log::{
     LOG_FILE_NAME, LogConfig, LogConfigPartial, LogFileConfig, LogFileConfigPartial,
     LogTargetConfig, LogTargetConfigPartial,
@@ -21,10 +23,7 @@ use nvim_oxi::{
     conversion::{Error, FromObject},
     lua::{self},
 };
-pub use permissions::{
-    ElicitationPermissions, ElicitationPermissionsPartial, Permissions, PermissionsPartial,
-    elicitation_changed,
-};
+pub use permissions::{Permissions, PermissionsPartial};
 pub use progress::{ProgressConfig, ProgressConfigPartial, show_progress_in_cmdline};
 pub use session::{SessionConfig, SessionConfigPartial};
 pub use terminal::{TerminalConfig, TerminalConfigPartial};
