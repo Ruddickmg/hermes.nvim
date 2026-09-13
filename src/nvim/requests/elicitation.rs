@@ -158,41 +158,38 @@ impl Request {
 
         match action.as_str() {
             "accept" => {
-                let accept = match dict.get("content").cloned() {
-                    Some(content_obj) => match &request.mode {
-                        ElicitationMode::Form(form_mode) => {
-                            let content_dict = dict_from_object(content_obj)
-                                .map_err(|e| Error::InvalidInput(e.to_string()))?;
-                            let schema = &form_mode.requested_schema;
-                            let mut content = std::collections::BTreeMap::new();
-                            for (key, value) in content_dict {
-                                let key: String = key.to_string();
-                                if let Some(prop_schema) = schema.properties.get(&key) {
-                                    let parsed = self
-                                        .validate_content_value(value, prop_schema)
-                                        .await
-                                        .map_err(|e| Error::InvalidInput(e.to_string()))?;
-                                    content.insert(key, parsed);
+                let accept = match &request.mode {
+                    ElicitationMode::Form(form_mode) => {
+                        let content_dict = match dict.get("content").cloned() {
+                            Some(content_obj) => dict_from_object(content_obj)
+                                .map_err(|e| Error::InvalidInput(e.to_string()))?,
+                            None => nvim_oxi::Dictionary::default(),
+                        };
+                        let schema = &form_mode.requested_schema;
+                        let mut content = std::collections::BTreeMap::new();
+                        for (key, value) in content_dict {
+                            let key: String = key.to_string();
+                            if let Some(prop_schema) = schema.properties.get(&key) {
+                                let parsed = self
+                                    .validate_content_value(value, prop_schema)
+                                    .await
+                                    .map_err(|e| Error::InvalidInput(e.to_string()))?;
+                                content.insert(key, parsed);
+                            }
+                        }
+                        if let Some(required) = &schema.required {
+                            for field in required {
+                                if !content.contains_key(field) {
+                                    return Err(Error::InvalidInput(format!(
+                                        "Missing required elicitation field '{}'",
+                                        field
+                                    )));
                                 }
                             }
-                            if let Some(required) = &schema.required {
-                                for field in required {
-                                    if !content.contains_key(field) {
-                                        return Err(Error::InvalidInput(format!(
-                                            "Missing required elicitation field '{}'",
-                                            field
-                                        )));
-                                    }
-                                }
-                            }
-                            ElicitationAcceptAction::new().content(content)
                         }
-                        ElicitationMode::Url(_) | ElicitationMode::Other(_) => {
-                            ElicitationAcceptAction::new()
-                        }
-                        _ => ElicitationAcceptAction::new(),
-                    },
-                    None => ElicitationAcceptAction::new(),
+                        ElicitationAcceptAction::new().content(content)
+                    }
+                    _ => ElicitationAcceptAction::new(),
                 };
                 Ok(CreateElicitationResponse::new(ElicitationAction::Accept(
                     accept,
