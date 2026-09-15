@@ -9,8 +9,9 @@ use agent_client_protocol::{
     Error,
     schema::ProtocolVersion,
     schema::v1::{
-        AgentCapabilities, ContentBlock, ContentChunk, InitializeResponse, LoadSessionResponse,
-        NewSessionResponse, ResumeSessionResponse, SessionCapabilities, SessionConfigOption,
+        AgentCapabilities, CompleteElicitationNotification, ContentBlock, ContentChunk,
+        ElicitationId, InitializeResponse, LoadSessionResponse, NewSessionResponse,
+        ResumeSessionResponse, SessionCapabilities, SessionConfigOption,
         SessionConfigOptionCategory, SessionConfigSelectOption, SessionMode, SessionModeState,
         SessionNotification, SessionResumeCapabilities, SessionUpdate,
         SetSessionConfigOptionResponse, SetSessionModeResponse, TextContent, UsageUpdate,
@@ -226,6 +227,118 @@ fn test_can_receive_notifications_returns_false_when_disabled() -> nvim_oxi::Res
 
     let result = smol::block_on(handler.can_receive_notifications());
     assert!(!result, "Should return false when disabled");
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_elicitation_enabled_returns_false_when_all_disabled() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    smol::block_on(async {
+        state.lock().await.config.permissions.elicitation.form = false;
+        state.lock().await.config.permissions.elicitation.url = false;
+    });
+
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
+
+    let result = smol::block_on(handler.elicitation_enabled());
+    assert!(
+        !result,
+        "Should return false when both form and url are disabled"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_elicitation_enabled_returns_true_when_form_enabled() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    smol::block_on(async {
+        state.lock().await.config.permissions.elicitation.url = false;
+    });
+
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
+
+    let result = smol::block_on(handler.elicitation_enabled());
+    assert!(
+        result,
+        "Should return true when form elicitation is enabled"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_elicitation_enabled_returns_true_when_url_enabled() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    smol::block_on(async {
+        state.lock().await.config.permissions.elicitation.form = false;
+    });
+
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
+
+    let result = smol::block_on(handler.elicitation_enabled());
+    assert!(result, "Should return true when url elicitation is enabled");
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_elicitation_complete_permissions_denied() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    smol::block_on(async {
+        state.lock().await.config.permissions.elicitation.form = false;
+        state.lock().await.config.permissions.elicitation.url = false;
+    });
+
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
+
+    let notification = CompleteElicitationNotification::new(ElicitationId::from("url-elicitation"));
+    let res = smol::block_on(handler.elicitation_complete(notification));
+    assert_eq!(
+        res.unwrap_err(),
+        Error::method_not_found(),
+        "Should return MethodNotFound when elicitation is disabled"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_elicitation_complete_permissions_allowed() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
+
+    let notification = CompleteElicitationNotification::new(ElicitationId::from("url-elicitation"));
+    let res: agent_client_protocol::Result<()> =
+        smol::block_on(handler.elicitation_complete(notification));
+    assert_eq!(res, Ok(()), "Should succeed when elicitation is enabled");
 
     Ok(())
 }
