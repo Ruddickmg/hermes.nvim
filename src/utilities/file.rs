@@ -10,6 +10,14 @@ use crate::acp::{Result, error::Error};
 use crate::utilities::buf_options::{buf_get_name, get_buf_option, set_buf_option};
 
 pub fn detect_project_storage_path() -> Result<String> {
+    // If XDG_STATE_HOME is explicitly set (used in tests and some environments),
+    // prefer it for deterministic paths.
+    if let Ok(xdg) = std::env::var("XDG_STATE_HOME") {
+        if !xdg.is_empty() {
+            return Ok(format!("{}/nvim/hermes", xdg));
+        }
+    }
+
     let state_dir = api::call_function::<(String,), String>("stdpath", ("state".to_string(),))
         .map_err(|e| Error::Internal(format!("Error intiializing plugin state: {:?}", e)))?;
     let path = format!("{}/hermes", state_dir);

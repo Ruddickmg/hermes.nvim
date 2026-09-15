@@ -187,7 +187,15 @@ impl Request {
                                 }
                             }
                         }
-                        ElicitationAcceptAction::new().content(content)
+                        // Only include the content map if it's non-empty. An empty
+                        // content should be represented as `None` on the accept
+                        // action so callers can distinguish between "no content"
+                        // and "empty content".
+                        if content.is_empty() {
+                            ElicitationAcceptAction::new()
+                        } else {
+                            ElicitationAcceptAction::new().content(content)
+                        }
                     }
                     _ => ElicitationAcceptAction::new(),
                 };
