@@ -1,5 +1,6 @@
 mod buffer;
 mod distribution;
+mod elicitation;
 mod log;
 mod permissions;
 pub mod progress;
@@ -12,6 +13,7 @@ pub use buffer::{BufferConfig, BufferConfigPartial};
 pub use distribution::{
     BinaryConfig, BinaryConfigPartial, DistributionsConfig, DistributionsConfigPartial,
 };
+pub use elicitation::{ElicitationPermissions, ElicitationPermissionsPartial, elicitation_changed};
 pub use log::{
     LOG_FILE_NAME, LogConfig, LogConfigPartial, LogFileConfig, LogFileConfigPartial,
     LogTargetConfig, LogTargetConfigPartial,
@@ -212,6 +214,19 @@ impl nvim_oxi::lua::Pushable for ClientConfigPartial {
             if let Some(val) = permissions.send_notifications {
                 perms_dict.insert("send_notifications", val);
             }
+            if let Some(elicitation) = permissions.elicitation {
+                let mut elic_dict = Dictionary::new();
+                if let Some(val) = elicitation.form {
+                    elic_dict.insert("form", val);
+                }
+                if let Some(val) = elicitation.url {
+                    elic_dict.insert("url", val);
+                }
+                if let Some(val) = elicitation.reject_unknown_elicitation_values {
+                    elic_dict.insert("reject_unknown_elicitation_values", val);
+                }
+                perms_dict.insert("elicitation", elic_dict);
+            }
             dict.insert("permissions", perms_dict);
         }
 
@@ -397,6 +412,11 @@ mod tests {
                 terminal_access: false,
                 request_permissions: false,
                 send_notifications: false,
+                elicitation: ElicitationPermissions {
+                    form: false,
+                    url: false,
+                    reject_unknown_elicitation_values: false,
+                },
             },
             terminal: TerminalConfig {
                 delete: true,

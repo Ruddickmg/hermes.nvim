@@ -16,6 +16,7 @@ use std::sync::Arc;
 use agent_client_protocol::{
     self as acp, Client, ConnectionTo, Responder, on_receive_notification, on_receive_request,
     schema::v1::{
+        CompleteElicitationNotification, CreateElicitationRequest, CreateElicitationResponse,
         CreateTerminalRequest, CreateTerminalResponse, ReadTextFileRequest, ReadTextFileResponse,
         ReleaseTerminalRequest, ReleaseTerminalResponse, RequestPermissionRequest,
         RequestPermissionResponse, SessionNotification, TerminalOutputRequest,
@@ -135,6 +136,30 @@ pub fn build_client(
                 move |notif: SessionNotification, _cx: ConnectionTo<acp::Agent>| {
                     let handler = handler.clone();
                     async move { handler.session_notification(notif).await }
+                }
+            },
+            on_receive_notification!(),
+        )
+        .on_receive_request(
+            {
+                let handler = handler.clone();
+                move |req: CreateElicitationRequest,
+                      responder: Responder<CreateElicitationResponse>,
+                      _cx: ConnectionTo<acp::Agent>| {
+                    let handler = handler.clone();
+                    async move {
+                        responder.respond_with_result(handler.create_elicitation(req).await)
+                    }
+                }
+            },
+            on_receive_request!(),
+        )
+        .on_receive_notification(
+            {
+                let handler = handler.clone();
+                move |notif: CompleteElicitationNotification, _cx: ConnectionTo<acp::Agent>| {
+                    let handler = handler.clone();
+                    async move { handler.elicitation_complete(notif).await }
                 }
             },
             on_receive_notification!(),
