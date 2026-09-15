@@ -14,7 +14,8 @@ pub fn detect_project_storage_path() -> Result<String> {
     // prefer it for deterministic paths.
     if let Ok(xdg) = std::env::var("XDG_STATE_HOME") {
         if !xdg.is_empty() {
-            return Ok(format!("{}/nvim/hermes", xdg));
+            let path = PathBuf::from(xdg).join("nvim").join("hermes");
+            return Ok(path.to_string_lossy().into_owned());
         }
     }
 
