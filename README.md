@@ -755,8 +755,6 @@ vim.api.nvim_create_autocmd("User", {
 
 Get the selectable modes for a session.
 
-Fires a `Modes` User autocommand with the selection data instead of returning it.
-
 ```lua
 local hermes = require("hermes")
 
@@ -838,11 +836,9 @@ vim.api.nvim_create_autocmd("User", {
 > - `options` (array): Available model options
 > - `current` (object): The currently selected model
 
-### ⚙️ ModelConfigurations
+### ⚙️ Model configurations
 
 Get the model configuration options for a session.
-
-Fires a `ModelConfigurations` User autocommand with the configuration data instead of returning it.
 
 ```lua
 local hermes = require("hermes")
@@ -912,11 +908,9 @@ vim.api.nvim_create_autocmd("User", {
 
 > **Triggers:** [ThoughtLevelUpdated](#thoughtlevelupdated) autocommand upon completion.
 
-### 💭 ThoughtLevels
+### 💭 Thought levels
 
 Get the selectable thought levels for a session.
-
-Fires a `ThoughtLevels` User autocommand with the selection data instead of returning it.
 
 ```lua
 local hermes = require("hermes")
