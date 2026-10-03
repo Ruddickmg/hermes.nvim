@@ -808,8 +808,6 @@ vim.api.nvim_create_autocmd("User", {
 
 Get the selectable models for a session.
 
-Fires a `Models` User autocommand with the selection data instead of returning it.
-
 ```lua
 local hermes = require("hermes")
 local session_id = "some-session-id"
