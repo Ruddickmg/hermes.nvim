@@ -31,7 +31,6 @@ use std::{cell::RefCell, rc::Rc};
 use super::requests::Requests;
 pub use agents::*;
 use async_lock::Mutex;
-pub use config_options::*;
 pub use configure_model::*;
 pub use connect::*;
 pub use create_session::*;
@@ -40,9 +39,6 @@ pub use disconnect::*;
 pub use list_sessions::*;
 pub use load_session::*;
 pub use logout::*;
-pub use model_configurations::*;
-pub use models::*;
-pub use modes::*;
 use nvim_oxi::{
     Dictionary, Function, Object,
     lua::{Poppable, Pushable},
@@ -55,7 +51,6 @@ pub use set_mode::*;
 pub use set_model::*;
 pub use set_thought_level::*;
 pub use setup::*;
-pub use thought_levels::*;
 use tracing::{debug, error};
 
 use crate::utilities::{Logger, NvimRuntime};
@@ -191,11 +186,9 @@ impl Hermes {
     }
 
     fn config_options_method(&self) -> Object {
-        self.api_method(
-            |api: Rc<RefCell<Api>>, session_id: ConfigOptionsArgs| async move {
-                api.try_borrow()?.config_options(session_id).await
-            },
-        )
+        self.api_method(|api: Rc<RefCell<Api>>, session_id: String| async move {
+            api.try_borrow()?.config_options(session_id).await
+        })
     }
 
     fn set_config_option_method(&self) -> Object {

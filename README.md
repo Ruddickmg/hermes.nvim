@@ -382,10 +382,9 @@ There are five types of prompts you can send to an agent
 
 ```lua
 local hermes = require("hermes")
-local session_id = "current-session-id";
 
 -- single prompt call signature
-hermes.prompt(sessionId, {
+hermes.prompt(session_id, {
   type = "text",
   text = "What time is it?"
 })
@@ -580,9 +579,9 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "SessionCreated",
   callback = function(args)
-    local seesion_id = args.data.sessionId
+local session_id = args.data.sessionId
 
-    hermes.resume_session(session_id)
+hermes.resume_session(session_id)
   end,
 })
 ```
@@ -894,7 +893,7 @@ Fires a `ThoughtLevels` User autocommand with the selection data instead of retu
 local hermes = require("hermes")
 
 -- call signature
-hermes.thought_levels(sessionId)
+hermes.thought_levels(session_id)
 
 -- example
 vim.api.nvim_create_autocmd("User", {
@@ -921,7 +920,7 @@ Get all configuration options available for a session.
 local hermes = require("hermes")
 
 -- call signature
-hermes.config_options(sessionId)
+hermes.config_options(session_id)
 
 -- example
 vim.api.nvim_create_autocmd("User", {
@@ -936,34 +935,19 @@ vim.api.nvim_create_autocmd("User", {
 ```
 
 > **Triggers:** [ConfigOptions](#configoptions) autocommand with the array of all
-> configuration options. Also fires when the agent sends a `config_option_update`
-> session notification.
-
-> [!NOTE]
-> The `ConfigOptions` payload is the verbatim option array and carries no session id, so
-> track the current session from [SessionCreated](#sessioncreated) (or
-> [SessionLoaded](#sessionloaded)) when you need to respond to it.
+> configuration options.
 
 ### ⚙️ Set config option (**Optional**)
 
-Set a single configuration option by id. Takes a table with `config_id` and `value` keys.
+Set a single configuration option by id. Takes a table with `id` and `value` keys.
 
 `value` may be a string (for select options) or a boolean (for boolean options).
 
 ```lua
 local hermes = require("hermes")
-local session_id
-
-vim.api.nvim_create_autocmd("User", {
-  group = "hermes",
-  pattern = "SessionCreated",
-  callback = function(args)
-    session_id = args.data.sessionId
-  end,
-})
 
 -- call signature
-hermes.set_config_option(sessionId, { config_id = "brave_mode", value = true })
+hermes.set_config_option(session_id, { id = "brave_mode", value = true })
 
 -- example: toggle a boolean option whenever the agent reports new values
 vim.api.nvim_create_autocmd("User", {
@@ -973,7 +957,7 @@ vim.api.nvim_create_autocmd("User", {
     for _, option in ipairs(args.data) do
       if option.id == "brave_mode" then
         hermes.set_config_option(session_id, {
-          config_id = option.id,
+          id = option.id,
           value = not option.currentValue,
         })
       end
@@ -1099,7 +1083,7 @@ vim.api.nvim_create_autocmd("User", {
     local request_id = event.data.requestId
     local command = event.data.command
     local term_args = event.data.args or {}
-    local byte_limit = event.data.output_byte_limit
+    local byte_limit = event.data.outputByteLimit
 
     -- lua combines args and command (add command to the beginning of args)
     table.insert(term_args, 1, command)
@@ -1556,7 +1540,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="configoptions">
       <td><code>ConfigOptions</code></td>
       <td>All configuration options for a session</td>
-      <td>⚡ <a href="#config-options">config_options()</a> / 🤖 Agent</td>
+      <td>⚡ <a href="#config-options">config_options()</a></td>
       <td><pre><code class="language-json">[
   {
     "id": "string",
@@ -1568,7 +1552,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
   }
 ]</code></pre></td>
     </tr>
-    <tr>
+    <tr id="configurationoption">
       <td><code>ConfigurationOption</code></td>
       <td>Configuration option updates</td>
       <td>🤖 Agent</td>
@@ -1583,21 +1567,11 @@ Below is a list of all autocommands and their associated data (passed to the cal
         "name": "string",
         "description": "string (optional)",
         "category": "string (optional)",
-        "kind": {
-          "type": "select",
-          "currentValue": "string",
-          "options": [
-            { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
-            {
-              "type": "grouped",
-              "group": "string",
-              "name": "string",
-              "options": [
-                { "value": "string", "name": "string", "description": "string (optional)" }
-              ]
-            }
-          ]
-        }
+        "type": "select",
+        "currentValue": "string",
+        "options": [
+          { "value": "string", "name": "string", "description": "string (optional)" }
+        ]
       }
     ]
   }

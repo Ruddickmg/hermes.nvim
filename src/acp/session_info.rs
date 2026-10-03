@@ -162,12 +162,6 @@ impl SessionDetails {
         self.config_options = options;
     }
 
-    pub fn has_config_option(&self, id: &str) -> bool {
-        self.config_options
-            .iter()
-            .any(|option| option.id.to_string() == id)
-    }
-
     fn parse_option_selection(opt: &SessionConfigOption) -> Option<(Vec<HermesOption>, String)> {
         match &opt.kind {
             SessionConfigKind::Select(select) => {

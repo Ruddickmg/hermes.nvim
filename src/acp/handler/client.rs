@@ -196,21 +196,6 @@ impl Handler {
         }
         drop(state);
 
-        // An agent-pushed option update carries the complete authoritative set,
-        // so replace local state and re-notify listeners.
-        if let SessionUpdate::ConfigOptionUpdate(update) = &session_notification.update {
-            {
-                let mut state = self.state.lock().await;
-                if let Some(details) = state.session_info.get_mut(&session_id) {
-                    details.replace_config_options(update.config_options.clone());
-                }
-                drop(state);
-            }
-
-            self.execute_autocommand(Commands::ConfigOptions, update.config_options.clone())
-                .await?;
-        }
-
         Ok(self
             .execute_autocommand(command, hermes_notification)
             .await?)

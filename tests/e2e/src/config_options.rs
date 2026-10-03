@@ -201,7 +201,7 @@ fn test_set_config_option_sends_boolean_value_for_boolean_option() -> Result<(),
     let _result = set_config_option.call((
         session.session_id.to_string(),
         hermes::api::SetConfigOptionConfig {
-            config_id: "brave_mode".to_string(),
+            id: "brave_mode".to_string(),
             value: hermes::api::ConfigOptionValue::Boolean(true),
         },
     ));
@@ -275,7 +275,7 @@ fn test_set_config_option_updates_stored_boolean_value() -> Result<(), nvim_oxi:
     let _result = set_config_option.call((
         session_id.clone(),
         hermes::api::SetConfigOptionConfig {
-            config_id: "brave_mode".to_string(),
+            id: "brave_mode".to_string(),
             value: hermes::api::ConfigOptionValue::Boolean(true),
         },
     ));
@@ -291,66 +291,6 @@ fn test_set_config_option_updates_stored_boolean_value() -> Result<(), nvim_oxi:
         &options[0].kind,
         SessionConfigKind::Boolean(boolean) if boolean.current_value
     ));
-
-    Ok(())
-}
-
-#[nvim_oxi::test]
-fn test_set_config_option_rejects_unknown_config_id() -> Result<(), nvim_oxi::Error> {
-    let dict: Dictionary = hermes()?;
-    let connect: Function<ConnectionArgs, ()> =
-        FromObject::from_object(dict.get("connect").unwrap().clone())?;
-    let disconnect: Function<DisconnectArgs, ()> =
-        FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
-    let create_session: Function<CreateSessionArgs, ()> =
-        FromObject::from_object(dict.get("create_session").unwrap().clone())?;
-    let set_config_option: Function<SetConfigOptionArgs, Option<()>> =
-        FromObject::from_object(dict.get("set_config_option").unwrap().clone())?;
-
-    let wait_for_initialization =
-        autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
-    let wait_for_session =
-        autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
-
-    let agent = MockAgent::new();
-    let config_handle = agent.config().clone();
-    {
-        let mut config = config_handle.lock().unwrap();
-        config.new_session_response =
-            NewSessionResponse::new(generate_session_id()).config_options(vec![
-                SessionConfigOption::boolean("brave_mode", "Brave Mode", false),
-            ]);
-    }
-    let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
-
-    connect_to_mock_agent(&connect, &mock_handle)?;
-    wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
-
-    create_session.call(CreateSessionArgs::Default)?;
-    let session = wait_for_session(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
-
-    let result = set_config_option.call((
-        session.session_id.to_string(),
-        hermes::api::SetConfigOptionConfig {
-            config_id: "does_not_exist".to_string(),
-            value: hermes::api::ConfigOptionValue::Boolean(true),
-        },
-    ));
-
-    let sent = config_handle
-        .lock()
-        .unwrap()
-        .set_session_config_option_request
-        .clone();
-
-    disconnect.call(DisconnectArgs::All)?;
-    mock_handle.close();
-
-    assert_eq!(
-        (result, sent),
-        (Ok(None), None),
-        "unknown config_id should be rejected before reaching the agent"
-    );
 
     Ok(())
 }
