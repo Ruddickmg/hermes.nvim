@@ -154,7 +154,6 @@ hermes.setup({
     terminal_access = true,      -- Allow terminal access to the agent 
     request_permissions = true,  -- Allow agent to send permission requests 
     send_notifications = true,  -- Allow the agent to send notifications 
-    boolean_config_access = true,  -- Advertise boolean config option support to the agent 
     elicitation = {
       form = true, -- Allow the agent to send form elicitation requests
       url = true, -- Allow the agent to send URL elicitation requests
@@ -916,13 +915,7 @@ vim.api.nvim_create_autocmd("User", {
 
 ### ⚙️ Config options
 
-Get all configuration options available for a session, including boolean options.
-
-Values are returned exactly as the agent sent them, so options are always verbatim ACP
-option objects. Boolean options are flattened onto the option itself, for example
-`{ id = "brave_mode", name = "Brave Mode", type = "boolean", currentValue = true }`.
-
-Fires a `ConfigOptions` User autocommand with the option array instead of returning it.
+Get all configuration options available for a session.
 
 ```lua
 local hermes = require("hermes")
@@ -990,11 +983,6 @@ vim.api.nvim_create_autocmd("User", {
 ```
 
 > **Triggers:** [ConfigurationUpdated](#configurationupdated) autocommand upon completion.
-
-> [!NOTE]
-> Boolean options are only available when the agent supports them. Hermes advertises the
-> `boolean` config option capability by default, and it can be turned off with the
-> `permissions.boolean_config_access` [setup](#setup) setting.
 
 ### ↩️ Respond
 

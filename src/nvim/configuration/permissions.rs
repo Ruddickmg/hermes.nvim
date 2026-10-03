@@ -13,7 +13,6 @@ pub struct Permissions {
     pub terminal_access: bool,
     pub request_permissions: bool,
     pub send_notifications: bool,
-    pub boolean_config_access: bool,
     pub elicitation: ElicitationPermissions,
 }
 
@@ -25,7 +24,6 @@ impl Default for Permissions {
             terminal_access: true,
             request_permissions: true,
             send_notifications: true,
-            boolean_config_access: true,
             elicitation: ElicitationPermissions::default(),
         }
     }
@@ -65,12 +63,6 @@ impl FromObject for Permissions {
             .transpose()?
             .unwrap_or(true);
 
-        let boolean_config_access = dict
-            .get("boolean_config_access")
-            .map(|o| bool::from_object(o.clone()))
-            .transpose()?
-            .unwrap_or(true);
-
         let elicitation = dict
             .get("elicitation")
             .map(|o| ElicitationPermissions::from_object(o.clone()))
@@ -83,7 +75,6 @@ impl FromObject for Permissions {
             terminal_access,
             request_permissions,
             send_notifications,
-            boolean_config_access,
             elicitation,
         })
     }
@@ -106,7 +97,6 @@ mod tests {
             any::<bool>(),
             any::<bool>(),
             any::<bool>(),
-            any::<bool>(),
         )
             .prop_map(
                 |(
@@ -115,7 +105,6 @@ mod tests {
                     terminal,
                     can_request,
                     allow_notif,
-                    boolean_config,
                     elic_form,
                     elic_url,
                     reject,
@@ -126,7 +115,6 @@ mod tests {
                         terminal_access: terminal,
                         request_permissions: can_request,
                         send_notifications: allow_notif,
-                        boolean_config_access: boolean_config,
                         elicitation: ElicitationPermissions {
                             form: elic_form,
                             url: elic_url,
@@ -148,7 +136,6 @@ mod tests {
             dict.insert("terminal_access", permissions.terminal_access);
             dict.insert("request_permissions", permissions.request_permissions);
             dict.insert("send_notifications", permissions.send_notifications);
-            dict.insert("boolean_config_access", permissions.boolean_config_access);
             let mut elicitation = Dictionary::new();
             elicitation.insert("form", permissions.elicitation.form);
             elicitation.insert("url", permissions.elicitation.url);
@@ -166,7 +153,6 @@ mod tests {
             prop_assert_eq!(parsed.terminal_access, permissions.terminal_access);
             prop_assert_eq!(parsed.request_permissions, permissions.request_permissions);
             prop_assert_eq!(parsed.send_notifications, permissions.send_notifications);
-            prop_assert_eq!(parsed.boolean_config_access, permissions.boolean_config_access);
             prop_assert_eq!(parsed.elicitation, permissions.elicitation);
         }
     }
@@ -229,35 +215,6 @@ mod tests {
             }
         );
     }
-
-    #[test]
-    fn boolean_config_access_defaults_to_true() {
-        assert!(Permissions::default().boolean_config_access);
-    }
-
-    #[test]
-    fn boolean_config_access_from_object_parses_false() {
-        let mut dict = Dictionary::new();
-        dict.insert("boolean_config_access", false);
-
-        let parsed =
-            Permissions::from_object(Object::from(dict)).expect("Permissions::from_object failed");
-
-        assert!(!parsed.boolean_config_access);
-    }
-
-    #[test]
-    fn permissions_partial_apply_to_disables_boolean_config_access() {
-        let mut perms = Permissions::default();
-        let partial = PermissionsPartial {
-            boolean_config_access: Some(false),
-            ..Default::default()
-        };
-
-        partial.apply_to(&mut perms);
-
-        assert!(!perms.boolean_config_access);
-    }
 }
 
 /// Partial permissions configuration where each field is optional
@@ -268,7 +225,6 @@ pub struct PermissionsPartial {
     pub terminal_access: Option<bool>,
     pub request_permissions: Option<bool>,
     pub send_notifications: Option<bool>,
-    pub boolean_config_access: Option<bool>,
     pub elicitation: Option<ElicitationPermissionsPartial>,
 }
 
@@ -289,9 +245,6 @@ impl PermissionsPartial {
         }
         if let Some(val) = self.send_notifications {
             permissions.send_notifications = val;
-        }
-        if let Some(val) = self.boolean_config_access {
-            permissions.boolean_config_access = val;
         }
         if let Some(elicitation) = self.elicitation {
             if let Some(val) = elicitation.form {
@@ -331,10 +284,6 @@ impl FromObject for PermissionsPartial {
             .get("send_notifications")
             .map(|o| bool::from_object(o.clone()))
             .transpose()?;
-        let boolean_config_access = dict
-            .get("boolean_config_access")
-            .map(|o| bool::from_object(o.clone()))
-            .transpose()?;
         let elicitation = dict
             .get("elicitation")
             .map(|o| ElicitationPermissionsPartial::from_object(o.clone()))
@@ -346,7 +295,6 @@ impl FromObject for PermissionsPartial {
             terminal_access,
             request_permissions,
             send_notifications,
-            boolean_config_access,
             elicitation,
         })
     }

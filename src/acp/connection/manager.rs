@@ -314,7 +314,7 @@ impl ConnectionManager {
 
         // Now we can safely do mutable operations
         let (sender, receiver) = async_channel::bounded(100);
-        let mut client_capabilities = ClientCapabilities::new()
+        let client_capabilities = ClientCapabilities::new()
             .terminal(permissions.terminal_access)
             .fs(FileSystemCapabilities::new()
                 .read_text_file(permissions.fs_read_access)
@@ -324,16 +324,13 @@ impl ConnectionManager {
                 permissions.elicitation.url,
                 autocmd_listeners_attached(GROUP, "User", "FormElicitation"),
                 autocmd_listeners_attached(GROUP, "User", "UrlElicitation"),
-            ));
-
-        if permissions.boolean_config_access {
-            client_capabilities = client_capabilities.session(
+            ))
+            .session(
                 ClientSessionCapabilities::new().config_options(
                     SessionConfigOptionsCapabilities::new()
                         .boolean(BooleanConfigOptionCapabilities::new()),
                 ),
             );
-        }
 
         let init_config = InitializeRequest::new(ProtocolVersion::LATEST)
             .client_info(Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"))

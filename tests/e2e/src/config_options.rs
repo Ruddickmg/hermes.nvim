@@ -355,9 +355,9 @@ fn test_set_config_option_rejects_unknown_config_id() -> Result<(), nvim_oxi::Er
     Ok(())
 }
 
-/// The capability must only be advertised when `boolean_config_access` is enabled.
+/// Boolean config option support is always advertised, with no permission gate.
 #[nvim_oxi::test]
-fn test_boolean_capability_advertised_when_enabled() -> Result<(), nvim_oxi::Error> {
+fn test_boolean_capability_advertised() -> Result<(), nvim_oxi::Error> {
     let dict: Dictionary = hermes()?;
     let connect: Function<ConnectionArgs, ()> =
         FromObject::from_object(dict.get("connect").unwrap().clone())?;
@@ -392,57 +392,6 @@ fn test_boolean_capability_advertised_when_enabled() -> Result<(), nvim_oxi::Err
     assert!(
         caps.and_then(|options| options.boolean).is_some(),
         "boolean config option support should be advertised"
-    );
-
-    Ok(())
-}
-
-#[nvim_oxi::test]
-fn test_boolean_capability_not_advertised_when_disabled() -> Result<(), nvim_oxi::Error> {
-    let dict: Dictionary = hermes()?;
-    let setup: Function<hermes::api::SetupArgs, ()> =
-        FromObject::from_object(dict.get("setup").unwrap().clone())?;
-    let connect: Function<ConnectionArgs, ()> =
-        FromObject::from_object(dict.get("connect").unwrap().clone())?;
-    let disconnect: Function<DisconnectArgs, ()> =
-        FromObject::from_object(dict.get("disconnect").unwrap().clone())?;
-
-    let wait_for_initialization =
-        autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
-
-    let mut permissions = nvim_oxi::Dictionary::new();
-    permissions.insert("boolean_config_access", false);
-    let mut config_dict = nvim_oxi::Dictionary::new();
-    config_dict.insert("permissions", permissions);
-    let partial = hermes::nvim::configuration::ClientConfigPartial::from_object(
-        nvim_oxi::Object::from(config_dict),
-    )
-    .expect("Failed to parse setup config dictionary");
-    setup.call(hermes::api::SetupArgs(Some(partial)))?;
-
-    let agent = MockAgent::new();
-    let config_handle = agent.config().clone();
-    let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
-
-    connect_to_mock_agent(&connect, &mock_handle)?;
-    wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
-
-    let caps = config_handle
-        .lock()
-        .unwrap()
-        .initialize_request
-        .as_ref()
-        .expect("initialize request should be captured")
-        .client_capabilities
-        .session
-        .clone();
-
-    disconnect.call(DisconnectArgs::All)?;
-    mock_handle.close();
-
-    assert_eq!(
-        caps, None,
-        "session capabilities should be omitted entirely"
     );
 
     Ok(())
