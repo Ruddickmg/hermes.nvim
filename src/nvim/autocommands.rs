@@ -67,6 +67,7 @@ pub enum Commands {
     Models,
     Modes,
     ThoughtLevels,
+    ConfigOptions,
 
     // Agent registry
     AgentList,
@@ -140,6 +141,7 @@ impl TryFrom<&str> for Commands {
             "Models" => Ok(Commands::Models),
             "Modes" => Ok(Commands::Modes),
             "ThoughtLevels" => Ok(Commands::ThoughtLevels),
+            "ConfigOptions" => Ok(Commands::ConfigOptions),
 
             // Agent registry
             "AgentList" => Ok(Commands::AgentList),
@@ -625,6 +627,14 @@ mod tests {
         assert_eq!(
             Commands::try_from("ThoughtLevels").unwrap(),
             Commands::ThoughtLevels
+        );
+    }
+
+    #[test]
+    fn test_commands_config_options() {
+        assert_eq!(
+            Commands::try_from("ConfigOptions").unwrap(),
+            Commands::ConfigOptions
         );
     }
 

@@ -37,17 +37,8 @@ async fn dispatch(
         }
         UserRequest::SetConfigOption(request) => {
             let session_id = request.session_id.to_string();
-            let option = match request.value {
-                acp::schema::v1::SessionConfigOptionValue::ValueId { ref value } => {
-                    value.to_string()
-                }
-                acp::schema::v1::SessionConfigOptionValue::Boolean { value } => value.to_string(),
-                _ => String::new(),
-            };
             let response = cx.send_request(request).block_task().await?;
-            client
-                .config_option_set(&session_id, &option, response)
-                .await?;
+            client.config_option_set(&session_id, response).await?;
         }
         UserRequest::SetMode(request) => {
             let session_id = request.session_id.to_string();

@@ -505,6 +505,45 @@ local uv = vim.uv or vim.loop
 local result, err = uv.fs_copyfile(src, dest)
 ```
 
+## Adding a Feature
+
+Use this checklist whenever a feature adds or changes user-facing API. Each step is a real touchpoint in this codebase — check each box deliberately and skip what doesn't apply, rather than forgetting it exists.
+
+### Rust Wiring (new API method)
+
+- [ ] `src/nvim/api/<feature>.rs` — `impl Api` method. Argument tables need `FromObject` + `Poppable` (and `Pushable` if returned to Lua)
+- [ ] `src/nvim/api/mod.rs` — **four** registrations: `pub mod <feature>;`, `pub use <feature>::*;`, a `<feature>_method()` on `Hermes`, and the `("<feature>", ...)` entry in the `From<Hermes> for Dictionary` impl
+- [ ] New ACP request? → `UserRequest` variant + `Connection::<feature>()` method in `src/acp/connection/mod.rs`, plus a dispatch arm in `src/acp/connection/connect.rs`
+- [ ] Agent response matters? → handler method firing an autocommand in `src/acp/handler/response.rs`
+- [ ] New autocommand? → `Commands` variant + `TryFrom<&str>` arm in `src/nvim/autocommands.rs` (with `from_str`/`Display` unit tests)
+- [ ] Session state changes? → update `src/acp/session_info.rs` / `src/nvim/state/`
+
+### Rust Tests
+
+- [ ] Unit tests in the same source file (`#[cfg(test)]`, `#[test]`, `pretty_assertions`): validation, error branches, `FromObject` edge cases (missing/invalid fields). Add proptest coverage for `FromObject` conversions
+- [ ] Integration tests in `tests/integration/src/` (`#[nvim_oxi::test]`) for Neovim-API-touching logic; register the module in `tests/integration/src/lib.rs`
+- [ ] E2E tests in `tests/e2e/src/` for the full Lua→Rust→agent flow; register the module in `tests/e2e/src/lib.rs`; extend `tests/e2e/src/utilities/mock_agent.rs` if the mock agent needs new canned responses
+
+### Lua
+
+- [ ] `M.<feature>` wrapper in `lua/hermes/init.lua` following existing patterns (getters `return execute_async(...)`, actions plain `execute_async(...)`)
+- [ ] EmmyLua annotations: `---@param` on the wrapper, `---@class` for new input tables, and a `Hermes<EventName>` payload class for any new autocommand (see the "Autocommand Payload Types" convention in `init.lua`)
+- [ ] `tests/lua/spec/init_spec.lua`: "exports `<feature>` from Rust" + signature tests
+- [ ] `tests/lua/spec/api_spec.lua`: "endpoint callable with opencode" test
+
+### Docs
+
+- [ ] `README.md`: API section (call signature + example); `---@type Hermes<Event>` casts in autocommand examples; a row in the autocommands table for a new event
+- [ ] `doc/hermes.txt`: matching section + example + autocommand list entry
+- [ ] `AGENTS.md`: update if the feature changes architecture, structure, or any convention described here
+
+### Verification
+
+- [ ] `cargo build --release` **before** running Lua specs — `tests/lua/spec/` loads `target/release/libhermes.so`; a stale binary makes new exports look missing
+- [ ] `cargo nextest run --lib` → `cargo nextest run --package hermes-integration` → `cd tests/e2e && cargo nextest run`
+- [ ] Lua suite via vusted (80% Lua coverage / 80% patch coverage per the Testing section)
+- [ ] Docs-only changes (README.md, doc/*.txt) require no test runs
+
 ## Testing
 
 Tests ensure code reliability and prevent regression.

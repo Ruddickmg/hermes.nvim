@@ -695,6 +695,29 @@ describe("Hermes API Endpoints (E2E)", function()
 			local ok, err = pcall(hermes.configure_model, "test-session-id", { id = "test", value = "val" })
 			assert.is_true(ok, "configure_model() should not crash: " .. tostring(err))
 		end)
+
+		it("config_options endpoint callable with opencode", function()
+			local hermes = setup_endpoint_test("opencode")
+
+			local ready = wait_for_ready(hermes, 30000)
+			if not ready then
+				error("Binary should be in READY state")
+			end
+
+			assert.is_nil(hermes.config_options("test-session-id"))
+		end)
+
+		it("set_config_option endpoint callable with opencode", function()
+			local hermes = setup_endpoint_test("opencode")
+
+			local ready = wait_for_ready(hermes, 30000)
+			if not ready then
+				error("Binary should be in READY state")
+			end
+
+			local ok, err = pcall(hermes.set_config_option, "test-session-id", { id = "brave_mode", value = true })
+			assert.is_true(ok, "set_config_option() should not crash: " .. tostring(err))
+		end)
 	end)
 
 	describe("with copilot agent (for permission requests)", function()

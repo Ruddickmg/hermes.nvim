@@ -256,7 +256,9 @@ Example: >
     vim.api.nvim_create_autocmd("User", {
         pattern = "ConnectionInitialized",
         callback = function(args)
-            local auth_method_id = args.data.authMethods[1].id
+            ---@type HermesConnectionInitialized
+            local data = args.data
+            local auth_method_id = data.authMethods[1].id
             require("hermes").authenticate(auth_method_id)
         end
     })
@@ -391,6 +393,8 @@ Autocommands triggered: ~
 *hermes.configure_model()*                  Configure model option
 *hermes.set_thought_level()*                Set thought level
 *hermes.thought_levels()*                   List thought levels
+*hermes.config_options()*                   List all configuration options
+*hermes.set_config_option()*                Set any configuration option
 
 hermes.cancel() cancels the current operation of the agent (e.g., stop
 generating text, stop a tool call in progress, etc).
@@ -402,6 +406,12 @@ returning it. configure_model() takes a session ID and a table with `id` and
 `value` keys. model_configurations() fires an autocommand with an array of
 model configuration options.
 
+config_options() takes a session ID and fires an autocommand with the
+configuration options for that session.
+
+set_config_option() takes a session ID and a table with `id` and `value` keys.
+`value` is a string for select options and a boolean for boolean options.
+
 Example: >
     -- Cancel current operation
     require("hermes").cancel(session_id)
@@ -412,11 +422,16 @@ Example: >
     -- Configure a model option
     require("hermes").configure_model(session_id,
         { id = "context_size", value = "200k" })
+
+    -- Toggle a boolean option
+    require("hermes").set_config_option(session_id,
+        { id = "brave_mode", value = true })
 <
 
 Autocommands triggered: ~
     ModeUpdated, Modes, SessionModelUpdated, Models, ModelConfigurations,
-    ModelConfigurationUpdated, ThoughtLevelUpdated, ThoughtLevels
+    ModelConfigurationUpdated, ThoughtLevelUpdated, ThoughtLevels,
+    ConfigOptions, ConfigurationUpdated
 
 -------------------------------------------------------------------------------
 4.10 RESPONDING TO REQUESTS                         *hermes-respond*
@@ -614,10 +629,18 @@ Listen to them with: >
         group = "hermes",
         pattern = "ConnectionInitialized",
         callback = function(args)
-            print("Connected!", vim.inspect(args.data))
+            ---@type HermesConnectionInitialized
+            local data = args.data
+            print("Connected!", vim.inspect(data))
         end
     })
 <
+
+Every autocommand's payload has a corresponding LuaLS class named after the
+autocommand (e.g. `ConnectionInitialized` delivers a
+`HermesConnectionInitialized` payload, `ConfigOptions` delivers a
+`HermesConfigOptions` array). Cast `args.data` inside your callback — as in
+the example above — to get completion and type checking for payload fields.
 
 Hermes will only trigger autocommands if there is a listener defined for it
 (i.e. you have created one like the example above).
@@ -647,7 +670,9 @@ response required). Example: >
         pattern = "FormElicitation",
         group = "hermes",
         callback = function(args)
-            local request_id = args.data.requestId
+            ---@type HermesFormElicitation
+            local data = args.data
+            local request_id = data.requestId
             require("hermes").respond(request_id, {
                 action = "accept",
                 content = { name = "Alice" },
@@ -689,6 +714,8 @@ notifications sourced from the agent.
 *AgentTextThought*              Textual thought/reasoning from the agent
 *Authenticated*                 Authentication completed (authenticate())
 *AvailableCommands*             Available commands are updated
+*ConfigOptions*                 All configuration options for a session
+                                 (config_options())
 *ConfigurationOption*           Configuration option updates
 *ConfigurationUpdated*          Session configuration updated
 *ConnectionInitialized*         Connection established with agent (connect())
@@ -698,10 +725,10 @@ notifications sourced from the agent.
                                  (respond())
 *LoggedOut*                     Agent logout completed (logout())
 *ModeCurrent*                   Current mode changes
-*ModelConfigurationUpdated*     Model configuration options updated
-                                 (configure_model())
 *ModelConfigurations*           Available model configuration options
                                  retrieved (model_configurations())
+*ModelConfigurationUpdated*     Model configuration options updated
+                                 (configure_model())
 *Models*                        Available models retrieved (models())
 *Modes*                         Available modes retrieved (modes())
 *ModeUpdated*                   Session mode changed (set_mode())
@@ -720,9 +747,9 @@ notifications sourced from the agent.
 *SessionModelUpdated*           Session model updated (set_model())
 *SessionResumed*                Session resumed successfully
                                  (resume_session())
+*SessionsListed*                Session list received (list_sessions())
 *SessionUpdate*                 Session metadata updated (title, timestamps,
                                  etc)
-*SessionsListed*                Session list received (list_sessions())
 *TerminalCreate*                Agent requests to create a terminal
                                  (respond())
 *TerminalExit*                  Agent requests notification when terminal
