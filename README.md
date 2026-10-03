@@ -579,9 +579,9 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "SessionCreated",
   callback = function(args)
-local session_id = args.data.sessionId
+    local session_id = args.data.sessionId
 
-hermes.resume_session(session_id)
+    hermes.resume_session(session_id)
   end,
 })
 ```

@@ -198,6 +198,20 @@
 ---@class ConfigureModelConfig
 ---@field id string Config option ID to set
 ---@field value string Value to set
+
+---@class ConfigOption
+---Configuration option for a session (delivered via the ConfigOptions autocommand)
+---@field id string Config option ID
+---@field name string Human-readable name
+---@field description? string Optional description
+---@field category? string Option category (e.g. "mode", "model", "thought_level", "model_config")
+---@field type "select"|"boolean" Option kind
+---@field options? SelectionOption[] Available values (select options only)
+---@field currentValue string|boolean Current value (value ID for select options, boolean for boolean options)
+
+---@class SetConfigOptionConfig
+---@field id string Config option ID to set
+---@field value string|boolean Value to set (string for select options, boolean for boolean options)
 -- luacov: enable
 
 local M = {}
@@ -775,6 +789,23 @@ end
 function M.configure_model(session_id, config)
 	execute_async(function()
 		M._load_native_sync().configure_model(session_id, config)
+	end)
+end
+
+---Get all configuration options for a session
+---@param session_id string Session ID
+function M.config_options(session_id)
+	return execute_async(function()
+		return M._load_native_sync().config_options(session_id)
+	end)
+end
+
+---Set any configuration option for a session
+---@param session_id string Session ID
+---@param config SetConfigOptionConfig Table with `id` and `value` keys
+function M.set_config_option(session_id, config)
+	execute_async(function()
+		M._load_native_sync().set_config_option(session_id, config)
 	end)
 end
 
