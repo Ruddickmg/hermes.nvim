@@ -34,6 +34,7 @@ pub struct SessionDetails {
     pub models: Option<Selection>,
     pub thought_levels: Option<Selection>,
     pub model_configs: Vec<ModelConfigOption>,
+    pub config_options: Vec<SessionConfigOption>,
 }
 
 impl SessionDetails {
@@ -43,6 +44,7 @@ impl SessionDetails {
             models: Self::parse_models(session),
             thought_levels: Self::parse_thought_levels(session),
             model_configs: Self::parse_model_configs(session),
+            config_options: session.config_options.clone().unwrap_or_default(),
         }
     }
 
@@ -144,6 +146,20 @@ impl SessionDetails {
 
     pub fn get_model_config(&self, id: &str) -> Option<&ModelConfigOption> {
         self.model_configs.iter().find(|mc| mc.id == id)
+    }
+
+    /// Every config option the agent has reported, stored verbatim.
+    pub fn all_config_options(&self) -> &[SessionConfigOption] {
+        &self.config_options
+    }
+
+    /// Replace the stored config options with a fresh authoritative snapshot.
+    ///
+    /// ACP sends the complete option set on session creation, on every
+    /// `session/set_config_option` response, and on `config_option_update`
+    /// notifications, so a wholesale replacement is always correct.
+    pub fn replace_config_options(&mut self, options: Vec<SessionConfigOption>) {
+        self.config_options = options;
     }
 
     fn parse_option_selection(opt: &SessionConfigOption) -> Option<(Vec<HermesOption>, String)> {

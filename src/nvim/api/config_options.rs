@@ -6,17 +6,18 @@ use crate::{
 
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn model_configurations(&self, session_id: String) -> Result<()> {
+    pub async fn config_options(&self, session_id: String) -> Result<()> {
         let state = self.state.lock().await;
-        let details = state
+        let options = state
             .session_info
             .get(&session_id)
             .ok_or_else(|| Error::SessionNotFound(session_id.clone()))?
-            .clone();
+            .all_config_options()
+            .to_vec();
         drop(state);
 
         self.response_handler
-            .execute_autocommand(Commands::ModelConfigurations, details.model_configs)
+            .execute_autocommand(Commands::ConfigOptions, options)
             .await
     }
 }
