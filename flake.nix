@@ -95,6 +95,8 @@
               sqlx-cli
               just
               lspmux
+              opencode
+              github-copilot-cli
               cargo-nextest
               cargo-llvm-cov
               cargo-deny
