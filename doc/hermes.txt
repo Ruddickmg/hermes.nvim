@@ -256,7 +256,9 @@ Example: >
     vim.api.nvim_create_autocmd("User", {
         pattern = "ConnectionInitialized",
         callback = function(args)
-            local auth_method_id = args.data.authMethods[1].id
+            ---@type HermesConnectionInitialized
+            local data = args.data
+            local auth_method_id = data.authMethods[1].id
             require("hermes").authenticate(auth_method_id)
         end
     })
@@ -627,10 +629,18 @@ Listen to them with: >
         group = "hermes",
         pattern = "ConnectionInitialized",
         callback = function(args)
-            print("Connected!", vim.inspect(args.data))
+            ---@type HermesConnectionInitialized
+            local data = args.data
+            print("Connected!", vim.inspect(data))
         end
     })
 <
+
+Every autocommand's payload has a corresponding LuaLS class named after the
+autocommand (e.g. `ConnectionInitialized` delivers a
+`HermesConnectionInitialized` payload, `ConfigOptions` delivers a
+`HermesConfigOptions` array). Cast `args.data` inside your callback — as in
+the example above — to get completion and type checking for payload fields.
 
 Hermes will only trigger autocommands if there is a listener defined for it
 (i.e. you have created one like the example above).
@@ -660,7 +670,9 @@ response required). Example: >
         pattern = "FormElicitation",
         group = "hermes",
         callback = function(args)
-            local request_id = args.data.requestId
+            ---@type HermesFormElicitation
+            local data = args.data
+            local request_id = data.requestId
             require("hermes").respond(request_id, {
                 action = "accept",
                 content = { name = "Alice" },
