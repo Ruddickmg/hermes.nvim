@@ -992,6 +992,136 @@ fn config_option_set_with_other_category_succeeds() -> nvim_oxi::Result<()> {
 }
 
 #[nvim_oxi::test]
+fn config_option_set_with_multiple_categories_succeeds() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
+
+    let session = NewSessionResponse::new("test-session").config_options(vec![
+        SessionConfigOption::select(
+            "mode",
+            "Mode",
+            "ask",
+            vec![
+                SessionConfigSelectOption::new("ask", "Ask"),
+                SessionConfigSelectOption::new("code", "Code"),
+            ],
+        )
+        .category(SessionConfigOptionCategory::Mode),
+        SessionConfigOption::select(
+            "model",
+            "Model",
+            "model-1",
+            vec![
+                SessionConfigSelectOption::new("model-1", "Model 1"),
+                SessionConfigSelectOption::new("model-2", "Model 2"),
+            ],
+        )
+        .category(SessionConfigOptionCategory::Model),
+    ]);
+    smol::block_on(async {
+        state.lock().await.set_session_info(&session);
+    });
+
+    let response = SetSessionConfigOptionResponse::new(vec![
+        SessionConfigOption::select(
+            "mode",
+            "Mode",
+            "code",
+            vec![SessionConfigSelectOption::new("code", "Code")],
+        )
+        .category(SessionConfigOptionCategory::Mode),
+        SessionConfigOption::select(
+            "model",
+            "Model",
+            "model-1",
+            vec![SessionConfigSelectOption::new("model-1", "Model 1")],
+        )
+        .category(SessionConfigOptionCategory::Model),
+    ]);
+
+    let result = smol::block_on(handler.config_option_set("test-session", "code", response));
+
+    assert!(
+        result.is_ok(),
+        "each category should use its own current value rather than the requested value"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn config_option_set_applies_each_option_current_value_from_response() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
+
+    let session = NewSessionResponse::new("test-session").config_options(vec![
+        SessionConfigOption::select(
+            "mode",
+            "Mode",
+            "ask",
+            vec![
+                SessionConfigSelectOption::new("ask", "Ask"),
+                SessionConfigSelectOption::new("code", "Code"),
+            ],
+        )
+        .category(SessionConfigOptionCategory::Mode),
+        SessionConfigOption::select(
+            "model",
+            "Model",
+            "model-2",
+            vec![
+                SessionConfigSelectOption::new("model-1", "Model 1"),
+                SessionConfigSelectOption::new("model-2", "Model 2"),
+            ],
+        )
+        .category(SessionConfigOptionCategory::Model),
+    ]);
+    smol::block_on(async {
+        state.lock().await.set_session_info(&session);
+    });
+
+    let response = SetSessionConfigOptionResponse::new(vec![
+        SessionConfigOption::select(
+            "mode",
+            "Mode",
+            "code",
+            vec![SessionConfigSelectOption::new("code", "Code")],
+        )
+        .category(SessionConfigOptionCategory::Mode),
+        SessionConfigOption::select(
+            "model",
+            "Model",
+            "model-1",
+            vec![SessionConfigSelectOption::new("model-1", "Model 1")],
+        )
+        .category(SessionConfigOptionCategory::Model),
+    ]);
+
+    smol::block_on(handler.config_option_set("test-session", "code", response))?;
+
+    let state_guard = smol::block_on(state.lock());
+    let details = state_guard.session_info.get("test-session").unwrap();
+
+    assert_eq!(
+        details.current_model().map(|option| option.value.as_str()),
+        Some("model-1"),
+        "model should track the current value the agent reported, not the requested mode value"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
 fn session_loaded_stores_model_config_options_info() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(

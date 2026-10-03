@@ -1,8 +1,9 @@
 use agent_client_protocol::schema::v1::{
     AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse, ExtResponse,
     ForkSessionResponse, InitializeResponse, ListSessionsResponse, LoadSessionResponse,
-    LogoutResponse, NewSessionResponse, PromptResponse, ResumeSessionResponse, SessionConfigOption,
-    SessionConfigOptionCategory, SetSessionConfigOptionResponse, SetSessionModeResponse,
+    LogoutResponse, NewSessionResponse, PromptResponse, ResumeSessionResponse, SessionConfigKind,
+    SessionConfigOption, SessionConfigOptionCategory, SetSessionConfigOptionResponse,
+    SetSessionModeResponse,
 };
 use serde::Serialize;
 use tracing::instrument;
@@ -100,7 +101,7 @@ impl Handler {
     pub async fn config_option_set(
         &self,
         session_id: &str,
-        updated: &str,
+        _updated: &str,
         response: SetSessionConfigOptionResponse,
     ) -> Result<(), Error> {
         let model_config_options = response.config_options.clone();
@@ -109,17 +110,28 @@ impl Handler {
         let futures = response
             .config_options
             .iter()
-            .filter_map(|c| c.category.clone())
-            .map(async move |category| match category {
+            .filter_map(|option| {
+                let category = option.category.clone()?;
+                let SessionConfigKind::Select(select) = &option.kind else {
+                    return None;
+                };
+                Some((category, select.current_value.0.to_string()))
+            })
+            .map(async move |(category, current_value)| match category {
                 SessionConfigOptionCategory::Mode => {
-                    self.session_mode_set(session_id, updated, SetSessionModeResponse::default())
-                        .await
+                    self.session_mode_set(
+                        session_id,
+                        &current_value,
+                        SetSessionModeResponse::default(),
+                    )
+                    .await
                 }
                 SessionConfigOptionCategory::Model => {
-                    self.session_model_set(session_id, updated).await
+                    self.session_model_set(session_id, &current_value).await
                 }
                 SessionConfigOptionCategory::ThoughtLevel => {
-                    self.session_thought_level_set(session_id, updated).await
+                    self.session_thought_level_set(session_id, &current_value)
+                        .await
                 }
                 SessionConfigOptionCategory::ModelConfig => {
                     self.session_model_config_set(session_id, model_config_ref)
