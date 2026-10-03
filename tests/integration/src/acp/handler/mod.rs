@@ -888,7 +888,7 @@ fn config_option_set_with_mode_category_succeeds() -> nvim_oxi::Result<()> {
     .category(SessionConfigOptionCategory::Mode);
     let response = SetSessionConfigOptionResponse::new(vec![option]);
 
-    let result = smol::block_on(handler.config_option_set("test-session", "chat", response));
+    let result = smol::block_on(handler.config_option_set("test-session", response));
 
     assert!(
         result.is_ok(),
@@ -930,7 +930,7 @@ fn config_option_set_with_model_category_succeeds() -> nvim_oxi::Result<()> {
     .category(SessionConfigOptionCategory::Model);
     let response = SetSessionConfigOptionResponse::new(vec![option]);
 
-    let result = smol::block_on(handler.config_option_set("test-session", "gpt4", response));
+    let result = smol::block_on(handler.config_option_set("test-session", response));
 
     assert!(
         result.is_ok(),
@@ -952,7 +952,7 @@ fn config_option_set_empty_options_succeeds() -> nvim_oxi::Result<()> {
 
     let response = SetSessionConfigOptionResponse::new(vec![]);
 
-    let result = smol::block_on(handler.config_option_set("test-session", "", response));
+    let result = smol::block_on(handler.config_option_set("test-session", response));
 
     assert!(
         result.is_ok(),
@@ -981,7 +981,7 @@ fn config_option_set_with_other_category_succeeds() -> nvim_oxi::Result<()> {
     .category(SessionConfigOptionCategory::Other("custom".into()));
     let response = SetSessionConfigOptionResponse::new(vec![option]);
 
-    let result = smol::block_on(handler.config_option_set("test-session", "val", response));
+    let result = smol::block_on(handler.config_option_set("test-session", response));
 
     assert!(
         result.is_ok(),
@@ -1044,7 +1044,7 @@ fn config_option_set_with_multiple_categories_succeeds() -> nvim_oxi::Result<()>
         .category(SessionConfigOptionCategory::Model),
     ]);
 
-    let result = smol::block_on(handler.config_option_set("test-session", "code", response));
+    let result = smol::block_on(handler.config_option_set("test-session", response));
 
     assert!(
         result.is_ok(),
@@ -1107,7 +1107,7 @@ fn config_option_set_applies_each_option_current_value_from_response() -> nvim_o
         .category(SessionConfigOptionCategory::Model),
     ]);
 
-    smol::block_on(handler.config_option_set("test-session", "code", response))?;
+    smol::block_on(handler.config_option_set("test-session", response))?;
 
     let state_guard = smol::block_on(state.lock());
     let details = state_guard.session_info.get("test-session").unwrap();

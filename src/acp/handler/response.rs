@@ -101,7 +101,6 @@ impl Handler {
     pub async fn config_option_set(
         &self,
         session_id: &str,
-        _updated: &str,
         response: SetSessionConfigOptionResponse,
     ) -> Result<(), Error> {
         let model_config_options = response.config_options.clone();
