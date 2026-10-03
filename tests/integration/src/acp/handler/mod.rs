@@ -11,7 +11,7 @@ use agent_client_protocol::{
     schema::v1::{
         AgentCapabilities, CompleteElicitationNotification, ContentBlock, ContentChunk,
         ElicitationId, InitializeResponse, LoadSessionResponse, NewSessionResponse,
-        ResumeSessionResponse, SessionCapabilities, SessionConfigOption,
+        ResumeSessionResponse, SessionCapabilities, SessionConfigKind, SessionConfigOption,
         SessionConfigOptionCategory, SessionConfigSelectOption, SessionMode, SessionModeState,
         SessionNotification, SessionResumeCapabilities, SessionUpdate,
         SetSessionConfigOptionResponse, SetSessionModeResponse, TextContent, UsageUpdate,
@@ -206,6 +206,97 @@ fn test_session_notification_usage_update_succeeds() -> nvim_oxi::Result<()> {
     let res: agent_client_protocol::Result<()> =
         smol::block_on(handler.session_notification(notification));
     assert_eq!(res, Ok(()), "Usage update notification should succeed");
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn config_option_update_notification_stores_boolean_option() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
+
+    let session = NewSessionResponse::new("test-session");
+    smol::block_on(async {
+        state.lock().await.set_session_info(&session);
+    });
+
+    let notification = SessionNotification::new(
+        "test-session",
+        SessionUpdate::ConfigOptionUpdate(
+            agent_client_protocol::schema::v1::ConfigOptionUpdate::new(vec![
+                SessionConfigOption::boolean("brave_mode", "Brave Mode", true),
+            ]),
+        ),
+    );
+    let result: agent_client_protocol::Result<()> =
+        smol::block_on(handler.session_notification(notification));
+    assert_eq!(result, Ok(()), "notification should be handled");
+
+    let state_guard = smol::block_on(state.lock());
+    let details = state_guard.session_info.get("test-session").unwrap();
+
+    assert_eq!(
+        details
+            .all_config_options()
+            .iter()
+            .map(|option| option.id.to_string())
+            .collect::<Vec<_>>(),
+        vec!["brave_mode".to_string()],
+        "agent-pushed boolean option should be stored"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn config_option_update_notification_replaces_previous_options() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
+
+    let session =
+        NewSessionResponse::new("test-session").config_options(vec![SessionConfigOption::boolean(
+            "old_option",
+            "Old",
+            true,
+        )]);
+    smol::block_on(async {
+        state.lock().await.set_session_info(&session);
+    });
+
+    let notification = SessionNotification::new(
+        "test-session",
+        SessionUpdate::ConfigOptionUpdate(
+            agent_client_protocol::schema::v1::ConfigOptionUpdate::new(vec![
+                SessionConfigOption::boolean("new_option", "New", false),
+            ]),
+        ),
+    );
+    let result: agent_client_protocol::Result<()> =
+        smol::block_on(handler.session_notification(notification));
+    assert_eq!(result, Ok(()), "notification should be handled");
+
+    let state_guard = smol::block_on(state.lock());
+    let details = state_guard.session_info.get("test-session").unwrap();
+
+    assert_eq!(
+        details
+            .all_config_options()
+            .iter()
+            .map(|option| option.id.to_string())
+            .collect::<Vec<_>>(),
+        vec!["new_option".to_string()],
+        "notification carries the authoritative set and should replace the stored one"
+    );
 
     Ok(())
 }
@@ -1116,6 +1207,93 @@ fn config_option_set_applies_each_option_current_value_from_response() -> nvim_o
         details.current_model().map(|option| option.value.as_str()),
         Some("model-1"),
         "model should track the current value the agent reported, not the requested mode value"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn config_option_set_stores_boolean_option_from_response() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
+
+    let session =
+        NewSessionResponse::new("test-session").config_options(vec![SessionConfigOption::boolean(
+            "brave_mode",
+            "Brave Mode",
+            false,
+        )]);
+    smol::block_on(async {
+        state.lock().await.set_session_info(&session);
+    });
+
+    let response = SetSessionConfigOptionResponse::new(vec![SessionConfigOption::boolean(
+        "brave_mode",
+        "Brave Mode",
+        true,
+    )]);
+
+    smol::block_on(handler.config_option_set("test-session", response))?;
+
+    let state_guard = smol::block_on(state.lock());
+    let details = state_guard.session_info.get("test-session").unwrap();
+
+    assert_eq!(
+        details
+            .all_config_options()
+            .iter()
+            .map(|option| option.id.to_string())
+            .collect::<Vec<_>>(),
+        vec!["brave_mode".to_string()],
+        "boolean option should be stored from the response snapshot"
+    );
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn config_option_set_stores_boolean_current_value() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let handler = Handler::new(
+        state.clone(),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
+
+    let session =
+        NewSessionResponse::new("test-session").config_options(vec![SessionConfigOption::boolean(
+            "brave_mode",
+            "Brave Mode",
+            false,
+        )]);
+    smol::block_on(async {
+        state.lock().await.set_session_info(&session);
+    });
+
+    let response = SetSessionConfigOptionResponse::new(vec![SessionConfigOption::boolean(
+        "brave_mode",
+        "Brave Mode",
+        true,
+    )]);
+
+    smol::block_on(handler.config_option_set("test-session", response))?;
+
+    let state_guard = smol::block_on(state.lock());
+    let details = state_guard.session_info.get("test-session").unwrap();
+    let stored = details.all_config_options().first().unwrap();
+
+    assert!(
+        matches!(
+            &stored.kind,
+            SessionConfigKind::Boolean(boolean) if boolean.current_value
+        ),
+        "stored boolean option should reflect the agent-reported current value"
     );
 
     Ok(())

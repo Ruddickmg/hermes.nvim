@@ -2,6 +2,7 @@ pub mod agents;
 pub mod authenticate;
 pub mod cancel;
 pub mod close_session;
+pub mod config_options;
 pub mod configure_model;
 pub mod connect;
 pub mod create_session;
@@ -17,6 +18,7 @@ pub mod modes;
 pub mod prompt;
 pub mod respond;
 pub mod resume_session;
+pub mod set_config_option;
 pub mod set_mode;
 pub mod set_model;
 pub mod set_thought_level;
@@ -29,6 +31,7 @@ use std::{cell::RefCell, rc::Rc};
 use super::requests::Requests;
 pub use agents::*;
 use async_lock::Mutex;
+pub use config_options::*;
 pub use configure_model::*;
 pub use connect::*;
 pub use create_session::*;
@@ -47,6 +50,7 @@ use nvim_oxi::{
 pub use prompt::*;
 pub use respond::*;
 pub use resume_session::*;
+pub use set_config_option::*;
 pub use set_mode::*;
 pub use set_model::*;
 pub use set_thought_level::*;
@@ -186,6 +190,22 @@ impl Hermes {
         })
     }
 
+    fn config_options_method(&self) -> Object {
+        self.api_method(
+            |api: Rc<RefCell<Api>>, session_id: ConfigOptionsArgs| async move {
+                api.try_borrow()?.config_options(session_id).await
+            },
+        )
+    }
+
+    fn set_config_option_method(&self) -> Object {
+        self.api_method(
+            |api: Rc<RefCell<Api>>, args: SetConfigOptionArgs| async move {
+                api.try_borrow()?.set_config_option(args).await
+            },
+        )
+    }
+
     fn modes_method(&self) -> Object {
         self.api_method(|api: Rc<RefCell<Api>>, session_id: String| async move {
             api.try_borrow()?.modes(session_id).await
@@ -271,6 +291,8 @@ impl From<Hermes> for Dictionary {
             ("load_session", hermes.load_session_method()),
             ("logout", hermes.logout_method()),
             ("resume_session", hermes.resume_session_method()),
+            ("config_options", hermes.config_options_method()),
+            ("set_config_option", hermes.set_config_option_method()),
             ("modes", hermes.modes_method()),
             ("models", hermes.models_method()),
             ("model_configurations", hermes.model_configurations_method()),

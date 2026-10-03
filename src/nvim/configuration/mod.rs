@@ -214,6 +214,9 @@ impl nvim_oxi::lua::Pushable for ClientConfigPartial {
             if let Some(val) = permissions.send_notifications {
                 perms_dict.insert("send_notifications", val);
             }
+            if let Some(val) = permissions.boolean_config_access {
+                perms_dict.insert("boolean_config_access", val);
+            }
             if let Some(elicitation) = permissions.elicitation {
                 let mut elic_dict = Dictionary::new();
                 if let Some(val) = elicitation.form {
@@ -412,6 +415,7 @@ mod tests {
                 terminal_access: false,
                 request_permissions: false,
                 send_notifications: false,
+                boolean_config_access: false,
                 elicitation: ElicitationPermissions {
                     form: false,
                     url: false,

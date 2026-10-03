@@ -154,6 +154,7 @@ hermes.setup({
     terminal_access = true,      -- Allow terminal access to the agent 
     request_permissions = true,  -- Allow agent to send permission requests 
     send_notifications = true,  -- Allow the agent to send notifications 
+    boolean_config_access = true,  -- Advertise boolean config option support to the agent 
     elicitation = {
       form = true, -- Allow the agent to send form elicitation requests
       url = true, -- Allow the agent to send URL elicitation requests
@@ -913,6 +914,88 @@ vim.api.nvim_create_autocmd("User", {
 > - `options` (array): Available thought level options
 > - `current` (object): The currently selected thought level
 
+### ⚙️ Config options
+
+Get all configuration options available for a session, including boolean options.
+
+Values are returned exactly as the agent sent them, so options are always verbatim ACP
+option objects. Boolean options are flattened onto the option itself, for example
+`{ id = "brave_mode", name = "Brave Mode", type = "boolean", currentValue = true }`.
+
+Fires a `ConfigOptions` User autocommand with the option array instead of returning it.
+
+```lua
+local hermes = require("hermes")
+
+-- call signature
+hermes.config_options(sessionId)
+
+-- example
+vim.api.nvim_create_autocmd("User", {
+  group = "hermes",
+  pattern = "ConfigOptions",
+  callback = function(args)
+    for _, option in ipairs(args.data) do
+      print(option.name .. " (" .. option.type .. ") = " .. tostring(option.currentValue))
+    end
+  end,
+})
+```
+
+> **Triggers:** [ConfigOptions](#configoptions) autocommand with the array of all
+> configuration options. Also fires when the agent sends a `config_option_update`
+> session notification.
+
+> [!NOTE]
+> The `ConfigOptions` payload is the verbatim option array and carries no session id, so
+> track the current session from [SessionCreated](#sessioncreated) (or
+> [SessionLoaded](#sessionloaded)) when you need to respond to it.
+
+### ⚙️ Set config option (**Optional**)
+
+Set a single configuration option by id. Takes a table with `config_id` and `value` keys.
+
+`value` may be a string (for select options) or a boolean (for boolean options).
+
+```lua
+local hermes = require("hermes")
+local session_id
+
+vim.api.nvim_create_autocmd("User", {
+  group = "hermes",
+  pattern = "SessionCreated",
+  callback = function(args)
+    session_id = args.data.sessionId
+  end,
+})
+
+-- call signature
+hermes.set_config_option(sessionId, { config_id = "brave_mode", value = true })
+
+-- example: toggle a boolean option whenever the agent reports new values
+vim.api.nvim_create_autocmd("User", {
+  group = "hermes",
+  pattern = "ConfigOptions",
+  callback = function(args)
+    for _, option in ipairs(args.data) do
+      if option.id == "brave_mode" then
+        hermes.set_config_option(session_id, {
+          config_id = option.id,
+          value = not option.currentValue,
+        })
+      end
+    end
+  end,
+})
+```
+
+> **Triggers:** [ConfigurationUpdated](#configurationupdated) autocommand upon completion.
+
+> [!NOTE]
+> Boolean options are only available when the agent supports them. Hermes advertises the
+> `boolean` config option capability by default, and it can be turned off with the
+> `permissions.boolean_config_access` [setup](#setup) setting.
+
 ### ↩️ Respond
 
 When an agent makes a request that requires user input (such as a permission request), it triggers an autocommand and pauses until the user responds. Use the `respond` method with the request ID to resume the agent's operation. If no autocommand handler is defined, a default workflow will be triggered. Requests can be disabled via the setup configuration. 
@@ -1482,6 +1565,21 @@ Below is a list of all autocommands and their associated data (passed to the cal
   }
 }</code></pre></td>
     </tr>
+    <tr id="configoptions">
+      <td><code>ConfigOptions</code></td>
+      <td>All configuration options for a session</td>
+      <td>⚡ <a href="#config-options">config_options()</a> / 🤖 Agent</td>
+      <td><pre><code class="language-json">[
+  {
+    "id": "string",
+    "name": "string",
+    "description": "string (optional)",
+    "category": "string (optional)",
+    "type": "boolean",
+    "currentValue": true
+  }
+]</code></pre></td>
+    </tr>
     <tr>
       <td><code>ConfigurationOption</code></td>
       <td>Configuration option updates</td>
@@ -1498,6 +1596,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
         "description": "string (optional)",
         "category": "string (optional)",
         "kind": {
+          "type": "select",
           "currentValue": "string",
           "options": [
             { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
@@ -1519,7 +1618,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="configurationupdated">
       <td><code>ConfigurationUpdated</code></td>
       <td>Session configuration updated</td>
-      <td>⚡ <a href="#load-session-optional">set_session_config_option()</a></td>
+      <td>⚡ <a href="#set-config-option-optional">set_config_option()</a> / <a href="#configure-model-optional">configure_model()</a></td>
       <td><pre><code class="language-json">{
   "configOptions": [
     {
@@ -1528,6 +1627,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
       "description": "string (optional)",
       "category": "string (optional)",
       "kind": {
+        "type": "select",
         "currentValue": "string",
         "options": [
           { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
@@ -1885,6 +1985,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
       "description": "string (optional)",
       "category": "string (optional)",
       "kind": {
+        "type": "select",
         "currentValue": "string",
         "options": [
           { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
@@ -1933,6 +2034,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
       "description": "string (optional)",
       "category": "string (optional)",
       "kind": {
+        "type": "select",
         "currentValue": "string",
         "options": [
           { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
@@ -1972,6 +2074,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
       "description": "string (optional)",
       "category": "string (optional)",
       "kind": {
+        "type": "select",
         "currentValue": "string",
         "options": [
           { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
@@ -2022,6 +2125,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
       "description": "string (optional)",
       "category": "string (optional)",
       "kind": {
+        "type": "select",
         "currentValue": "string",
         "options": [
           { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
@@ -2537,7 +2641,7 @@ cargo build --release
   - [ ] [improve authentication data](https://agentclientprotocol.com/rfds/auth-methods)
   - [ ] [Fork sessions](https://agentclientprotocol.com/rfds/session-fork)
   - [ ] [ACP over MCP](https://agentclientprotocol.com/rfds/mcp-over-acp)
-  - [ ] [Boolean config option](https://agentclientprotocol.com/rfds/boolean-config-option)
+  - [x] [Boolean config option](https://agentclientprotocol.com/rfds/boolean-config-option)
   - [ ] [NES (next edit suggestions)](https://agentclientprotocol.com/rfds/next-edit-suggestions)
   - [x] ["elicitation"](https://agentclientprotocol.com/rfds/elicitation)
   - [ ] [Configurable LLM Providers](https://agentclientprotocol.com/rfds/custom-llm-endpoint)

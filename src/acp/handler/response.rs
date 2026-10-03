@@ -142,6 +142,16 @@ impl Handler {
 
         futures::future::try_join_all(futures).await?;
 
+        // Every response carries the authoritative option set, including any
+        // boolean options the agent advertises.
+        {
+            let mut state = self.state.lock().await;
+            if let Some(details) = state.session_info.get_mut(session_id) {
+                details.replace_config_options(response.config_options.clone());
+            }
+            drop(state);
+        }
+
         self.execute_autocommand(Commands::ConfigurationUpdated, response)
             .await
     }
