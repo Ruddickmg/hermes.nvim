@@ -695,6 +695,23 @@ Default behavior: If no listener is attached to `FormElicitation` or
 unsupported to the agent, and cancels any elicitation requests it receives
 (which should not happen when the capability is reported as unsupported).
 
+Tool calls ~                                                 *hermes-tool-calls*
+
+Tool call activity is reported through the |ToolCall| and |ToolCallUpdate|
+autocommands, and the `toolCall` object carried by a |PermissionRequest|
+exposes the same fields.
+
+Alongside `title` (human-readable copy, such as "Reading configuration file")
+and `kind` (a coarse category such as `read`), a payload may include `name`:
+the programmatic identifier of the invoked tool, for example `read_file`.
+Agents are free to omit it, so treat it as optional and fall back to `title`
+when it is absent. `name` is the stable, machine-readable key, which makes it
+the field to group or count tool usage by.
+
+On |ToolCallUpdate| a supplied `name` sets or replaces the current name.
+Omitting it, or sending null, leaves the previous name unchanged rather than
+clearing it.
+
 Autocommand list ~                             *hermes-autocommands-list*
 
 The following autocommands are fired by Hermes (with `args.data` populated
