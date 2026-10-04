@@ -2636,17 +2636,19 @@ cargo build --release
 ## 📋 TODO:
 
 -- functionality
+- [ ] [Request Cancellation Mechanism](https://agentclientprotocol.com/rfds/request-cancellation)
+- [ ] [Terminal Authentication](https://agentclientprotocol.com/rfds/auth-methods)
+- [ ] [Tool call name](https://agentclientprotocol.com/rfds/tool-call-name)
 - [ ] Support "unstable"/proposed ACP methods
   - [ ] [improve authentication data](https://agentclientprotocol.com/rfds/auth-methods)
   - [ ] [Fork sessions](https://agentclientprotocol.com/rfds/session-fork)
   - [ ] [ACP over MCP](https://agentclientprotocol.com/rfds/mcp-over-acp)
-  - [x] [Boolean config option](https://agentclientprotocol.com/rfds/boolean-config-option)
   - [ ] [NES (next edit suggestions)](https://agentclientprotocol.com/rfds/next-edit-suggestions)
-  - [x] ["elicitation"](https://agentclientprotocol.com/rfds/elicitation)
   - [ ] [Configurable LLM Providers](https://agentclientprotocol.com/rfds/custom-llm-endpoint)
   - [ ] [Plan Operations Support](https://agentclientprotocol.com/rfds/plan-operations)
+  - [ ] [End-Turn Token Usage](https://agentclientprotocol.com/rfds/end-turn-token-usage)
+  - [ ] [Agent Authentication State Query](https://agentclientprotocol.com/rfds/get-auth-state)
+  - [ ] [Subagent Sessions](https://agentclientprotocol.com/rfds/subagents)
 
 -- nice to haves
 - [ ] research RLM ([example](https://github.com/JaredStewart/coderlm))
-- [ ] connect agent to lsp (try to set it up as a tool call/connect to neovim lsp)
-- [ ] use [whisper.rs](https://crates.io/crates/whisper-rs) to facilitate speech to text
