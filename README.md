@@ -154,6 +154,11 @@ hermes.setup({
     terminal_access = true,      -- Allow terminal access to the agent 
     request_permissions = true,  -- Allow agent to send permission requests 
     send_notifications = true,  -- Allow the agent to send notifications 
+    elicitation = {
+      form = true, -- Allow the agent to send form elicitation requests
+      url = true, -- Allow the agent to send URL elicitation requests
+      reject_unknown_elicitation_values = false, -- Reject responses for unknown/future elicitation property types
+    },
   },
   distributions = { -- path to distributions
     uvx = true, -- allows installing agents via UVX
@@ -1176,6 +1181,75 @@ vim.api.nvim_create_autocmd("User", {
 > - Remove the terminal
 > - Delete the attached buffer (can be configured to omit this step)
 
+#### 📋 User/Form input (elicitation)
+
+```lua
+local hermes = require("hermes")
+
+-- Accept and provide content for the requested fields:
+hermes.respond("requestId", {
+  action = "accept",
+  content = { name = "Alice", age = 30 },
+})
+
+-- Decline without providing content:
+hermes.respond("requestId", { action = "decline" })
+
+-- Cancel the elicitation entirely:
+hermes.respond("requestId", { action = "cancel" })
+
+-- example:
+vim.api.nvim_create_autocmd("User", {
+  group = "hermes",
+  pattern = "FormElicitation",
+  callback = function(args)
+    local requestId = args.data.requestId
+    local mode = args.data.mode -- "form"
+    local message = args.data.message -- the prompt shown to the user
+
+    hermes.respond(requestId, {
+      action = "accept",
+      content = { name = vim.fn.input(message .. ": ") },
+    })
+  end,
+})
+```
+
+> **Responds to:** [FormElicitation](#formelicitation) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for [FormElicitation](#formelicitation), Hermes will:
+> - Report that form elicitation is not a supported capability
+> - Cancel any elicitation requests it may receive (should not happen when capabilities are reported as unsupported)
+
+#### 🔗 Browser input (elicitation)
+
+```lua
+local hermes = require("hermes")
+
+-- Decline without providing content:
+hermes.respond("requestId", { action = "decline" })
+
+-- Cancel the elicitation entirely:
+hermes.respond("requestId", { action = "cancel" })
+
+-- example:
+vim.api.nvim_create_autocmd("User", {
+  group = "hermes",
+  pattern = "UrlElicitation",
+  callback = function(args)
+    local requestId = args.data.requestId
+
+    hermes.respond(requestId, { action = "decline" })
+  end,
+})
+```
+
+> **Responds to:** [UrlElicitation](#urlelicitation) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for [UrlElicitation](#urlelicitation), Hermes will:
+> - Report that url elicitation is not a supported capability
+> - Cancel any elicitation requests it may receive (should not happen when capabilities are reported as unsupported)
+
 ## 📡 Autocommands
 
 Hermes generates autocommands for all communication between agent and client. Here's an example of hooking into one:
@@ -1513,6 +1587,26 @@ Below is a list of all autocommands and their associated data (passed to the cal
     "version": "string",
     "title": "string (optional)"
   }
+}</code></pre></td>
+    </tr>
+    <tr id="elicitationcomplete">
+      <td><code>ElicitationComplete</code></td>
+      <td>Agent notifies that an elicitation has completed</td>
+      <td>🤖 Agent (notification)</td>
+      <td><pre><code class="language-json">{
+  "elicitationId": "uuid string"
+}</code></pre></td>
+    </tr>
+    <tr id="formelicitation">
+      <td><code>FormElicitation</code></td>
+      <td>Agent requests form-based elicitation (structured user input)</td>
+      <td>🤖 Agent (requires -> <a href="#responding-to-form-elicitation">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "mode": "form",
+  "scope": { ... },
+  "schema": { ... },
+  "message": "string"
 }</code></pre></td>
     </tr>
     <tr id="loggedout">
@@ -2220,6 +2314,18 @@ Below is a list of all autocommands and their associated data (passed to the cal
   }
 }</code></pre></td>
     </tr>
+    <tr id="urlelicitation">
+      <td><code>UrlElicitation</code></td>
+      <td>Agent requests URL-based elicitation (direct user to a browser URL)</td>
+      <td>🤖 Agent (requires -> <a href="#responding-to-url-elicitation">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "mode": "url",
+  "scope": { ... },
+  "url": "string",
+  "message": "string"
+}</code></pre></td>
+    </tr>
     <tr>
       <td><code>UsageUpdate</code></td>
       <td>Session usage metrics update (tokens, cost)</td>
@@ -2333,7 +2439,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "content": "string"
 }</code></pre></td>
     </tr>
-  </tbody>
+    </tbody>
 </table>
 
 
@@ -2433,7 +2539,7 @@ cargo build --release
   - [ ] [ACP over MCP](https://agentclientprotocol.com/rfds/mcp-over-acp)
   - [ ] [Boolean config option](https://agentclientprotocol.com/rfds/boolean-config-option)
   - [ ] [NES (next edit suggestions)](https://agentclientprotocol.com/rfds/next-edit-suggestions)
-  - [ ] ["elicitation"](https://agentclientprotocol.com/rfds/elicitation)
+  - [x] ["elicitation"](https://agentclientprotocol.com/rfds/elicitation)
   - [ ] [Configurable LLM Providers](https://agentclientprotocol.com/rfds/custom-llm-endpoint)
   - [ ] [Plan Operations Support](https://agentclientprotocol.com/rfds/plan-operations)
 

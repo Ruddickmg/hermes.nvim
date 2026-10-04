@@ -2,8 +2,9 @@
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, AuthenticateResponse, CloseSessionResponse, CreateTerminalRequest,
-    DeleteSessionResponse, ExtResponse, Implementation, InitializeResponse, ListSessionsResponse,
+    AgentCapabilities, AuthenticateResponse, CloseSessionResponse, CompleteElicitationNotification,
+    CreateElicitationRequest, CreateTerminalRequest, DeleteSessionResponse, ExtResponse,
+    Implementation, InitializeRequest, InitializeResponse, ListSessionsResponse,
     LoadSessionResponse, McpCapabilities, NewSessionResponse, PermissionOption, PermissionOptionId,
     PermissionOptionKind, PromptCapabilities, ReadTextFileRequest, ReleaseTerminalRequest,
     RequestPermissionRequest, ResumeSessionResponse, SessionAdditionalDirectoriesCapabilities,
@@ -21,6 +22,8 @@ use std::time::Duration;
 #[derive(Clone)]
 pub struct MockConfig {
     pub initialize_response: InitializeResponse,
+    /// The InitializeRequest most recently received by the agent (None = not yet received)
+    pub initialize_request: Option<InitializeRequest>,
     pub authenticate_response: AuthenticateResponse,
     pub new_session_response: NewSessionResponse,
     /// Permission request to send during prompt (None = don't request permission)
@@ -53,6 +56,10 @@ pub struct MockConfig {
     pub write_file_request: Option<WriteTextFileRequest>,
     /// Release terminal request to send during prompt (None = skip)
     pub release_terminal_request: Option<ReleaseTerminalRequest>,
+    /// Elicitation request to send during prompt (None = skip)
+    pub elicitation_request: Option<CreateElicitationRequest>,
+    /// Elicitation complete notification to send during prompt (None = skip)
+    pub elicitation_complete_notification: Option<CompleteElicitationNotification>,
     /// Close session response to return when a CloseSessionRequest is received
     pub close_session_response: Option<CloseSessionResponse>,
     /// Delete session response to return when a DeleteSessionRequest is received
@@ -87,6 +94,7 @@ impl Default for MockConfig {
                         ),
                 ),
             authenticate_response: AuthenticateResponse::default(),
+            initialize_request: None,
             new_session_response: NewSessionResponse::new(generate_session_id()),
             permission_request: None,
             load_session_response: None,
@@ -103,6 +111,8 @@ impl Default for MockConfig {
             read_file_request: None,
             write_file_request: None,
             release_terminal_request: None,
+            elicitation_request: None,
+            elicitation_complete_notification: None,
             close_session_response: None,
             delete_session_response: None,
         }
@@ -225,6 +235,21 @@ impl MockConfig {
     /// Set a release terminal request to send during prompt
     pub fn set_release_terminal_request(mut self, request: ReleaseTerminalRequest) -> Self {
         self.release_terminal_request = Some(request);
+        self
+    }
+
+    /// Set an elicitation request to send during prompt
+    pub fn set_elicitation_request(mut self, request: CreateElicitationRequest) -> Self {
+        self.elicitation_request = Some(request);
+        self
+    }
+
+    /// Set an elicitation complete notification to send during prompt
+    pub fn set_elicitation_complete_notification(
+        mut self,
+        notification: CompleteElicitationNotification,
+    ) -> Self {
+        self.elicitation_complete_notification = Some(notification);
         self
     }
 

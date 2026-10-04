@@ -413,11 +413,12 @@ fn build_mock_agent_builder(
         .on_receive_request(
             {
                 let config = config.clone();
-                move |_req: InitializeRequest,
+                move |req: InitializeRequest,
                       responder: Responder<InitializeResponse>,
                       _cx: ConnectionTo<acp::Client>| {
                     let config = config.clone();
                     async move {
+                        config.lock().unwrap().initialize_request = Some(req);
                         let dur = config.lock().unwrap().timeout;
                         let result = timeout(dur, async {
                             Ok::<_, acp::Error>(config.lock().unwrap().initialize_response.clone())
@@ -827,6 +828,30 @@ async fn handle_prompt(
                 .block_task()
                 .await
                 .map_err(|e| internal_error(format!("release_terminal failed: {}", e)))?;
+        }
+
+        // Send elicitation request (if configured)
+        let elicitation_request = {
+            let config = config.lock().unwrap();
+            config.elicitation_request.clone()
+        };
+
+        if let Some(elic_req) = elicitation_request {
+            cx.send_request(elic_req)
+                .block_task()
+                .await
+                .map_err(|e| internal_error(format!("elicitation failed: {}", e)))?;
+        }
+
+        // Send elicitation complete notification (if configured)
+        let elicitation_complete_notification = {
+            let config = config.lock().unwrap();
+            config.elicitation_complete_notification.clone()
+        };
+
+        if let Some(complete_notif) = elicitation_complete_notification {
+            cx.send_notification(complete_notif)
+                .map_err(|e| internal_error(format!("elicitation complete failed: {}", e)))?;
         }
 
         // Echo back the prompt content as agent message chunks

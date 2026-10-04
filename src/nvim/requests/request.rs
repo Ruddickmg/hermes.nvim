@@ -1,5 +1,6 @@
 use agent_client_protocol::schema::v1::{
-    CreateTerminalRequest, CreateTerminalResponse, KillTerminalRequest, KillTerminalResponse,
+    CreateElicitationRequest, CreateElicitationResponse, CreateTerminalRequest,
+    CreateTerminalResponse, ElicitationAction, KillTerminalRequest, KillTerminalResponse,
     ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
     RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
     TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
@@ -9,15 +10,14 @@ use async_channel::Sender;
 use async_lock::Mutex;
 use nvim_oxi::conversion::FromObject;
 use std::sync::Arc;
-use tracing::error;
+use tracing::{error, warn};
 use uuid::Uuid;
 
 use crate::PluginState;
 use crate::acp::Result;
 use crate::acp::error::Error;
 use crate::nvim::autocommands::Commands;
-use crate::nvim::configuration::dict_from_object;
-use crate::nvim::terminal::{Terminal, TerminalManager, parse_exit_code};
+use crate::nvim::terminal::{Terminal, TerminalManager};
 use crate::utilities::{
     NvimMessenger, NvimRuntime, TransmitToNvim, acquire_or_create_buffer, buffer_get_lines,
     buffer_line_count, mark_buffer_modified, refresh_view, save_buffer_to_disk, show_permission_ui,
@@ -56,6 +56,10 @@ pub enum Responder {
         OneshotSender<Result<KillTerminalResponse>>,
         KillTerminalRequest,
     ),
+    Elicitation(
+        OneshotSender<CreateElicitationResponse>,
+        CreateElicitationRequest,
+    ),
 }
 
 impl From<Responder> for Commands {
@@ -69,6 +73,12 @@ impl From<Responder> for Commands {
             Responder::TerminalCreate(..) => Commands::TerminalCreate,
             Responder::TerminalExit(..) => Commands::TerminalExit,
             Responder::TerminalRelease(..) => Commands::TerminalRelease,
+            Responder::Elicitation(_, req) => match req.mode {
+                agent_client_protocol::schema::v1::ElicitationMode::Url(_) => {
+                    Commands::UrlElicitation
+                }
+                _ => Commands::FormElicitation,
+            },
         }
     }
 }
@@ -80,7 +90,7 @@ pub struct Request {
     session_id: String,
     responder: Arc<Mutex<Option<Responder>>>,
     remove: NvimMessenger<Uuid>,
-    state: Arc<Mutex<PluginState>>,
+    pub(super) state: Arc<Mutex<PluginState>>,
     is_permission_request: bool,
 }
 
@@ -168,99 +178,6 @@ impl Request {
                 })?;
         }
         Ok(())
-    }
-
-    fn parse_terminal_output_response(data: nvim_oxi::Object) -> Result<(String, bool)> {
-        // First, try to parse as a plain String
-        match String::from_object(data.clone()) {
-            Ok(output) => Ok((output, false)),
-            Err(_) => {
-                // Not a string, try Dictionary
-                let dict =
-                    dict_from_object(data).map_err(|e| Error::InvalidInput(e.to_string()))?;
-
-                // "output" field is required and must be a String
-                let output = dict
-                    .get("output")
-                    .cloned()
-                    .ok_or(Error::InvalidInput(
-                        "Missing 'output' field in terminal output response".to_string(),
-                    ))
-                    .and_then(|o| {
-                        String::from_object(o).map_err(|e| Error::InvalidInput(e.to_string()))
-                    })?;
-
-                // "truncated" field is optional, defaults to false
-                let truncated = match dict.get("truncated").cloned() {
-                    Some(t) => {
-                        bool::from_object(t).map_err(|e| Error::InvalidInput(e.to_string()))?
-                    }
-                    None => false,
-                };
-
-                Ok((output, truncated))
-            }
-        }
-    }
-
-    fn parse_terminal_exit_response(
-        data: nvim_oxi::Object,
-    ) -> Result<(Option<u32>, Option<String>)> {
-        // First, try to parse as a plain String (signal name only)
-        match String::from_object(data.clone()) {
-            Ok(signal) => Ok(if signal.is_empty() {
-                return Err(Error::InvalidInput(
-                    "Signal string cannot be empty".to_string(),
-                ));
-            } else {
-                (None, Some(signal))
-            }),
-            Err(_) => {
-                // Not a string, try Integer (exit code)
-                match i64::from_object(data.clone()) {
-                    Ok(exit_code) => Ok(parse_exit_code(exit_code)),
-                    Err(_) => {
-                        let dict = dict_from_object(data)
-                            .map_err(|e| Error::InvalidInput(e.to_string()))?;
-
-                        // "exitCode" field is optional
-                        let exit_code = match dict.get("exitCode").cloned() {
-                            Some(ec) => {
-                                let code: i64 = i64::from_object(ec)
-                                    .map_err(|e| Error::InvalidInput(e.to_string()))?;
-                                Some(code)
-                            }
-                            None => None,
-                        };
-
-                        // "signal" field is optional
-                        let signal = match dict.get("signal").cloned() {
-                            Some(s) => {
-                                let sig: String = String::from_object(s)
-                                    .map_err(|e| Error::InvalidInput(e.to_string()))?;
-                                if sig.is_empty() { None } else { Some(sig) }
-                            }
-                            None => None,
-                        };
-
-                        if signal.is_none() && exit_code.is_none() {
-                            Err(Error::InvalidInput(
-                                "Terminal exit response must contain at least 'exitCode' or 'signal'".to_string(),
-                            ))
-                        } else if let Some(code) = exit_code {
-                            let (parsed_exit_code, parsed_signal) = parse_exit_code(code);
-                            let final_signal = match (signal, parsed_signal) {
-                                (Some(explicit_sig), _) => Some(explicit_sig),
-                                (None, inferred_sig) => inferred_sig,
-                            };
-                            Ok((parsed_exit_code, final_signal))
-                        } else {
-                            Ok((None, signal))
-                        }
-                    }
-                }
-            }
-        }
     }
 
     pub async fn respond(&self, response: nvim_oxi::Object) -> Result<()> {
@@ -355,6 +272,15 @@ impl Request {
                             self.id, e
                         ))
                     })?;
+            }
+            Responder::Elicitation(sender, request) => {
+                let result = self.parse_elicitation_response(&request, response).await?;
+                sender.send(result).await.map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send elicitation response for request '{}': {:?}",
+                        self.id, e
+                    ))
+                })?;
             }
         };
         self.finish().await
@@ -539,6 +465,23 @@ impl Request {
                             self.id, e
                         ))
                     })?;
+                }
+                Responder::Elicitation(sender, _) => {
+                    // TODO: Handle the default elicitation case (render the form or
+                    // prompt the user) when no autocommand listener is attached.
+                    warn!(
+                        "No listener attached for elicitation request '{}'. Defaulting to cancel.",
+                        self.id
+                    );
+                    sender
+                        .send(CreateElicitationResponse::new(ElicitationAction::Cancel))
+                        .await
+                        .map_err(|e| {
+                            Error::Internal(format!(
+                                "Failed to send default elicitation response for request '{}': {:?}",
+                                self.id, e
+                            ))
+                        })?;
                 }
             }
             self.finish().await?;
@@ -844,5 +787,43 @@ mod tests {
         );
         let command: Commands = responder.into();
         assert_eq!(command, Commands::TerminalRelease);
+    }
+
+    #[test]
+    fn responder_elicitation_maps_to_form_elicitation_command() {
+        let (sender, _receiver) = async_channel::bounded::<CreateElicitationResponse>(1);
+        let schema =
+            agent_client_protocol::schema::v1::ElicitationSchema::new().string("name", true);
+        let scope = agent_client_protocol::schema::v1::ElicitationScope::Session(
+            agent_client_protocol::schema::v1::ElicitationSessionScope::new("test"),
+        );
+        let mode = agent_client_protocol::schema::v1::ElicitationFormMode::new(scope, schema);
+        let request = agent_client_protocol::schema::v1::CreateElicitationRequest::new(
+            mode,
+            "Please enter your name",
+        );
+        let responder = Responder::Elicitation(sender, request);
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::FormElicitation);
+    }
+
+    #[test]
+    fn responder_elicitation_url_maps_to_url_elicitation_command() {
+        let (sender, _receiver) = async_channel::bounded::<CreateElicitationResponse>(1);
+        let scope = agent_client_protocol::schema::v1::ElicitationScope::Session(
+            agent_client_protocol::schema::v1::ElicitationSessionScope::new("test"),
+        );
+        let mode = agent_client_protocol::schema::v1::ElicitationUrlMode::new(
+            scope,
+            agent_client_protocol::schema::v1::ElicitationId::from("url-elicitation"),
+            "https://example.com/auth",
+        );
+        let request = agent_client_protocol::schema::v1::CreateElicitationRequest::new(
+            mode,
+            "Please authorize",
+        );
+        let responder = Responder::Elicitation(sender, request);
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::UrlElicitation);
     }
 }
