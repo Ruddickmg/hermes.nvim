@@ -9,8 +9,9 @@ use crate::utilities::autocmd::autocmd_listeners_attached;
 use crate::{Handler, acp::error::Error};
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    ClientCapabilities, ElicitationCapabilities, ElicitationFormCapabilities,
-    ElicitationUrlCapabilities, FileSystemCapabilities, Implementation, InitializeRequest,
+    BooleanConfigOptionCapabilities, ClientCapabilities, ClientSessionCapabilities,
+    ElicitationCapabilities, ElicitationFormCapabilities, ElicitationUrlCapabilities,
+    FileSystemCapabilities, Implementation, InitializeRequest, SessionConfigOptionsCapabilities,
 };
 use async_lock::Mutex;
 use serde::{Deserialize, Serialize};
@@ -313,21 +314,27 @@ impl ConnectionManager {
 
         // Now we can safely do mutable operations
         let (sender, receiver) = async_channel::bounded(100);
+        let client_capabilities = ClientCapabilities::new()
+            .terminal(permissions.terminal_access)
+            .fs(FileSystemCapabilities::new()
+                .read_text_file(permissions.fs_read_access)
+                .write_text_file(permissions.fs_write_access))
+            .elicitation(build_elicitation_capabilities(
+                permissions.elicitation.form,
+                permissions.elicitation.url,
+                autocmd_listeners_attached(GROUP, "User", "FormElicitation"),
+                autocmd_listeners_attached(GROUP, "User", "UrlElicitation"),
+            ))
+            .session(
+                ClientSessionCapabilities::new().config_options(
+                    SessionConfigOptionsCapabilities::new()
+                        .boolean(BooleanConfigOptionCapabilities::new()),
+                ),
+            );
+
         let init_config = InitializeRequest::new(ProtocolVersion::LATEST)
             .client_info(Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"))
-            .client_capabilities(
-                ClientCapabilities::new()
-                    .terminal(permissions.terminal_access)
-                    .fs(FileSystemCapabilities::new()
-                        .read_text_file(permissions.fs_read_access)
-                        .write_text_file(permissions.fs_write_access))
-                    .elicitation(build_elicitation_capabilities(
-                        permissions.elicitation.form,
-                        permissions.elicitation.url,
-                        autocmd_listeners_attached(GROUP, "User", "FormElicitation"),
-                        autocmd_listeners_attached(GROUP, "User", "UrlElicitation"),
-                    )),
-            );
+            .client_capabilities(client_capabilities);
 
         let thread_agent = agent.clone();
         trace!("Starting agent communication in new thread");

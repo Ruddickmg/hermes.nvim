@@ -1,5 +1,6 @@
 pub const TIMEOUT_IN_SECONDS: u64 = 30; // seconds
 
+pub mod config_options;
 pub mod configure_model;
 pub mod connection;
 pub mod copilot;

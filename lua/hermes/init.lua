@@ -198,6 +198,398 @@
 ---@class ConfigureModelConfig
 ---@field id string Config option ID to set
 ---@field value string Value to set
+
+---@class HermesConfigSelectGroup
+---A group of values under a header (select options only)
+---@field group string Group ID
+---@field name string Human-readable group label
+---@field options SelectionOption[] Option values in this group
+
+---@class ConfigOption
+---Configuration option for a session (delivered via the ConfigOptions autocommand)
+---@field id string Config option ID
+---@field name string Human-readable name
+---@field description? string Optional description
+---@field category? string Option category (e.g. "mode", "model", "thought_level", "model_config")
+---@field type "select"|"boolean" Option kind
+---@field options? (SelectionOption|HermesConfigSelectGroup)[] Available values (select options only; entries are either options or groups)
+---@field currentValue string|boolean Current value (value ID for select options, boolean for boolean options)
+
+---@class SetConfigOptionConfig
+---@field id string Config option ID to set
+---@field value string|boolean Value to set (string for select options, boolean for boolean options)
+
+-- ============================================================================
+-- Autocommand Payload Types
+--
+-- Every autocommand's `args.data` payload has a corresponding class named
+-- after the autocommand (e.g. the AgentTextMessage autocommand delivers a
+-- HermesAgentTextMessage payload). Cast `args.data` inside callbacks to get
+-- completion and type checking:
+--
+--   vim.api.nvim_create_autocmd("User", {
+--     group = "hermes",
+--     pattern = "AgentTextMessage",
+--     callback = function(args)
+--       ---@type HermesAgentTextMessage
+--       local data = args.data
+--       print(data.update.content.text)
+--     end,
+--   })
+-- ============================================================================
+
+---@class HermesAnnotations
+---@field audience? string[]
+---@field lastModified? string ISO 8601 timestamp
+---@field priority? number
+
+---@class HermesTextChunk
+---@field type "text"
+---@field text string
+---@field annotations? HermesAnnotations
+
+---@class HermesImageChunk
+---@field type "image"
+---@field data string Base64-encoded image data
+---@field mimeType string
+---@field uri? string
+---@field annotations? HermesAnnotations
+
+---@class HermesAudioChunk
+---@field type "audio"
+---@field data string Base64-encoded audio data
+---@field mimeType string
+---@field annotations? HermesAnnotations
+
+---@class HermesResourceLinkChunk
+---@field type "resource_link"
+---@field name string
+---@field uri string
+---@field description? string
+---@field mimeType? string
+---@field size? number
+---@field title? string
+---@field annotations? HermesAnnotations
+
+---@class HermesResourceContents
+---@field text? string Text content (text resources)
+---@field blob? string Base64-encoded binary data (blob resources)
+---@field uri string
+---@field mimeType? string
+
+---@class HermesResourceChunk
+---@field type "resource"
+---@field resource HermesResourceContents
+---@field annotations? HermesAnnotations
+
+---Base payload for session notifications sent by the agent
+---@class HermesSessionNotification
+---@field sessionId string
+---@field promptId string UUID of the prompt turn
+
+---@class HermesAgentTextMessage: HermesSessionNotification
+---@field update { sessionUpdate: "agent_message_chunk", content: HermesTextChunk }
+
+---@class HermesAgentImageMessage: HermesSessionNotification
+---@field update { sessionUpdate: "agent_message_chunk", content: HermesImageChunk }
+
+---@class HermesAgentResourceLinkMessage: HermesSessionNotification
+---@field update { sessionUpdate: "agent_message_chunk", content: HermesResourceLinkChunk }
+
+---@class HermesAgentResourceMessage: HermesSessionNotification
+---@field update { sessionUpdate: "agent_message_chunk", content: HermesResourceChunk }
+
+---@class HermesAgentTextThought: HermesSessionNotification
+---@field update { sessionUpdate: "agent_thought_chunk", content: HermesTextChunk }
+
+---@class HermesAgentImageThought: HermesSessionNotification
+---@field update { sessionUpdate: "agent_thought_chunk", content: HermesImageChunk }
+
+---@class HermesAgentResourceLinkThought: HermesSessionNotification
+---@field update { sessionUpdate: "agent_thought_chunk", content: HermesResourceLinkChunk }
+
+---@class HermesAgentResourceThought: HermesSessionNotification
+---@field update { sessionUpdate: "agent_thought_chunk", content: HermesResourceChunk }
+
+---@class HermesUserTextMessage: HermesSessionNotification
+---@field update { sessionUpdate: "user_message_chunk", content: HermesTextChunk }
+
+---@class HermesUserImageMessage: HermesSessionNotification
+---@field update { sessionUpdate: "user_message_chunk", content: HermesImageChunk }
+
+---@class HermesUserResourceLinkMessage: HermesSessionNotification
+---@field update { sessionUpdate: "user_message_chunk", content: HermesResourceLinkChunk }
+
+---@class HermesUserResourceMessage: HermesSessionNotification
+---@field update { sessionUpdate: "user_message_chunk", content: HermesResourceChunk }
+
+---@class HermesAvailableCommand
+---@field id string
+---@field name string
+---@field description? string
+
+---@class HermesAvailableCommands: HermesSessionNotification
+---@field update { sessionUpdate: "available_commands_update", availableCommands: HermesAvailableCommand[] }
+
+---@class HermesConfigurationOption: HermesSessionNotification
+---@field update { sessionUpdate: "config_option_update", configOptions: ConfigOption[] }
+
+---@class HermesModeCurrent: HermesSessionNotification
+---@field update { sessionUpdate: "current_mode_update", currentModeId: string }
+
+---@class HermesPlanEntry
+---@field content string
+---@field priority "High"|"Medium"|"Low"
+---@field status "Pending"|"InProgress"|"Completed"|"Cancelled"
+
+---@class HermesPlan: HermesSessionNotification
+---@field update { sessionUpdate: "plan", entries: HermesPlanEntry[] }
+
+---@class HermesSessionUpdate: HermesSessionNotification
+---@field update { sessionUpdate: "session_info_update", title?: string, updatedAt?: string }
+
+---@class HermesUsageUpdate: HermesSessionNotification
+---@field update { sessionUpdate: "usage_update", used: number, size: number, cost: { amount: number, currency: string } }
+
+---@alias HermesToolCallKind "Read"|"Edit"|"Delete"|"Move"|"Search"|"Execute"|"Think"|"Fetch"|"SwitchMode"|"Other"
+
+---@alias HermesToolCallStatus "Pending"|"InProgress"|"Completed"|"Cancelled"|"Error"
+
+---@class HermesToolCallContentBlock
+---@field type "content"
+---@field content HermesTextChunk|HermesImageChunk|HermesAudioChunk|HermesResourceChunk|HermesResourceLinkChunk
+
+---@class HermesToolCallDiff
+---@field type "diff"
+---@field path string
+---@field oldText string
+---@field newText string
+
+---@class HermesToolCallTerminalRef
+---@field type "terminal"
+---@field terminalId string
+
+---@alias HermesToolCallContent HermesToolCallContentBlock|HermesToolCallDiff|HermesToolCallTerminalRef
+
+---@class HermesToolCallLocation
+---@field path string
+---@field line? number
+
+---Tool call details attached to a permission request
+---@class HermesToolCallInfo
+---@field toolCallId string
+---@field kind? HermesToolCallKind
+---@field status? HermesToolCallStatus
+---@field title? string
+---@field content? HermesToolCallContent[]
+---@field locations? HermesToolCallLocation[]
+---@field rawInput? any
+---@field rawOutput? any
+
+---@class HermesToolCall: HermesSessionNotification
+---@field update { sessionUpdate: "tool_call", toolCallId: string, title: string, kind: HermesToolCallKind, status: HermesToolCallStatus, content: HermesToolCallContent[], locations: HermesToolCallLocation[], rawInput?: any, rawOutput?: any }
+
+---@class HermesToolCallUpdate: HermesSessionNotification
+---@field update { sessionUpdate: "tool_call_update", toolCallId: string, kind?: HermesToolCallKind, status?: HermesToolCallStatus, title?: string, content?: HermesToolCallContent[], locations?: HermesToolCallLocation[], rawInput?: any, rawOutput?: any }
+
+---@class HermesPermissionOption
+---@field id string Option ID to pass to respond()
+---@field label string Human-readable label
+---@field description? string
+
+---@class HermesPermissionRequest
+---@field requestId string UUID to pass to respond()
+---@field sessionId string
+---@field toolCall HermesToolCallInfo
+---@field options HermesPermissionOption[]
+
+---@class HermesReadTextFile
+---@field requestId string UUID to pass to respond()
+---@field sessionId string
+---@field path string
+---@field line? number 1-based line to start reading from
+---@field limit? number Maximum number of lines to read
+
+---@class HermesWriteTextFile
+---@field requestId string UUID to pass to respond()
+---@field sessionId string
+---@field path string
+---@field content string
+
+---@class HermesTerminalCreate
+---@field requestId string UUID to pass to respond()
+---@field sessionId string
+---@field command string
+---@field args string[]
+---@field env EnvVar[]
+---@field cwd? string
+---@field outputByteLimit? number
+
+---@class HermesTerminalExit
+---@field requestId string UUID to pass to respond()
+---@field sessionId string
+---@field terminalId string
+
+---@class HermesTerminalKill
+---@field requestId string UUID to pass to respond()
+---@field sessionId string
+---@field terminalId string
+---@field signal? string e.g. "SIGTERM", "SIGKILL"
+
+---@class HermesTerminalOutput
+---@field requestId string UUID to pass to respond()
+---@field sessionId string
+---@field terminalId string
+---@field byteLimit? number
+
+---@class HermesTerminalRelease
+---@field requestId string UUID to pass to respond()
+---@field sessionId string
+---@field terminalId string
+
+---@class HermesFormElicitation
+---@field requestId string UUID to pass to respond()
+---@field mode "form"
+---@field scope? table
+---@field schema? table JSON schema describing the expected form fields
+---@field message string Prompt shown to the user
+
+---@class HermesUrlElicitation
+---@field requestId string UUID to pass to respond()
+---@field mode "url"
+---@field scope? table
+---@field url string URL to direct the user to
+---@field message string Prompt shown to the user
+
+---@class HermesElicitationComplete
+---@field elicitationId string UUID of the completed elicitation
+
+---@class HermesAgentInfo
+---@field id string
+---@field name string
+---@field version string
+---@field license string
+---@field description string
+---@field website string
+---@field repository string
+---@field icon string
+---@field distributions string[] e.g. { "binary", "npx", "uvx" }
+
+---@class HermesAgentList
+---@field agents HermesAgentInfo[]
+
+---@class HermesAuthMethod
+---@field id string Authentication method ID to pass to authenticate()
+---@field name string
+---@field description? string
+
+---@class HermesPromptCapabilities
+---@field image boolean
+---@field audio boolean
+---@field embeddedContext boolean
+
+---@class HermesMcpCapabilities
+---@field http boolean
+---@field sse boolean
+---@field acp boolean
+
+---@class HermesSessionCapabilities
+---@field list boolean
+---@field fork boolean
+---@field resume boolean
+---@field close boolean
+---@field additionalDirectories boolean
+---@field delete boolean
+
+---@class HermesAgentCapabilities
+---@field loadSession boolean
+---@field promptCapabilities HermesPromptCapabilities
+---@field mcpCapabilities HermesMcpCapabilities
+---@field sessionCapabilities HermesSessionCapabilities
+---@field auth { logout: boolean }
+
+---@class HermesAgentImplementation
+---@field name string
+---@field version string
+---@field title? string
+
+---@class HermesConnectionInitialized
+---@field protocolVersion string
+---@field agentCapabilities HermesAgentCapabilities
+---@field authMethods HermesAuthMethod[]
+---@field agentInfo HermesAgentImplementation
+
+---@class HermesPrompted
+---@field stopReason string e.g. "Stop", "Cancelled", "Error"
+
+---@class HermesProgress
+---@field id string
+---@field title string
+---@field source string
+---@field status "running"|"success"|"failure"
+---@field percent? number
+---@field text? string[]
+
+---@class HermesSessionMode
+---@field id string
+---@field name string
+---@field description? string
+
+---@class HermesSessionModes
+---@field currentModeId string
+---@field availableModes HermesSessionMode[]
+
+---@class HermesSessionCreated
+---@field sessionId string
+---@field modes HermesSessionModes
+---@field configOptions ConfigOption[]
+
+---@class HermesSessionForked: HermesSessionCreated
+
+---@class HermesSessionLoaded
+---@field modes HermesSessionModes
+---@field configOptions ConfigOption[]
+
+---@class HermesSessionResumed: HermesSessionLoaded
+
+---@class HermesSessionClosed
+---@field sessionId string
+
+---@class HermesSessionDeleted
+---@field sessionId string
+
+---@class HermesSessionListItem
+---@field sessionId string
+---@field cwd string
+---@field additionalDirectories string[]
+---@field title? string
+---@field updatedAt? string
+
+---@class HermesSessionsListed
+---@field sessions HermesSessionListItem[]
+---@field nextCursor? string Pagination cursor for fetching the next page
+
+---@class HermesModes
+---@field options ModeOption[]
+---@field current ModeOption
+
+---@class HermesModels
+---@field options ModelOption[]
+---@field current ModelOption
+
+---@class HermesThoughtLevels
+---@field options ThoughtLevelOption[]
+---@field current ThoughtLevelOption
+
+---@class HermesConfigurationUpdated
+---@field configOptions ConfigOption[]
+
+---@alias HermesConfigOptions ConfigOption[]
+---@alias HermesModelConfigurations ModelConfigOption[]
+---@alias HermesModelConfigurationUpdated ModelConfigOption[]
+---@alias HermesModeUpdated ModeOption
+---@alias HermesSessionModelUpdated ModelOption
+---@alias HermesThoughtLevelUpdated ThoughtLevelOption
 -- luacov: enable
 
 local M = {}
@@ -775,6 +1167,23 @@ end
 function M.configure_model(session_id, config)
 	execute_async(function()
 		M._load_native_sync().configure_model(session_id, config)
+	end)
+end
+
+---Get all configuration options for a session
+---@param session_id string Session ID
+function M.config_options(session_id)
+	return execute_async(function()
+		return M._load_native_sync().config_options(session_id)
+	end)
+end
+
+---Set any configuration option for a session
+---@param session_id string Session ID
+---@param config SetConfigOptionConfig Table with `id` and `value` keys
+function M.set_config_option(session_id, config)
+	execute_async(function()
+		M._load_native_sync().set_config_option(session_id, config)
 	end)
 end
 

@@ -3,6 +3,7 @@
 
 local helpers = require("helpers")
 local stub = require("luassert.stub")
+local match = require("luassert.match")
 
 describe("plugin.hermes", function()
   local temp_dir
@@ -93,6 +94,103 @@ describe("plugin.hermes", function()
         vim.cmd("Hermes build with-icons with-ansi")
       end)
       assert.is_true(ok, "Hermes build with multiple features should not crash")
+    end)
+  end)
+
+  describe(":Hermes log", function()
+    local log_path
+
+    local function setup_log_config(format)
+      require("hermes.config").setup({
+        log = { file = { path = temp_dir, name = "hermes.log", format = format } },
+      })
+      log_path = temp_dir .. "/hermes.log"
+    end
+
+    local function use_real_files()
+      -- The outer before_each stubs filereadable to 0; restore the real
+      -- function and nil the handle so the outer after_each skips the revert
+      filereadable_stub:revert()
+      filereadable_stub = nil
+    end
+
+    after_each(function()
+      -- Close the tab if the command opened one (errors on the last tab)
+      pcall(function()
+        vim.cmd("tabclose!")
+      end)
+      require("hermes.config").setup({})
+    end)
+
+    it("opens the configured log file in a new tab", function()
+      use_real_files()
+      setup_log_config("json")
+      vim.fn.writefile({ '{"msg":"hello"}' }, log_path)
+
+      vim.cmd("Hermes log")
+
+      assert.equals(log_path, vim.api.nvim_buf_get_name(0))
+    end)
+
+    it("marks the log buffer as readonly", function()
+      use_real_files()
+      setup_log_config("json")
+      vim.fn.writefile({ '{"msg":"hello"}' }, log_path)
+
+      vim.cmd("Hermes log")
+
+      assert.is_true(vim.bo.readonly)
+    end)
+
+    it("sets jsonl filetype when log format is json", function()
+      use_real_files()
+      setup_log_config("json")
+      vim.fn.writefile({ '{"msg":"hello"}' }, log_path)
+
+      vim.cmd("Hermes log")
+
+      assert.equals("jsonl", vim.bo.filetype)
+    end)
+
+    it("leaves filetype unset when log format is compact", function()
+      use_real_files()
+      setup_log_config("compact")
+      vim.fn.writefile({ "a compact log line" }, log_path)
+
+      vim.cmd("Hermes log")
+
+      assert.equals("", vim.bo.filetype)
+    end)
+
+    it("opens the most recent rotated log file when the base file is missing", function()
+      use_real_files()
+      setup_log_config("json")
+      local rotated = log_path .. ".1"
+      vim.fn.writefile({ '{"msg":"rotated"}' }, rotated)
+
+      vim.cmd("Hermes log")
+
+      assert.equals(rotated, vim.api.nvim_buf_get_name(0))
+    end)
+
+    it("places the cursor on the last line", function()
+      use_real_files()
+      setup_log_config("json")
+      vim.fn.writefile({ "one", "two", "three" }, log_path)
+
+      vim.cmd("Hermes log")
+
+      assert.equals(3, vim.fn.line("."))
+    end)
+
+    it("notifies with an enable-logging hint when no log file exists", function()
+      setup_log_config("json")
+      local notify_stub = stub(vim, "notify")
+
+      vim.cmd("Hermes log")
+
+      assert.stub(notify_stub).was_called_with(match.has_match("Enable it with"), vim.log.levels.INFO, { title = "Hermes" })
+      notify_stub:revert()
     end)
   end)
   

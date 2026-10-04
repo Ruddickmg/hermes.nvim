@@ -603,11 +603,12 @@ fn build_mock_agent_builder(
         .on_receive_request(
             {
                 let config = config.clone();
-                move |_req: SetSessionConfigOptionRequest,
+                move |req: SetSessionConfigOptionRequest,
                       responder: Responder<SetSessionConfigOptionResponse>,
                       _cx: ConnectionTo<acp::Client>| {
                     let config = config.clone();
                     async move {
+                        config.lock().unwrap().set_session_config_option_request = Some(req);
                         let dur = config.lock().unwrap().timeout;
                         let result = timeout(dur, async {
                             let config = config.lock().unwrap();

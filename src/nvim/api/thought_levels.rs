@@ -4,9 +4,6 @@ use crate::{
     nvim::autocommands::Commands,
 };
 
-/// Single positional argument: session_id
-pub type ThoughtLevelsArgs = String;
-
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn thought_levels(&self, session_id: String) -> Result<()> {
