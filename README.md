@@ -1856,6 +1856,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other (optional)",
     "status": "Pending | InProgress | Completed | Cancelled | Error (optional)",
     "title": "string (optional)",
+    "name": "string (optional)",
     "content": [
       {
         "type": "content",
@@ -2272,6 +2273,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     "sessionUpdate": "tool_call",
     "toolCallId": "string",
     "title": "string",
+    "name": "string (optional)",
     "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other",
     "status": "Pending | InProgress | Completed | Cancelled | Error",
     "content": [
@@ -2352,6 +2354,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other (optional)",
     "status": "Pending | InProgress | Completed | Cancelled | Error (optional)",
     "title": "string (optional)",
+    "name": "string (optional)",
     "content": [
       {
         "type": "content",
@@ -2637,8 +2640,6 @@ cargo build --release
 
 -- functionality
 - [ ] [Request Cancellation Mechanism](https://agentclientprotocol.com/rfds/request-cancellation)
-- [ ] [Terminal Authentication](https://agentclientprotocol.com/rfds/auth-methods)
-- [ ] [Tool call name](https://agentclientprotocol.com/rfds/tool-call-name)
 - [ ] Support "unstable"/proposed ACP methods
   - [ ] [improve authentication data](https://agentclientprotocol.com/rfds/auth-methods)
   - [ ] [Fork sessions](https://agentclientprotocol.com/rfds/session-fork)
