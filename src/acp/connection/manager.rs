@@ -9,9 +9,10 @@ use crate::utilities::autocmd::autocmd_listeners_attached;
 use crate::{Handler, acp::error::Error};
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    BooleanConfigOptionCapabilities, ClientCapabilities, ClientSessionCapabilities,
-    ElicitationCapabilities, ElicitationFormCapabilities, ElicitationUrlCapabilities,
-    FileSystemCapabilities, Implementation, InitializeRequest, SessionConfigOptionsCapabilities,
+    AuthCapabilities, BooleanConfigOptionCapabilities, ClientCapabilities,
+    ClientSessionCapabilities, ElicitationCapabilities, ElicitationFormCapabilities,
+    ElicitationUrlCapabilities, FileSystemCapabilities, Implementation, InitializeRequest,
+    SessionConfigOptionsCapabilities,
 };
 use async_lock::Mutex;
 use serde::{Deserialize, Serialize};
@@ -253,6 +254,13 @@ impl ConnectionManager {
     }
 
     #[instrument(level = "trace", skip(self))]
+    async fn store_connection_details(&self, agent: Assistant, details: ConnectionDetails) {
+        let mut config = self.state.lock().await;
+        config.set_connection_details(agent, details);
+        drop(config);
+    }
+
+    #[instrument(level = "trace", skip(self))]
     async fn set_agent(&self, agent: Assistant) {
         let mut config = self.state.lock().await;
         config.set_agent(agent);
@@ -294,25 +302,24 @@ impl ConnectionManager {
     pub async fn connect(
         &mut self,
         handler: Arc<Handler>,
-        ConnectionDetails { agent, protocol }: ConnectionDetails,
+        connection_details: ConnectionDetails,
     ) -> crate::acp::Result<&Connection> {
+        let details = connection_details.clone();
+        let ConnectionDetails { agent, protocol } = connection_details;
         let permissions = self.get_permissions().await;
         let agent_name = agent.name();
-
-        // Check if connection already exists without borrowing
         let already_connected = self.connection.contains_key(&agent_name);
+
         if already_connected {
             warn!(
                 "A connection already exists for '{}'. Returning existing connection",
                 agent
             );
             return self
-                .connection
-                .get(&agent_name)
+                .get_connection(&agent)
                 .ok_or_else(|| Error::Internal("Connection not found".to_string()));
         }
 
-        // Now we can safely do mutable operations
         let (sender, receiver) = async_channel::bounded(100);
         let client_capabilities = ClientCapabilities::new()
             .terminal(permissions.terminal_access)
@@ -325,6 +332,7 @@ impl ConnectionManager {
                 autocmd_listeners_attached(GROUP, "User", "FormElicitation"),
                 autocmd_listeners_attached(GROUP, "User", "UrlElicitation"),
             ))
+            .auth(AuthCapabilities::new().terminal(true))
             .session(
                 ClientSessionCapabilities::new().config_options(
                     SessionConfigOptionsCapabilities::new()
@@ -352,12 +360,6 @@ impl ConnectionManager {
 
             trace!("Starting smol executor for {}", agent_display_name);
 
-            // Run the connection in the executor.
-            // smol::block_on drives the top-level future, while executor.run()
-            // continuously polls all tasks spawned onto the LocalExecutor.
-            // Each protocol module owns its transport-specific orchestration
-            // (stream acquisition, post-disconnect cleanup) and delegates the
-            // shared ACP `Client.builder()` plumbing to `connect::run_connection`.
             let run_result = smol::block_on(executor.run(async {
                 match protocol {
                     Protocol::Stdio => {
@@ -384,6 +386,7 @@ impl ConnectionManager {
 
         self.add_connection(agent.clone(), Connection::new(sender, handle, stdio_child));
         self.set_agent(agent.clone()).await;
+        self.store_connection_details(agent.clone(), details).await;
         let connection = self.get_connection(&agent).unwrap();
         debug!("Stored connection to '{}'", agent);
         connection.initialize(init_config).await?;
