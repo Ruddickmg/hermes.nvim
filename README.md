@@ -83,7 +83,7 @@ programs.nixvim = {
 
 ## ⌨️ Commands
 
-Show recent log messages and current state information.
+Open the most recent log file in a new tab (read-only, cursor at the end). The buffer's filetype follows your `log.file.format` configuration — JSON logs open as `jsonl` (newline-delimited JSON).
 ```vim
 :Hermes log
 ```

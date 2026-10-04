@@ -781,7 +781,8 @@ notifications sourced from the agent.
 *:Hermes*                                                 Hermes management
 
 Subcommands: ~
-    log        Show recent log messages and current state information
+    log        Open the most recent log file in a new tab (read-only;
+               filetype follows the log.file.format configuration)
     install    Download the currently configured version
                (triggers |Progress| autocommand while downloading)
     update     Fetch the latest release from GitHub and replace the current
@@ -793,7 +794,7 @@ Subcommands: ~
                to re-download
 
 Example: >
-    :Hermes log        " View recent logs
+    :Hermes log        " Open most recent log file in a new tab
     :Hermes install    " Download binary (first time or specific version)
     :Hermes update     " Fetch and install latest version
     :Hermes build      " Build from source

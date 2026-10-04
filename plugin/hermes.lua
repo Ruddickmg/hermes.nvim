@@ -14,26 +14,58 @@ vim.api.nvim_create_user_command("Hermes", function(args)
 	local subcmd = args.fargs[1]
 
 	if subcmd == "log" or subcmd == "logs" then
-		-- Show recent log messages
-		local hermes = require("hermes")
-		local state = hermes.get_loading_state()
-		local error_msg = hermes.get_loading_error()
+		-- Open the most recent log file in a new tab
+		local config = require("hermes.config")
+		local file_config = config.get().log.file
+		local log_path = config.get_log_file_path()
 
-		local log_lines = {
-			"Hermes Log",
-			"==========",
-			"",
-			"Recent log messages will appear here.",
-			"Use :messages to see all notifications.",
-			"",
-			"Current State: " .. state,
-		}
-
-		if error_msg then
-			table.insert(log_lines, "Last Error: " .. error_msg)
+		-- The base path is the active log file; rotated backups are named
+		-- "<name>.1", "<name>.2", ... Fall back to the most recent backup if
+		-- the base file does not exist.
+		local path
+		if vim.fn.filereadable(log_path) == 1 then
+			path = log_path
+		else
+			for rotation = 1, file_config.max_files or 5 do
+				local rotated = log_path .. "." .. rotation
+				if vim.fn.filereadable(rotated) == 1 then
+					path = rotated
+					break
+				end
+			end
 		end
 
-		logger.notify(table.concat(log_lines, "\n"), vim.log.levels.INFO)
+		if not path then
+			local hermes = require("hermes")
+			local lines = {
+				"No log file found at " .. log_path,
+				"",
+				"File logging is configured with level '" .. tostring(file_config.level) .. "'.",
+				"Enable it with: require('hermes').setup({ log = { file = { level = 'info' } } })",
+				"",
+				"Current State: " .. hermes.get_loading_state(),
+			}
+			local error_msg = hermes.get_loading_error()
+			if error_msg then
+				table.insert(lines, "Last Error: " .. error_msg)
+			end
+			-- Explicitly invoked command: notify directly, bypassing the
+			-- notification level filter so there is always a response.
+			vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "Hermes" })
+			return
+		end
+
+		vim.cmd("tabnew " .. vim.fn.fnameescape(path))
+		vim.bo.readonly = true
+		vim.bo.modifiable = false
+
+		-- JSON logs are newline-delimited (one object per line)
+		if file_config.format == "json" then
+			vim.bo.filetype = "jsonl"
+		end
+
+		-- Tail behavior: land on the last line
+		vim.cmd("normal! G")
 	elseif subcmd == "install" or subcmd == "download" then
 		-- Force download/install (async, non-blocking)
 		logger.notify("Installing Hermes binary...", vim.log.levels.INFO)
