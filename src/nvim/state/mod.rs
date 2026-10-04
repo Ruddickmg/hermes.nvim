@@ -1,9 +1,10 @@
-use crate::acp::registry::Registry;
+use crate::acp::{connection::ConnectionDetails, registry::Registry};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::acp::connection::Assistant;
 use crate::{
-    acp::{connection::Assistant, session_info::SessionDetails},
+    acp::session_info::SessionDetails,
     nvim::{configuration::ClientConfig, state::agent::AgentInfo},
 };
 use agent_client_protocol::schema::v1::{InitializeResponse, NewSessionResponse};
@@ -86,6 +87,21 @@ impl PluginState {
                 .insert(session_id.to_string(), prompt_id.to_string());
             prompt_id
         }
+    }
+
+    #[instrument(level = "trace")]
+    pub fn set_connection_details(
+        &mut self,
+        agent: Assistant,
+        details: ConnectionDetails,
+    ) -> &mut Self {
+        self.agent_info
+            .set_connection_details(agent.clone(), details.clone());
+        debug!(
+            "Updated connection details for agent '{}' to: '{:?}'",
+            agent, details
+        );
+        self
     }
 
     #[instrument(level = "trace")]
