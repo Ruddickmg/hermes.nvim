@@ -9,9 +9,19 @@ use crate::{
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct TerminalAuthenticateRequest {
-    request_id: String,
-    method: AuthMethodTerminal,
-    agent: Assistant,
+    pub request_id: String,
+    pub method: AuthMethodTerminal,
+    pub agent: Assistant,
+}
+
+impl TerminalAuthenticateRequest {
+    pub fn new(agent: Assistant, method: AuthMethodTerminal) -> Self {
+        TerminalAuthenticateRequest {
+            agent,
+            method,
+            request_id: Uuid::new_v4().to_string(),
+        }
+    }
 }
 
 impl Api {
@@ -30,11 +40,10 @@ impl Api {
             match method {
                 AuthMethod::Terminal(terminal_method) => {
                     connection
-                        .terminal_authentication(TerminalAuthenticateRequest {
-                            request_id: Uuid::new_v4().to_string(),
-                            method: terminal_method,
+                        .terminal_authentication(TerminalAuthenticateRequest::new(
                             agent,
-                        })
+                            terminal_method,
+                        ))
                         .await
                 }
                 _ => connection.authenticate(AuthenticateRequest::new(id)).await,
@@ -45,5 +54,34 @@ impl Api {
                 id, agent
             )))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_terminal_authenticate_request_serializes_expected_shape() {
+        let request = TerminalAuthenticateRequest::new(
+            Assistant::Opencode,
+            AuthMethodTerminal::new("tui-auth", "Terminal Auth")
+                .args(vec!["--device-code".to_string()]),
+        );
+        let value = serde_json::to_value(&request).expect("serialization should succeed");
+
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "request_id": request.request_id,
+                "method": {
+                    "id": "tui-auth",
+                    "name": "Terminal Auth",
+                    "args": ["--device-code"]
+                },
+                "agent": "Opencode"
+            })
+        );
     }
 }

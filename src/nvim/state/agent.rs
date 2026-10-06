@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use agent_client_protocol::schema::v1::{AuthMethod, AuthMethodId, InitializeResponse};
+use agent_client_protocol::schema::v1::{AuthMethod, InitializeResponse};
 
 use crate::acp::connection::Assistant;
 use crate::acp::connection::manager::{ConnectionDetails, Protocol};
@@ -194,7 +194,7 @@ mod tests {
     use super::*;
     use agent_client_protocol::schema::ProtocolVersion;
     use agent_client_protocol::schema::v1::{
-        AgentCapabilities, McpCapabilities, PromptCapabilities,
+        AgentCapabilities, AuthMethodTerminal, McpCapabilities, PromptCapabilities,
         SessionAdditionalDirectoriesCapabilities, SessionCapabilities, SessionDeleteCapabilities,
         SessionForkCapabilities, SessionListCapabilities, SessionResumeCapabilities,
     };
@@ -202,6 +202,12 @@ mod tests {
 
     fn create_test_response() -> InitializeResponse {
         InitializeResponse::new(ProtocolVersion::V1)
+    }
+
+    fn create_response_with_terminal_method(id: &str) -> InitializeResponse {
+        InitializeResponse::new(ProtocolVersion::V1).auth_methods(vec![AuthMethod::Terminal(
+            AuthMethodTerminal::new(id.to_string(), "Terminal Auth"),
+        )])
     }
 
     fn create_agent_info_with_agent(agent: Assistant) -> AgentInfo {
@@ -271,6 +277,42 @@ mod tests {
     fn test_get_capabilities_returns_some_when_info_exists() {
         let info = create_agent_info_with_agent(Assistant::Opencode);
         assert!(info.get_capabilities().is_some());
+    }
+
+    #[test]
+    fn test_get_auth_method_returns_none_without_agent_info() {
+        let info = AgentInfo::new();
+        assert_eq!(info.get_auth_method("tui-auth".to_string()), None);
+    }
+
+    #[test]
+    fn test_get_auth_method_returns_matching_terminal_method() {
+        let mut info = AgentInfo::new();
+        info.add_agent(
+            Assistant::Opencode,
+            create_response_with_terminal_method("tui-auth"),
+        );
+        info.set_agent(Assistant::Opencode);
+
+        assert_eq!(
+            info.get_auth_method("tui-auth".to_string()),
+            Some(AuthMethod::Terminal(AuthMethodTerminal::new(
+                "tui-auth",
+                "Terminal Auth"
+            )))
+        );
+    }
+
+    #[test]
+    fn test_get_auth_method_returns_none_for_unknown_id() {
+        let mut info = AgentInfo::new();
+        info.add_agent(
+            Assistant::Opencode,
+            create_response_with_terminal_method("tui-auth"),
+        );
+        info.set_agent(Assistant::Opencode);
+
+        assert_eq!(info.get_auth_method("missing-id".to_string()), None);
     }
 
     #[test]

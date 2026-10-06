@@ -369,7 +369,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-> **Triggers:** [Authenticated](#authenticated) autocommand upon completion.
+> **Triggers:** [Authenticated](#authenticated) on success, or [TerminalAuthentication](#terminalauthentication) when the selected method is terminal.
 
 ### 💬 Prompt
 > **Note on `promptId`:** All agent notification autocommands (sourced from 🤖 Agent) include a `promptId` field. This UUID is generated when a prompt is sent (via `prompt()`) or when a user message chunk arrives from the agent, and it is attached to all subsequent notifications for that session so you can correlate messages within a single prompt/response cycle.
@@ -2172,6 +2172,21 @@ Below is a list of all autocommands and their associated data (passed to the cal
     "title": "string (optional)",
     "updatedAt": "string (optional)"
   }
+}</code></pre></td>
+    </tr>
+    <tr id="terminalauthentication">
+      <td><code>TerminalAuthentication</code></td>
+      <td>Terminal auth method selected, run it in a terminal</td>
+      <td>⚡ <a href="#authenticate">authenticate()</a></td>
+      <td><pre><code class="language-json">{
+  "request_id": "uuid string",
+  "method": {
+    "id": "string",
+    "name": "string",
+    "args": ["string"],
+    "env": {"key": "value"}
+  },
+  "agent": "string|table"
 }</code></pre></td>
     </tr>
     <tr id="terminalcreate">
