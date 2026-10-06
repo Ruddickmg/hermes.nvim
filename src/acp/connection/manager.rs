@@ -756,4 +756,28 @@ mod tests {
 
         assert_eq!(caps, ElicitationCapabilities::new());
     }
+
+    #[test]
+    fn store_connection_details_persists_to_plugin_state() {
+        let state = Arc::new(Mutex::new(PluginState::new()));
+        let manager = ConnectionManager::new(state.clone());
+        let agent = Assistant::Opencode;
+        let details = ConnectionDetails {
+            agent: agent.clone(),
+            protocol: Protocol::Socket,
+        };
+
+        smol::block_on(manager.store_connection_details(agent.clone(), details));
+
+        let stored = smol::block_on(async {
+            state
+                .lock()
+                .await
+                .agent_info
+                .connection_details(&agent)
+                .map(|stored| (stored.agent.clone(), stored.protocol))
+        });
+
+        assert_eq!(stored, Some((Assistant::Opencode, Protocol::Socket)));
+    }
 }

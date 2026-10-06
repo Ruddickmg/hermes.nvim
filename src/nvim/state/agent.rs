@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use agent_client_protocol::schema::v1::InitializeResponse;
+use agent_client_protocol::schema::v1::{AuthMethod, AuthMethodId, InitializeResponse};
 
 use crate::acp::connection::Assistant;
 use crate::acp::connection::manager::{ConnectionDetails, Protocol};
@@ -48,6 +48,17 @@ impl AgentInfo {
     }
     pub fn get_current_info(&self) -> Option<&InitializeResponse> {
         self.agents.get(&self.current)
+    }
+
+    pub fn get_auth_method(&self, id: String) -> Option<AuthMethod> {
+        self.get_current_info()
+            .map(|info| {
+                info.auth_methods
+                    .iter()
+                    .find(|method| method.id().to_string() == id)
+            })
+            .unwrap_or(None)
+            .cloned()
     }
 
     pub fn get_capabilities(
@@ -618,6 +629,55 @@ mod tests {
         info.set_history(temp_dir.path().join("history"));
         info.history.write_keyed("agent/session.jsonl", "line1");
         info.history.write_keyed("agent/session.jsonl", "line2");
+    }
+
+    fn details_for(agent: &Assistant, protocol: Protocol) -> ConnectionDetails {
+        ConnectionDetails {
+            agent: agent.clone(),
+            protocol,
+        }
+    }
+
+    #[test]
+    fn test_set_connection_details_stores_details_for_agent() {
+        let mut info = AgentInfo::new();
+        let agent = Assistant::Opencode;
+
+        info.set_connection_details(agent.clone(), details_for(&agent, Protocol::Tcp));
+
+        let stored = info
+            .connection_details(&agent)
+            .map(|stored| (stored.agent.clone(), stored.protocol));
+        assert_eq!(stored, Some((Assistant::Opencode, Protocol::Tcp)));
+    }
+
+    #[test]
+    fn test_connection_details_returns_none_for_unknown_agent() {
+        let info = AgentInfo::new();
+
+        assert!(info.connection_details(&Assistant::Copilot).is_none());
+    }
+
+    #[test]
+    fn test_connection_details_isolated_per_agent() {
+        let mut info = AgentInfo::new();
+
+        info.set_connection_details(
+            Assistant::Opencode,
+            details_for(&Assistant::Opencode, Protocol::Tcp),
+        );
+        info.set_connection_details(
+            Assistant::Gemini,
+            details_for(&Assistant::Gemini, Protocol::Http),
+        );
+
+        let protocols = (
+            info.connection_details(&Assistant::Opencode)
+                .map(|details| details.protocol),
+            info.connection_details(&Assistant::Gemini)
+                .map(|details| details.protocol),
+        );
+        assert_eq!(protocols, (Some(Protocol::Tcp), Some(Protocol::Http)));
     }
 
     #[test]
