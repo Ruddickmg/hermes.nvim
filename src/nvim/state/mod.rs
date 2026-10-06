@@ -128,6 +128,7 @@ impl Default for PluginState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::acp::connection::manager::Protocol;
     use agent_client_protocol::schema::v1::{
         NewSessionResponse, SessionConfigOption, SessionConfigOptionCategory,
         SessionConfigSelectOption, SessionMode, SessionModeState,
@@ -235,5 +236,23 @@ mod tests {
         let mut state = PluginState::default();
         state.set_agent(Assistant::Opencode);
         assert_eq!(state.agent_info.current, Assistant::Opencode);
+    }
+
+    #[test]
+    fn set_connection_details_stores_details_for_agent() {
+        let mut state = PluginState::default();
+        let agent = Assistant::Opencode;
+        let details = ConnectionDetails {
+            agent: agent.clone(),
+            protocol: Protocol::Https,
+        };
+
+        state.set_connection_details(agent.clone(), details);
+
+        let stored = state
+            .agent_info
+            .connection_details(&agent)
+            .map(|stored| (stored.agent.clone(), stored.protocol));
+        assert_eq!(stored, Some((Assistant::Opencode, Protocol::Https)));
     }
 }

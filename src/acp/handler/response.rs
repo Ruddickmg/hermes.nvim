@@ -11,6 +11,7 @@ use tracing::instrument;
 use crate::Handler;
 use crate::acp::connection::Assistant;
 use crate::acp::error::Error;
+use crate::api::authenticate::TerminalAuthenticateRequest;
 use crate::nvim::autocommands::Commands;
 
 #[derive(Serialize, Debug)]
@@ -88,6 +89,15 @@ impl Handler {
     #[instrument(level = "trace", skip(self))]
     pub async fn authenticated(&self, response: AuthenticateResponse) -> Result<(), Error> {
         self.execute_autocommand(Commands::Authenticated, response)
+            .await
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub async fn terminal_authentication(
+        &self,
+        response: TerminalAuthenticateRequest,
+    ) -> Result<(), Error> {
+        self.execute_autocommand(Commands::TerminalAuthentication, response)
             .await
     }
 

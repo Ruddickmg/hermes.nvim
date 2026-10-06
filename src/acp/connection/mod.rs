@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use tracing::{debug, error, warn};
 
 use crate::acp::{Result, error::Error};
+use crate::api::authenticate::TerminalAuthenticateRequest;
 use agent_client_protocol::schema::v1::{
     AuthenticateRequest, CancelNotification, CloseSessionRequest, DeleteSessionRequest,
     ForkSessionRequest, InitializeRequest, ListSessionsRequest, LoadSessionRequest, LogoutRequest,
@@ -34,6 +35,7 @@ pub enum UserRequest {
     CreateSession(NewSessionRequest),
     Prompt(PromptRequest),
     Authenticate(AuthenticateRequest),
+    TerminalAuthentication(TerminalAuthenticateRequest),
     SetConfigOption(SetSessionConfigOptionRequest),
     SetMode(SetSessionModeRequest),
     LoadSession(LoadSessionRequest),
@@ -181,6 +183,16 @@ impl Connection {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn prompt(&self, request: PromptRequest) -> Result<()> {
         self.send(UserRequest::Prompt(request)).await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub async fn terminal_authentication(
+        &self,
+        request: TerminalAuthenticateRequest,
+    ) -> Result<()> {
+        self.send(UserRequest::TerminalAuthentication(request))
+            .await?;
         Ok(())
     }
 
