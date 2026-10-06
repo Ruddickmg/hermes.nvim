@@ -21,6 +21,7 @@ pub mod response;
 pub mod session;
 pub mod setup;
 pub mod terminal;
+pub mod terminal_auth;
 pub mod thought_level;
 pub mod thought_levels;
 pub mod utilities;

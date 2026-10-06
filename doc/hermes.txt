@@ -266,6 +266,7 @@ Example: >
 
 Autocommand triggered: ~
     Authenticated - On successful authentication
+    TerminalAuthentication - Terminal auth method selected (authenticate())
 
 -------------------------------------------------------------------------------
 4.6 LIST SESSIONS                                     *hermes-list-sessions*
@@ -767,6 +768,8 @@ notifications sourced from the agent.
 *SessionsListed*                Session list received (list_sessions())
 *SessionUpdate*                 Session metadata updated (title, timestamps,
                                  etc)
+*TerminalAuthentication*        Terminal auth method selected, run it in a
+                                 terminal (authenticate())
 *TerminalCreate*                Agent requests to create a terminal
                                  (respond())
 *TerminalExit*                  Agent requests notification when terminal

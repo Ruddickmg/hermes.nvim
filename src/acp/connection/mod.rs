@@ -397,6 +397,32 @@ mod tests {
     }
 
     #[test]
+    fn test_connection_terminal_authentication() {
+        use agent_client_protocol::schema::v1::AuthMethodTerminal;
+        let executor = mock_runtime();
+        let (sender, receiver) = async_channel::bounded(1);
+        let connection = Arc::new(Connection::new(sender, mock_handle(), None));
+
+        let request = TerminalAuthenticateRequest::new(
+            Assistant::Opencode,
+            AuthMethodTerminal::new("tui-auth", "Terminal Auth"),
+        );
+
+        smol::block_on(executor.run(async {
+            connection.terminal_authentication(request).await.unwrap();
+        }));
+
+        drop(connection);
+
+        smol::block_on(executor.run(async {
+            assert!(matches!(
+                receiver.recv().await,
+                Ok(UserRequest::TerminalAuthentication(_))
+            ));
+        }));
+    }
+
+    #[test]
     fn test_connection_delete_session() {
         use agent_client_protocol::schema::v1::DeleteSessionRequest;
         let executor = mock_runtime();

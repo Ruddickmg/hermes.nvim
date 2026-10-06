@@ -1,11 +1,13 @@
 use crate::helpers::{MockRequestHandler, mock_runtime};
 use agent_client_protocol::schema::v1::{
-    AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse, ForkSessionResponse,
-    ListSessionsResponse, ResumeSessionResponse,
+    AuthMethodTerminal, AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse,
+    ForkSessionResponse, ListSessionsResponse, ResumeSessionResponse,
 };
 use async_lock::Mutex;
+use hermes::acp::connection::Assistant;
 use hermes::acp::handler::Handler;
 use hermes::acp::session_info::SessionDetails;
+use hermes::api::authenticate::TerminalAuthenticateRequest;
 use hermes::nvim::state::PluginState;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -25,6 +27,18 @@ fn authenticated_succeeds() -> nvim_oxi::Result<()> {
     let response = AuthenticateResponse::default();
     let result = smol::block_on(handler.authenticated(response));
     assert!(result.is_ok(), "authenticated should succeed");
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn terminal_authentication_succeeds() -> nvim_oxi::Result<()> {
+    let handler = create_handler();
+    let response = TerminalAuthenticateRequest::new(
+        Assistant::Opencode,
+        AuthMethodTerminal::new("tui-auth".to_string(), "Terminal Auth"),
+    );
+    let result = smol::block_on(handler.terminal_authentication(response));
+    assert!(result.is_ok(), "terminal_authentication should succeed");
     Ok(())
 }
 
