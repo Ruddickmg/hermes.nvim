@@ -93,15 +93,16 @@ impl Api {
             request = request.cursor(cursor);
         }
 
-        let connection = self
-            .connection_manager
+        let connection_manager = self.connection_manager.lock().await;
+        let connection = connection_manager
             .get_current_connection()
             .await
             .ok_or_else(|| {
                 crate::acp::error::Error::Connection("No connection found".to_string())
             })?;
-
-        connection.list_sessions(request).await
+        let result = connection.list_sessions(request).await;
+        drop(connection_manager);
+        result
     }
 }
 

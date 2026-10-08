@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use crate::PluginState;
 use crate::acp::Result;
-use crate::acp::connection::{Assistant, ConnectionManager};
+use crate::acp::connection::Assistant;
 use crate::acp::error::Error;
 use crate::nvim::autocommands::Commands;
 use crate::nvim::terminal::{Terminal, TerminalManager};
@@ -479,7 +479,15 @@ impl Request {
                         ))
                     })?;
                 }
-                Responder::TerminalAuthentication(sender, data) => sender.send(data).await,
+                Responder::TerminalAuthentication(..) => {
+                    // Dropping the sender closes the channel, which the response
+                    // handler observes as a failure and skips the reconnect.
+                    warn!(
+                        "No listener attached for terminal authentication request '{}'. \
+                         Defaulting to failure.",
+                        self.id
+                    );
+                }
                 Responder::Elicitation(sender, _) => {
                     // TODO: Handle the default elicitation case (render the form or
                     // prompt the user) when no autocommand listener is attached.

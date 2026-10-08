@@ -61,7 +61,10 @@ impl Api {
         drop(state);
         let elicitation_changed =
             elicitation_changed(config_update.permissions.as_ref(), &old_permissions);
-        if !self.connection_manager.connected_agents().is_empty() && elicitation_changed {
+        let connection_manager = self.connection_manager.lock().await;
+        let has_connections = !connection_manager.connected_agents().is_empty();
+        drop(connection_manager);
+        if has_connections && elicitation_changed {
             warn!("Enabling or disabling elicitation will only take effect on new connections");
         }
         if let Some(progress) = config_update.progress.clone() {

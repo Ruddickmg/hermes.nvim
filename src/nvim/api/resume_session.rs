@@ -125,13 +125,14 @@ impl Api {
         }
         request = request.mcp_servers(config.mcp_servers);
 
-        let connection = self
-            .connection_manager
+        let connection_manager = self.connection_manager.lock().await;
+        let connection = connection_manager
             .get_current_connection()
             .await
             .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
-
-        connection.resume_session(request).await
+        let result = connection.resume_session(request).await;
+        drop(connection_manager);
+        result
     }
 }
 

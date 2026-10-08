@@ -10,7 +10,6 @@ use std::time::{Duration, Instant};
 use tracing::{debug, error, warn};
 
 use crate::acp::{Result, error::Error};
-use crate::api::authenticate::TerminalAuthenticateRequest;
 use agent_client_protocol::schema::v1::{
     AuthMethodTerminal, AuthenticateRequest, CancelNotification, CloseSessionRequest,
     DeleteSessionRequest, ForkSessionRequest, InitializeRequest, ListSessionsRequest,
@@ -54,7 +53,7 @@ pub struct Connection {
     /// Shared child process handle for stdio connections, enabling concurrent
     /// wait/kill. `None` for non-stdio connections (TCP, HTTP, etc.).
     child: Option<Arc<stdio::child::Child>>,
-    config: Option,
+    config: Option<InitializeRequest>,
 }
 
 impl Connection {
@@ -165,7 +164,7 @@ impl Connection {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn initialize(&self, request: InitializeRequest) -> Result<()> {
+    pub async fn initialize(&mut self, request: InitializeRequest) -> Result<()> {
         self.config = Some(request.clone());
         self.send(UserRequest::Initialize(request)).await?;
         Ok(())
@@ -173,7 +172,7 @@ impl Connection {
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn reconnect(&self) -> Result<()> {
-        if let Some(config) = self.config.cloned() {
+        if let Some(config) = self.config.clone() {
             self.send(UserRequest::Initialize(config)).await
         } else {
             Err(Error::Connection(
@@ -418,13 +417,13 @@ mod tests {
         let (sender, receiver) = async_channel::bounded(1);
         let connection = Arc::new(Connection::new(sender, mock_handle(), None));
 
-        let request = TerminalAuthenticateRequest::new(
-            Assistant::Opencode,
-            AuthMethodTerminal::new("tui-auth", "Terminal Auth"),
-        );
+        let request = AuthMethodTerminal::new("tui-auth", "Terminal Auth");
 
         smol::block_on(executor.run(async {
-            connection.terminal_authentication(request).await.unwrap();
+            connection
+                .terminal_authentication(Assistant::Opencode, request)
+                .await
+                .unwrap();
         }));
 
         drop(connection);
@@ -432,7 +431,7 @@ mod tests {
         smol::block_on(executor.run(async {
             assert!(matches!(
                 receiver.recv().await,
-                Ok(UserRequest::TerminalAuthentication(_))
+                Ok(UserRequest::TerminalAuthentication(_, _))
             ));
         }));
     }

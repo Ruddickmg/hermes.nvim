@@ -23,12 +23,13 @@ impl Api {
 
         let request = CloseSessionRequest::new(SessionId::from(session_id));
 
-        let connection = self
-            .connection_manager
+        let connection_manager = self.connection_manager.lock().await;
+        let connection = connection_manager
             .get_current_connection()
             .await
             .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
-
-        connection.close_session(request).await
+        let result = connection.close_session(request).await;
+        drop(connection_manager);
+        result
     }
 }
