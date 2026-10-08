@@ -1,18 +1,19 @@
 use agent_client_protocol::schema::v1::{
-    AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse, ExtResponse,
-    ForkSessionResponse, InitializeResponse, ListSessionsResponse, LoadSessionResponse,
-    LogoutResponse, NewSessionResponse, PromptResponse, ResumeSessionResponse, SessionConfigKind,
-    SessionConfigOption, SessionConfigOptionCategory, SetSessionConfigOptionResponse,
-    SetSessionModeResponse,
+    AuthMethodTerminal, AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse,
+    ExtResponse, ForkSessionResponse, InitializeResponse, ListSessionsResponse,
+    LoadSessionResponse, LogoutResponse, NewSessionResponse, PromptResponse, ResumeSessionResponse,
+    SessionConfigKind, SessionConfigOption, SessionConfigOptionCategory,
+    SetSessionConfigOptionResponse, SetSessionModeResponse,
 };
+use async_channel::bounded;
 use serde::Serialize;
 use tracing::instrument;
 
 use crate::Handler;
 use crate::acp::connection::Assistant;
 use crate::acp::error::Error;
-use crate::api::authenticate::TerminalAuthenticateRequest;
 use crate::nvim::autocommands::Commands;
+use crate::nvim::requests::Responder;
 
 #[derive(Serialize, Debug)]
 struct WithSessionId<T: Serialize> {
@@ -95,10 +96,25 @@ impl Handler {
     #[instrument(level = "trace", skip(self))]
     pub async fn terminal_authentication(
         &self,
-        response: TerminalAuthenticateRequest,
+        agent: Assistant,
+        response: AuthMethodTerminal,
     ) -> Result<(), Error> {
-        self.execute_autocommand(Commands::TerminalAuthentication, response)
-            .await
+        let (sender, receiver) = bounded::<Assistant>(1);
+        self.execute_autocommand_request(
+            // INFO: Authentication is agent wide, so session_id doesn't apply here. This is essentially a place holder but does serveas a unique identifier at the agent level.
+            // TODO: Should likely figure out a more correct solution here but in this case it doesn't really matter (for now).
+            agent.to_string(),
+            Commands::TerminalAuthentication,
+            response,
+            Responder::TerminalAuthentication(sender, agent),
+        )
+        .await?;
+        while let Ok(assistant) = receiver.recv().await {
+            let connection_manager = self.connection_manager.lock().await;
+            connection_manager.reconnect(&assistant).await?;
+            drop(connection_manager);
+        }
+        Ok(())
     }
 
     #[instrument(level = "trace", skip(self))]

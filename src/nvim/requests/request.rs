@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 use crate::PluginState;
 use crate::acp::Result;
+use crate::acp::connection::{Assistant, ConnectionManager};
 use crate::acp::error::Error;
 use crate::nvim::autocommands::Commands;
 use crate::nvim::terminal::{Terminal, TerminalManager};
@@ -36,6 +37,7 @@ pub enum Responder {
         ReadTextFileRequest,
     ),
     WriteFileResponse(OneshotSender<WriteTextFileResponse>, WriteTextFileRequest),
+    TerminalAuthentication(OneshotSender<Assistant>, Assistant),
     TerminalCreate(
         OneshotSender<Result<CreateTerminalResponse>>,
         CreateTerminalRequest,
@@ -65,6 +67,7 @@ pub enum Responder {
 impl From<Responder> for Commands {
     fn from(responder: Responder) -> Self {
         match responder {
+            Responder::TerminalAuthentication(..) => Commands::TerminalAuthentication,
             Responder::TerminalOutput(..) => Commands::TerminalOutput,
             Responder::TerminalKill(..) => Commands::TerminalKill,
             Responder::ReadFileResponse(..) => Commands::ReadTextFile,
@@ -220,6 +223,16 @@ impl Request {
                         self.id, e
                     ))
                 })?;
+            }
+            Responder::TerminalAuthentication(sender, assistant) => {
+                if bool::from_object(response).map_err(|e| Error::InvalidInput(e.to_string()))? {
+                    sender.send(assistant).await.map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send terminal authentication response for request '{}': {:?}",
+                            self.id, e
+                        ))
+                    })?;
+                }
             }
             Responder::TerminalCreate(sender, _) => {
                 let result = String::from_object(response)
@@ -466,6 +479,7 @@ impl Request {
                         ))
                     })?;
                 }
+                Responder::TerminalAuthentication(sender, data) => sender.send(data).await,
                 Responder::Elicitation(sender, _) => {
                     // TODO: Handle the default elicitation case (render the form or
                     // prompt the user) when no autocommand listener is attached.

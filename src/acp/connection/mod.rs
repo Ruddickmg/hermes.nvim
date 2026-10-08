@@ -12,10 +12,10 @@ use tracing::{debug, error, warn};
 use crate::acp::{Result, error::Error};
 use crate::api::authenticate::TerminalAuthenticateRequest;
 use agent_client_protocol::schema::v1::{
-    AuthenticateRequest, CancelNotification, CloseSessionRequest, DeleteSessionRequest,
-    ForkSessionRequest, InitializeRequest, ListSessionsRequest, LoadSessionRequest, LogoutRequest,
-    NewSessionRequest, PromptRequest, ResumeSessionRequest, SetSessionConfigOptionRequest,
-    SetSessionModeRequest,
+    AuthMethodTerminal, AuthenticateRequest, CancelNotification, CloseSessionRequest,
+    DeleteSessionRequest, ForkSessionRequest, InitializeRequest, ListSessionsRequest,
+    LoadSessionRequest, LogoutRequest, NewSessionRequest, PromptRequest, ResumeSessionRequest,
+    SetSessionConfigOptionRequest, SetSessionModeRequest,
 };
 use async_channel::Sender;
 pub use manager::*;
@@ -35,7 +35,7 @@ pub enum UserRequest {
     CreateSession(NewSessionRequest),
     Prompt(PromptRequest),
     Authenticate(AuthenticateRequest),
-    TerminalAuthentication(TerminalAuthenticateRequest),
+    TerminalAuthentication(Assistant, AuthMethodTerminal),
     SetConfigOption(SetSessionConfigOptionRequest),
     SetMode(SetSessionModeRequest),
     LoadSession(LoadSessionRequest),
@@ -54,6 +54,7 @@ pub struct Connection {
     /// Shared child process handle for stdio connections, enabling concurrent
     /// wait/kill. `None` for non-stdio connections (TCP, HTTP, etc.).
     child: Option<Arc<stdio::child::Child>>,
+    config: Option,
 }
 
 impl Connection {
@@ -156,6 +157,7 @@ impl Connection {
         child: Option<Arc<stdio::child::Child>>,
     ) -> Self {
         Self {
+            config: None,
             sender: Some(sender),
             handle: Some(handle),
             child,
@@ -164,8 +166,20 @@ impl Connection {
 
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn initialize(&self, request: InitializeRequest) -> Result<()> {
+        self.config = Some(request.clone());
         self.send(UserRequest::Initialize(request)).await?;
         Ok(())
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub async fn reconnect(&self) -> Result<()> {
+        if let Some(config) = self.config.cloned() {
+            self.send(UserRequest::Initialize(config)).await
+        } else {
+            Err(Error::Connection(
+                "Attempted to reconnect before a connection was initialized".to_string(),
+            ))
+        }
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -189,9 +203,10 @@ impl Connection {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn terminal_authentication(
         &self,
-        request: TerminalAuthenticateRequest,
+        agent: Assistant,
+        request: AuthMethodTerminal,
     ) -> Result<()> {
-        self.send(UserRequest::TerminalAuthentication(request))
+        self.send(UserRequest::TerminalAuthentication(agent, request))
             .await?;
         Ok(())
     }

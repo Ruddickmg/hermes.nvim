@@ -394,7 +394,7 @@ impl Api {
 
         let request = PromptRequest::new(session_id.to_string(), content_blocks);
         let connection = self
-            .connection
+            .connection_manager
             .get_current_connection()
             .await
             .ok_or_else(|| {
