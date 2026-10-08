@@ -1,4 +1,4 @@
-use crate::acp::{connection::ConnectionDetails, registry::Registry};
+use crate::acp::registry::Registry;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -87,21 +87,6 @@ impl PluginState {
                 .insert(session_id.to_string(), prompt_id.to_string());
             prompt_id
         }
-    }
-
-    #[instrument(level = "trace")]
-    pub fn set_connection_details(
-        &mut self,
-        agent: Assistant,
-        details: ConnectionDetails,
-    ) -> &mut Self {
-        self.agent_info
-            .set_connection_details(agent.clone(), details.clone());
-        debug!(
-            "Updated connection details for agent '{}' to: '{:?}'",
-            agent, details
-        );
-        self
     }
 
     #[instrument(level = "trace")]

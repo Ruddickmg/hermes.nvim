@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use agent_client_protocol::schema::v1::{AuthMethod, InitializeResponse};
 
 use crate::acp::connection::Assistant;
-use crate::acp::connection::manager::{ConnectionDetails, Protocol};
+use crate::acp::connection::manager::Protocol;
 use crate::utilities::logging::channel::ChannelWriter;
 use crate::utilities::logging::sink::history::HistorySink;
 
@@ -13,7 +13,6 @@ pub struct AgentInfo {
     pub current: Assistant,
     pub protocol: Protocol,
     agents: HashMap<Assistant, InitializeResponse>,
-    connection: HashMap<Assistant, ConnectionDetails>,
     pub history: ChannelWriter<HistorySink>,
     pub history_base_path: PathBuf,
 }
@@ -24,7 +23,6 @@ impl AgentInfo {
             current: Assistant::default(),
             protocol: Protocol::default(),
             agents: HashMap::new(),
-            connection: HashMap::new(),
             history: ChannelWriter::new_file(HistorySink::new(PathBuf::new())),
             history_base_path: PathBuf::new(),
         }
@@ -69,14 +67,6 @@ impl AgentInfo {
 
     pub fn set_agent(&mut self, agent: Assistant) {
         self.current = agent;
-    }
-
-    pub fn connection_details(&self, agent: &Assistant) -> Option<&ConnectionDetails> {
-        self.connection.get(agent)
-    }
-
-    pub fn set_connection_details(&mut self, agent: Assistant, details: ConnectionDetails) {
-        self.connection.insert(agent, details);
     }
 
     pub fn add_agent(&mut self, agent: Assistant, info: InitializeResponse) {
