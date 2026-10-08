@@ -227,16 +227,20 @@ impl Api {
             opts.clone().into_assistant(agent_id)?
         };
 
-        self.connection_manager
+        let handler = self.response_handler.clone();
+        let mut connection_manager = self.connection_manager.lock().await;
+        let result = connection_manager
             .connect(
-                self.response_handler.clone(),
+                handler,
                 ConnectionDetails {
                     agent,
                     protocol: opts.protocol,
                 },
             )
-            .await?;
-        Ok(())
+            .await
+            .map(|_| ());
+        drop(connection_manager);
+        result
     }
 }
 

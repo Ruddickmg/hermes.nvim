@@ -82,11 +82,14 @@ impl Pushable for DisconnectArgs {
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn disconnect(&mut self, args: DisconnectArgs) -> crate::acp::Result<()> {
-        match args {
-            DisconnectArgs::Multiple(agents) => self.connection_manager.disconnect(agents),
-            DisconnectArgs::Single(agent) => self.connection_manager.disconnect(vec![agent]),
-            DisconnectArgs::All => self.connection_manager.close_all(),
-        }
+        let mut connection_manager = self.connection_manager.lock().await;
+        let result = match args {
+            DisconnectArgs::Multiple(agents) => connection_manager.disconnect(agents),
+            DisconnectArgs::Single(agent) => connection_manager.disconnect(vec![agent]),
+            DisconnectArgs::All => connection_manager.close_all(),
+        };
+        drop(connection_manager);
+        result
     }
 }
 

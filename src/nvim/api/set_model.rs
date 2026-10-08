@@ -11,20 +11,19 @@ pub type SetModelArgs = (String, String);
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn set_model(&self, (session_id, model_id): SetModelArgs) -> Result<()> {
-        let connection = self
-            .connection_manager
+        let connection_manager = self.connection_manager.lock().await;
+        let connection = connection_manager
             .get_current_connection()
             .await
             .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
-
-        connection
+        let result = connection
             .set_config_option(SetSessionConfigOptionRequest::new(
                 session_id,
                 "model".to_string(),
                 agent_client_protocol::schema::v1::SessionConfigOptionValue::value_id(model_id),
             ))
-            .await?;
-
-        Ok(())
+            .await;
+        drop(connection_manager);
+        result
     }
 }

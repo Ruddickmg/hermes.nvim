@@ -286,6 +286,11 @@ impl ConnectionManager {
     }
 
     #[instrument(level = "trace", skip(self))]
+    pub fn get_connection_mut(&mut self, agent: &Assistant) -> Option<&mut Connection> {
+        self.connection.get_mut(&agent.name())
+    }
+
+    #[instrument(level = "trace", skip(self))]
     pub async fn get_current_connection(&self) -> Option<&Connection> {
         self.get_connection(&self.get_agent().await)
     }
@@ -387,7 +392,7 @@ impl ConnectionManager {
         self.add_connection(agent.clone(), Connection::new(sender, handle, stdio_child));
         self.set_agent(agent.clone()).await;
         self.store_connection_details(agent.clone(), details).await;
-        let connection = self.get_connection(&agent).unwrap();
+        let connection = self.get_connection_mut(&agent).unwrap();
         debug!("Stored connection to '{}'", agent);
         connection.initialize(init_config).await?;
         info!("Initialized connection to '{}'", agent);

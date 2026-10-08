@@ -22,13 +22,12 @@ impl Api {
             return Err(Error::Unsupported("thought_level".to_string()));
         }
 
-        let connection = self
-            .connection_manager
+        let connection_manager = self.connection_manager.lock().await;
+        let connection = connection_manager
             .get_current_connection()
             .await
             .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
-
-        connection
+        let result = connection
             .set_config_option(
                 agent_client_protocol::schema::v1::SetSessionConfigOptionRequest::new(
                     session_id,
@@ -36,8 +35,8 @@ impl Api {
                     agent_client_protocol::schema::v1::SessionConfigOptionValue::value_id(level),
                 ),
             )
-            .await?;
-
-        Ok(())
+            .await;
+        drop(connection_manager);
+        result
     }
 }
