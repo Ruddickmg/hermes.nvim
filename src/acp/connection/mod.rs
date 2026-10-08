@@ -9,6 +9,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, warn};
 
+use crate::Handler;
 use crate::acp::{Result, error::Error};
 use agent_client_protocol::schema::v1::{
     AuthMethodTerminal, AuthenticateRequest, CancelNotification, CloseSessionRequest,
@@ -46,14 +47,15 @@ pub enum UserRequest {
     Logout(LogoutRequest),
 }
 
-#[derive(Debug)]
 pub struct Connection {
     sender: Option<Sender<UserRequest>>,
-    handle: Option<JoinHandle<Result<()>>>,
+    pub handle: Option<JoinHandle<Result<()>>>,
     /// Shared child process handle for stdio connections, enabling concurrent
     /// wait/kill. `None` for non-stdio connections (TCP, HTTP, etc.).
     child: Option<Arc<stdio::child::Child>>,
     config: Option<InitializeRequest>,
+    requests: Arc<Handler>,
+    details: ConnectionDetails,
 }
 
 impl Connection {
@@ -149,16 +151,20 @@ impl Connection {
         Ok(())
     }
 
-    #[tracing::instrument(level = "trace", skip(child))]
+    #[tracing::instrument(level = "trace", skip(child, request_handler))]
     pub fn new(
         sender: Sender<UserRequest>,
         handle: JoinHandle<Result<()>>,
         child: Option<Arc<stdio::child::Child>>,
+        request_handler: Arc<Handler>,
+        details: ConnectionDetails,
     ) -> Self {
         Self {
             config: None,
             sender: Some(sender),
             handle: Some(handle),
+            requests: request_handler,
+            details,
             child,
         }
     }
@@ -171,14 +177,8 @@ impl Connection {
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn reconnect(&self) -> Result<()> {
-        if let Some(config) = self.config.clone() {
-            self.send(UserRequest::Initialize(config)).await
-        } else {
-            Err(Error::Connection(
-                "Attempted to reconnect before a connection was initialized".to_string(),
-            ))
-        }
+    pub async fn details(&mut self) -> Result<(Arc<Handler>, ConnectionDetails)> {
+        Ok((self.requests.clone(), self.details.clone()))
     }
 
     #[tracing::instrument(level = "trace", skip(self))]

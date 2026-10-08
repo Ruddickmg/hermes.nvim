@@ -254,13 +254,6 @@ impl ConnectionManager {
     }
 
     #[instrument(level = "trace", skip(self))]
-    async fn store_connection_details(&self, agent: Assistant, details: ConnectionDetails) {
-        let mut config = self.state.lock().await;
-        config.set_connection_details(agent, details);
-        drop(config);
-    }
-
-    #[instrument(level = "trace", skip(self))]
     async fn set_agent(&self, agent: Assistant) {
         let mut config = self.state.lock().await;
         config.set_agent(agent);
@@ -309,8 +302,7 @@ impl ConnectionManager {
         handler: Arc<Handler>,
         connection_details: ConnectionDetails,
     ) -> crate::acp::Result<&Connection> {
-        let details = connection_details.clone();
-        let ConnectionDetails { agent, protocol } = connection_details;
+        let ConnectionDetails { agent, protocol } = connection_details.clone();
         let permissions = self.get_permissions().await;
         let agent_name = agent.name();
         let already_connected = self.connection.contains_key(&agent_name);
@@ -358,6 +350,7 @@ impl ConnectionManager {
             None
         };
         let stdio_child = child.clone();
+        let request_handler = handler.clone();
 
         let handle = std::thread::spawn(move || {
             let executor = std::rc::Rc::new(smol::LocalExecutor::new());
@@ -389,9 +382,17 @@ impl ConnectionManager {
             run_result
         });
 
-        self.add_connection(agent.clone(), Connection::new(sender, handle, stdio_child));
+        self.add_connection(
+            agent.clone(),
+            Connection::new(
+                sender,
+                handle,
+                stdio_child,
+                request_handler,
+                connection_details,
+            ),
+        );
         self.set_agent(agent.clone()).await;
-        self.store_connection_details(agent.clone(), details).await;
         let connection = self.get_connection_mut(&agent).unwrap();
         debug!("Stored connection to '{}'", agent);
         connection.initialize(init_config).await?;
@@ -399,10 +400,13 @@ impl ConnectionManager {
         Ok(connection)
     }
 
-    pub async fn reconnect(&self, assistant: &Assistant) -> crate::acp::Result<()> {
-        if let Some(connection) = self.get_connection(assistant) {
-            connection.reconnect().await?;
-        }
+    pub async fn reconnect(&mut self, assistant: &Assistant) -> crate::acp::Result<()> {
+        let mut connection = self.connection.remove(&assistant.name()).ok_or_else(|| {
+            Error::Connection(format!("No connection found for assistant {}", assistant))
+        })?;
+        let (handler, details) = connection.details().await?;
+        drop(connection);
+        self.connect(handler, details).await?;
         Ok(())
     }
 

@@ -110,11 +110,12 @@ impl Handler {
         )
         .await?;
         while let Ok(assistant) = receiver.recv().await {
-            let connection_manager = self.connection_manager.lock().await;
+            let mut connection_manager = self.connection_manager.lock().await;
             connection_manager.reconnect(&assistant).await?;
             drop(connection_manager);
         }
-        Ok(())
+        self.execute_autocommand(Commands::Authenticated, AuthenticateResponse::new())
+            .await
     }
 
     #[instrument(level = "trace", skip(self))]
