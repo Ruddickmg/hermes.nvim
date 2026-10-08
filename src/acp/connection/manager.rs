@@ -394,6 +394,13 @@ impl ConnectionManager {
         Ok(connection)
     }
 
+    pub async fn reconnect(&self, assistant: &Assistant) -> crate::acp::Result<()> {
+        if let Some(connection) = self.get_connection(assistant) {
+            connection.reconnect().await?;
+        }
+        Ok(())
+    }
+
     #[instrument(level = "trace", skip(self))]
     pub fn connected_agents(&self) -> Vec<Assistant> {
         self.connection

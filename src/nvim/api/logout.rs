@@ -98,14 +98,16 @@ impl Api {
         let agents: Vec<Assistant> = match &args {
             LogoutArgs::Single(agent) => vec![agent.clone()],
             LogoutArgs::Multiple(agents) => agents.clone(),
-            LogoutArgs::All => self.connection.connected_agents(),
+            LogoutArgs::All => self.connection_manager.connected_agents(),
         };
         let futures: Vec<_> = agents
             .iter()
             .map(|assistant| {
-                self.connection.get_connection(assistant).ok_or_else(|| {
-                    Error::Connection(format!("No connection found for: {}", assistant))
-                })
+                self.connection_manager
+                    .get_connection(assistant)
+                    .ok_or_else(|| {
+                        Error::Connection(format!("No connection found for: {}", assistant))
+                    })
             })
             .collect::<acp::Result<Vec<&Connection>>>()?
             .iter()

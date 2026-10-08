@@ -35,8 +35,8 @@ async fn dispatch(
             let response = cx.send_request(request).block_task().await?;
             client.authenticated(response).await?;
         }
-        UserRequest::TerminalAuthentication(request) => {
-            client.terminal_authentication(request).await?;
+        UserRequest::TerminalAuthentication(agent, request) => {
+            client.terminal_authentication(agent, request).await?;
         }
         UserRequest::SetConfigOption(request) => {
             let session_id = request.session_id.to_string();

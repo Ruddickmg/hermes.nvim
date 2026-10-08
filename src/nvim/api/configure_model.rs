@@ -97,7 +97,7 @@ impl Api {
         }
 
         let connection = self
-            .connection
+            .connection_manager
             .get_current_connection()
             .await
             .ok_or_else(|| AcpError::Connection("No connection found".to_string()))?;

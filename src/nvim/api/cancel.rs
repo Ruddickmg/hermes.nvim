@@ -8,7 +8,7 @@ impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn cancel(&self, session_id: String) -> Result<()> {
         let connection = self
-            .connection
+            .connection_manager
             .get_current_connection()
             .await
             .ok_or_else(|| Error::Connection("No connection found".to_string()))?;

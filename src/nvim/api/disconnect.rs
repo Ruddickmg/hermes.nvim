@@ -83,9 +83,9 @@ impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn disconnect(&mut self, args: DisconnectArgs) -> crate::acp::Result<()> {
         match args {
-            DisconnectArgs::Multiple(agents) => self.connection.disconnect(agents),
-            DisconnectArgs::Single(agent) => self.connection.disconnect(vec![agent]),
-            DisconnectArgs::All => self.connection.close_all(),
+            DisconnectArgs::Multiple(agents) => self.connection_manager.disconnect(agents),
+            DisconnectArgs::Single(agent) => self.connection_manager.disconnect(vec![agent]),
+            DisconnectArgs::All => self.connection_manager.close_all(),
         }
     }
 }

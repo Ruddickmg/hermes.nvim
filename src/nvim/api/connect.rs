@@ -227,7 +227,7 @@ impl Api {
             opts.clone().into_assistant(agent_id)?
         };
 
-        self.connection
+        self.connection_manager
             .connect(
                 self.response_handler.clone(),
                 ConnectionDetails {
