@@ -329,7 +329,11 @@ impl ConnectionManager {
                 autocmd_listeners_attached(GROUP, "User", "FormElicitation"),
                 autocmd_listeners_attached(GROUP, "User", "UrlElicitation"),
             ))
-            .auth(AuthCapabilities::new().terminal(true))
+            .auth(AuthCapabilities::new().terminal(autocmd_listeners_attached(
+                GROUP,
+                "User",
+                "TerminalAuthentication",
+            )))
             .session(
                 ClientSessionCapabilities::new().config_options(
                     SessionConfigOptionsCapabilities::new()
