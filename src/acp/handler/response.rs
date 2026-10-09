@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use agent_client_protocol::schema::v1::{
     AuthMethodTerminal, AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse,
     ExtResponse, ForkSessionResponse, InitializeResponse, ListSessionsResponse,
@@ -93,29 +95,32 @@ impl Handler {
             .await
     }
 
-    #[instrument(level = "trace", skip(self))]
+    #[instrument(level = "trace", skip(self, handler))]
     pub async fn terminal_authentication(
         &self,
         agent: Assistant,
+        handler: Arc<Handler>,
         response: AuthMethodTerminal,
     ) -> Result<(), Error> {
-        let (sender, receiver) = bounded::<Assistant>(1);
+        let (sender, receiver) = bounded::<bool>(1);
         self.execute_autocommand_request(
             // INFO: Authentication is agent wide, so session_id doesn't apply here. This is essentially a place holder but does serveas a unique identifier at the agent level.
             // TODO: Should likely figure out a more correct solution here but in this case it doesn't really matter (for now).
             agent.to_string(),
             Commands::TerminalAuthentication,
             response,
-            Responder::TerminalAuthentication(sender, agent),
+            Responder::TerminalAuthentication(sender),
         )
         .await?;
-        while let Ok(assistant) = receiver.recv().await {
-            let mut connection_manager = self.connection_manager.lock().await;
-            connection_manager.reconnect(&assistant).await?;
-            drop(connection_manager);
+        if let Ok(authenticated) = receiver.recv().await {
+            if authenticated {
+                let mut connection_manager = self.connection_manager.lock().await;
+                connection_manager.reconnect(handler, &agent).await?;
+                drop(connection_manager);
+                self.authenticated(AuthenticateResponse::new()).await?;
+            }
         }
-        self.execute_autocommand(Commands::Authenticated, AuthenticateResponse::new())
-            .await
+        Ok(())
     }
 
     #[instrument(level = "trace", skip(self))]

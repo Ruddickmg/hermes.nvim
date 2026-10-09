@@ -36,7 +36,9 @@ async fn dispatch(
             client.authenticated(response).await?;
         }
         UserRequest::TerminalAuthentication(agent, request) => {
-            client.terminal_authentication(agent, request).await?;
+            client
+                .terminal_authentication(agent, client.clone(), request)
+                .await?;
         }
         UserRequest::SetConfigOption(request) => {
             let session_id = request.session_id.to_string();

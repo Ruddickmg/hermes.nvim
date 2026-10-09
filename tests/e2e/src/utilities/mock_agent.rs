@@ -65,9 +65,9 @@ impl MockAgent {
     /// Start the mock agent on a random available port.
     ///
     /// Spawns a thread with a smol LocalExecutor that:
-    /// 1. Accepts one TCP connection
+    /// 1. Accepts TCP connections in a loop until shutdown is signaled
     /// 2. Builds an `Agent.builder()` with handlers that delegate to MockConfig
-    /// 3. Drives the connection until the transport closes or shutdown is signaled
+    /// 3. Drives each connection until the transport closes or shutdown is signaled
     pub fn start(agent: MockAgent) -> Result<MockAgentHandle, std::io::Error> {
         let std_listener = std::net::TcpListener::bind("127.0.0.1:0")?;
         let port = std_listener.local_addr()?.port();
@@ -90,52 +90,59 @@ impl MockAgent {
             };
 
             smol::block_on(executor.clone().run(async move {
-                let accept_fut = async {
-                    match listener.accept().await {
-                        Ok((stream, addr)) => {
-                            info!("Mock agent accepted connection from {}", addr);
-                            Some(stream)
-                        }
-                        Err(e) => {
-                            error!("Failed to accept connection: {}", e);
-                            None
-                        }
-                    }
-                };
-
-                let shutdown_fut = async {
-                    let _ = shutdown_rx.recv().await;
-                    info!("Mock agent received shutdown signal before connection");
-                };
-
-                match select(Box::pin(accept_fut), Box::pin(shutdown_fut)).await {
-                    Either::Left((Some(stream), _)) => {
-                        let (read_half, write_half) = stream.split();
-
-                        let builder = build_mock_agent_builder(config.clone());
-
-                        let serve_fut = async move {
-                            let result = builder
-                                .connect_to(ByteStreams::new(write_half, read_half))
-                                .await;
-                            if let Err(e) = result {
-                                error!("Mock agent connection error: {}", e);
+                // INFO: Accept connections until shutdown is signaled or the
+                // listener fails. Reconnects (e.g. terminal authentication
+                // acceptance) arrive as subsequent connections on this listener.
+                loop {
+                    let accept_fut = async {
+                        match listener.accept().await {
+                            Ok((stream, addr)) => {
+                                info!("Mock agent accepted connection from {}", addr);
+                                Some(stream)
                             }
-                            info!("Mock agent connection completed");
-                        };
+                            Err(e) => {
+                                error!("Failed to accept connection: {}", e);
+                                None
+                            }
+                        }
+                    };
 
-                        let shutdown_wait = async {
-                            let _ = shutdown_rx.recv().await;
-                            info!("Shutdown received while serving connection");
-                        };
+                    let shutdown_fut = async {
+                        let _ = shutdown_rx.recv().await;
+                        info!("Mock agent received shutdown signal");
+                    };
 
-                        let _ = select(Box::pin(serve_fut), Box::pin(shutdown_wait)).await;
-                    }
-                    Either::Left((None, _)) => {
-                        info!("Mock agent accept failed, exiting");
-                    }
-                    Either::Right((_, _)) => {
-                        info!("Mock agent shutting down before connection established");
+                    match select(Box::pin(accept_fut), Box::pin(shutdown_fut)).await {
+                        Either::Left((Some(stream), _)) => {
+                            let (read_half, write_half) = stream.split();
+
+                            let builder = build_mock_agent_builder(config.clone());
+
+                            let serve_fut = async move {
+                                let result = builder
+                                    .connect_to(ByteStreams::new(write_half, read_half))
+                                    .await;
+                                if let Err(e) = result {
+                                    error!("Mock agent connection error: {}", e);
+                                }
+                                info!("Mock agent connection completed");
+                            };
+
+                            let shutdown_wait = async {
+                                let _ = shutdown_rx.recv().await;
+                                info!("Shutdown received while serving connection");
+                            };
+
+                            let _ = select(Box::pin(serve_fut), Box::pin(shutdown_wait)).await;
+                        }
+                        Either::Left((None, _)) => {
+                            info!("Mock agent accept failed, exiting");
+                            break;
+                        }
+                        Either::Right((_, _)) => {
+                            info!("Mock agent shutting down");
+                            break;
+                        }
                     }
                 }
 
