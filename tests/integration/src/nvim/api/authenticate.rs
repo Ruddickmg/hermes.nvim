@@ -3,7 +3,7 @@
 //! The auth method lookup happens before any connection lookup, so both error
 //! branches are reachable without an agent.
 
-use crate::helpers::mock_runtime;
+use crate::helpers::{mock_connection_manager, mock_runtime};
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{AuthMethod, AuthMethodTerminal, InitializeResponse};
 use async_lock::Mutex;
@@ -22,11 +22,17 @@ fn create_test_api(plugin_state: Arc<Mutex<PluginState>>) -> Api {
     let requests = Rc::new(
         Requests::new(runtime.clone(), plugin_state.clone()).expect("Failed to create requests"),
     );
+    let connection_manager = mock_connection_manager(&plugin_state);
     let handler = Arc::new(
-        Handler::new(plugin_state.clone(), runtime.clone(), requests.clone())
-            .expect("Failed to create handler"),
+        Handler::new(
+            plugin_state.clone(),
+            connection_manager.clone(),
+            runtime.clone(),
+            requests.clone(),
+        )
+        .expect("Failed to create handler"),
     );
-    Api::new(plugin_state, logger, handler, requests)
+    Api::new(plugin_state, logger, handler, requests, connection_manager)
 }
 
 fn block_on<F>(fut: F) -> F::Output

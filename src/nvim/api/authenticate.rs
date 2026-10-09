@@ -1,28 +1,9 @@
-use agent_client_protocol::schema::v1::{AuthMethod, AuthMethodTerminal, AuthenticateRequest};
-use serde::Serialize;
-use uuid::Uuid;
+use agent_client_protocol::schema::v1::{AuthMethod, AuthenticateRequest};
 
 use crate::{
-    acp::{Result, connection::Assistant, error::Error},
+    acp::{Result, error::Error},
     api::Api,
 };
-
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-pub struct TerminalAuthenticateRequest {
-    pub request_id: String,
-    pub method: AuthMethodTerminal,
-    pub agent: Assistant,
-}
-
-impl TerminalAuthenticateRequest {
-    pub fn new(agent: Assistant, method: AuthMethodTerminal) -> Self {
-        TerminalAuthenticateRequest {
-            agent,
-            method,
-            request_id: Uuid::new_v4().to_string(),
-        }
-    }
-}
 
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
@@ -53,34 +34,5 @@ impl Api {
                 id, agent
             )))
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use pretty_assertions::assert_eq;
-
-    #[test]
-    fn test_terminal_authenticate_request_serializes_expected_shape() {
-        let request = TerminalAuthenticateRequest::new(
-            Assistant::Opencode,
-            AuthMethodTerminal::new("tui-auth", "Terminal Auth")
-                .args(vec!["--device-code".to_string()]),
-        );
-        let value = serde_json::to_value(&request).expect("serialization should succeed");
-
-        assert_eq!(
-            value,
-            serde_json::json!({
-                "request_id": request.request_id,
-                "method": {
-                    "id": "tui-auth",
-                    "name": "Terminal Auth",
-                    "args": ["--device-code"]
-                },
-                "agent": "Opencode"
-            })
-        );
     }
 }

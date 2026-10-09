@@ -1,4 +1,4 @@
-use crate::helpers::mock_runtime;
+use crate::helpers::{mock_connection_manager, mock_runtime};
 use async_lock::Mutex;
 use hermes::{
     Handler, PluginState,
@@ -25,11 +25,17 @@ fn create_test_api(
     let requests = Rc::new(
         Requests::new(runtime.clone(), plugin_state.clone()).expect("Failed to create requests"),
     );
+    let connection_manager = mock_connection_manager(&plugin_state);
     let handler = Arc::new(
-        Handler::new(plugin_state.clone(), runtime.clone(), requests.clone())
-            .expect("Failed to create handler"),
+        Handler::new(
+            plugin_state.clone(),
+            connection_manager.clone(),
+            runtime.clone(),
+            requests.clone(),
+        )
+        .expect("Failed to create handler"),
     );
-    Api::new(plugin_state, logger, handler, requests)
+    Api::new(plugin_state, logger, handler, requests, connection_manager)
 }
 
 /// Helper to block on an async future in synchronous tests

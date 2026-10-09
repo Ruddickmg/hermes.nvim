@@ -663,55 +663,6 @@ mod tests {
         info.history.write_keyed("agent/session.jsonl", "line2");
     }
 
-    fn details_for(agent: &Assistant, protocol: Protocol) -> ConnectionDetails {
-        ConnectionDetails {
-            agent: agent.clone(),
-            protocol,
-        }
-    }
-
-    #[test]
-    fn test_set_connection_details_stores_details_for_agent() {
-        let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
-
-        info.set_connection_details(agent.clone(), details_for(&agent, Protocol::Tcp));
-
-        let stored = info
-            .connection_details(&agent)
-            .map(|stored| (stored.agent.clone(), stored.protocol));
-        assert_eq!(stored, Some((Assistant::Opencode, Protocol::Tcp)));
-    }
-
-    #[test]
-    fn test_connection_details_returns_none_for_unknown_agent() {
-        let info = AgentInfo::new();
-
-        assert!(info.connection_details(&Assistant::Copilot).is_none());
-    }
-
-    #[test]
-    fn test_connection_details_isolated_per_agent() {
-        let mut info = AgentInfo::new();
-
-        info.set_connection_details(
-            Assistant::Opencode,
-            details_for(&Assistant::Opencode, Protocol::Tcp),
-        );
-        info.set_connection_details(
-            Assistant::Gemini,
-            details_for(&Assistant::Gemini, Protocol::Http),
-        );
-
-        let protocols = (
-            info.connection_details(&Assistant::Opencode)
-                .map(|details| details.protocol),
-            info.connection_details(&Assistant::Gemini)
-                .map(|details| details.protocol),
-        );
-        assert_eq!(protocols, (Some(Protocol::Tcp), Some(Protocol::Http)));
-    }
-
     #[test]
     fn test_can_close_session_returns_false_by_default() {
         let info = create_agent_info_with_agent(Assistant::Opencode);

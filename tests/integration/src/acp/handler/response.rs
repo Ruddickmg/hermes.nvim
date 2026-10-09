@@ -1,4 +1,4 @@
-use crate::helpers::{MockRequestHandler, mock_runtime};
+use crate::helpers::{MockRequestHandler, mock_connection_manager, mock_runtime};
 use agent_client_protocol::schema::v1::{
     AuthMethodTerminal, AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse,
     ForkSessionResponse, ListSessionsResponse, ResumeSessionResponse,
@@ -11,14 +11,38 @@ use hermes::api::authenticate::TerminalAuthenticateRequest;
 use hermes::nvim::state::PluginState;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 fn create_handler() -> Handler {
+    let state = Arc::new(Mutex::new(PluginState::default()));
     Handler::new(
-        Arc::new(Mutex::new(PluginState::default())),
+        state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
     .expect("Handler creation should succeed")
+}
+
+/// Drives a future to completion on the main thread, pumping Neovim's event
+/// loop between polls so `AsyncHandle` callbacks and `vim.schedule` callbacks
+/// can run. Returns `None` when the deadline elapses.
+fn drive<F: std::future::Future>(future: F) -> Option<F::Output> {
+    let mut future = std::pin::pin!(future);
+    let waker = futures::task::noop_waker();
+    let mut context = std::task::Context::from_waker(&waker);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        match future.as_mut().poll(&mut context) {
+            std::task::Poll::Ready(value) => return Some(value),
+            std::task::Poll::Pending => {
+                if Instant::now() >= deadline {
+                    return None;
+                }
+                nvim_oxi::api::command("sleep 10m").ok();
+            }
+        }
+    }
 }
 
 #[nvim_oxi::test]
@@ -33,11 +57,12 @@ fn authenticated_succeeds() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn terminal_authentication_succeeds() -> nvim_oxi::Result<()> {
     let handler = create_handler();
-    let response = TerminalAuthenticateRequest::new(
+    let request = TerminalAuthenticateRequest::new(
         Assistant::Opencode,
         AuthMethodTerminal::new("tui-auth".to_string(), "Terminal Auth"),
     );
-    let result = smol::block_on(handler.terminal_authentication(response));
+    let result = drive(handler.terminal_authentication(request.agent, request.method))
+        .expect("terminal_authentication should settle before the deadline");
     assert!(result.is_ok(), "terminal_authentication should succeed");
     Ok(())
 }
@@ -97,6 +122,7 @@ fn session_closed_removes_session_info() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -131,6 +157,7 @@ fn session_closed_removes_prompt() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -189,6 +216,7 @@ fn session_deleted_removes_session_info() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -223,6 +251,7 @@ fn session_deleted_removes_prompt() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )

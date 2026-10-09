@@ -15,7 +15,6 @@ use uuid::Uuid;
 
 use crate::PluginState;
 use crate::acp::Result;
-use crate::acp::connection::Assistant;
 use crate::acp::error::Error;
 use crate::nvim::autocommands::Commands;
 use crate::nvim::terminal::{Terminal, TerminalManager};
@@ -37,7 +36,7 @@ pub enum Responder {
         ReadTextFileRequest,
     ),
     WriteFileResponse(OneshotSender<WriteTextFileResponse>, WriteTextFileRequest),
-    TerminalAuthentication(OneshotSender<Assistant>, Assistant),
+    TerminalAuthentication(OneshotSender<bool>),
     TerminalCreate(
         OneshotSender<Result<CreateTerminalResponse>>,
         CreateTerminalRequest,
@@ -224,15 +223,13 @@ impl Request {
                     ))
                 })?;
             }
-            Responder::TerminalAuthentication(sender, assistant) => {
-                if bool::from_object(response).map_err(|e| Error::InvalidInput(e.to_string()))? {
-                    sender.send(assistant).await.map_err(|e| {
-                        Error::Internal(format!(
-                            "Failed to send terminal authentication response for request '{}': {:?}",
-                            self.id, e
-                        ))
-                    })?;
-                }
+            Responder::TerminalAuthentication(sender) => {
+                sender.send(bool::from_object(response).map_err(|e| Error::InvalidInput(e.to_string()))?).await.map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send terminal authentication response for request '{}': {:?}",
+                        self.id, e
+                    ))
+                })?;
             }
             Responder::TerminalCreate(sender, _) => {
                 let result = String::from_object(response)
@@ -479,15 +476,6 @@ impl Request {
                         ))
                     })?;
                 }
-                Responder::TerminalAuthentication(..) => {
-                    // Dropping the sender closes the channel, which the response
-                    // handler observes as a failure and skips the reconnect.
-                    warn!(
-                        "No listener attached for terminal authentication request '{}'. \
-                         Defaulting to failure.",
-                        self.id
-                    );
-                }
                 Responder::Elicitation(sender, _) => {
                     // TODO: Handle the default elicitation case (render the form or
                     // prompt the user) when no autocommand listener is attached.
@@ -504,6 +492,9 @@ impl Request {
                                 self.id, e
                             ))
                         })?;
+                }
+                Responder::TerminalAuthentication(..) => {
+                    unreachable!("TerminalAuthentication is disabled when there are no listeners")
                 }
             }
             self.finish().await?;
