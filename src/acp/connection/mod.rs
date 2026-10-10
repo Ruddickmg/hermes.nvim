@@ -328,16 +328,10 @@ mod tests {
         smol::LocalExecutor::new()
     }
 
-    /// A `Connection` with no live `Handler` behind it; enough for exercising the
-    /// request-sending methods, which never touch `details()`.
+    /// A `Connection` with no child process; enough for exercising the
+    /// request-sending methods.
     fn mock_connection(sender: async_channel::Sender<UserRequest>) -> Connection {
-        Connection::new(
-            sender,
-            mock_handle(),
-            None,
-            Weak::new(),
-            ConnectionDetails::default(),
-        )
+        Connection::new(sender, mock_handle(), None, ConnectionDetails::default())
     }
 
     #[test]

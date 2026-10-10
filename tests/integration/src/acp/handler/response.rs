@@ -7,7 +7,6 @@ use async_lock::Mutex;
 use hermes::acp::connection::Assistant;
 use hermes::acp::handler::Handler;
 use hermes::acp::session_info::SessionDetails;
-use hermes::api::authenticate::TerminalAuthenticateRequest;
 use hermes::nvim::state::PluginState;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -56,13 +55,13 @@ fn authenticated_succeeds() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn terminal_authentication_succeeds() -> nvim_oxi::Result<()> {
-    let handler = create_handler();
-    let request = TerminalAuthenticateRequest::new(
+    let handler = Arc::new(create_handler());
+    let result = drive(handler.terminal_authentication(
         Assistant::Opencode,
+        handler.clone(),
         AuthMethodTerminal::new("tui-auth".to_string(), "Terminal Auth"),
-    );
-    let result = drive(handler.terminal_authentication(request.agent, request.method))
-        .expect("terminal_authentication should settle before the deadline");
+    ))
+    .expect("terminal_authentication should settle before the deadline");
     assert!(result.is_ok(), "terminal_authentication should succeed");
     Ok(())
 }
