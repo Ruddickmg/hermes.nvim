@@ -1097,6 +1097,45 @@ vim.api.nvim_create_autocmd("User", {
 > - Start at the `line` number if defined
 > - End at the `limit` number if defined
 
+#### Authentication via terminal
+
+```lua
+local hermes = require("hermes")
+
+-- simple boolean response, true if successful, false if authentication failed
+local successfully_authenticated = true;
+
+-- call signature
+hermes.respond("requestId", successfully_authenticated);
+
+vim.api.nvim_create_autocmd("User", {
+  group = "hermes",
+  pattern = "TerminalAuthentication",
+  callback = function(event)
+    --@type HermesTerminalAuthentication
+    local data = event.data
+    local request_id = data.requestId
+
+    -- set up commands
+    local cmd = vim.list_extend(data.command, data.args or {})
+    local env = vim.tbl_extend("force", vim.fn.environ(), data.env or {})
+
+    -- trigger authentication flow
+    vim.api.nvim_command("botright new")
+    vim.fn.termopen(cmd, {
+      env = env,
+      on_exit = function(_, exit_code)
+        hermes.respond(request_id, exit_code == 0)
+      end,
+    })
+  end,
+})
+```
+
+> **Responds to:** [TerminalAuthentication](#terminalauthentication) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for `TerminalAuthentication`, Hermes will:
+> - Report terminal authentication as unsupported (no default can be applied)
 
 #### 💻 Create Terminal for agent communication 
 
