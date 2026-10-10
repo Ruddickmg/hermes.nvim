@@ -11,7 +11,6 @@ use agent_client_protocol::schema::v1::{
     AuthMethod, AuthMethodAgent, AuthMethodTerminal, AuthenticateResponse, InitializeResponse,
 };
 use hermes::{
-    acp::connection::Assistant,
     api::{ConnectionArgs, DisconnectArgs},
     nvim::{autocommands::Commands, hermes},
 };
@@ -34,12 +33,14 @@ fn create_func<A, R>(plugin: Dictionary, name: &str) -> Function<A, R> {
         .unwrap_or_else(|_| panic!("Failed to create function for {}", name))
 }
 
-/// Mirror of the payload hermes sends on the TerminalAuthentication autocommand.
+/// Mirror of the payload hermes sends on the TerminalAuthentication autocommand:
+/// the selected auth method flattened alongside the id to pass to `respond()`.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 struct TerminalAuthenticationData {
+    #[serde(rename = "requestId")]
     request_id: String,
+    #[serde(flatten)]
     method: AuthMethodTerminal,
-    agent: Assistant,
 }
 
 /// Advertise a single auth method without dropping the mock agent's default capabilities.
@@ -87,12 +88,6 @@ fn terminal_auth_method_fires_terminal_authentication_autocommand() -> Result<()
             .to_string(),
         method: AuthMethodTerminal::new("tui-auth".to_string(), "Terminal Auth")
             .args(vec!["--device-code".to_string()]),
-        agent: Assistant::CustomUrl {
-            name: "mock-agent".to_string(),
-            host: "localhost".to_string(),
-            port: mock_handle.port(),
-            path: None,
-        },
     };
     assert_eq!(data, expected);
 
