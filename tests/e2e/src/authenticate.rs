@@ -215,12 +215,9 @@ fn declining_terminal_auth_does_not_fire_authenticated() -> Result<(), nvim_oxi:
     let data = (setup.wait_for_terminal_authentication)(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
     setup.respond.call((data.request_id, Object::from(false)))?;
 
-    let result = (setup.wait_for_authentication)(Duration::from_secs(5));
-
-    assert!(
-        result.is_err(),
-        "Authenticated should not fire when terminal authentication is declined"
-    );
+    let error = (setup.wait_for_authentication)(Duration::from_secs(5))
+        .expect_err("Authenticated should not fire when terminal authentication is declined");
+    assert_eq!(error.to_string(), "Timed out waiting for Autocmd");
 
     setup.disconnect.call(DisconnectArgs::All)?;
     setup.mock_handle.close();

@@ -11,6 +11,7 @@ use hermes::{
     Handler, PluginState, acp::connection::Assistant, api::Api, nvim::requests::Requests,
     utilities::detect_project_storage_path,
 };
+use pretty_assertions::assert_eq;
 use std::rc::Rc;
 use std::sync::Arc;
 
