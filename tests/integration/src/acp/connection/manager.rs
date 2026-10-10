@@ -8,6 +8,7 @@ use hermes::acp::{
     registry::entry::AgentEntry,
 };
 use hermes::nvim::configuration::DistributionsConfig;
+use pretty_assertions::assert_eq;
 use std::collections::HashMap;
 use std::sync::Arc;
 

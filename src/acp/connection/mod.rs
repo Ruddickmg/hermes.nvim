@@ -439,6 +439,11 @@ mod tests {
             connection.disconnect().await.unwrap();
         }));
 
-        assert!(receiver.is_closed());
+        smol::block_on(executor.run(async {
+            assert!(matches!(
+                receiver.recv().await,
+                Err(async_channel::RecvError)
+            ));
+        }));
     }
 }
