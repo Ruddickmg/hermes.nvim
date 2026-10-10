@@ -4,10 +4,9 @@ pub mod manager;
 pub mod socket;
 pub mod stdio;
 pub mod tcp;
+use std::sync::Arc;
 use std::thread::JoinHandle;
-use std::time::Duration;
-use std::{sync::Arc, time::Instant};
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
 use crate::acp::{Result, error::Error};
 use agent_client_protocol::schema::v1::{
@@ -38,13 +37,6 @@ pub enum UserRequest {
     DeleteSession(DeleteSessionRequest),
     Logout(LogoutRequest),
 }
-
-/// Maximum time to wait for a connection thread to exit gracefully before force-killing
-/// the child process.
-const GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
-
-/// Maximum time to wait for a connection thread to exit after force-killing the child process.
-const FORCE_KILL_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Debug)]
 pub struct Connection {
@@ -192,85 +184,45 @@ impl Connection {
         Ok(())
     }
 
-    /// Returns true if the thread finished within the timeout.
-    async fn wait_for_thread(handle: &JoinHandle<Result<()>>, timeout: Duration) -> bool {
-        let start = Instant::now();
-        while start.elapsed() < timeout {
-            if handle.is_finished() {
-                return true;
-            }
-            async_io::Timer::after(Duration::from_millis(10)).await;
-        }
-        false
-    }
-
-    /// Disconnect from the agent, using a multi-phase shutdown:
-    /// 1. Drop the channel sender (signals the message loop to exit)
-    /// 2. Wait for the thread to exit gracefully within a timeout
-    /// 3. If still running, terminate the child process (SIGTERM) and wait again
-    /// 4. If still running, force-kill the child process (SIGKILL) and wait again
-    /// 5. If still running, abandon the thread (don't block Neovim)
+    /// Non-blocking request to shut down this connection.
+    ///
+    /// Signals the message loop to exit by dropping the channel sender and
+    /// best-effort kills the child process. Never waits on the worker thread:
+    /// `reconnect` runs on the connection's own thread, so waiting for it to
+    /// finish would always time out. The thread exits on its own once the
+    /// current message dispatch returns and its `recv()` observes the closed
+    /// channel.
     #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn disconnect(&mut self) -> Result<()> {
-        // Phase 1: Drop the channel sender to signal the message loop to exit
+    pub fn shutdown(&mut self) {
         if let Some(sender) = self.sender.take() {
             drop(sender);
         }
 
         if let Some(ref handle) = self.handle {
-            // Fast path: if the thread already finished, no async work needed
             if handle.is_finished() {
-                debug!("Connection thread already exited");
-                return Ok(());
+                debug!("Connection thread already exited during shutdown");
+                return;
             }
-
-            // Phase 2: Wait for graceful exit
-            if Self::wait_for_thread(handle, GRACEFUL_SHUTDOWN_TIMEOUT).await {
-                debug!("Connection thread exited gracefully");
-                return Ok(());
-            }
-
-            // Phase 3: Terminate the child process (SIGTERM on Unix, TerminateProcess on Windows)
-            if let Some(ref child) = self.child {
-                if let Err(e) = child.terminate().await {
-                    warn!("Failed to send terminate signal to child: {}", e);
-                }
-            }
-            if Self::wait_for_thread(handle, FORCE_KILL_TIMEOUT).await {
-                debug!("Connection thread exited after terminate");
-                return Ok(());
-            }
-
-            // Phase 4: Force-kill the child process (SIGKILL on Unix, TerminateProcess on Windows)
-            if let Some(ref child) = self.child {
-                if let Err(e) = child.kill().await {
-                    warn!("Failed to force-kill child: {}", e);
-                }
-            }
-            if Self::wait_for_thread(handle, FORCE_KILL_TIMEOUT).await {
-                debug!("Connection thread exited after force-kill");
-                return Ok(());
-            }
-
-            // Phase 5: Abandon the thread - don't block Neovim
-            error!(
-                "Connection thread did not exit within timeout, abandoning. \
-                 The child process may still be running."
-            );
-            // Intentionally leak the JoinHandle to avoid blocking.
-            // The thread will eventually exit when the child process dies or the OS cleans up.
-            self.handle.take();
         }
-        Ok(())
+
+        if let Some(ref child) = self.child {
+            if let Err(e) = child.try_kill_sync() {
+                warn!(
+                    "Failed to kill child process during connection shutdown: {}",
+                    e
+                );
+            }
+        }
     }
 }
 
 impl Drop for Connection {
     /// Best-effort synchronous cleanup.
     ///
-    /// The full async `disconnect()` should be called explicitly before dropping.
-    /// This `Drop` impl is a safety net that performs only synchronous operations
-    /// to avoid panicking from a nested `block_on` on the `current_thread` runtime.
+    /// Equivalent to `shutdown()`: closes the channel so the connection thread
+    /// exits on its own, and non-blockingly kills the child process if present.
+    /// No waiting or joining is performed to avoid panicking from a nested
+    /// `block_on` on the `current_thread` runtime.
     fn drop(&mut self) {
         // Phase 1: Drop the sender to signal the message loop to exit.
         // When the receiver sees the channel closed, it breaks the loop and the
@@ -430,14 +382,12 @@ mod tests {
     }
 
     #[test]
-    fn test_connection_disconnect_closes_sender() {
+    fn test_connection_shutdown_closes_sender() {
         let executor = mock_runtime();
         let (sender, receiver) = async_channel::bounded(1);
         let mut connection = mock_connection(sender);
 
-        smol::block_on(executor.run(async {
-            connection.disconnect().await.unwrap();
-        }));
+        connection.shutdown();
 
         smol::block_on(executor.run(async {
             assert!(matches!(
