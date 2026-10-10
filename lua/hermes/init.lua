@@ -589,10 +589,8 @@
 ---@class HermesConfigurationUpdated
 ---@field configOptions ConfigOption[]
 
----@class HermesTerminalAuthentication
----@field request_id string UUID v4 for this authentication attempt
----@field method HermesAuthMethodTerminal The terminal auth method to run
----@field agent string|table<string, any> The connected agent identifier
+---@class HermesTerminalAuthentication: HermesAuthMethodTerminal
+---@field requestId string UUID to pass to respond()
 
 ---@alias HermesConfigOptions ConfigOption[]
 ---@alias HermesModelConfigurations ModelConfigOption[]

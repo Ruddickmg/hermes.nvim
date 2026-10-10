@@ -2179,14 +2179,12 @@ Below is a list of all autocommands and their associated data (passed to the cal
       <td>Terminal auth method selected, run it in a terminal</td>
       <td>⚡ <a href="#authenticate">authenticate()</a></td>
       <td><pre><code class="language-json">{
-  "request_id": "uuid string",
-  "method": {
-    "id": "string",
-    "name": "string",
-    "args": ["string"],
-    "env": {"key": "value"}
-  },
-  "agent": "string|table"
+  "requestId": "uuid string",
+  "id": "string",
+  "name": "string",
+  "description": "string (optional)",
+  "args": ["string"],
+  "env": {"key": "value"}
 }</code></pre></td>
     </tr>
     <tr id="terminalcreate">
