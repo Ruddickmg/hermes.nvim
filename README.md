@@ -2654,10 +2654,11 @@ cargo build --release
 -- functionality
 - [ ] [Request Cancellation Mechanism](https://agentclientprotocol.com/rfds/request-cancellation)
 - [ ] Support "unstable"/proposed ACP methods
-  - [ ] [improve authentication data](https://agentclientprotocol.com/rfds/auth-methods)
   - [ ] [Fork sessions](https://agentclientprotocol.com/rfds/session-fork)
+  - [ ] [Agent Extensions via ACP Proxies](https://agentclientprotocol.com/rfds/proxy-chains)
   - [ ] [ACP over MCP](https://agentclientprotocol.com/rfds/mcp-over-acp)
   - [ ] [NES (next edit suggestions)](https://agentclientprotocol.com/rfds/next-edit-suggestions)
+  - [ ] [Represent deleted files in diff](https://agentclientprotocol.com/rfds/diff-delete)
   - [ ] [Configurable LLM Providers](https://agentclientprotocol.com/rfds/custom-llm-endpoint)
   - [ ] [Plan Operations Support](https://agentclientprotocol.com/rfds/plan-operations)
   - [ ] [End-Turn Token Usage](https://agentclientprotocol.com/rfds/end-turn-token-usage)
