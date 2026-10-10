@@ -104,7 +104,7 @@ impl Handler {
     ) -> Result<(), Error> {
         let (sender, receiver) = bounded::<bool>(1);
         self.execute_autocommand_request(
-            // INFO: Authentication is agent wide, so session_id doesn't apply here. This is essentially a place holder but does serveas a unique identifier at the agent level.
+            // INFO: Authentication is agent wide, so session_id doesn't apply here. This is essentially a place holder but does serve as a unique identifier at the agent level.
             // TODO: Should likely figure out a more correct solution here but in this case it doesn't really matter (for now).
             agent.to_string(),
             Commands::TerminalAuthentication,

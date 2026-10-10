@@ -11,7 +11,6 @@ use crate::utilities::logging::sink::history::HistorySink;
 #[derive(Clone, Debug)]
 pub struct AgentInfo {
     pub current: Assistant,
-    pub protocol: Protocol,
     agents: HashMap<Assistant, InitializeResponse>,
     pub history: ChannelWriter<HistorySink>,
     pub history_base_path: PathBuf,
@@ -21,7 +20,6 @@ impl AgentInfo {
     pub fn new() -> Self {
         Self {
             current: Assistant::default(),
-            protocol: Protocol::default(),
             agents: HashMap::new(),
             history: ChannelWriter::new_file(HistorySink::new(PathBuf::new())),
             history_base_path: PathBuf::new(),

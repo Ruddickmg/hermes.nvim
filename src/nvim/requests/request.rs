@@ -493,8 +493,12 @@ impl Request {
                             ))
                         })?;
                 }
-                Responder::TerminalAuthentication(..) => {
-                    unreachable!("TerminalAuthentication is disabled when there are no listeners")
+                Responder::TerminalAuthentication(sender, ..) => {
+                    warn!("TerminalAuthentication should be disabled when there are no listeners");
+                    sender.send(false).await.map_err(| e | Error::Internal(format!(
+                        "Failed to send response to erroneous terminal authentication branch '{}': {:?}",
+                        self.id, e
+                    )));
                 }
             }
             self.finish().await?;
