@@ -1,4 +1,4 @@
-use crate::helpers::{MockRequestHandler, mock_connection_manager, mock_runtime};
+use crate::helpers::{MockRequestHandler, mock_connection_manager, mock_handler, mock_runtime};
 use agent_client_protocol::schema::v1::{
     AuthMethodTerminal, AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse,
     ForkSessionResponse, ListSessionsResponse, ResumeSessionResponse,
@@ -11,17 +11,6 @@ use hermes::nvim::state::PluginState;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-
-fn create_handler() -> Handler {
-    let state = Arc::new(Mutex::new(PluginState::default()));
-    Handler::new(
-        state.clone(),
-        mock_connection_manager(&state),
-        mock_runtime(),
-        Rc::new(MockRequestHandler::new()),
-    )
-    .expect("Handler creation should succeed")
-}
 
 /// Drives a future to completion on the main thread, pumping Neovim's event
 /// loop between polls so `AsyncHandle` callbacks and `vim.schedule` callbacks
@@ -46,7 +35,7 @@ fn drive<F: std::future::Future>(future: F) -> Option<F::Output> {
 
 #[nvim_oxi::test]
 fn authenticated_succeeds() -> nvim_oxi::Result<()> {
-    let handler = create_handler();
+    let handler = mock_handler();
     let response = AuthenticateResponse::default();
     let result = smol::block_on(handler.authenticated(response));
     assert!(result.is_ok(), "authenticated should succeed");
@@ -55,7 +44,7 @@ fn authenticated_succeeds() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn terminal_authentication_succeeds() -> nvim_oxi::Result<()> {
-    let handler = Arc::new(create_handler());
+    let handler = Arc::new(mock_handler());
     let result = drive(handler.terminal_authentication(
         Assistant::Opencode,
         handler.clone(),
@@ -68,7 +57,7 @@ fn terminal_authentication_succeeds() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn custom_command_executed_succeeds() -> nvim_oxi::Result<()> {
-    let handler = create_handler();
+    let handler = mock_handler();
     let raw = serde_json::value::RawValue::from_string("{}".to_string())
         .map(std::sync::Arc::from)
         .expect("RawValue creation should succeed");
@@ -80,7 +69,7 @@ fn custom_command_executed_succeeds() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn sessions_listed_succeeds() -> nvim_oxi::Result<()> {
-    let handler = create_handler();
+    let handler = mock_handler();
     let response = ListSessionsResponse::new(vec![]);
     let result = smol::block_on(handler.sessions_listed(response));
     assert!(result.is_ok(), "sessions_listed should succeed");
@@ -89,7 +78,7 @@ fn sessions_listed_succeeds() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn session_forked_succeeds() -> nvim_oxi::Result<()> {
-    let handler = create_handler();
+    let handler = mock_handler();
     let response = ForkSessionResponse::new("forked-session");
     let result = smol::block_on(handler.session_forked(response));
     assert!(result.is_ok(), "session_forked should succeed");
@@ -98,7 +87,7 @@ fn session_forked_succeeds() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn session_resumed_succeeds() -> nvim_oxi::Result<()> {
-    let handler = create_handler();
+    let handler = mock_handler();
     let session_id = String::from("test-session");
     let response = ResumeSessionResponse::default();
     let result = smol::block_on(handler.session_resumed(session_id, response));
@@ -108,7 +97,7 @@ fn session_resumed_succeeds() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn session_closed_succeeds() -> nvim_oxi::Result<()> {
-    let handler = create_handler();
+    let handler = mock_handler();
     let session_id = String::from("test-session");
     let response = CloseSessionResponse::default();
     let result = smol::block_on(handler.session_closed(session_id, response));
@@ -185,7 +174,7 @@ fn session_closed_removes_prompt() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn session_notification_session_info_update_succeeds() -> nvim_oxi::Result<()> {
-    let handler = create_handler();
+    let handler = mock_handler();
     let info = agent_client_protocol::schema::v1::SessionInfoUpdate::new();
     let notification = agent_client_protocol::schema::v1::SessionNotification::new(
         "test-session",
@@ -202,7 +191,7 @@ fn session_notification_session_info_update_succeeds() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn session_deleted_succeeds() -> nvim_oxi::Result<()> {
-    let handler = create_handler();
+    let handler = mock_handler();
     let session_id = String::from("test-session");
     let response = DeleteSessionResponse::default();
     let result = smol::block_on(handler.session_deleted(session_id, response));

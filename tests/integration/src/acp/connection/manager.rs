@@ -1,8 +1,15 @@
 //! Integration tests for Assistant command construction
 
-use hermes::acp::{connection::Assistant, registry::entry::AgentEntry};
+use crate::helpers::mock_handler;
+use async_lock::Mutex;
+use hermes::PluginState;
+use hermes::acp::{
+    connection::{Assistant, ConnectionManager},
+    registry::entry::AgentEntry,
+};
 use hermes::nvim::configuration::DistributionsConfig;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[nvim_oxi::test]
 fn assistant_command_with_no_registry_returns_error() {
@@ -62,4 +69,18 @@ fn assistant_command_with_no_registry_error_mentions_registry() {
         "Error should mention missing registry: {}",
         err
     );
+}
+
+#[nvim_oxi::test]
+fn reconnect_returns_error_when_no_connection() -> nvim_oxi::Result<()> {
+    let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
+    let handler = Arc::new(mock_handler());
+
+    let result = smol::block_on(manager.reconnect(handler, &Assistant::Opencode));
+
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        "Connection error: No connection found for assistant opencode"
+    );
+    Ok(())
 }
