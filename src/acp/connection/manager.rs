@@ -398,7 +398,10 @@ impl ConnectionManager {
             Error::Connection(format!("No connection found for assistant {}", assistant))
         })?;
         let details = connection.details();
-        connection.disconnect().await?;
+        // This runs on the connection's own thread, so we must not wait for it
+        // to exit (it can never observe itself as finished). `shutdown()` just
+        // closes the channel; the thread exits once this dispatch returns.
+        connection.shutdown();
         drop(connection);
         self.connect(handler, details).await?;
         Ok(())
