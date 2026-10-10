@@ -393,8 +393,8 @@ impl Api {
         };
 
         let request = PromptRequest::new(session_id.to_string(), content_blocks);
-        let connection = self
-            .connection
+        let connection_manager = self.connection_manager.lock().await;
+        let connection = connection_manager
             .get_current_connection()
             .await
             .ok_or_else(|| {
@@ -402,8 +402,9 @@ impl Api {
                     "You are not connected to an agent, call connect before \"prompt\"".to_string(),
                 )
             })?;
-
-        connection.prompt(request).await?;
+        let result = connection.prompt(request).await;
+        drop(connection_manager);
+        result?;
 
         let state = self.state.lock().await;
         write_prompt_history(history, &agent_name, &session_id, &state.agent_info);

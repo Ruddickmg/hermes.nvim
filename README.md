@@ -369,7 +369,7 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
-> **Triggers:** [Authenticated](#authenticated) autocommand upon completion.
+> **Triggers:** [Authenticated](#authenticated) on success, or [TerminalAuthentication](#terminalauthentication) when the selected method is terminal.
 
 ### 💬 Prompt
 > **Note on `promptId`:** All agent notification autocommands (sourced from 🤖 Agent) include a `promptId` field. This UUID is generated when a prompt is sent (via `prompt()`) or when a user message chunk arrives from the agent, and it is attached to all subsequent notifications for that session so you can correlate messages within a single prompt/response cycle.
@@ -1856,6 +1856,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other (optional)",
     "status": "Pending | InProgress | Completed | Cancelled | Error (optional)",
     "title": "string (optional)",
+    "name": "string (optional)",
     "content": [
       {
         "type": "content",
@@ -2173,6 +2174,19 @@ Below is a list of all autocommands and their associated data (passed to the cal
   }
 }</code></pre></td>
     </tr>
+    <tr id="terminalauthentication">
+      <td><code>TerminalAuthentication</code></td>
+      <td>Terminal auth method selected, run it in a terminal</td>
+      <td>⚡ <a href="#authenticate">authenticate()</a></td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "id": "string",
+  "name": "string",
+  "description": "string (optional)",
+  "args": ["string"],
+  "env": {"key": "value"}
+}</code></pre></td>
+    </tr>
     <tr id="terminalcreate">
       <td><code>TerminalCreate</code></td>
       <td>Agent requests to create a terminal for command execution</td>
@@ -2272,6 +2286,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     "sessionUpdate": "tool_call",
     "toolCallId": "string",
     "title": "string",
+    "name": "string (optional)",
     "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other",
     "status": "Pending | InProgress | Completed | Cancelled | Error",
     "content": [
@@ -2352,6 +2367,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other (optional)",
     "status": "Pending | InProgress | Completed | Cancelled | Error (optional)",
     "title": "string (optional)",
+    "name": "string (optional)",
     "content": [
       {
         "type": "content",
@@ -2637,13 +2653,12 @@ cargo build --release
 
 -- functionality
 - [ ] [Request Cancellation Mechanism](https://agentclientprotocol.com/rfds/request-cancellation)
-- [ ] [Terminal Authentication](https://agentclientprotocol.com/rfds/auth-methods)
-- [ ] [Tool call name](https://agentclientprotocol.com/rfds/tool-call-name)
 - [ ] Support "unstable"/proposed ACP methods
-  - [ ] [improve authentication data](https://agentclientprotocol.com/rfds/auth-methods)
   - [ ] [Fork sessions](https://agentclientprotocol.com/rfds/session-fork)
+  - [ ] [Agent Extensions via ACP Proxies](https://agentclientprotocol.com/rfds/proxy-chains)
   - [ ] [ACP over MCP](https://agentclientprotocol.com/rfds/mcp-over-acp)
   - [ ] [NES (next edit suggestions)](https://agentclientprotocol.com/rfds/next-edit-suggestions)
+  - [ ] [Represent deleted files in diff](https://agentclientprotocol.com/rfds/diff-delete)
   - [ ] [Configurable LLM Providers](https://agentclientprotocol.com/rfds/custom-llm-endpoint)
   - [ ] [Plan Operations Support](https://agentclientprotocol.com/rfds/plan-operations)
   - [ ] [End-Turn Token Usage](https://agentclientprotocol.com/rfds/end-turn-token-usage)

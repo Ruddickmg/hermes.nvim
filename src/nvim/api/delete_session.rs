@@ -152,8 +152,8 @@ impl Api {
             DeleteSessionArg::Multiple(ids) => ids,
         };
 
-        let connection = self
-            .connection
+        let connection_manager = self.connection_manager.lock().await;
+        let connection = connection_manager
             .get_current_connection()
             .await
             .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
@@ -176,7 +176,9 @@ impl Api {
             })
             .collect::<Vec<_>>();
 
-        future::try_join_all(futures).await?;
+        let result = future::try_join_all(futures).await;
+        drop(connection_manager);
+        result?;
         Ok(())
     }
 }

@@ -1,10 +1,13 @@
+use std::sync::Arc;
+
 use agent_client_protocol::schema::v1::{
-    AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse, ExtResponse,
-    ForkSessionResponse, InitializeResponse, ListSessionsResponse, LoadSessionResponse,
-    LogoutResponse, NewSessionResponse, PromptResponse, ResumeSessionResponse, SessionConfigKind,
-    SessionConfigOption, SessionConfigOptionCategory, SetSessionConfigOptionResponse,
-    SetSessionModeResponse,
+    AuthMethodTerminal, AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse,
+    ExtResponse, ForkSessionResponse, InitializeResponse, ListSessionsResponse,
+    LoadSessionResponse, LogoutResponse, NewSessionResponse, PromptResponse, ResumeSessionResponse,
+    SessionConfigKind, SessionConfigOption, SessionConfigOptionCategory,
+    SetSessionConfigOptionResponse, SetSessionModeResponse,
 };
+use async_channel::bounded;
 use serde::Serialize;
 use tracing::instrument;
 
@@ -12,6 +15,7 @@ use crate::Handler;
 use crate::acp::connection::Assistant;
 use crate::acp::error::Error;
 use crate::nvim::autocommands::Commands;
+use crate::nvim::requests::Responder;
 
 #[derive(Serialize, Debug)]
 struct WithSessionId<T: Serialize> {
@@ -89,6 +93,34 @@ impl Handler {
     pub async fn authenticated(&self, response: AuthenticateResponse) -> Result<(), Error> {
         self.execute_autocommand(Commands::Authenticated, response)
             .await
+    }
+
+    #[instrument(level = "trace", skip(self, handler))]
+    pub async fn terminal_authentication(
+        &self,
+        agent: Assistant,
+        handler: Arc<Handler>,
+        response: AuthMethodTerminal,
+    ) -> Result<(), Error> {
+        let (sender, receiver) = bounded::<bool>(1);
+        self.execute_autocommand_request(
+            // INFO: Authentication is agent wide, so session_id doesn't apply here. This is essentially a place holder but does serve as a unique identifier at the agent level.
+            // TODO: Should likely figure out a more correct solution here but in this case it doesn't really matter (for now).
+            agent.to_string(),
+            Commands::TerminalAuthentication,
+            response,
+            Responder::TerminalAuthentication(sender),
+        )
+        .await?;
+        if let Ok(authenticated) = receiver.recv().await {
+            if authenticated {
+                let mut connection_manager = self.connection_manager.lock().await;
+                connection_manager.reconnect(handler, &agent).await?;
+                drop(connection_manager);
+                self.authenticated(AuthenticateResponse::new()).await?;
+            }
+        }
+        Ok(())
     }
 
     #[instrument(level = "trace", skip(self))]

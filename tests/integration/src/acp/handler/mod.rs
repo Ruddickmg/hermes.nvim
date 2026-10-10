@@ -4,7 +4,7 @@
 // timeout due to test environment issues. Keep it undeclared until those are resolved.
 pub mod response;
 
-use crate::helpers::{MockRequestHandler, mock_runtime};
+use crate::helpers::{MockRequestHandler, mock_connection_manager, mock_runtime};
 use agent_client_protocol::{
     Error,
     schema::ProtocolVersion,
@@ -40,6 +40,7 @@ fn test_session_notification_permissions_denied() -> nvim_oxi::Result<()> {
 
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -62,6 +63,7 @@ fn test_session_notification_permissions_allowed() -> nvim_oxi::Result<()> {
 
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -84,6 +86,7 @@ fn test_can_write_returns_false_when_disabled() -> nvim_oxi::Result<()> {
 
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -104,6 +107,7 @@ fn test_can_read_returns_false_when_disabled() -> nvim_oxi::Result<()> {
 
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -125,6 +129,7 @@ fn test_can_access_terminal_returns_false_when_disabled() -> nvim_oxi::Result<()
 
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -146,6 +151,7 @@ fn test_can_request_permissions_returns_false_when_disabled() -> nvim_oxi::Resul
 
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -166,6 +172,7 @@ fn test_set_agent_info_updates_agent_information() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -196,6 +203,7 @@ fn test_session_notification_usage_update_succeeds() -> nvim_oxi::Result<()> {
 
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -220,6 +228,7 @@ fn test_can_receive_notifications_returns_false_when_disabled() -> nvim_oxi::Res
 
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -241,6 +250,7 @@ fn test_elicitation_enabled_returns_false_when_all_disabled() -> nvim_oxi::Resul
 
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -264,6 +274,7 @@ fn test_elicitation_enabled_returns_true_when_form_enabled() -> nvim_oxi::Result
 
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -287,6 +298,7 @@ fn test_elicitation_enabled_returns_true_when_url_enabled() -> nvim_oxi::Result<
 
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -308,6 +320,7 @@ fn test_elicitation_complete_permissions_denied() -> nvim_oxi::Result<()> {
 
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -330,6 +343,7 @@ fn test_elicitation_complete_permissions_allowed() -> nvim_oxi::Result<()> {
 
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -354,6 +368,7 @@ fn test_execute_autocommand_request_sends_with_responder() -> nvim_oxi::Result<(
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -433,6 +448,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         std::rc::Rc::new(FailingMockRequestHandler),
     )
@@ -513,6 +529,7 @@ fn test_no_listener_with_request_logs_default_response_error() -> nvim_oxi::Resu
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         std::rc::Rc::new(FailingMockRequestHandler),
     )
@@ -553,6 +570,7 @@ fn test_no_listener_no_request_triggers_warn_path() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -584,6 +602,7 @@ fn get_prompt_id_returns_value_after_user_message_chunk() -> nvim_oxi::Result<()
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -605,6 +624,7 @@ fn agent_message_chunk_succeeds_and_stores_prompt_id_when_none_exists() -> nvim_
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -628,6 +648,7 @@ fn agent_message_chunk_succeeds_after_user_message_chunk() -> nvim_oxi::Result<(
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -648,6 +669,7 @@ fn get_agent_returns_current_agent() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -673,6 +695,7 @@ fn set_prompt_id_updates_session_prompt_id() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -696,6 +719,7 @@ fn get_prompt_id_returns_same_value_on_repeated_calls_without_user_message() -> 
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -717,6 +741,7 @@ fn session_loaded_stores_legacy_mode_info() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -740,6 +765,7 @@ fn session_loaded_stores_config_options_info() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -768,6 +794,7 @@ fn session_loaded_stores_none_when_empty() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -789,6 +816,7 @@ fn session_resumed_stores_legacy_mode_info() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -812,6 +840,7 @@ fn session_resumed_stores_config_options_info() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -840,6 +869,7 @@ fn session_resumed_stores_none_when_empty() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -861,6 +891,7 @@ fn config_option_set_with_mode_category_succeeds() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -903,6 +934,7 @@ fn config_option_set_with_model_category_succeeds() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -945,6 +977,7 @@ fn config_option_set_empty_options_succeeds() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -967,6 +1000,7 @@ fn config_option_set_with_other_category_succeeds() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -996,6 +1030,7 @@ fn config_option_set_with_multiple_categories_succeeds() -> nvim_oxi::Result<()>
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -1059,6 +1094,7 @@ fn config_option_set_applies_each_option_current_value_from_response() -> nvim_o
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -1126,6 +1162,7 @@ fn config_option_set_stores_boolean_option_from_response() -> nvim_oxi::Result<(
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -1170,6 +1207,7 @@ fn config_option_set_stores_boolean_current_value() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -1213,6 +1251,7 @@ fn session_loaded_stores_model_config_options_info() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -1241,6 +1280,7 @@ fn session_mode_set_mode_not_found() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -1278,6 +1318,7 @@ fn session_mode_set_session_not_found() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -1302,6 +1343,7 @@ fn session_model_set_model_not_found() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -1335,6 +1377,7 @@ fn session_model_set_succeeds() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -1368,6 +1411,7 @@ fn session_model_set_session_not_found() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -1388,6 +1432,7 @@ fn session_thought_level_set_succeeds() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -1424,6 +1469,7 @@ fn session_thought_level_set_not_found() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -1460,6 +1506,7 @@ fn session_thought_level_set_session_not_found() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -1491,6 +1538,7 @@ fn session_notification_writes_history_to_file() -> nvim_oxi::Result<()> {
     ));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -1550,6 +1598,7 @@ fn session_notification_skips_history_when_not_needed() -> nvim_oxi::Result<()> 
     ));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -1597,6 +1646,7 @@ fn session_notification_does_not_write_history_when_permissions_denied() -> nvim
     });
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -1654,8 +1704,13 @@ use std::time::Duration;
 fn handler_callback_fires_autocmd_when_listener_attached() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let requests = Rc::new(MockRequestHandler::new());
-    let handler =
-        Handler::new(state, mock_runtime(), requests).expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_connection_manager(&state),
+        mock_runtime(),
+        requests,
+    )
+    .expect("Handler creation should succeed");
 
     // Ensure the hermes augroup exists so listener_attached can query it
     let _ = create_augroup("hermes", true);
@@ -1706,8 +1761,13 @@ fn handler_callback_fires_autocmd_when_listener_attached() -> nvim_oxi::Result<(
 fn handler_callback_sends_default_response_when_no_listener() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let requests = Rc::new(MockRequestHandler::new());
-    let handler =
-        Handler::new(state, mock_runtime(), requests).expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_connection_manager(&state),
+        mock_runtime(),
+        requests,
+    )
+    .expect("Handler creation should succeed");
 
     // Dummy sender – the mock default_response returns Ok without sending,
     // but the callback branch itself is what we want to exercise for coverage.
@@ -1747,8 +1807,13 @@ fn handler_callback_sends_default_response_when_no_listener() -> nvim_oxi::Resul
 fn handler_callback_warns_when_no_listener_and_no_request() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let requests = Rc::new(MockRequestHandler::new());
-    let handler =
-        Handler::new(state, mock_runtime(), requests).expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_connection_manager(&state),
+        mock_runtime(),
+        requests,
+    )
+    .expect("Handler creation should succeed");
 
     let executor = smol::LocalExecutor::new();
     smol::block_on(executor.run(async {

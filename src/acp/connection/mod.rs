@@ -6,25 +6,17 @@ pub mod stdio;
 pub mod tcp;
 use std::sync::Arc;
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
 use crate::acp::{Result, error::Error};
 use agent_client_protocol::schema::v1::{
-    AuthenticateRequest, CancelNotification, CloseSessionRequest, DeleteSessionRequest,
-    ForkSessionRequest, InitializeRequest, ListSessionsRequest, LoadSessionRequest, LogoutRequest,
-    NewSessionRequest, PromptRequest, ResumeSessionRequest, SetSessionConfigOptionRequest,
-    SetSessionModeRequest,
+    AuthMethodTerminal, AuthenticateRequest, CancelNotification, CloseSessionRequest,
+    DeleteSessionRequest, ForkSessionRequest, InitializeRequest, ListSessionsRequest,
+    LoadSessionRequest, LogoutRequest, NewSessionRequest, PromptRequest, ResumeSessionRequest,
+    SetSessionConfigOptionRequest, SetSessionModeRequest,
 };
 use async_channel::Sender;
 pub use manager::*;
-
-/// Maximum time to wait for a connection thread to exit gracefully before force-killing
-/// the child process.
-const GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
-
-/// Maximum time to wait for a connection thread to exit after force-killing the child process.
-const FORCE_KILL_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum UserRequest {
@@ -34,6 +26,7 @@ pub enum UserRequest {
     CreateSession(NewSessionRequest),
     Prompt(PromptRequest),
     Authenticate(AuthenticateRequest),
+    TerminalAuthentication(Assistant, AuthMethodTerminal),
     SetConfigOption(SetSessionConfigOptionRequest),
     SetMode(SetSessionModeRequest),
     LoadSession(LoadSessionRequest),
@@ -52,6 +45,7 @@ pub struct Connection {
     /// Shared child process handle for stdio connections, enabling concurrent
     /// wait/kill. `None` for non-stdio connections (TCP, HTTP, etc.).
     child: Option<Arc<stdio::child::Child>>,
+    details: ConnectionDetails,
 }
 
 impl Connection {
@@ -69,78 +63,6 @@ impl Connection {
         }
     }
 
-    /// Disconnect from the agent, using a multi-phase shutdown:
-    /// 1. Drop the channel sender (signals the message loop to exit)
-    /// 2. Wait for the thread to exit gracefully within a timeout
-    /// 3. If still running, terminate the child process (SIGTERM) and wait again
-    /// 4. If still running, force-kill the child process (SIGKILL) and wait again
-    /// 5. If still running, abandon the thread (don't block Neovim)
-    #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn disconnect(&mut self) -> Result<()> {
-        // Phase 1: Drop the channel sender to signal the message loop to exit
-        if let Some(sender) = self.sender.take() {
-            drop(sender);
-        }
-
-        if let Some(ref handle) = self.handle {
-            // Fast path: if the thread already finished, no async work needed
-            if handle.is_finished() {
-                debug!("Connection thread already exited");
-                return Ok(());
-            }
-
-            // Phase 2: Wait for graceful exit
-            if Self::wait_for_thread(handle, GRACEFUL_SHUTDOWN_TIMEOUT).await {
-                debug!("Connection thread exited gracefully");
-                return Ok(());
-            }
-
-            // Phase 3: Terminate the child process (SIGTERM on Unix, TerminateProcess on Windows)
-            if let Some(ref child) = self.child {
-                if let Err(e) = child.terminate().await {
-                    warn!("Failed to send terminate signal to child: {}", e);
-                }
-            }
-            if Self::wait_for_thread(handle, FORCE_KILL_TIMEOUT).await {
-                debug!("Connection thread exited after terminate");
-                return Ok(());
-            }
-
-            // Phase 4: Force-kill the child process (SIGKILL on Unix, TerminateProcess on Windows)
-            if let Some(ref child) = self.child {
-                if let Err(e) = child.kill().await {
-                    warn!("Failed to force-kill child: {}", e);
-                }
-            }
-            if Self::wait_for_thread(handle, FORCE_KILL_TIMEOUT).await {
-                debug!("Connection thread exited after force-kill");
-                return Ok(());
-            }
-
-            // Phase 5: Abandon the thread - don't block Neovim
-            error!(
-                "Connection thread did not exit within timeout, abandoning. \
-                 The child process may still be running."
-            );
-            // Intentionally leak the JoinHandle to avoid blocking.
-            // The thread will eventually exit when the child process dies or the OS cleans up.
-            self.handle.take();
-        }
-        Ok(())
-    }
-
-    /// Returns true if the thread finished within the timeout.
-    async fn wait_for_thread(handle: &JoinHandle<Result<()>>, timeout: Duration) -> bool {
-        let start = Instant::now();
-        while start.elapsed() < timeout {
-            if handle.is_finished() {
-                return true;
-            }
-            async_io::Timer::after(Duration::from_millis(10)).await;
-        }
-        false
-    }
-
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn close(&self) -> Result<()> {
         self.send(UserRequest::Close).await?;
@@ -152,10 +74,12 @@ impl Connection {
         sender: Sender<UserRequest>,
         handle: JoinHandle<Result<()>>,
         child: Option<Arc<stdio::child::Child>>,
+        details: ConnectionDetails,
     ) -> Self {
         Self {
             sender: Some(sender),
             handle: Some(handle),
+            details,
             child,
         }
     }
@@ -164,6 +88,11 @@ impl Connection {
     pub async fn initialize(&self, request: InitializeRequest) -> Result<()> {
         self.send(UserRequest::Initialize(request)).await?;
         Ok(())
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn details(&self) -> ConnectionDetails {
+        self.details.clone()
     }
 
     #[tracing::instrument(level = "trace", skip(self))]
@@ -181,6 +110,17 @@ impl Connection {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn prompt(&self, request: PromptRequest) -> Result<()> {
         self.send(UserRequest::Prompt(request)).await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub async fn terminal_authentication(
+        &self,
+        agent: Assistant,
+        request: AuthMethodTerminal,
+    ) -> Result<()> {
+        self.send(UserRequest::TerminalAuthentication(agent, request))
+            .await?;
         Ok(())
     }
 
@@ -243,14 +183,46 @@ impl Connection {
         self.send(UserRequest::Logout(request)).await?;
         Ok(())
     }
+
+    /// Non-blocking request to shut down this connection.
+    ///
+    /// Signals the message loop to exit by dropping the channel sender and
+    /// best-effort kills the child process. Never waits on the worker thread:
+    /// `reconnect` runs on the connection's own thread, so waiting for it to
+    /// finish would always time out. The thread exits on its own once the
+    /// current message dispatch returns and its `recv()` observes the closed
+    /// channel.
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn shutdown(&mut self) {
+        if let Some(sender) = self.sender.take() {
+            drop(sender);
+        }
+
+        if let Some(ref handle) = self.handle {
+            if handle.is_finished() {
+                debug!("Connection thread already exited during shutdown");
+                return;
+            }
+        }
+
+        if let Some(ref child) = self.child {
+            if let Err(e) = child.try_kill_sync() {
+                warn!(
+                    "Failed to kill child process during connection shutdown: {}",
+                    e
+                );
+            }
+        }
+    }
 }
 
 impl Drop for Connection {
     /// Best-effort synchronous cleanup.
     ///
-    /// The full async `disconnect()` should be called explicitly before dropping.
-    /// This `Drop` impl is a safety net that performs only synchronous operations
-    /// to avoid panicking from a nested `block_on` on the `current_thread` runtime.
+    /// Equivalent to `shutdown()`: closes the channel so the connection thread
+    /// exits on its own, and non-blockingly kills the child process if present.
+    /// No waiting or joining is performed to avoid panicking from a nested
+    /// `block_on` on the `current_thread` runtime.
     fn drop(&mut self) {
         // Phase 1: Drop the sender to signal the message loop to exit.
         // When the receiver sees the channel closed, it breaks the loop and the
@@ -308,42 +280,17 @@ mod tests {
         smol::LocalExecutor::new()
     }
 
-    #[test]
-    fn test_wait_for_thread_returns_true_when_finished() {
-        let executor = mock_runtime();
-        let handle = std::thread::spawn(|| Ok::<(), Error>(()));
-        // Give thread time to finish
-        std::thread::sleep(Duration::from_millis(10));
-        let result =
-            smol::block_on(executor.run(async {
-                Connection::wait_for_thread(&handle, Duration::from_millis(500)).await
-            }));
-        assert!(result);
-    }
-
-    #[test]
-    fn test_wait_for_thread_returns_false_on_timeout() {
-        let executor = mock_runtime();
-        let (tx, rx) = std::sync::mpsc::channel::<()>();
-        let handle = std::thread::spawn(move || {
-            let _ = rx.recv(); // Block until signaled
-            Ok::<(), Error>(())
-        });
-        let result =
-            smol::block_on(executor.run(async {
-                Connection::wait_for_thread(&handle, Duration::from_millis(50)).await
-            }));
-        assert!(!result);
-        // Cleanup: unblock the thread
-        let _ = tx.send(());
-        let _ = handle.join();
+    /// A `Connection` with no child process; enough for exercising the
+    /// request-sending methods.
+    fn mock_connection(sender: async_channel::Sender<UserRequest>) -> Connection {
+        Connection::new(sender, mock_handle(), None, ConnectionDetails::default())
     }
 
     #[test]
     fn test_connection_initialize() {
         let executor = mock_runtime();
         let (sender, receiver) = async_channel::bounded(1);
-        let connection = Arc::new(Connection::new(sender, mock_handle(), None));
+        let connection = Arc::new(mock_connection(sender));
         let request = InitializeRequest::new(ProtocolVersion::LATEST);
 
         smol::block_on(executor.run(async {
@@ -366,7 +313,7 @@ mod tests {
         use agent_client_protocol::schema::v1::NewSessionRequest;
         let executor = mock_runtime();
         let (sender, receiver) = async_channel::bounded(1);
-        let connection = Arc::new(Connection::new(sender, mock_handle(), None));
+        let connection = Arc::new(mock_connection(sender));
 
         let request = NewSessionRequest::new(std::path::PathBuf::from("/"));
 
@@ -385,11 +332,37 @@ mod tests {
     }
 
     #[test]
+    fn test_connection_terminal_authentication() {
+        use agent_client_protocol::schema::v1::AuthMethodTerminal;
+        let executor = mock_runtime();
+        let (sender, receiver) = async_channel::bounded(1);
+        let connection = Arc::new(mock_connection(sender));
+
+        let request = AuthMethodTerminal::new("tui-auth", "Terminal Auth");
+
+        smol::block_on(executor.run(async {
+            connection
+                .terminal_authentication(Assistant::Opencode, request)
+                .await
+                .unwrap();
+        }));
+
+        drop(connection);
+
+        smol::block_on(executor.run(async {
+            assert!(matches!(
+                receiver.recv().await,
+                Ok(UserRequest::TerminalAuthentication(_, _))
+            ));
+        }));
+    }
+
+    #[test]
     fn test_connection_delete_session() {
         use agent_client_protocol::schema::v1::DeleteSessionRequest;
         let executor = mock_runtime();
         let (sender, receiver) = async_channel::bounded(1);
-        let connection = Arc::new(Connection::new(sender, mock_handle(), None));
+        let connection = Arc::new(mock_connection(sender));
 
         let request = DeleteSessionRequest::new(SessionId::from("test-session"));
 
@@ -405,6 +378,22 @@ mod tests {
             } else {
                 panic!("Expected DeleteSession request");
             }
+        }));
+    }
+
+    #[test]
+    fn test_connection_shutdown_closes_sender() {
+        let executor = mock_runtime();
+        let (sender, receiver) = async_channel::bounded(1);
+        let mut connection = mock_connection(sender);
+
+        connection.shutdown();
+
+        smol::block_on(executor.run(async {
+            assert!(matches!(
+                receiver.recv().await,
+                Err(async_channel::RecvError)
+            ));
         }));
     }
 }

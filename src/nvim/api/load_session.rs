@@ -118,8 +118,8 @@ impl Api {
         let agent_info = state.agent_info.clone();
         drop(state);
 
-        let connection = self
-            .connection
+        let connection_manager = self.connection_manager.lock().await;
+        let connection = connection_manager
             .get_current_connection()
             .await
             .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
@@ -127,7 +127,7 @@ impl Api {
         let cwd = config.cwd.unwrap_or(project_root);
         let additional_directories = config.additional_directories.unwrap_or_default();
 
-        if agent_info.can_load_session() {
+        let result = if agent_info.can_load_session() {
             let mut req = LoadSessionRequest::new(session_id, cwd);
             if agent_info.can_use_additional_directories() {
                 req = req.additional_directories(additional_directories.clone());
@@ -187,7 +187,9 @@ impl Api {
             Ok(())
         } else {
             Ok(())
-        }
+        };
+        drop(connection_manager);
+        result
     }
 }
 

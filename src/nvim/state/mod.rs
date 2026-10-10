@@ -2,8 +2,9 @@ use crate::acp::registry::Registry;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::acp::connection::Assistant;
 use crate::{
-    acp::{connection::Assistant, session_info::SessionDetails},
+    acp::session_info::SessionDetails,
     nvim::{configuration::ClientConfig, state::agent::AgentInfo},
 };
 use agent_client_protocol::schema::v1::{InitializeResponse, NewSessionResponse};

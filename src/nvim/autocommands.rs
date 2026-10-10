@@ -30,6 +30,7 @@ pub enum Commands {
     SessionUpdate,
     Prompted,
     Authenticated,
+    TerminalAuthentication,
     LoggedOut,
     ConfigurationUpdated,
     ModelConfigurations,
@@ -104,6 +105,7 @@ impl TryFrom<&str> for Commands {
             "SessionUpdate" => Ok(Commands::SessionUpdate),
             "Prompted" => Ok(Commands::Prompted),
             "Authenticated" => Ok(Commands::Authenticated),
+            "TerminalAuthentication" => Ok(Commands::TerminalAuthentication),
             "LoggedOut" => Ok(Commands::LoggedOut),
             "ConfigurationUpdated" => Ok(Commands::ConfigurationUpdated),
             "ModelConfigurations" => Ok(Commands::ModelConfigurations),
@@ -399,6 +401,22 @@ mod tests {
         assert_eq!(
             Commands::try_from("Authenticated").unwrap(),
             Commands::Authenticated
+        );
+    }
+
+    #[test]
+    fn test_commands_terminal_authentication() {
+        assert_eq!(
+            Commands::try_from("TerminalAuthentication").unwrap(),
+            Commands::TerminalAuthentication
+        );
+    }
+
+    #[test]
+    fn test_commands_terminal_authentication_display() {
+        assert_eq!(
+            format!("{}", Commands::TerminalAuthentication),
+            "TerminalAuthentication"
         );
     }
 

@@ -96,13 +96,12 @@ impl Api {
             )));
         }
 
-        let connection = self
-            .connection
+        let connection_manager = self.connection_manager.lock().await;
+        let connection = connection_manager
             .get_current_connection()
             .await
             .ok_or_else(|| AcpError::Connection("No connection found".to_string()))?;
-
-        connection
+        let result = connection
             .set_config_option(
                 agent_client_protocol::schema::v1::SetSessionConfigOptionRequest::new(
                     session_id,
@@ -112,9 +111,9 @@ impl Api {
                     ),
                 ),
             )
-            .await?;
-
-        Ok(())
+            .await;
+        drop(connection_manager);
+        result
     }
 }
 

@@ -36,6 +36,7 @@ pub enum Responder {
         ReadTextFileRequest,
     ),
     WriteFileResponse(OneshotSender<WriteTextFileResponse>, WriteTextFileRequest),
+    TerminalAuthentication(OneshotSender<bool>),
     TerminalCreate(
         OneshotSender<Result<CreateTerminalResponse>>,
         CreateTerminalRequest,
@@ -65,6 +66,7 @@ pub enum Responder {
 impl From<Responder> for Commands {
     fn from(responder: Responder) -> Self {
         match responder {
+            Responder::TerminalAuthentication(..) => Commands::TerminalAuthentication,
             Responder::TerminalOutput(..) => Commands::TerminalOutput,
             Responder::TerminalKill(..) => Commands::TerminalKill,
             Responder::ReadFileResponse(..) => Commands::ReadTextFile,
@@ -217,6 +219,14 @@ impl Request {
                 sender.send(outcome).await.map_err(|e| {
                     Error::Internal(format!(
                         "Failed to send response for request '{}': {:?}",
+                        self.id, e
+                    ))
+                })?;
+            }
+            Responder::TerminalAuthentication(sender) => {
+                sender.send(bool::from_object(response).map_err(|e| Error::InvalidInput(e.to_string()))?).await.map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to send terminal authentication response for request '{}': {:?}",
                         self.id, e
                     ))
                 })?;
@@ -483,6 +493,15 @@ impl Request {
                             ))
                         })?;
                 }
+                Responder::TerminalAuthentication(sender) => {
+                    warn!("TerminalAuthentication should be disabled when there are no listeners");
+                    sender.send(false).await.map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to send response to erroneous terminal authentication branch '{}': {:?}",
+                            self.id, e
+                        ))
+                    })?;
+                }
             }
             self.finish().await?;
         }
@@ -680,6 +699,14 @@ mod tests {
     }
 
     // Tests for Responder -> Commands conversion
+    #[test]
+    fn responder_terminal_authentication_maps_to_terminal_authentication_command() {
+        let (sender, _receiver) = async_channel::bounded::<bool>(1);
+        let responder = Responder::TerminalAuthentication(sender);
+        let command: Commands = responder.into();
+        assert_eq!(command, Commands::TerminalAuthentication);
+    }
+
     #[test]
     fn responder_terminal_output_maps_to_terminal_output_command() {
         let (sender, _receiver) = async_channel::bounded::<Result<TerminalOutputResponse>>(1);

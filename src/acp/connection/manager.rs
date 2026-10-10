@@ -9,9 +9,10 @@ use crate::utilities::autocmd::autocmd_listeners_attached;
 use crate::{Handler, acp::error::Error};
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    BooleanConfigOptionCapabilities, ClientCapabilities, ClientSessionCapabilities,
-    ElicitationCapabilities, ElicitationFormCapabilities, ElicitationUrlCapabilities,
-    FileSystemCapabilities, Implementation, InitializeRequest, SessionConfigOptionsCapabilities,
+    AuthCapabilities, BooleanConfigOptionCapabilities, ClientCapabilities,
+    ClientSessionCapabilities, ElicitationCapabilities, ElicitationFormCapabilities,
+    ElicitationUrlCapabilities, FileSystemCapabilities, Implementation, InitializeRequest,
+    SessionConfigOptionsCapabilities,
 };
 use async_lock::Mutex;
 use serde::{Deserialize, Serialize};
@@ -128,10 +129,6 @@ impl std::fmt::Display for Assistant {
 }
 
 impl Assistant {
-    /// Build the `async_process::Command` for this agent without spawning it.
-    ///
-    /// The caller is responsible for spawning the command on the correct
-    /// executor (the one whose reactor will handle the child's IO).
     #[instrument(level = "trace", skip(self))]
     pub async fn command(&self) -> crate::acp::Result<async_process::Command> {
         let owned_command;
@@ -294,25 +291,23 @@ impl ConnectionManager {
     pub async fn connect(
         &mut self,
         handler: Arc<Handler>,
-        ConnectionDetails { agent, protocol }: ConnectionDetails,
+        connection_details: ConnectionDetails,
     ) -> crate::acp::Result<&Connection> {
+        let ConnectionDetails { agent, protocol } = connection_details.clone();
         let permissions = self.get_permissions().await;
         let agent_name = agent.name();
-
-        // Check if connection already exists without borrowing
         let already_connected = self.connection.contains_key(&agent_name);
+
         if already_connected {
             warn!(
                 "A connection already exists for '{}'. Returning existing connection",
                 agent
             );
             return self
-                .connection
-                .get(&agent_name)
+                .get_connection(&agent)
                 .ok_or_else(|| Error::Internal("Connection not found".to_string()));
         }
 
-        // Now we can safely do mutable operations
         let (sender, receiver) = async_channel::bounded(100);
         let client_capabilities = ClientCapabilities::new()
             .terminal(permissions.terminal_access)
@@ -325,6 +320,11 @@ impl ConnectionManager {
                 autocmd_listeners_attached(GROUP, "User", "FormElicitation"),
                 autocmd_listeners_attached(GROUP, "User", "UrlElicitation"),
             ))
+            .auth(AuthCapabilities::new().terminal(autocmd_listeners_attached(
+                GROUP,
+                "User",
+                "TerminalAuthentication",
+            )))
             .session(
                 ClientSessionCapabilities::new().config_options(
                     SessionConfigOptionsCapabilities::new()
@@ -352,12 +352,6 @@ impl ConnectionManager {
 
             trace!("Starting smol executor for {}", agent_display_name);
 
-            // Run the connection in the executor.
-            // smol::block_on drives the top-level future, while executor.run()
-            // continuously polls all tasks spawned onto the LocalExecutor.
-            // Each protocol module owns its transport-specific orchestration
-            // (stream acquisition, post-disconnect cleanup) and delegates the
-            // shared ACP `Client.builder()` plumbing to `connect::run_connection`.
             let run_result = smol::block_on(executor.run(async {
                 match protocol {
                     Protocol::Stdio => {
@@ -382,13 +376,35 @@ impl ConnectionManager {
             run_result
         });
 
-        self.add_connection(agent.clone(), Connection::new(sender, handle, stdio_child));
+        self.add_connection(
+            agent.clone(),
+            Connection::new(sender, handle, stdio_child, connection_details),
+        );
         self.set_agent(agent.clone()).await;
         let connection = self.get_connection(&agent).unwrap();
         debug!("Stored connection to '{}'", agent);
         connection.initialize(init_config).await?;
         info!("Initialized connection to '{}'", agent);
         Ok(connection)
+    }
+
+    #[instrument(level = "trace", skip(self, handler))]
+    pub async fn reconnect(
+        &mut self,
+        handler: Arc<Handler>,
+        assistant: &Assistant,
+    ) -> crate::acp::Result<()> {
+        let mut connection = self.connection.remove(&assistant.name()).ok_or_else(|| {
+            Error::Connection(format!("No connection found for assistant {}", assistant))
+        })?;
+        let details = connection.details();
+        // This runs on the connection's own thread, so we must not wait for it
+        // to exit (it can never observe itself as finished). `shutdown()` just
+        // closes the channel; the thread exits once this dispatch returns.
+        connection.shutdown();
+        drop(connection);
+        self.connect(handler, details).await?;
+        Ok(())
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -451,6 +467,15 @@ mod tests {
     use crate::acp::registry::{DistributionCommand, PackageDistribution};
     use pretty_assertions::assert_eq;
     use proptest::prelude::*;
+
+    /// A `Connection` with no live `Handler` behind it; enough for exercising
+    /// `ConnectionManager` bookkeeping, which never touches `Connection::details()`.
+    fn mock_connection(
+        sender: async_channel::Sender<crate::acp::connection::UserRequest>,
+        handle: std::thread::JoinHandle<crate::acp::Result<()>>,
+    ) -> Connection {
+        Connection::new(sender, handle, None, ConnectionDetails::default())
+    }
 
     proptest! {
         #[test]
@@ -550,7 +575,7 @@ mod tests {
         let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
         let (sender, _) = async_channel::unbounded();
         let handle = std::thread::spawn(|| Ok(()));
-        let connection = Connection::new(sender, handle, None);
+        let connection = mock_connection(sender, handle);
         manager.add_connection(Assistant::Copilot, connection);
         let agents = manager.connected_agents();
         assert_eq!(agents.len(), 1);
@@ -562,18 +587,44 @@ mod tests {
         let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
         let (sender1, _) = async_channel::unbounded();
         let handle1 = std::thread::spawn(|| Ok(()));
-        let connection1 = Connection::new(sender1, handle1, None);
+        let connection1 = mock_connection(sender1, handle1);
         manager.add_connection(Assistant::Copilot, connection1);
 
         let (sender2, _) = async_channel::unbounded();
         let handle2 = std::thread::spawn(|| Ok(()));
-        let connection2 = Connection::new(sender2, handle2, None);
+        let connection2 = mock_connection(sender2, handle2);
         manager.add_connection(Assistant::Opencode, connection2);
 
         let agents = manager.connected_agents();
         assert_eq!(agents.len(), 2);
         assert!(agents.contains(&Assistant::Copilot));
         assert!(agents.contains(&Assistant::Opencode));
+    }
+
+    #[test]
+    fn disconnect_returns_error_when_connection_missing() {
+        let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
+
+        let result = manager.disconnect(vec![Assistant::Copilot]);
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Connection error: A problem occurred while trying to disconnect from agent(s): copilot"
+        );
+    }
+
+    #[test]
+    fn disconnect_removes_connection() {
+        let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
+        let (sender, _) = async_channel::unbounded();
+        let handle = std::thread::spawn(|| Ok(()));
+        manager.add_connection(Assistant::Copilot, mock_connection(sender, handle));
+
+        manager
+            .disconnect(vec![Assistant::Copilot])
+            .expect("disconnect should succeed");
+
+        assert!(manager.connected_agents().is_empty());
     }
 
     #[test]

@@ -5,6 +5,7 @@
 //!
 //! See request/handler.rs for examples of actual integration tests.
 
+pub mod authenticate;
 pub mod configure_model;
 pub mod delete_session;
 pub mod load_session;
@@ -20,7 +21,7 @@ use async_lock::Mutex;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::helpers::mock_runtime;
+use crate::helpers::{mock_connection_manager, mock_runtime};
 use hermes::acp::handler::Handler;
 use hermes::nvim::state::PluginState;
 
@@ -84,6 +85,7 @@ fn test_agent_with_all_capabilities_disabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -123,6 +125,7 @@ fn test_agent_with_all_capabilities_enabled() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )
@@ -160,6 +163,7 @@ fn test_agent_with_mixed_capabilities() -> nvim_oxi::Result<()> {
     let state = Arc::new(Mutex::new(PluginState::default()));
     let handler = Handler::new(
         state.clone(),
+        mock_connection_manager(&state),
         mock_runtime(),
         Rc::new(MockRequestHandler::new()),
     )

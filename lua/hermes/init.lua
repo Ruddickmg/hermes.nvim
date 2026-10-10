@@ -381,16 +381,17 @@
 ---@field kind? HermesToolCallKind
 ---@field status? HermesToolCallStatus
 ---@field title? string
+---@field name? string Programmatic name of the invoked tool (e.g. read_file)
 ---@field content? HermesToolCallContent[]
 ---@field locations? HermesToolCallLocation[]
 ---@field rawInput? any
 ---@field rawOutput? any
 
 ---@class HermesToolCall: HermesSessionNotification
----@field update { sessionUpdate: "tool_call", toolCallId: string, title: string, kind: HermesToolCallKind, status: HermesToolCallStatus, content: HermesToolCallContent[], locations: HermesToolCallLocation[], rawInput?: any, rawOutput?: any }
+---@field update { sessionUpdate: "tool_call", toolCallId: string, title: string, name?: string, kind: HermesToolCallKind, status: HermesToolCallStatus, content: HermesToolCallContent[], locations: HermesToolCallLocation[], rawInput?: any, rawOutput?: any }
 
 ---@class HermesToolCallUpdate: HermesSessionNotification
----@field update { sessionUpdate: "tool_call_update", toolCallId: string, kind?: HermesToolCallKind, status?: HermesToolCallStatus, title?: string, content?: HermesToolCallContent[], locations?: HermesToolCallLocation[], rawInput?: any, rawOutput?: any }
+---@field update { sessionUpdate: "tool_call_update", toolCallId: string, kind?: HermesToolCallKind, status?: HermesToolCallStatus, title?: string, name?: string, content?: HermesToolCallContent[], locations?: HermesToolCallLocation[], rawInput?: any, rawOutput?: any }
 
 ---@class HermesPermissionOption
 ---@field id string Option ID to pass to respond()
@@ -583,6 +584,14 @@
 
 ---@class HermesConfigurationUpdated
 ---@field configOptions ConfigOption[]
+
+---@class HermesTerminalAuthentication
+---@field requestId string UUID to pass to respond()
+---@field id string Authentication method ID
+---@field name string
+---@field description? string
+---@field args? string[] Additional args appended to the agent invocation
+---@field env? table<string, string> Additional environment variables
 
 ---@alias HermesConfigOptions ConfigOption[]
 ---@alias HermesModelConfigurations ModelConfigOption[]
