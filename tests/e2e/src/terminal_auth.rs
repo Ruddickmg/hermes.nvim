@@ -8,7 +8,8 @@
 //! `hermes.respond()` and assert on whether Authenticated fires.
 
 use agent_client_protocol::schema::v1::{
-    AuthMethod, AuthMethodAgent, AuthMethodTerminal, AuthenticateResponse, InitializeResponse,
+    AuthMethod, AuthMethodAgent, AuthMethodId, AuthMethodTerminal, AuthenticateResponse,
+    InitializeResponse,
 };
 use hermes::{
     api::{ConnectionArgs, DisconnectArgs},
@@ -17,6 +18,7 @@ use hermes::{
 use nvim_oxi::{Dictionary, Function, Object, conversion::FromObject};
 use pretty_assertions::assert_eq;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -34,13 +36,20 @@ fn create_func<A, R>(plugin: Dictionary, name: &str) -> Function<A, R> {
 }
 
 /// Mirror of the payload hermes sends on the TerminalAuthentication autocommand:
-/// the selected auth method flattened alongside the id to pass to `respond()`.
+/// the ACP `AuthMethodTerminal` fields flattened, plus the request id injected
+/// by Hermes for `respond()`.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 struct TerminalAuthenticationData {
-    #[serde(rename = "requestId")]
     request_id: String,
-    #[serde(flatten)]
-    method: AuthMethodTerminal,
+    id: AuthMethodId,
+    name: String,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    args: Vec<String>,
+    #[serde(default)]
+    env: HashMap<String, String>,
 }
 
 /// Advertise a single auth method without dropping the mock agent's default capabilities.
@@ -86,8 +95,11 @@ fn terminal_auth_method_fires_terminal_authentication_autocommand() -> Result<()
         request_id: Uuid::parse_str(&data.request_id)
             .expect("request_id should be a valid UUID")
             .to_string(),
-        method: AuthMethodTerminal::new("tui-auth".to_string(), "Terminal Auth")
-            .args(vec!["--device-code".to_string()]),
+        id: AuthMethodId::new("tui-auth"),
+        name: "Terminal Auth".to_string(),
+        description: None,
+        args: vec!["--device-code".to_string()],
+        env: HashMap::new(),
     };
     assert_eq!(data, expected);
 
