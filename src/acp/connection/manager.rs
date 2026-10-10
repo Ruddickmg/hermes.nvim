@@ -599,6 +599,32 @@ mod tests {
     }
 
     #[test]
+    fn disconnect_returns_error_when_connection_missing() {
+        let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
+
+        let result = manager.disconnect(vec![Assistant::Copilot]);
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Connection error: A problem occurred while trying to disconnect from agent(s): copilot"
+        );
+    }
+
+    #[test]
+    fn disconnect_removes_connection() {
+        let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
+        let (sender, _) = async_channel::unbounded();
+        let handle = std::thread::spawn(|| Ok(()));
+        manager.add_connection(Assistant::Copilot, mock_connection(sender, handle));
+
+        manager
+            .disconnect(vec![Assistant::Copilot])
+            .expect("disconnect should succeed");
+
+        assert!(manager.connected_agents().is_empty());
+    }
+
+    #[test]
     fn test_assistant_from_str_copilot_lowercase() {
         assert_eq!(Assistant::from("copilot"), Assistant::Copilot);
     }

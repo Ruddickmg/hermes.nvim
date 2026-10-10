@@ -484,10 +484,6 @@
 ---@field name string
 ---@field description? string
 
----@class HermesAuthMethodTerminal: HermesAuthMethod
----@field args? string[] Additional args appended to the agent invocation
----@field env? table<string, string> Additional environment variables
-
 ---@class HermesPromptCapabilities
 ---@field image boolean
 ---@field audio boolean
@@ -589,8 +585,13 @@
 ---@class HermesConfigurationUpdated
 ---@field configOptions ConfigOption[]
 
----@class HermesTerminalAuthentication: HermesAuthMethodTerminal
+---@class HermesTerminalAuthentication
 ---@field requestId string UUID to pass to respond()
+---@field id string Authentication method ID
+---@field name string
+---@field description? string
+---@field args? string[] Additional args appended to the agent invocation
+---@field env? table<string, string> Additional environment variables
 
 ---@alias HermesConfigOptions ConfigOption[]
 ---@alias HermesModelConfigurations ModelConfigOption[]

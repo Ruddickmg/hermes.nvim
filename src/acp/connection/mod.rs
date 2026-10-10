@@ -428,4 +428,17 @@ mod tests {
             }
         }));
     }
+
+    #[test]
+    fn test_connection_disconnect_closes_sender() {
+        let executor = mock_runtime();
+        let (sender, receiver) = async_channel::bounded(1);
+        let mut connection = mock_connection(sender);
+
+        smol::block_on(executor.run(async {
+            connection.disconnect().await.unwrap();
+        }));
+
+        assert!(receiver.is_closed());
+    }
 }
