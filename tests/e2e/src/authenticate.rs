@@ -8,8 +8,7 @@
 //! `hermes.respond()` and assert on whether Authenticated fires.
 
 use agent_client_protocol::schema::v1::{
-    AuthMethod, AuthMethodAgent, AuthMethodId, AuthMethodTerminal, AuthenticateResponse,
-    InitializeResponse,
+    AuthMethod, AuthMethodAgent, AuthMethodId, AuthenticateResponse, InitializeResponse,
 };
 use hermes::{
     api::{ConnectionArgs, DisconnectArgs},
@@ -25,8 +24,8 @@ use uuid::Uuid;
 use crate::{
     TIMEOUT_IN_SECONDS,
     utilities::{
-        autocommand, mock_agent::MockAgent, mock_agent_handle::MockAgentHandle,
-        test_helpers::connect_to_mock_agent,
+        autocommand, mock_agent::MockAgent, test_helpers::connect_to_mock_agent,
+        test_helpers::connect_to_mock_agent_stdio,
     },
 };
 
@@ -67,14 +66,11 @@ fn mock_agent_advertising(method: AuthMethod) -> MockAgent {
 
 /// Test: `authenticate()` with a terminal method fires TerminalAuthentication
 /// instead of sending an `authenticate` request to the agent.
+///
+/// Uses the stdio mock (`mock-agent-stdio`) because terminal auth requires an
+/// agent command; hermes spawns the binary as a subprocess.
 #[nvim_oxi::test]
 fn terminal_auth_method_fires_terminal_authentication_autocommand() -> Result<(), nvim_oxi::Error> {
-    let agent = mock_agent_advertising(AuthMethod::Terminal(
-        AuthMethodTerminal::new("tui-auth".to_string(), "Terminal Auth")
-            .args(vec!["--device-code".to_string()]),
-    ));
-    let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
-
     let dict: Dictionary = hermes()?;
     let connect: Function<ConnectionArgs, ()> = create_func(dict.clone(), "connect");
     let disconnect: Function<DisconnectArgs, ()> = create_func(dict.clone(), "disconnect");
@@ -86,7 +82,7 @@ fn terminal_auth_method_fires_terminal_authentication_autocommand() -> Result<()
         TerminalAuthenticationData,
     >(Commands::TerminalAuthentication);
 
-    connect_to_mock_agent(&connect, &mock_handle)?;
+    connect_to_mock_agent_stdio(&connect, &["terminal", "--device-code"])?;
     wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
     authenticate.call("tui-auth".to_string())?;
@@ -101,12 +97,11 @@ fn terminal_auth_method_fires_terminal_authentication_autocommand() -> Result<()
         description: None,
         args: vec!["--device-code".to_string()],
         env: HashMap::new(),
-        command: "mock-agent".to_string(),
+        command: env!("HERMES_MOCK_AGENT_BIN").to_string(),
     };
     assert_eq!(data, expected);
 
     disconnect.call(DisconnectArgs::All)?;
-    mock_handle.close();
     Ok(())
 }
 
@@ -143,10 +138,9 @@ fn agent_auth_method_fires_authenticated_autocommand() -> Result<(), nvim_oxi::E
     Ok(())
 }
 
-/// Everything the two `respond()` tests need once the mock agent is connected
-/// and `authenticate("tui-auth")` has been issued.
+/// Everything the two `respond()` tests need once the stdio mock agent is
+/// connected and `authenticate("tui-auth")` has been issued.
 struct RespondSetup {
-    mock_handle: MockAgentHandle,
     disconnect: Function<DisconnectArgs, ()>,
     respond: Function<(String, Object), ()>,
     wait_for_terminal_authentication:
@@ -154,15 +148,10 @@ struct RespondSetup {
     wait_for_authentication: Box<dyn Fn(Duration) -> Result<AuthenticateResponse, nvim_oxi::Error>>,
 }
 
-/// Start a terminal-auth-capable mock agent, connect, wait for initialization,
-/// and issue the authenticate call that produces a TerminalAuthentication event.
+/// Start a terminal-auth-capable stdio mock agent, connect, wait for
+/// initialization, and issue the authenticate call that produces a
+/// TerminalAuthentication event.
 fn setup_respond_test() -> Result<RespondSetup, nvim_oxi::Error> {
-    let agent = mock_agent_advertising(AuthMethod::Terminal(AuthMethodTerminal::new(
-        "tui-auth".to_string(),
-        "Terminal Auth",
-    )));
-    let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
-
     let dict: Dictionary = hermes()?;
     let connect: Function<ConnectionArgs, ()> = create_func(dict.clone(), "connect");
     let disconnect: Function<DisconnectArgs, ()> = create_func(dict.clone(), "disconnect");
@@ -177,13 +166,12 @@ fn setup_respond_test() -> Result<RespondSetup, nvim_oxi::Error> {
     let wait_for_authentication =
         autocommand::listen_for_autocommand::<AuthenticateResponse>(Commands::Authenticated);
 
-    connect_to_mock_agent(&connect, &mock_handle)?;
+    connect_to_mock_agent_stdio(&connect, &["terminal"])?;
     wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
     authenticate.call("tui-auth".to_string())?;
 
     Ok(RespondSetup {
-        mock_handle,
         disconnect,
         respond,
         wait_for_terminal_authentication,
@@ -191,7 +179,8 @@ fn setup_respond_test() -> Result<RespondSetup, nvim_oxi::Error> {
     })
 }
 
-/// Test: `respond(id, true)` reconnects the agent and fires Authenticated.
+/// Test: `respond(id, true)` reconnects the stdio mock (spawning a fresh
+/// process) and fires Authenticated.
 #[nvim_oxi::test]
 fn accepting_terminal_auth_reconnects_and_fires_authenticated() -> Result<(), nvim_oxi::Error> {
     let setup = setup_respond_test()?;
@@ -204,7 +193,6 @@ fn accepting_terminal_auth_reconnects_and_fires_authenticated() -> Result<(), nv
     assert_eq!(response, AuthenticateResponse::default());
 
     setup.disconnect.call(DisconnectArgs::All)?;
-    setup.mock_handle.close();
     Ok(())
 }
 
@@ -222,6 +210,5 @@ fn declining_terminal_auth_does_not_fire_authenticated() -> Result<(), nvim_oxi:
     assert_eq!(error.to_string(), "Timed out waiting for Autocmd");
 
     setup.disconnect.call(DisconnectArgs::All)?;
-    setup.mock_handle.close();
     Ok(())
 }

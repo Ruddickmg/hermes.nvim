@@ -10,8 +10,8 @@
 // indirection that was carried over from 0.10.x.
 
 use agent_client_protocol::{
-    self as acp, Agent, ByteStreams, ConnectionTo, Lines, Responder, on_receive_notification,
-    on_receive_request,
+    self as acp, Agent, ByteStreams, ConnectionTo, Lines, Responder, Stdio,
+    on_receive_notification, on_receive_request,
     schema::v1::{
         AuthenticateRequest, AuthenticateResponse, CancelNotification, CloseSessionRequest,
         CloseSessionResponse, ContentBlock, ContentChunk, DeleteSessionRequest,
@@ -158,6 +158,19 @@ impl MockAgent {
             thread_handle,
             shutdown_tx,
         ))
+    }
+
+    /// Serve a single ACP connection over this process's stdin/stdout.
+    ///
+    /// Used by the `mock-agent-stdio` binary that hermes spawns when an e2e
+    /// test connects via the `stdio` protocol. Each spawned process handles the
+    /// one connection hermes drives; reconnects (e.g. terminal authentication
+    /// acceptance) spawn fresh processes that re-read their configuration from
+    /// argv.
+    pub async fn run_stdio(self) -> Result<(), acp::Error> {
+        let MockAgent { config } = self;
+        let builder = build_mock_agent_builder(config);
+        builder.connect_to(Stdio::new()).await
     }
 
     /// Start the mock agent on a random available port, accepting WebSocket connections.
