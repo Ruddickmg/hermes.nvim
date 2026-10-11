@@ -1112,7 +1112,7 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "TerminalAuthentication",
   callback = function(event)
-    --@type HermesTerminalAuthentication
+    ---@type HermesTerminalAuthentication
     local data = event.data
     local request_id = data.requestId
 
@@ -2223,7 +2223,8 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "name": "string",
   "description": "string (optional)",
   "args": ["string"],
-  "env": {"key": "value"}
+  "env": {"key": "value"},
+  "command": "string"
 }</code></pre></td>
     </tr>
     <tr id="terminalcreate">
