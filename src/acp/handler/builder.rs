@@ -1,10 +1,9 @@
-//! Builder factory for the ACP 0.11 `Client` role.
+//! Builder factory for the ACP `Client` role.
 //!
-//! In 0.10.x, request/notification handlers lived in `impl Client for Handler`.
-//! In 0.11 there is no `Client` trait — handlers are closures registered on a
-//! `Client.builder()`. This module wires our existing `Handler` inherent methods
-//! into the builder so the dispatch loop calls into them automatically when the
-//! agent sends a request or notification.
+//! Request/notification handlers are closures registered on a `Client.builder()`.
+//! This module wires our existing `Handler` inherent methods into the builder so
+//! the dispatch loop calls into them automatically when the agent sends a request
+//! or notification.
 //!
 //! Every closure clones an `Arc<Handler>`, calls the matching method on the
 //! handler, and forwards the result back to the responder. Permission gating

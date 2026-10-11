@@ -12,7 +12,7 @@ The architecture separates Neovim logic from Rust ACP interactions:
   - tests/integration: Contains integration tests.
   - tests/e2e: Contains end to end tests.
 
-- **Concurrency Model:** The ACP SDK is single-threaded and async. We spawn a dedicated thread for each connection, each running a single-threaded `smol::LocalExecutor` driven by `smol::block_on(executor.run(...))`. This ensures every Agent has its own [independent](https://doc.rust-lang.org/std/thread/struct.JoinHandle.html) environment. Thread handles are stored to be joined and dropped upon disconnection. We intentionally do not depend on tokio directly; `agent-client-protocol` 0.11 pulls tokio in as a transitive dependency for its internal helpers, but Hermes code paths use smol exclusively.
+- **Concurrency Model:** The ACP SDK is single-threaded and async. We spawn a dedicated thread for each connection, each running a single-threaded `smol::LocalExecutor` driven by `smol::block_on(executor.run(...))`. This ensures every Agent has its own [independent](https://doc.rust-lang.org/std/thread/struct.JoinHandle.html) environment. Thread handles are stored to be joined and dropped upon disconnection. We intentionally do not depend on tokio directly; `agent-client-protocol` v3 has no default features, so it does not pull tokio in either. Hermes enables only the features it needs (`unstable_session_fork`, `unstable_mcp_over_acp`, and `stdio` for the e2e mock agent), and all code paths use smol exclusively.
 
 - **Communication:**
   - Agent threads communicate with the main Neovim thread via [async-channel](https://docs.rs/async-channel/latest/async_channel/) mpsc channels.

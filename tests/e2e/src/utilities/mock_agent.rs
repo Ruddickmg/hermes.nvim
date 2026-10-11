@@ -1,13 +1,10 @@
 #![allow(private_interfaces)]
 
-// MockAgent for e2e tests, rewritten for agent-client-protocol 0.11.
+// MockAgent for e2e tests.
 //
-// In 0.10.x this was an `impl Agent for MockAgent` block driven by
-// `AgentSideConnection::new(...)`. In 0.11 there is no `Agent` trait; handlers
-// are closures registered on `Agent.builder()`. The prompt handler runs inside
-// `cx.spawn(...)` and calls `cx.send_request(...).block_task().await` directly
-// on the cloned `ConnectionTo<Client>`, eliminating the AgentToConnection channel
-// indirection that was carried over from 0.10.x.
+// Handlers are closures registered on `Agent.builder()`. The prompt handler runs
+// inside `cx.spawn(...)` and calls `cx.send_request(...).block_task().await` directly
+// on the cloned `ConnectionTo<Client>`.
 
 use agent_client_protocol::{
     self as acp, Agent, ByteStreams, ConnectionTo, Lines, Responder, Stdio,
@@ -743,7 +740,7 @@ fn build_mock_agent_builder(
             on_receive_request!(),
         )
     // NOTE: `ExtRequest`/`ExtNotification` are not `JsonRpcRequest`/`JsonRpcNotification`
-    // in agent-client-protocol 0.11. Handling them would require defining a custom
+    // in the ACP SDK. Handling them would require defining a custom
     // typed wrapper or registering a catch-all `on_receive_dispatch`. The previous
     // MockAgent implementation only returned a default response for them, which the
     // existing test suite never exercises meaningfully. They are intentionally omitted
