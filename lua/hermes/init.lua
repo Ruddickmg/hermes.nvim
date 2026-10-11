@@ -590,8 +590,9 @@
 ---@field id string Authentication method ID
 ---@field name string
 ---@field description? string
----@field args? string[] Additional args appended to the agent invocation
+---@field args? string[] Full argv for the auth invocation (agent args followed by provider args)
 ---@field env? table<string, string> Additional environment variables
+---@field command string Program required to run the agent in a terminal
 
 ---@alias HermesConfigOptions ConfigOption[]
 ---@alias HermesModelConfigurations ModelConfigOption[]

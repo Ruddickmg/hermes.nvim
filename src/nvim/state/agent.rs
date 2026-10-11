@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use agent_client_protocol::schema::v1::{AuthMethod, InitializeResponse};
 
 use crate::acp::connection::Assistant;
-use crate::acp::connection::manager::Protocol;
 use crate::utilities::logging::channel::ChannelWriter;
 use crate::utilities::logging::sink::history::HistorySink;
 

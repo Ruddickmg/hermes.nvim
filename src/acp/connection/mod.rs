@@ -8,12 +8,15 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use tracing::{debug, warn};
 
-use crate::acp::{Result, error::Error};
+use crate::{
+    acp::{Result, error::Error},
+    api::authenticate::TerminalAuthRequest,
+};
 use agent_client_protocol::schema::v1::{
-    AuthMethodTerminal, AuthenticateRequest, CancelNotification, CloseSessionRequest,
-    DeleteSessionRequest, ForkSessionRequest, InitializeRequest, ListSessionsRequest,
-    LoadSessionRequest, LogoutRequest, NewSessionRequest, PromptRequest, ResumeSessionRequest,
-    SetSessionConfigOptionRequest, SetSessionModeRequest,
+    AuthenticateRequest, CancelNotification, CloseSessionRequest, DeleteSessionRequest,
+    ForkSessionRequest, InitializeRequest, ListSessionsRequest, LoadSessionRequest, LogoutRequest,
+    NewSessionRequest, PromptRequest, ResumeSessionRequest, SetSessionConfigOptionRequest,
+    SetSessionModeRequest,
 };
 use async_channel::Sender;
 pub use manager::*;
@@ -26,7 +29,7 @@ pub enum UserRequest {
     CreateSession(NewSessionRequest),
     Prompt(PromptRequest),
     Authenticate(AuthenticateRequest),
-    TerminalAuthentication(Assistant, AuthMethodTerminal),
+    TerminalAuthentication(Assistant, TerminalAuthRequest),
     SetConfigOption(SetSessionConfigOptionRequest),
     SetMode(SetSessionModeRequest),
     LoadSession(LoadSessionRequest),
@@ -117,7 +120,7 @@ impl Connection {
     pub async fn terminal_authentication(
         &self,
         agent: Assistant,
-        request: AuthMethodTerminal,
+        request: TerminalAuthRequest,
     ) -> Result<()> {
         self.send(UserRequest::TerminalAuthentication(agent, request))
             .await?;

@@ -1,9 +1,17 @@
-use agent_client_protocol::schema::v1::{AuthMethod, AuthenticateRequest};
+use agent_client_protocol::schema::v1::{AuthMethod, AuthMethodTerminal, AuthenticateRequest};
+use serde::Serialize;
 
 use crate::{
     acp::{Result, error::Error},
     api::Api,
 };
+
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct TerminalAuthRequest {
+    #[serde(flatten)]
+    method: AuthMethodTerminal,
+    command: String,
+}
 
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
@@ -21,7 +29,18 @@ impl Api {
             let result = match method {
                 AuthMethod::Terminal(terminal_method) => {
                     connection
-                        .terminal_authentication(agent, terminal_method)
+                        .terminal_authentication(
+                            agent.clone(),
+                            TerminalAuthRequest {
+                                method: terminal_method,
+                                command: agent.base_command().ok_or_else(|| {
+                                    Error::InvalidInput(format!(
+                                        "No command found for agent: {}",
+                                        agent
+                                    ))
+                                })?,
+                            },
+                        )
                         .await
                 }
                 _ => connection.authenticate(AuthenticateRequest::new(id)).await,

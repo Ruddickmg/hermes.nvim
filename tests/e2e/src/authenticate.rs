@@ -36,8 +36,8 @@ fn create_func<A, R>(plugin: Dictionary, name: &str) -> Function<A, R> {
 }
 
 /// Mirror of the payload hermes sends on the TerminalAuthentication autocommand:
-/// the ACP `AuthMethodTerminal` fields flattened, plus the request id injected
-/// by Hermes for `respond()`.
+/// the ACP `AuthMethodTerminal` fields flattened, the resolved agent `command`,
+/// plus the request id injected by Hermes for `respond()`.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct TerminalAuthenticationData {
@@ -50,6 +50,7 @@ struct TerminalAuthenticationData {
     args: Vec<String>,
     #[serde(default)]
     env: HashMap<String, String>,
+    command: String,
 }
 
 /// Advertise a single auth method without dropping the mock agent's default capabilities.
@@ -100,6 +101,7 @@ fn terminal_auth_method_fires_terminal_authentication_autocommand() -> Result<()
         description: None,
         args: vec!["--device-code".to_string()],
         env: HashMap::new(),
+        command: "mock-agent".to_string(),
     };
     assert_eq!(data, expected);
 

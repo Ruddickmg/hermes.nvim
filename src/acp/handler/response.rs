@@ -1,19 +1,21 @@
 use std::sync::Arc;
 
 use agent_client_protocol::schema::v1::{
-    AuthMethodTerminal, AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse,
-    ExtResponse, ForkSessionResponse, InitializeResponse, ListSessionsResponse,
-    LoadSessionResponse, LogoutResponse, NewSessionResponse, PromptResponse, ResumeSessionResponse,
-    SessionConfigKind, SessionConfigOption, SessionConfigOptionCategory,
-    SetSessionConfigOptionResponse, SetSessionModeResponse,
+    AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse, ExtResponse,
+    ForkSessionResponse, InitializeResponse, ListSessionsResponse, LoadSessionResponse,
+    LogoutResponse, NewSessionResponse, PromptResponse, ResumeSessionResponse, SessionConfigKind,
+    SessionConfigOption, SessionConfigOptionCategory, SetSessionConfigOptionResponse,
+    SetSessionModeResponse,
 };
 use async_channel::bounded;
 use serde::Serialize;
 use tracing::instrument;
+use uuid::Uuid;
 
 use crate::Handler;
 use crate::acp::connection::Assistant;
 use crate::acp::error::Error;
+use crate::api::authenticate::TerminalAuthRequest;
 use crate::nvim::autocommands::Commands;
 use crate::nvim::requests::Responder;
 
@@ -100,13 +102,11 @@ impl Handler {
         &self,
         agent: Assistant,
         handler: Arc<Handler>,
-        response: AuthMethodTerminal,
+        response: TerminalAuthRequest,
     ) -> Result<(), Error> {
         let (sender, receiver) = bounded::<bool>(1);
         self.execute_autocommand_request(
-            // INFO: Authentication is agent wide, so session_id doesn't apply here. This is essentially a place holder but does serve as a unique identifier at the agent level.
-            // TODO: Should likely figure out a more correct solution here but in this case it doesn't really matter (for now).
-            agent.to_string(),
+            Uuid::new_v4().to_string(),
             Commands::TerminalAuthentication,
             response,
             Responder::TerminalAuthentication(sender),
@@ -380,5 +380,89 @@ impl Handler {
         state.prompt.remove(&session_id);
         drop(state);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn opencode_invocation_appends_auth_args_to_base_args() {
+        let invocation = smol::block_on(resolve_agent_invocation(
+            &Assistant::Opencode,
+            vec!["--device-code".to_string()],
+        ));
+        assert_eq!(
+            invocation,
+            (
+                "opencode".to_string(),
+                vec!["acp".to_string(), "--device-code".to_string()],
+            )
+        );
+    }
+
+    #[test]
+    fn copilot_invocation_appends_auth_args_to_base_args() {
+        let invocation = smol::block_on(resolve_agent_invocation(
+            &Assistant::Copilot,
+            vec!["--login".to_string()],
+        ));
+        assert_eq!(
+            invocation,
+            (
+                "copilot".to_string(),
+                vec!["--acp".to_string(), "--login".to_string()],
+            )
+        );
+    }
+
+    #[test]
+    fn custom_stdio_invocation_uses_configured_command_and_args() {
+        let agent = Assistant::CustomStdio {
+            name: "custom".to_string(),
+            command: "my-agent".to_string(),
+            args: vec!["serve".to_string()],
+        };
+        let invocation =
+            smol::block_on(resolve_agent_invocation(&agent, vec!["--auth".to_string()]));
+        assert_eq!(
+            invocation,
+            (
+                "my-agent".to_string(),
+                vec!["serve".to_string(), "--auth".to_string()],
+            )
+        );
+    }
+
+    #[test]
+    fn custom_url_invocation_falls_back_to_agent_name() {
+        let agent = Assistant::CustomUrl {
+            name: "remote".to_string(),
+            host: "localhost".to_string(),
+            port: 8080,
+            path: None,
+        };
+        let invocation =
+            smol::block_on(resolve_agent_invocation(&agent, vec!["--auth".to_string()]));
+        assert_eq!(
+            invocation,
+            ("remote".to_string(), vec!["--auth".to_string()])
+        );
+    }
+
+    #[test]
+    fn custom_socket_invocation_falls_back_to_agent_name() {
+        let agent = Assistant::CustomSocket {
+            name: "socket".to_string(),
+            path: "/tmp/agent.sock".to_string(),
+        };
+        let invocation =
+            smol::block_on(resolve_agent_invocation(&agent, vec!["--auth".to_string()]));
+        assert_eq!(
+            invocation,
+            ("socket".to_string(), vec!["--auth".to_string()])
+        );
     }
 }

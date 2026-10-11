@@ -196,6 +196,15 @@ impl Assistant {
             assistant => assistant.to_string(),
         }
     }
+
+    #[instrument(level = "trace", skip(self))]
+    pub fn base_command(&self) -> Option<String> {
+        match self {
+            Assistant::CustomStdio { command, .. } => Some(command.clone()),
+            Assistant::Registered { command, .. } => command.clone(),
+            _ => None,
+        }
+    }
 }
 
 impl From<&str> for Assistant {
@@ -320,11 +329,10 @@ impl ConnectionManager {
                 autocmd_listeners_attached(GROUP, "User", "FormElicitation"),
                 autocmd_listeners_attached(GROUP, "User", "UrlElicitation"),
             ))
-            .auth(AuthCapabilities::new().terminal(autocmd_listeners_attached(
-                GROUP,
-                "User",
-                "TerminalAuthentication",
-            )))
+            .auth(AuthCapabilities::new().terminal(
+                autocmd_listeners_attached(GROUP, "User", "TerminalAuthentication")
+                    && agent.base_command().is_some(),
+            ))
             .session(
                 ClientSessionCapabilities::new().config_options(
                     SessionConfigOptionsCapabilities::new()
