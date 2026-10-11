@@ -26,10 +26,9 @@ pub struct HermesNotification {
     pub update: SessionUpdate,
 }
 
-// In 0.10.x these were trait methods on `impl Client for Handler`. In 0.11
-// the `Client` trait is gone and handlers are registered as builder closures
-// (see `src/acp/handler/builder.rs`). The methods below remain as inherent
-// methods on `Handler` so the builder closures can delegate to them.
+// Handlers are registered as builder closures (see `src/acp/handler/builder.rs`)
+// rather than trait methods. These methods are inherent on `Handler` so the
+// builder closures can delegate to them.
 impl Handler {
     pub async fn request_permission(
         &self,
