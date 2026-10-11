@@ -305,7 +305,7 @@ impl From<Hermes> for Dictionary {
 pub struct Api {
     state: Arc<Mutex<PluginState>>,
     logger: &'static Logger,
-    connection: ConnectionManager,
+    connection_manager: Arc<Mutex<ConnectionManager>>,
     response_handler: Arc<Handler>,
     request_handler: Rc<Requests>,
 }
@@ -317,9 +317,10 @@ impl Api {
         logger: &'static Logger,
         response_handler: Arc<Handler>,
         request_handler: Rc<Requests>,
+        connection_manager: Arc<Mutex<ConnectionManager>>,
     ) -> Self {
         Self {
-            connection: ConnectionManager::new(state.clone()),
+            connection_manager,
             response_handler,
             request_handler,
             logger,
