@@ -1117,7 +1117,7 @@ vim.api.nvim_create_autocmd("User", {
     local request_id = data.requestId
 
     -- set up commands
-    local cmd = vim.list_extend(data.command, data.args or {})
+    local cmd = vim.list_extend({ data.command }, data.args or {})
     local env = vim.tbl_extend("force", vim.fn.environ(), data.env or {})
 
     -- trigger authentication flow

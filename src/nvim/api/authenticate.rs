@@ -13,6 +13,12 @@ pub struct TerminalAuthRequest {
     command: String,
 }
 
+impl TerminalAuthRequest {
+    pub fn new(method: AuthMethodTerminal, command: String) -> Self {
+        Self { method, command }
+    }
+}
+
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn authenticate(&self, id: String) -> Result<()> {

@@ -341,7 +341,10 @@ mod tests {
         let (sender, receiver) = async_channel::bounded(1);
         let connection = Arc::new(mock_connection(sender));
 
-        let request = AuthMethodTerminal::new("tui-auth", "Terminal Auth");
+        let request = TerminalAuthRequest::new(
+            AuthMethodTerminal::new("tui-auth", "Terminal Auth"),
+            "opencode".to_string(),
+        );
 
         smol::block_on(executor.run(async {
             connection

@@ -590,7 +590,7 @@
 ---@field id string Authentication method ID
 ---@field name string
 ---@field description? string
----@field args? string[] Full argv for the auth invocation (agent args followed by provider args)
+---@field args? string[] Additional arguments to append when invoking the command
 ---@field env? table<string, string> Additional environment variables
 ---@field command string Program required to run the agent in a terminal
 

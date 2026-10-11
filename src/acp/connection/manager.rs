@@ -777,6 +777,93 @@ mod tests {
     }
 
     #[test]
+    fn base_command_custom_stdio_returns_configured_command() {
+        let agent = Assistant::CustomStdio {
+            name: "custom".to_string(),
+            command: "mock-agent".to_string(),
+            args: vec!["serve".to_string()],
+        };
+        assert_eq!(agent.base_command(), Some("mock-agent".to_string()));
+    }
+
+    #[test]
+    fn base_command_registered_with_command_override_returns_override() {
+        let entry = AgentEntry {
+            id: "test-agent".to_string(),
+            name: "Test Agent".to_string(),
+            version: "1.0.0".to_string(),
+            description: String::new(),
+            repository: None,
+            website: None,
+            authors: None,
+            license: None,
+            icon: None,
+            distribution: HashMap::new(),
+        };
+        let assistant = Assistant::Registered {
+            agent: entry,
+            configuration: Default::default(),
+            distribution: None,
+            command: Some("override-agent".to_string()),
+            args: None,
+            registry: None,
+        };
+        assert_eq!(assistant.base_command(), Some("override-agent".to_string()));
+    }
+
+    #[test]
+    fn base_command_registered_without_command_returns_none() {
+        let entry = AgentEntry {
+            id: "test-agent".to_string(),
+            name: "Test Agent".to_string(),
+            version: "1.0.0".to_string(),
+            description: String::new(),
+            repository: None,
+            website: None,
+            authors: None,
+            license: None,
+            icon: None,
+            distribution: HashMap::new(),
+        };
+        let assistant = Assistant::Registered {
+            agent: entry,
+            configuration: Default::default(),
+            distribution: None,
+            command: None,
+            args: None,
+            registry: None,
+        };
+        assert_eq!(assistant.base_command(), None);
+    }
+
+    #[test]
+    fn base_command_builtin_agents_return_none() {
+        let agents = vec![Assistant::Opencode, Assistant::Copilot];
+        let results: Vec<Option<String>> = agents.iter().map(|a| a.base_command()).collect();
+        assert_eq!(results, vec![None, None]);
+    }
+
+    #[test]
+    fn base_command_custom_url_returns_none() {
+        let agent = Assistant::CustomUrl {
+            name: "remote".to_string(),
+            host: "localhost".to_string(),
+            port: 8080,
+            path: None,
+        };
+        assert_eq!(agent.base_command(), None);
+    }
+
+    #[test]
+    fn base_command_custom_socket_returns_none() {
+        let agent = Assistant::CustomSocket {
+            name: "socket".to_string(),
+            path: "/tmp/agent.sock".to_string(),
+        };
+        assert_eq!(agent.base_command(), None);
+    }
+
+    #[test]
     fn test_protocol_default_is_stdio() {
         let protocol: Protocol = Default::default();
         assert!(matches!(protocol, Protocol::Stdio));
