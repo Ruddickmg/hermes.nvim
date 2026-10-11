@@ -1097,7 +1097,7 @@ vim.api.nvim_create_autocmd("User", {
 > - Start at the `line` number if defined
 > - End at the `limit` number if defined
 
-#### Authentication via terminal
+#### 🔑 Authentication via terminal
 
 ```lua
 local hermes = require("hermes")
