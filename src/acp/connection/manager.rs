@@ -3,11 +3,15 @@ use crate::acp::connection::{Connection, http, socket, stdio, tcp};
 use crate::acp::registry::distribution::Distribution;
 use crate::acp::registry::entry::AgentEntry;
 use crate::acp::registry::resolution::fetch_agent_from_registry;
+use crate::nvim::GROUP;
 use crate::nvim::configuration::{DistributionsConfig, Permissions};
+use crate::utilities::autocmd::autocmd_listeners_attached;
 use crate::{Handler, acp::error::Error};
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    ClientCapabilities, FileSystemCapabilities, Implementation, InitializeRequest,
+    BooleanConfigOptionCapabilities, ClientCapabilities, ClientSessionCapabilities,
+    ElicitationCapabilities, ElicitationFormCapabilities, ElicitationUrlCapabilities,
+    FileSystemCapabilities, Implementation, InitializeRequest, SessionConfigOptionsCapabilities,
 };
 use async_lock::Mutex;
 use serde::{Deserialize, Serialize};
@@ -223,6 +227,17 @@ pub struct ConnectionDetails {
     pub protocol: Protocol,
 }
 
+fn build_elicitation_capabilities(
+    form_allowed: bool,
+    url_allowed: bool,
+    form_listener_attached: bool,
+    url_listener_attached: bool,
+) -> ElicitationCapabilities {
+    ElicitationCapabilities::new()
+        .form((form_allowed && form_listener_attached).then(ElicitationFormCapabilities::new))
+        .url((url_allowed && url_listener_attached).then(ElicitationUrlCapabilities::new))
+}
+
 pub struct ConnectionManager {
     connection: HashMap<String, Connection>,
     state: Arc<Mutex<PluginState>>,
@@ -299,15 +314,27 @@ impl ConnectionManager {
 
         // Now we can safely do mutable operations
         let (sender, receiver) = async_channel::bounded(100);
+        let client_capabilities = ClientCapabilities::new()
+            .terminal(permissions.terminal_access)
+            .fs(FileSystemCapabilities::new()
+                .read_text_file(permissions.fs_read_access)
+                .write_text_file(permissions.fs_write_access))
+            .elicitation(build_elicitation_capabilities(
+                permissions.elicitation.form,
+                permissions.elicitation.url,
+                autocmd_listeners_attached(GROUP, "User", "FormElicitation"),
+                autocmd_listeners_attached(GROUP, "User", "UrlElicitation"),
+            ))
+            .session(
+                ClientSessionCapabilities::new().config_options(
+                    SessionConfigOptionsCapabilities::new()
+                        .boolean(BooleanConfigOptionCapabilities::new()),
+                ),
+            );
+
         let init_config = InitializeRequest::new(ProtocolVersion::LATEST)
             .client_info(Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"))
-            .client_capabilities(
-                ClientCapabilities::new()
-                    .terminal(permissions.terminal_access)
-                    .fs(FileSystemCapabilities::new()
-                        .read_text_file(permissions.fs_read_access)
-                        .write_text_file(permissions.fs_write_access)),
-            );
+            .client_capabilities(client_capabilities);
 
         let thread_agent = agent.clone();
         trace!("Starting agent communication in new thread");
@@ -694,5 +721,36 @@ mod tests {
     fn test_protocol_default_is_stdio() {
         let protocol: Protocol = Default::default();
         assert!(matches!(protocol, Protocol::Stdio));
+    }
+
+    #[test]
+    fn elicitation_capabilities_advertised_when_permission_and_listener_present() {
+        let caps = build_elicitation_capabilities(true, true, true, true);
+
+        let expected = ElicitationCapabilities::new()
+            .form(ElicitationFormCapabilities::new())
+            .url(ElicitationUrlCapabilities::new());
+        assert_eq!(caps, expected);
+    }
+
+    #[test]
+    fn elicitation_form_capability_suppressed_when_permission_disabled() {
+        let caps = build_elicitation_capabilities(false, false, true, true);
+
+        assert_eq!(caps, ElicitationCapabilities::new());
+    }
+
+    #[test]
+    fn elicitation_form_capability_suppressed_without_listener() {
+        let caps = build_elicitation_capabilities(true, false, false, true);
+
+        assert_eq!(caps, ElicitationCapabilities::new());
+    }
+
+    #[test]
+    fn elicitation_url_capability_suppressed_without_listener() {
+        let caps = build_elicitation_capabilities(false, true, true, false);
+
+        assert_eq!(caps, ElicitationCapabilities::new());
     }
 }

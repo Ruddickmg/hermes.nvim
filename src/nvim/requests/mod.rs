@@ -1,4 +1,6 @@
+mod elicitation;
 pub mod request;
+mod terminal;
 use crate::{
     PluginState,
     acp::{Result, error::Error},

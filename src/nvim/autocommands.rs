@@ -14,6 +14,9 @@ pub enum Commands {
     WriteTextFile,
     ReadTextFile,
     PermissionRequest,
+    FormElicitation,
+    UrlElicitation,
+    ElicitationComplete,
     ToolCall,
     ToolCallUpdate,
     Plan,
@@ -64,6 +67,7 @@ pub enum Commands {
     Models,
     Modes,
     ThoughtLevels,
+    ConfigOptions,
 
     // Agent registry
     AgentList,
@@ -84,6 +88,9 @@ impl TryFrom<&str> for Commands {
             "WriteTextFile" => Ok(Commands::WriteTextFile),
             "ReadTextFile" => Ok(Commands::ReadTextFile),
             "PermissionRequest" => Ok(Commands::PermissionRequest),
+            "FormElicitation" => Ok(Commands::FormElicitation),
+            "UrlElicitation" => Ok(Commands::UrlElicitation),
+            "ElicitationComplete" => Ok(Commands::ElicitationComplete),
             "ToolCall" => Ok(Commands::ToolCall),
             "ToolCallUpdate" => Ok(Commands::ToolCallUpdate),
             "Plan" => Ok(Commands::Plan),
@@ -134,6 +141,7 @@ impl TryFrom<&str> for Commands {
             "Models" => Ok(Commands::Models),
             "Modes" => Ok(Commands::Modes),
             "ThoughtLevels" => Ok(Commands::ThoughtLevels),
+            "ConfigOptions" => Ok(Commands::ConfigOptions),
 
             // Agent registry
             "AgentList" => Ok(Commands::AgentList),
@@ -269,6 +277,48 @@ mod tests {
         assert_eq!(
             Commands::try_from("ReadTextFile").unwrap(),
             Commands::ReadTextFile
+        );
+    }
+
+    #[test]
+    fn test_commands_form_elicitation_try_from() {
+        assert_eq!(
+            Commands::try_from("FormElicitation").unwrap(),
+            Commands::FormElicitation
+        );
+    }
+
+    #[test]
+    fn test_commands_form_elicitation_display() {
+        assert_eq!(format!("{}", Commands::FormElicitation), "FormElicitation");
+    }
+
+    #[test]
+    fn test_commands_url_elicitation_try_from() {
+        assert_eq!(
+            Commands::try_from("UrlElicitation").unwrap(),
+            Commands::UrlElicitation
+        );
+    }
+
+    #[test]
+    fn test_commands_url_elicitation_display() {
+        assert_eq!(format!("{}", Commands::UrlElicitation), "UrlElicitation");
+    }
+
+    #[test]
+    fn test_commands_elicitation_complete_try_from() {
+        assert_eq!(
+            Commands::try_from("ElicitationComplete").unwrap(),
+            Commands::ElicitationComplete
+        );
+    }
+
+    #[test]
+    fn test_commands_elicitation_complete_display() {
+        assert_eq!(
+            format!("{}", Commands::ElicitationComplete),
+            "ElicitationComplete"
         );
     }
 
@@ -577,6 +627,14 @@ mod tests {
         assert_eq!(
             Commands::try_from("ThoughtLevels").unwrap(),
             Commands::ThoughtLevels
+        );
+    }
+
+    #[test]
+    fn test_commands_config_options() {
+        assert_eq!(
+            Commands::try_from("ConfigOptions").unwrap(),
+            Commands::ConfigOptions
         );
     }
 
