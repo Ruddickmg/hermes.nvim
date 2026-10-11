@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use agent_client_protocol::schema::v1::{
     AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse, ExtResponse,
     ForkSessionResponse, InitializeResponse, ListSessionsResponse, LoadSessionResponse,
@@ -5,13 +7,17 @@ use agent_client_protocol::schema::v1::{
     SessionConfigOption, SessionConfigOptionCategory, SetSessionConfigOptionResponse,
     SetSessionModeResponse,
 };
+use async_channel::bounded;
 use serde::Serialize;
 use tracing::instrument;
+use uuid::Uuid;
 
 use crate::Handler;
 use crate::acp::connection::Assistant;
 use crate::acp::error::Error;
+use crate::api::authenticate::TerminalAuthRequest;
 use crate::nvim::autocommands::Commands;
+use crate::nvim::requests::Responder;
 
 #[derive(Serialize, Debug)]
 struct WithSessionId<T: Serialize> {
@@ -89,6 +95,32 @@ impl Handler {
     pub async fn authenticated(&self, response: AuthenticateResponse) -> Result<(), Error> {
         self.execute_autocommand(Commands::Authenticated, response)
             .await
+    }
+
+    #[instrument(level = "trace", skip(self, handler))]
+    pub async fn terminal_authentication(
+        &self,
+        agent: Assistant,
+        handler: Arc<Handler>,
+        response: TerminalAuthRequest,
+    ) -> Result<(), Error> {
+        let (sender, receiver) = bounded::<bool>(1);
+        self.execute_autocommand_request(
+            Uuid::new_v4().to_string(),
+            Commands::TerminalAuthentication,
+            response,
+            Responder::TerminalAuthentication(sender),
+        )
+        .await?;
+        if let Ok(authenticated) = receiver.recv().await {
+            if authenticated {
+                let mut connection_manager = self.connection_manager.lock().await;
+                connection_manager.reconnect(handler, &agent).await?;
+                drop(connection_manager);
+                self.authenticated(AuthenticateResponse::new()).await?;
+            }
+        }
+        Ok(())
     }
 
     #[instrument(level = "trace", skip(self))]
