@@ -387,6 +387,7 @@ fn test_execute_autocommand_request_sends_with_responder() -> nvim_oxi::Result<(
     // This should succeed - covers lines 207-208
     let result = smol::block_on(handler.execute_autocommand_request(
         "test-session".to_string(),
+        agent_client_protocol::schema::v1::RequestId::Null,
         "TestCommand",
         serde_json::json!({"test": "data"}),
         responder,
@@ -436,8 +437,23 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
             Ok(())
         }
 
-        async fn add_request(&self, _session_id: String, _responder: Responder) -> Uuid {
+        async fn add_request(
+            &self,
+            _session_id: String,
+            _agent_request_id: agent_client_protocol::schema::v1::RequestId,
+            _responder: Responder,
+        ) -> Uuid {
             Uuid::new_v4()
+        }
+
+        async fn remove_request(
+            &self,
+            request_id: &Uuid,
+        ) -> hermes::acp::Result<hermes::nvim::requests::Request> {
+            Err(hermes::acp::error::Error::InvalidInput(format!(
+                "No request found for {}",
+                request_id
+            )))
         }
 
         async fn get_request(&self, _request_id: &Uuid) -> Option<hermes::nvim::requests::Request> {
@@ -470,6 +486,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
     // With the failing mock, default_response will fail, triggering the error! at 74-77
     let result = smol::block_on(handler.execute_autocommand_request(
         "test-session".to_string(),
+        agent_client_protocol::schema::v1::RequestId::Null,
         "TestErrorCommand", // No listener for this command
         serde_json::json!({"data": "value"}),
         responder,
@@ -517,8 +534,23 @@ fn test_no_listener_with_request_logs_default_response_error() -> nvim_oxi::Resu
             Ok(())
         }
 
-        async fn add_request(&self, _session_id: String, _responder: Responder) -> Uuid {
+        async fn add_request(
+            &self,
+            _session_id: String,
+            _agent_request_id: agent_client_protocol::schema::v1::RequestId,
+            _responder: Responder,
+        ) -> Uuid {
             Uuid::new_v4()
+        }
+
+        async fn remove_request(
+            &self,
+            request_id: &Uuid,
+        ) -> hermes::acp::Result<hermes::nvim::requests::Request> {
+            Err(hermes::acp::error::Error::InvalidInput(format!(
+                "No request found for {}",
+                request_id
+            )))
         }
 
         async fn get_request(&self, _request_id: &Uuid) -> Option<hermes::nvim::requests::Request> {
@@ -547,6 +579,7 @@ fn test_no_listener_with_request_logs_default_response_error() -> nvim_oxi::Resu
 
     let _result = smol::block_on(handler.execute_autocommand_request(
         "test-session".to_string(),
+        agent_client_protocol::schema::v1::RequestId::Null,
         "TestErrorCommand",
         serde_json::json!({"data": "value"}),
         responder,
@@ -1784,6 +1817,7 @@ fn handler_callback_sends_default_response_when_no_listener() -> nvim_oxi::Resul
                 Some((
                     Responder::PermissionResponse(sender),
                     "test-session".to_string(),
+                    agent_client_protocol::schema::v1::RequestId::Null,
                 )),
             ))
             .await

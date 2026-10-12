@@ -1,4 +1,5 @@
 //! Mock implementation of RequestHandler trait for testing
+use agent_client_protocol::schema::v1::RequestId;
 use async_trait::async_trait;
 use hermes::nvim::requests::{Request, RequestHandler, Responder};
 use uuid::Uuid;
@@ -40,8 +41,20 @@ impl RequestHandler for MockRequestHandler {
         Ok(())
     }
 
-    async fn add_request(&self, _session_id: String, _responder: Responder) -> Uuid {
+    async fn add_request(
+        &self,
+        _session_id: String,
+        _agent_request_id: RequestId,
+        _responder: Responder,
+    ) -> Uuid {
         Uuid::new_v4()
+    }
+
+    async fn remove_request(&self, request_id: &Uuid) -> hermes::acp::Result<Request> {
+        Err(hermes::acp::error::Error::InvalidInput(format!(
+            "No request found for {}",
+            request_id
+        )))
     }
 
     async fn get_request(&self, _request_id: &Uuid) -> Option<Request> {
