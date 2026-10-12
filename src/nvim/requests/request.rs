@@ -2,7 +2,7 @@ use agent_client_protocol::schema::v1::{
     CreateElicitationRequest, CreateElicitationResponse, CreateTerminalRequest,
     CreateTerminalResponse, ElicitationAction, KillTerminalRequest, KillTerminalResponse,
     ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
-    RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
+    RequestId, RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
     TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
     WriteTextFileRequest, WriteTextFileResponse,
 };
@@ -90,6 +90,7 @@ pub struct Request {
     id: Uuid,
     nvim_runtime: NvimRuntime,
     session_id: String,
+    request_id: RequestId,
     responder: Arc<Mutex<Option<Responder>>>,
     remove: NvimMessenger<Uuid>,
     pub(super) state: Arc<Mutex<PluginState>>,
@@ -100,7 +101,11 @@ impl Request {
     pub fn id(&self) -> Uuid {
         self.id
     }
+    pub fn request_id(&self) -> RequestId {
+        self.request_id.clone()
+    }
     pub fn new(
+        request_id: RequestId,
         session_id: String,
         remove: NvimMessenger<Uuid>,
         responder: Responder,
@@ -112,6 +117,7 @@ impl Request {
             nvim_runtime,
             id: Uuid::new_v4(),
             session_id,
+            request_id,
             is_permission_request: matches!(responder, Responder::PermissionResponse(..)),
             responder: Arc::new(Mutex::new(Some(responder))),
             remove,

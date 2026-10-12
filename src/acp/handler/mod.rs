@@ -2,6 +2,7 @@ pub mod builder;
 pub mod client;
 pub mod response;
 
+use agent_client_protocol::schema::v1::RequestId;
 pub use builder::build_client;
 
 use crate::{
@@ -27,7 +28,11 @@ use std::{
 };
 use tracing::{debug, error, instrument, warn};
 
-type NvimHandleArgs = (String, serde_json::Value, Option<(Responder, String)>);
+type NvimHandleArgs = (
+    String,
+    serde_json::Value,
+    Option<(Responder, String, RequestId)>,
+);
 
 pub struct Handler {
     pub connection_manager: Arc<Mutex<ConnectionManager>>,
@@ -51,8 +56,10 @@ impl Handler {
                 async move {
                     let mut data = datas.clone();
                     debug!("Received autocommand: {}, with data: {:#?}", command, data);
-                    let request = if let Some((res, session_id)) = response_data {
-                        let request_id = nvim_requests.add_request(session_id, res).await;
+                    let request = if let Some((res, session_id, agent_request_id)) = response_data {
+                        let request_id = nvim_requests
+                            .add_request(session_id, agent_request_id, res)
+                            .await;
                         data["requestId"] = serde_json::Value::String(request_id.to_string());
                         debug!("Request data: {:#?}", data);
                         Some(request_id)
@@ -212,7 +219,7 @@ impl Handler {
         &self,
         command: C,
         data: S,
-        response_data: Option<(Responder, String)>,
+        response_data: Option<(Responder, String, RequestId)>,
     ) -> Result<()>
     where
         C: ToString + Debug,
@@ -229,11 +236,12 @@ impl Handler {
     pub async fn execute_autocommand_request<C: ToString + Debug, S: Serialize + Debug>(
         &self,
         session_id: String,
+        request_id: RequestId,
         command: C,
         data: S,
         responder: Responder,
     ) -> Result<()> {
-        self.send_autocommand(command, data, Some((responder, session_id)))
+        self.send_autocommand(command, data, Some((responder, session_id, request_id)))
             .await?;
         Ok(())
     }

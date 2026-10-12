@@ -26,13 +26,6 @@ use agent_client_protocol::{
 
 use crate::Handler;
 
-/// Construct a `Client.builder()` with every inbound handler registered.
-///
-/// Each closure delegates to the corresponding inherent method on `Handler`,
-/// preserving the permission gating and autocommand-dispatch behavior of the
-/// old `impl Client for Handler`. The builder is returned without driving it;
-/// callers attach a transport and (optionally) a `main_fn` via
-/// `connect_with(...)` or `connect_to(...)`.
 pub fn build_client(
     handler: Arc<Handler>,
 ) -> acp::Builder<
@@ -50,7 +43,11 @@ pub fn build_client(
                       responder: Responder<RequestPermissionResponse>,
                       _cx: ConnectionTo<acp::Agent>| {
                     let handler = handler.clone();
-                    async move { responder.respond_with_result(handler.request_permission(req).await) }
+                    let request_id = responder.id().clone();
+                    async move {
+                        responder
+                            .respond_with_result(handler.request_permission(req, request_id).await)
+                    }
                 }
             },
             on_receive_request!(),
@@ -62,7 +59,11 @@ pub fn build_client(
                       responder: Responder<WriteTextFileResponse>,
                       _cx: ConnectionTo<acp::Agent>| {
                     let handler = handler.clone();
-                    async move { responder.respond_with_result(handler.write_text_file(req).await) }
+                    let request_id = responder.id().clone();
+                    async move {
+                        responder
+                            .respond_with_result(handler.write_text_file(req, request_id).await)
+                    }
                 }
             },
             on_receive_request!(),
@@ -74,7 +75,10 @@ pub fn build_client(
                       responder: Responder<ReadTextFileResponse>,
                       _cx: ConnectionTo<acp::Agent>| {
                     let handler = handler.clone();
-                    async move { responder.respond_with_result(handler.read_text_file(req).await) }
+                    let request_id = responder.id().clone();
+                    async move {
+                        responder.respond_with_result(handler.read_text_file(req, request_id).await)
+                    }
                 }
             },
             on_receive_request!(),
@@ -86,7 +90,11 @@ pub fn build_client(
                       responder: Responder<CreateTerminalResponse>,
                       _cx: ConnectionTo<acp::Agent>| {
                     let handler = handler.clone();
-                    async move { responder.respond_with_result(handler.create_terminal(req).await) }
+                    let request_id = responder.id().clone();
+                    async move {
+                        responder
+                            .respond_with_result(handler.create_terminal(req, request_id).await)
+                    }
                 }
             },
             on_receive_request!(),
@@ -98,7 +106,11 @@ pub fn build_client(
                       responder: Responder<TerminalOutputResponse>,
                       _cx: ConnectionTo<acp::Agent>| {
                     let handler = handler.clone();
-                    async move { responder.respond_with_result(handler.terminal_output(req).await) }
+                    let request_id = responder.id().clone();
+                    async move {
+                        responder
+                            .respond_with_result(handler.terminal_output(req, request_id).await)
+                    }
                 }
             },
             on_receive_request!(),
@@ -110,8 +122,11 @@ pub fn build_client(
                       responder: Responder<WaitForTerminalExitResponse>,
                       _cx: ConnectionTo<acp::Agent>| {
                     let handler = handler.clone();
+                    let request_id = responder.id().clone();
                     async move {
-                        responder.respond_with_result(handler.wait_for_terminal_exit(req).await)
+                        responder.respond_with_result(
+                            handler.wait_for_terminal_exit(req, request_id).await,
+                        )
                     }
                 }
             },
@@ -124,7 +139,11 @@ pub fn build_client(
                       responder: Responder<ReleaseTerminalResponse>,
                       _cx: ConnectionTo<acp::Agent>| {
                     let handler = handler.clone();
-                    async move { responder.respond_with_result(handler.release_terminal(req).await) }
+                    let request_id = responder.id().clone();
+                    async move {
+                        responder
+                            .respond_with_result(handler.release_terminal(req, request_id).await)
+                    }
                 }
             },
             on_receive_request!(),
@@ -146,8 +165,10 @@ pub fn build_client(
                       responder: Responder<CreateElicitationResponse>,
                       _cx: ConnectionTo<acp::Agent>| {
                     let handler = handler.clone();
+                    let request_id = responder.id().clone();
                     async move {
-                        responder.respond_with_result(handler.create_elicitation(req).await)
+                        responder
+                            .respond_with_result(handler.create_elicitation(req, request_id).await)
                     }
                 }
             },

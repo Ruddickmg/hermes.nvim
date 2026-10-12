@@ -7,6 +7,7 @@ use crate::{
     nvim::terminal::{TerminalInfo, TerminalManager},
     utilities::{NvimMessenger, NvimRuntime},
 };
+use agent_client_protocol::schema::v1::RequestId;
 use async_lock::Mutex;
 use async_trait::async_trait;
 use std::{collections::HashMap, sync::Arc};
@@ -51,8 +52,14 @@ pub trait RequestHandler {
     async fn default_response(&self, request_id: &Uuid, data: serde_json::Value) -> Result<()>;
     async fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()>;
     async fn cancel_session_requests(&self, session_id: String) -> Result<()>;
-    async fn add_request(&self, session_id: String, responder: Responder) -> Uuid;
+    async fn remove_request(&self, request_id: &Uuid) -> Result<Request>;
     async fn get_request(&self, request_id: &Uuid) -> Option<Request>;
+    async fn add_request(
+        &self,
+        session_id: String,
+        agent_request_id: RequestId,
+        responder: Responder,
+    ) -> Uuid;
 }
 
 #[async_trait(?Send)]
@@ -71,10 +78,16 @@ impl RequestHandler for Requests {
         }
     }
 
-    async fn add_request(&self, session_id: String, responder: Responder) -> Uuid {
+    async fn add_request(
+        &self,
+        session_id: String,
+        agent_request_id: RequestId,
+        responder: Responder,
+    ) -> Uuid {
         let mut pending = self.pending.lock().await;
         let finisher = self.nvim_handler.clone();
         let request = Request::new(
+            agent_request_id,
             session_id,
             finisher,
             responder,
@@ -111,6 +124,14 @@ impl RequestHandler for Requests {
         )
         .await?;
         Ok(())
+    }
+
+    async fn remove_request(&self, request_id: &Uuid) -> Result<Request> {
+        let mut pending = self.pending.lock().await;
+        let pending_request = pending.remove(request_id);
+        drop(pending);
+        pending_request
+            .ok_or_else(|| Error::InvalidInput(format!("No request found for {}", request_id)))
     }
 
     async fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()> {

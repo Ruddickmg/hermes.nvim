@@ -15,8 +15,8 @@ use crate::{
 use agent_client_protocol::schema::v1::{
     AuthenticateRequest, CancelNotification, CloseSessionRequest, DeleteSessionRequest,
     ForkSessionRequest, InitializeRequest, ListSessionsRequest, LoadSessionRequest, LogoutRequest,
-    NewSessionRequest, PromptRequest, ResumeSessionRequest, SetSessionConfigOptionRequest,
-    SetSessionModeRequest,
+    NewSessionRequest, PromptRequest, RequestId, ResumeSessionRequest,
+    SetSessionConfigOptionRequest, SetSessionModeRequest,
 };
 use async_channel::Sender;
 pub use manager::*;
@@ -26,6 +26,7 @@ pub enum UserRequest {
     Close,
     Initialize(InitializeRequest),
     Cancel(CancelNotification),
+    CancelRequest(RequestId),
     CreateSession(NewSessionRequest),
     Prompt(PromptRequest),
     Authenticate(AuthenticateRequest),
@@ -107,6 +108,12 @@ impl Connection {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn cancel(&self, notification: CancelNotification) -> Result<()> {
         self.send(UserRequest::Cancel(notification)).await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub async fn cancel_request(&self, id: RequestId) -> Result<()> {
+        self.send(UserRequest::CancelRequest(id)).await?;
         Ok(())
     }
 
