@@ -51,8 +51,7 @@ fn add_elicitation_request_with(
 ) {
     let (sender, receiver) = async_channel::bounded::<CreateElicitationResponse>(1);
     let responder = Responder::Elicitation(sender, request);
-    let request_id =
-        block_on(requests.add_request("test-session".to_string(), RequestId::Null, responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
     (request_id, receiver)
 }
 

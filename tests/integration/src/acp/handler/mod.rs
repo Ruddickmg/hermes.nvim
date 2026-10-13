@@ -18,7 +18,7 @@ use agent_client_protocol::{
     },
 };
 use async_lock::Mutex;
-use hermes::acp::handler::Handler;
+use hermes::acp::handler::{Handler, NvimHandleArgs};
 use hermes::nvim::state::PluginState;
 use pretty_assertions::assert_eq;
 use std::io::{Read, Write};
@@ -437,7 +437,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
             Ok(())
         }
 
-        async fn add_request(
+        async fn add(
             &self,
             _session_id: String,
             _agent_request_id: agent_client_protocol::schema::v1::RequestId,
@@ -446,7 +446,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
             Uuid::new_v4()
         }
 
-        async fn remove_request(
+        async fn remove(
             &self,
             request_id: &Uuid,
         ) -> hermes::acp::Result<hermes::nvim::requests::Request> {
@@ -456,7 +456,14 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
             )))
         }
 
-        async fn get_request(&self, _request_id: &Uuid) -> Option<hermes::nvim::requests::Request> {
+        async fn get(&self, _request_id: &Uuid) -> Option<hermes::nvim::requests::Request> {
+            None
+        }
+
+        async fn remove_by_request_id(
+            &self,
+            _agent_request_id: &agent_client_protocol::schema::v1::RequestId,
+        ) -> Option<hermes::nvim::requests::Request> {
             None
         }
     }
@@ -534,7 +541,7 @@ fn test_no_listener_with_request_logs_default_response_error() -> nvim_oxi::Resu
             Ok(())
         }
 
-        async fn add_request(
+        async fn add(
             &self,
             _session_id: String,
             _agent_request_id: agent_client_protocol::schema::v1::RequestId,
@@ -543,7 +550,7 @@ fn test_no_listener_with_request_logs_default_response_error() -> nvim_oxi::Resu
             Uuid::new_v4()
         }
 
-        async fn remove_request(
+        async fn remove(
             &self,
             request_id: &Uuid,
         ) -> hermes::acp::Result<hermes::nvim::requests::Request> {
@@ -553,7 +560,14 @@ fn test_no_listener_with_request_logs_default_response_error() -> nvim_oxi::Resu
             )))
         }
 
-        async fn get_request(&self, _request_id: &Uuid) -> Option<hermes::nvim::requests::Request> {
+        async fn get(&self, _request_id: &Uuid) -> Option<hermes::nvim::requests::Request> {
+            None
+        }
+
+        async fn remove_by_request_id(
+            &self,
+            _agent_request_id: &agent_client_protocol::schema::v1::RequestId,
+        ) -> Option<hermes::nvim::requests::Request> {
             None
         }
     }
@@ -1761,10 +1775,9 @@ fn handler_callback_fires_autocmd_when_listener_attached() -> nvim_oxi::Result<(
     smol::block_on(executor.run(async {
         handler
             .channel
-            .send((
+            .send(NvimHandleArgs::Event(
                 Commands::PermissionRequest.to_string(),
                 serde_json::json!({}),
-                None,
             ))
             .await
             .expect("Send should succeed");
@@ -1811,14 +1824,12 @@ fn handler_callback_sends_default_response_when_no_listener() -> nvim_oxi::Resul
     smol::block_on(executor.run(async {
         handler
             .channel
-            .send((
+            .send(NvimHandleArgs::Request(
                 "UnknownCommand".to_string(),
                 serde_json::json!({}),
-                Some((
-                    Responder::PermissionResponse(sender),
-                    "test-session".to_string(),
-                    agent_client_protocol::schema::v1::RequestId::Null,
-                )),
+                Responder::PermissionResponse(sender),
+                "test-session".to_string(),
+                agent_client_protocol::schema::v1::RequestId::Null,
             ))
             .await
             .expect("Send should succeed");
@@ -1853,10 +1864,9 @@ fn handler_callback_warns_when_no_listener_and_no_request() -> nvim_oxi::Result<
     smol::block_on(executor.run(async {
         handler
             .channel
-            .send((
+            .send(NvimHandleArgs::Event(
                 "AnotherUnknownCommand".to_string(),
                 serde_json::json!({}),
-                None,
             ))
             .await
             .expect("Send should succeed");

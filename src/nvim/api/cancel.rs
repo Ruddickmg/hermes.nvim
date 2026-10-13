@@ -4,6 +4,7 @@ use crate::{
     nvim::requests::RequestHandler,
 };
 use agent_client_protocol::schema::v1::CancelNotification;
+use futures::future::try_join;
 
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
@@ -35,7 +36,12 @@ impl Api {
             let request = self.request_handler.get(&request_id).await.ok_or_else(|| {
                 Error::InvalidInput(format!("No request found for id: {}", request_id))
             })?;
-            connection.cancel_request(request.request_id()).await?;
+
+            try_join(
+                connection.cancel_request(request.request_id()),
+                self.response_handler.cancel_request(&request.request_id()),
+            )
+            .await?;
 
             drop(connection_manager);
         }

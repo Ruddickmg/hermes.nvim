@@ -831,10 +831,26 @@ async fn handle_prompt(
 
         if let Some(read_req) = read_file_request {
             let sent = cx.send_request(read_req);
-            config.lock().unwrap().last_read_file_request_id = Some(sent.id().clone());
-            sent.block_task()
-                .await
-                .map_err(|e| internal_error(format!("read_text_file failed: {}", e)))?;
+            let (should_cancel, signal) = {
+                let mut config = config.lock().unwrap();
+                config.last_read_file_request_id = Some(sent.id().clone());
+                (
+                    config.cancel_read_file_request,
+                    config.cancel_read_file_signal.clone(),
+                )
+            };
+            if should_cancel {
+                if let Some(signal) = signal {
+                    let _ = signal.recv().await;
+                }
+                let _ = sent.cancel();
+            }
+            if let Err(error) = sent.block_task().await {
+                config.lock().unwrap().last_read_file_response_error_code = Some(error.code.into());
+                if !should_cancel {
+                    return Err(internal_error(format!("read_text_file failed: {}", error)));
+                }
+            }
         }
 
         // Write text file (if configured)

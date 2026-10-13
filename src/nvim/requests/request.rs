@@ -9,7 +9,7 @@ use agent_client_protocol::schema::v1::{
 use async_channel::Sender;
 use async_lock::Mutex;
 use nvim_oxi::conversion::FromObject;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{error, warn};
 use uuid::Uuid;
@@ -97,7 +97,7 @@ pub struct Request {
     is_permission_request: bool,
 }
 
-#[derive(Clone, Serialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct RequestDetails {
     pub request_id: String,

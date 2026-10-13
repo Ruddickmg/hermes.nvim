@@ -28,7 +28,7 @@ macro_rules! spawn_request_handler {
                         .run_until_cancelled(handler.$method(request, request_id.clone()))
                         .await;
                     if cancellation.is_cancelled()
-                        && let Err(error) = handler.cancel_incoming_request(&request_id).await
+                        && let Err(error) = handler.cancel_request(&request_id).await
                     {
                         error!("Failed to clean up cancelled request: {}", error);
                     }

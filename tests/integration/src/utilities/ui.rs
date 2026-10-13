@@ -141,11 +141,10 @@ fn test_non_permission_request_not_permission() -> nvim_oxi::Result<()> {
         "test content",
     );
     let responder = Responder::WriteFileResponse(sender, write_request);
-    let request_id =
-        block_on(requests.add_request("test-session".to_string(), RequestId::Null, responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     // Get the request and check if it's a permission request
-    let request = block_on(requests.get_request(&request_id)).expect("Request should exist");
+    let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     // Verify this is NOT a permission request
     assert!(

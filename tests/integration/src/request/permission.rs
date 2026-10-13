@@ -63,8 +63,7 @@ fn invalid_json_data_returns_error() -> nvim_oxi::Result<()> {
         })?);
     let (sender, _receiver) = async_channel::bounded::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
-    let request_id =
-        block_on(requests.add_request("test-session".to_string(), RequestId::Null, responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     // Invalid JSON that doesn't match RequestPermissionRequest structure
     let invalid_data = serde_json::json!({

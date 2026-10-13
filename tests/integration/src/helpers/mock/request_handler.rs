@@ -41,7 +41,7 @@ impl RequestHandler for MockRequestHandler {
         Ok(())
     }
 
-    async fn add_request(
+    async fn add(
         &self,
         _session_id: String,
         _agent_request_id: RequestId,
@@ -50,14 +50,18 @@ impl RequestHandler for MockRequestHandler {
         Uuid::new_v4()
     }
 
-    async fn remove_request(&self, request_id: &Uuid) -> hermes::acp::Result<Request> {
+    async fn remove(&self, request_id: &Uuid) -> hermes::acp::Result<Request> {
         Err(hermes::acp::error::Error::InvalidInput(format!(
             "No request found for {}",
             request_id
         )))
     }
 
-    async fn get_request(&self, _request_id: &Uuid) -> Option<Request> {
+    async fn get(&self, _request_id: &Uuid) -> Option<Request> {
+        None
+    }
+
+    async fn remove_by_request_id(&self, _agent_request_id: &RequestId) -> Option<Request> {
         None
     }
 }
