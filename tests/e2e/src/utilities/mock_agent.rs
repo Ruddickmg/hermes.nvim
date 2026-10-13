@@ -10,15 +10,15 @@ use agent_client_protocol::{
     self as acp, Agent, ByteStreams, ConnectionTo, Lines, Responder, Stdio,
     on_receive_notification, on_receive_request,
     schema::v1::{
-        AuthenticateRequest, AuthenticateResponse, CancelNotification, CloseSessionRequest,
-        CloseSessionResponse, ContentBlock, ContentChunk, DeleteSessionRequest,
-        DeleteSessionResponse, InitializeRequest, InitializeResponse, ListSessionsRequest,
-        ListSessionsResponse, LoadSessionRequest, LoadSessionResponse, LogoutRequest,
-        LogoutResponse, NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse,
-        ResumeSessionRequest, ResumeSessionResponse, SessionNotification, SessionUpdate,
-        SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, SetSessionModeRequest,
-        SetSessionModeResponse, StopReason, TerminalOutputRequest, TextContent,
-        WaitForTerminalExitRequest,
+        AuthenticateRequest, AuthenticateResponse, CancelNotification, CancelRequestNotification,
+        CloseSessionRequest, CloseSessionResponse, ContentBlock, ContentChunk,
+        DeleteSessionRequest, DeleteSessionResponse, InitializeRequest, InitializeResponse,
+        ListSessionsRequest, ListSessionsResponse, LoadSessionRequest, LoadSessionResponse,
+        LogoutRequest, LogoutResponse, NewSessionRequest, NewSessionResponse, PromptRequest,
+        PromptResponse, ResumeSessionRequest, ResumeSessionResponse, SessionNotification,
+        SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
+        SetSessionModeRequest, SetSessionModeResponse, StopReason, TerminalOutputRequest,
+        TextContent, WaitForTerminalExitRequest,
     },
 };
 use async_channel::bounded;
@@ -529,6 +529,20 @@ fn build_mock_agent_builder(
             },
             on_receive_notification!(),
         )
+        .on_receive_notification(
+            {
+                let config = config.clone();
+                move |notification: CancelRequestNotification, _cx: ConnectionTo<acp::Client>| {
+                    let config = config.clone();
+                    async move {
+                        config.lock().unwrap().cancel_request_id =
+                            Some(notification.request_id.clone());
+                        Ok(())
+                    }
+                }
+            },
+            on_receive_notification!(),
+        )
         .on_receive_request(
             {
                 let config = config.clone();
@@ -816,8 +830,9 @@ async fn handle_prompt(
         };
 
         if let Some(read_req) = read_file_request {
-            cx.send_request(read_req)
-                .block_task()
+            let sent = cx.send_request(read_req);
+            config.lock().unwrap().last_read_file_request_id = Some(sent.id().clone());
+            sent.block_task()
                 .await
                 .map_err(|e| internal_error(format!("read_text_file failed: {}", e)))?;
         }

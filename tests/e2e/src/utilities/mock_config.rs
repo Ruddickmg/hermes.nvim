@@ -7,12 +7,12 @@ use agent_client_protocol::schema::v1::{
     Implementation, InitializeRequest, InitializeResponse, ListSessionsResponse,
     LoadSessionResponse, McpCapabilities, NewSessionResponse, PermissionOption, PermissionOptionId,
     PermissionOptionKind, PromptCapabilities, ReadTextFileRequest, ReleaseTerminalRequest,
-    RequestPermissionRequest, ResumeSessionResponse, SessionAdditionalDirectoriesCapabilities,
-    SessionCapabilities, SessionCloseCapabilities, SessionDeleteCapabilities,
-    SessionForkCapabilities, SessionId, SessionInfo, SessionListCapabilities,
-    SessionResumeCapabilities, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
-    SetSessionModeResponse, TerminalOutputRequest, ToolCallId, ToolCallUpdate,
-    ToolCallUpdateFields, WaitForTerminalExitRequest, WriteTextFileRequest,
+    RequestId, RequestPermissionRequest, ResumeSessionResponse,
+    SessionAdditionalDirectoriesCapabilities, SessionCapabilities, SessionCloseCapabilities,
+    SessionDeleteCapabilities, SessionForkCapabilities, SessionId, SessionInfo,
+    SessionListCapabilities, SessionResumeCapabilities, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, SetSessionModeResponse, TerminalOutputRequest, ToolCallId,
+    ToolCallUpdate, ToolCallUpdateFields, WaitForTerminalExitRequest, WriteTextFileRequest,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -66,6 +66,10 @@ pub struct MockConfig {
     pub close_session_response: Option<CloseSessionResponse>,
     /// Delete session response to return when a DeleteSessionRequest is received
     pub delete_session_response: Option<DeleteSessionResponse>,
+    /// Request id the agent used for the most recent outgoing read request (None = none sent)
+    pub last_read_file_request_id: Option<RequestId>,
+    /// Request id carried by the most recent `$/cancel_request` notification (None = none received)
+    pub cancel_request_id: Option<RequestId>,
 }
 
 impl Default for MockConfig {
@@ -118,6 +122,8 @@ impl Default for MockConfig {
             elicitation_complete_notification: None,
             close_session_response: None,
             delete_session_response: None,
+            last_read_file_request_id: None,
+            cancel_request_id: None,
         }
     }
 }

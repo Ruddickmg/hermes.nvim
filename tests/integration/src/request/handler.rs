@@ -210,6 +210,87 @@ fn test_other_session_not_cancelled() -> nvim_oxi::Result<()> {
 }
 
 #[nvim_oxi::test]
+fn test_remove_request_returns_stored_request() -> nvim_oxi::Result<()> {
+    let requests = Arc::new(
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
+    );
+    let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
+    let responder = Responder::PermissionResponse(sender);
+    let request_id =
+        block_on(requests.add_request("test-session".to_string(), RequestId::Null, responder));
+
+    let removed = block_on(requests.remove_request(&request_id))
+        .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
+
+    assert_eq!(removed.id(), request_id);
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_remove_request_removes_from_pending() -> nvim_oxi::Result<()> {
+    let requests = Arc::new(
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
+    );
+    let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
+    let responder = Responder::PermissionResponse(sender);
+    let request_id =
+        block_on(requests.add_request("test-session".to_string(), RequestId::Null, responder));
+
+    block_on(requests.remove_request(&request_id))
+        .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
+
+    assert!(
+        block_on(requests.get_request(&request_id)).is_none(),
+        "Removed request should no longer be pending"
+    );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_remove_request_missing_returns_error() -> nvim_oxi::Result<()> {
+    let requests = Arc::new(
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
+    );
+
+    let result = block_on(requests.remove_request(&Uuid::new_v4()));
+
+    assert!(
+        result.is_err(),
+        "Removing a non-existent request should return an error"
+    );
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_request_id_returns_agent_request_id() -> nvim_oxi::Result<()> {
+    let requests = Arc::new(
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
+    );
+    let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
+    let responder = Responder::PermissionResponse(sender);
+    let agent_request_id = RequestId::Number(42);
+    let request_id = block_on(requests.add_request(
+        "test-session".to_string(),
+        agent_request_id.clone(),
+        responder,
+    ));
+
+    let removed = block_on(requests.remove_request(&request_id))
+        .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
+
+    assert_eq!(removed.request_id(), agent_request_id);
+    Ok(())
+}
+
+#[nvim_oxi::test]
 fn test_get_request_returns_some_for_existing() -> nvim_oxi::Result<()> {
     let requests = Arc::new(
         Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(

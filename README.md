@@ -702,25 +702,25 @@ vim.api.nvim_create_autocmd("User", {
 
 ### ⏹️ Cancel (**Optional**)
 
-Cancel the current operation of the agent (e.g., stop generating text, stop a tool call in progress, etc)
+Cancel the current operation of the agent (e.g., stop generating text, stop a tool call in progress, etc).
 
 ```lua
 local hermes = require("hermes")
-local sessionId = 'session-id-from-create-session-response'
+local session_id = 'session-id-from-create-session-response'
 
--- call signature
-hermes.cancel(sessionId)
+-- call signature (session ID or pending request ID)
+hermes.cancel(session_id)
 
 -- example
 vim.api.nvim_create_autocmd("User", {
   group = "hermes",
-  pattern = "SessionCreated",
+  pattern = "PermissionRequest",
   callback = function(args)
-    ---@type HermesSessionCreated
+    ---@type HermesPermissionRequest
     local data = args.data
-    local sessionId = data.sessionId
+    local request_id = data.requestId
 
-    hermes.cancel(sessionId)
+    hermes.cancel(request_id)
   end,
 })
 ```

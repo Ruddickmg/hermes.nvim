@@ -398,7 +398,9 @@ Autocommands triggered: ~
 *hermes.set_config_option()*                Set any configuration option
 
 hermes.cancel() cancels the current operation of the agent (e.g., stop
-generating text, stop a tool call in progress, etc).
+generating text, stop a tool call in progress, etc). The argument may be a
+session ID, or the requestId of a pending incoming request (from a
+PermissionRequest/ReadTextFile/etc. autocommand payload).
 
 set_mode/set_model/set_thought_level take a session ID and the mode/model/
 thought level ID. modes()/models()/thought_levels() fire the corresponding
