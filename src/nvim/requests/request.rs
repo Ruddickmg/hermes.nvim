@@ -9,6 +9,7 @@ use agent_client_protocol::schema::v1::{
 use async_channel::Sender;
 use async_lock::Mutex;
 use nvim_oxi::conversion::FromObject;
+use serde::Serialize;
 use std::sync::Arc;
 use tracing::{error, warn};
 use uuid::Uuid;
@@ -25,10 +26,9 @@ use crate::utilities::{
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
-/// Type alias for oneshot channel sender (async_channel::bounded(1))
 pub type OneshotSender<T> = Sender<T>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Responder {
     PermissionResponse(OneshotSender<RequestPermissionOutcome>),
     ReadFileResponse(
@@ -97,12 +97,28 @@ pub struct Request {
     is_permission_request: bool,
 }
 
+#[derive(Clone, Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestDetails {
+    pub request_id: String,
+    pub session_id: String,
+}
+
 impl Request {
     pub fn id(&self) -> Uuid {
         self.id
     }
+    pub fn details(&self) -> RequestDetails {
+        RequestDetails {
+            request_id: self.id.to_string(),
+            session_id: self.session_id(),
+        }
+    }
     pub fn request_id(&self) -> RequestId {
         self.request_id.clone()
+    }
+    pub fn session_id(&self) -> String {
+        self.session_id.clone()
     }
     pub fn new(
         request_id: RequestId,

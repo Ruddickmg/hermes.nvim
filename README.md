@@ -725,6 +725,10 @@ vim.api.nvim_create_autocmd("User", {
 })
 ```
 
+> **Triggers:** [RequestCancelled](#requestcancelled) autocommand upon completion.
+
+> [!NOTE]: [RequestCancelled](#requestcancelled) may also be triggered by the agent (agents can cancel requests)
+
 ### 🎯 Set mode (**Optional**)
 
 Set what mode the agent is in (the plan/build modes for opencode for example)
@@ -2003,6 +2007,15 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "path": "string",
   "line": "number (optional, 1-based)",
   "limit": "number (optional, max lines to read)"
+}</code></pre></td>
+    </tr>
+    <tr id="requestcancelled">
+      <td><code>RequestCancelled</code></td>
+      <td>Cancelled a pending request (Can be triggered by the user or the agent)</td>
+      <td>🤖 Agent (notification), ⚡ <a href="#cancel">cancel()</a></td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string"
 }</code></pre></td>
     </tr>
     <tr id="sessionclosed">

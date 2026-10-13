@@ -52,9 +52,10 @@ pub trait RequestHandler {
     async fn default_response(&self, request_id: &Uuid, data: serde_json::Value) -> Result<()>;
     async fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()>;
     async fn cancel_session_requests(&self, session_id: String) -> Result<()>;
-    async fn remove_request(&self, request_id: &Uuid) -> Result<Request>;
-    async fn get_request(&self, request_id: &Uuid) -> Option<Request>;
-    async fn add_request(
+    async fn remove(&self, request_id: &Uuid) -> Result<Request>;
+    async fn remove_by_request_id(&self, agent_request_id: &RequestId) -> Option<Request>;
+    async fn get(&self, request_id: &Uuid) -> Option<Request>;
+    async fn add(
         &self,
         session_id: String,
         agent_request_id: RequestId,
@@ -78,7 +79,7 @@ impl RequestHandler for Requests {
         }
     }
 
-    async fn add_request(
+    async fn add(
         &self,
         session_id: String,
         agent_request_id: RequestId,
@@ -100,7 +101,7 @@ impl RequestHandler for Requests {
         request_id
     }
 
-    async fn get_request(&self, request_id: &Uuid) -> Option<Request> {
+    async fn get(&self, request_id: &Uuid) -> Option<Request> {
         let pending = self.pending.lock().await;
         let request = pending.get(request_id).cloned();
         drop(pending);
@@ -126,12 +127,22 @@ impl RequestHandler for Requests {
         Ok(())
     }
 
-    async fn remove_request(&self, request_id: &Uuid) -> Result<Request> {
+    async fn remove(&self, request_id: &Uuid) -> Result<Request> {
         let mut pending = self.pending.lock().await;
         let pending_request = pending.remove(request_id);
         drop(pending);
         pending_request
             .ok_or_else(|| Error::InvalidInput(format!("No request found for {}", request_id)))
+    }
+
+    async fn remove_by_request_id(&self, agent_request_id: &RequestId) -> Option<Request> {
+        let mut pending = self.pending.lock().await;
+        let request = pending
+            .extract_if(|_, request| request.request_id() == *agent_request_id)
+            .map(|(_, request)| request)
+            .next();
+        drop(pending);
+        request
     }
 
     async fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()> {

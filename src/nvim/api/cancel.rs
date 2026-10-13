@@ -19,20 +19,24 @@ impl Api {
             .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
 
         if is_session_id {
-            let result = connection.cancel(CancelNotification::new(id.clone())).await;
+            connection
+                .cancel(CancelNotification::new(id.clone()))
+                .await?;
             drop(connection_manager);
-            result?;
 
             self.request_handler.cancel_session_requests(id).await?;
         } else {
             let request_id = uuid::Uuid::parse_str(&id).map_err(|_| {
                 Error::InvalidInput(format!(
-                    "No session found and id is invalid for a request_id: {}",
+                    "No session found and id is invalid type for a request_id: {}",
                     id
                 ))
             })?;
-            let request = self.request_handler.remove_request(&request_id).await?;
+            let request = self.request_handler.get(&request_id).await.ok_or_else(|| {
+                Error::InvalidInput(format!("No request found for id: {}", request_id))
+            })?;
             connection.cancel_request(request.request_id()).await?;
+
             drop(connection_manager);
         }
         Ok(())

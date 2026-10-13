@@ -465,6 +465,10 @@
 ---@class HermesElicitationComplete
 ---@field elicitationId string UUID of the completed elicitation
 
+---@class HermesRequestCancelled
+---@field requestId string UUID of the request the agent cancelled
+---@field sessionId string
+
 ---@class HermesAgentInfo
 ---@field id string
 ---@field name string

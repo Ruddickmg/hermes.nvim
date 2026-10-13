@@ -23,6 +23,7 @@ pub enum Commands {
     AvailableCommands,
     ModeCurrent,
     ConfigurationOption,
+    RequestCancelled,
 
     // Session lifecycle commands
     ConnectionInitialized,
@@ -98,6 +99,7 @@ impl TryFrom<&str> for Commands {
             "AvailableCommands" => Ok(Commands::AvailableCommands),
             "ModeCurrent" => Ok(Commands::ModeCurrent),
             "ConfigurationOption" => Ok(Commands::ConfigurationOption),
+            "RequestCancelled" => Ok(Commands::RequestCancelled),
 
             // Session lifecycle commands
             "ConnectionInitialized" => Ok(Commands::ConnectionInitialized),
@@ -363,6 +365,14 @@ mod tests {
         assert_eq!(
             Commands::try_from("ConfigurationOption").unwrap(),
             Commands::ConfigurationOption
+        );
+    }
+
+    #[test]
+    fn test_commands_request_cancelled() {
+        assert_eq!(
+            Commands::try_from("RequestCancelled").unwrap(),
+            Commands::RequestCancelled
         );
     }
 

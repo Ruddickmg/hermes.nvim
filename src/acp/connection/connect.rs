@@ -28,7 +28,8 @@ async fn dispatch(
             cx.send_notification(notification)?;
         }
         UserRequest::CancelRequest(id) => {
-            cx.send_cancel_request(id)?;
+            cx.send_cancel_request(id.clone())?;
+            client.cancel_request(&id).await?;
         }
         UserRequest::Prompt(request) => {
             let response = cx.send_request(request).block_task().await?;
