@@ -1614,6 +1614,25 @@ Below is a list of all autocommands and their associated data (passed to the cal
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
+    <tr>
+      <td><code>AvailableCommands</code></td>
+      <td>Available commands are updated</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "promptId": "uuid string",
+  "update": {
+    "sessionUpdate": "available_commands_update",
+    "availableCommands": [
+      {
+        "id": "string",
+        "name": "string",
+        "description": "string (optional)"
+      }
+    ]
+  }
+}</code></pre></td>
+    </tr>
     <tr id="compactionsummarychunk">
       <td><code>CompactionSummaryChunk</code></td>
       <td>Streamed chunk of a compaction summary</td>
@@ -1646,25 +1665,6 @@ Below is a list of all autocommands and their associated data (passed to the cal
       { "type": "text", "text": "string" }
     ],
     "error": "string (optional)"
-  }
-}</code></pre></td>
-    </tr>
-    <tr>
-      <td><code>AvailableCommands</code></td>
-      <td>Available commands are updated</td>
-      <td>🤖 Agent</td>
-      <td><pre><code class="language-json">{
-  "sessionId": "string",
-  "promptId": "uuid string",
-  "update": {
-    "sessionUpdate": "available_commands_update",
-    "availableCommands": [
-      {
-        "id": "string",
-        "name": "string",
-        "description": "string (optional)"
-      }
-    ]
   }
 }</code></pre></td>
     </tr>
