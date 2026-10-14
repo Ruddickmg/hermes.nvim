@@ -10,9 +10,9 @@ use crate::{Handler, acp::error::Error};
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     AuthCapabilities, BooleanConfigOptionCapabilities, ClientCapabilities,
-    ClientSessionCapabilities, ElicitationCapabilities, ElicitationFormCapabilities,
-    ElicitationUrlCapabilities, FileSystemCapabilities, Implementation, InitializeRequest,
-    SessionConfigOptionsCapabilities,
+    ClientSessionCapabilities, CompactionCapabilities, ElicitationCapabilities,
+    ElicitationFormCapabilities, ElicitationUrlCapabilities, FileSystemCapabilities,
+    Implementation, InitializeRequest, SessionConfigOptionsCapabilities,
 };
 use async_lock::Mutex;
 use serde::{Deserialize, Serialize};
@@ -244,6 +244,17 @@ fn build_elicitation_capabilities(
         .url((url_allowed && url_listener_attached).then(ElicitationUrlCapabilities::new))
 }
 
+fn build_session_capabilities(compaction_supported: bool) -> ClientSessionCapabilities {
+    let capabilities = ClientSessionCapabilities::new().config_options(
+        SessionConfigOptionsCapabilities::new().boolean(BooleanConfigOptionCapabilities::new()),
+    );
+    if compaction_supported {
+        capabilities.compaction(CompactionCapabilities::new())
+    } else {
+        capabilities
+    }
+}
+
 pub struct ConnectionManager {
     connection: HashMap<String, Connection>,
     state: Arc<Mutex<PluginState>>,
@@ -333,12 +344,10 @@ impl ConnectionManager {
                 autocmd_listeners_attached(GROUP, "User", "TerminalAuthentication")
                     && agent.base_command().is_some(),
             ))
-            .session(
-                ClientSessionCapabilities::new().config_options(
-                    SessionConfigOptionsCapabilities::new()
-                        .boolean(BooleanConfigOptionCapabilities::new()),
-                ),
-            );
+            .session(build_session_capabilities(
+                autocmd_listeners_attached(GROUP, "User", "CompactionUpdate")
+                    || autocmd_listeners_attached(GROUP, "User", "CompactionSummaryChunk"),
+            ));
 
         let init_config = InitializeRequest::new(ProtocolVersion::LATEST)
             .client_info(Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"))
@@ -497,6 +506,18 @@ mod tests {
             // Property: converting string to Protocol should never panic
             let _ = Protocol::from(name.as_str());
         }
+    }
+
+    #[test]
+    fn test_build_session_capabilities_advertises_compaction_when_supported() {
+        let capabilities = build_session_capabilities(true);
+        assert_eq!(capabilities.compaction, Some(CompactionCapabilities::new()));
+    }
+
+    #[test]
+    fn test_build_session_capabilities_omits_compaction_when_unsupported() {
+        let capabilities = build_session_capabilities(false);
+        assert_eq!(capabilities.compaction, None);
     }
 
     #[test]
