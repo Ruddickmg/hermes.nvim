@@ -278,7 +278,7 @@ mod tests {
 
     use super::*;
     use agent_client_protocol::schema::ProtocolVersion;
-    use agent_client_protocol::schema::v1::{InitializeRequest, SessionId};
+    use agent_client_protocol::schema::v1::{InitializeRequest, RequestId, SessionId};
     use pretty_assertions::assert_eq;
 
     /// Creates a mock thread handle that immediately returns Ok for testing
@@ -314,6 +314,28 @@ mod tests {
                 assert_eq!(received.protocol_version, request.protocol_version);
             } else {
                 panic!("Expected Initialize request");
+            }
+        }));
+    }
+
+    #[test]
+    fn test_connection_cancel_request() {
+        let executor = mock_runtime();
+        let (sender, receiver) = async_channel::bounded(1);
+        let connection = Arc::new(mock_connection(sender));
+        let request_id = RequestId::Number(1);
+
+        smol::block_on(executor.run(async {
+            connection.cancel_request(request_id.clone()).await.unwrap();
+        }));
+
+        drop(connection);
+
+        smol::block_on(executor.run(async {
+            if let Ok(UserRequest::CancelRequest(received)) = receiver.recv().await {
+                assert_eq!(received, request_id);
+            } else {
+                panic!("Expected CancelRequest");
             }
         }));
     }

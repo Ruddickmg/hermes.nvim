@@ -289,6 +289,24 @@ fn test_request_id_returns_agent_request_id() -> nvim_oxi::Result<()> {
 }
 
 #[nvim_oxi::test]
+fn test_details_returns_request_session_id() -> nvim_oxi::Result<()> {
+    let requests = Arc::new(
+        Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(
+            |e| nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e)),
+        )?,
+    );
+    let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
+    let responder = Responder::PermissionResponse(sender);
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
+
+    let removed = block_on(requests.remove(&request_id))
+        .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
+
+    assert_eq!(removed.details().session_id, "test-session");
+    Ok(())
+}
+
+#[nvim_oxi::test]
 fn test_remove_by_request_id_returns_stored_request() -> nvim_oxi::Result<()> {
     let requests = Arc::new(
         Requests::new(mock_runtime(), Arc::new(Mutex::new(PluginState::default()))).map_err(

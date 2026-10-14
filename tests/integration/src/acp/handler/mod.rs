@@ -1883,3 +1883,38 @@ fn handler_callback_warns_when_no_listener_and_no_request() -> nvim_oxi::Result<
 
     Ok(())
 }
+
+#[tracing_test::traced_test]
+#[nvim_oxi::test]
+fn handler_callback_logs_error_when_cancel_has_no_matching_request() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let requests = Rc::new(MockRequestHandler::new());
+    let handler = Handler::new(
+        state.clone(),
+        mock_connection_manager(&state),
+        mock_runtime(),
+        requests,
+    )
+    .expect("Handler creation should succeed");
+
+    let executor = smol::LocalExecutor::new();
+    smol::block_on(executor.run(async {
+        handler
+            .channel
+            .send(NvimHandleArgs::Cancel(
+                agent_client_protocol::schema::v1::RequestId::Number(1),
+            ))
+            .await
+            .expect("Send should succeed");
+    }));
+
+    // Give the event loop a moment to process.
+    nvim_oxi::api::command("sleep 50m").ok();
+
+    assert!(
+        logs_contain("no matching request was found"),
+        "Expected error log when cancelling a request id that is not pending"
+    );
+
+    Ok(())
+}

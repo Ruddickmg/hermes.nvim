@@ -157,6 +157,76 @@ fn test_cancel_pending_read_request_sends_cancel_notification() -> Result<(), nv
     Ok(())
 }
 
+/// Result of cancelling with an id that resolves to no pending request.
+struct UnresolvedCancel {
+    /// `$/cancel_request` request id the mock agent received, if any.
+    received: Option<RequestId>,
+}
+
+/// Connect to the mock agent and call `cancel` with `id`, which is neither a
+/// known session id nor a pending request id.
+fn run_cancel_with_unresolved_id(id: String) -> Result<UnresolvedCancel, nvim_oxi::Error> {
+    let agent = MockAgent::new();
+    let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
+
+    let dict: Dictionary = hermes()?;
+    let connect: Function<ConnectionArgs, ()> = create_func(dict.clone(), "connect");
+    let disconnect: Function<DisconnectArgs, ()> = create_func(dict.clone(), "disconnect");
+    let cancel: Function<String, ()> = create_func(dict.clone(), "cancel");
+
+    let wait_for_init =
+        autocommand::listen_for_autocommand::<InitializeResponse>(Commands::ConnectionInitialized);
+
+    connect_to_mock_agent(&connect, &mock_handle)?;
+    wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS)).map_err(|_| make_err("init timeout"))?;
+
+    cancel.call(id)?;
+
+    // Poll briefly so a regression that forwards the id to the agent would be
+    // observed before the assertion.
+    let deadline = Instant::now() + Duration::from_millis(500);
+    let mut received = None;
+    while Instant::now() < deadline {
+        let captured = mock_handle.config.lock().unwrap().cancel_request_id.clone();
+        if captured.is_some() {
+            received = captured;
+            break;
+        }
+        let _ = nvim_oxi::api::command("sleep 100m");
+    }
+
+    disconnect.call(DisconnectArgs::All)?;
+    mock_handle.close();
+
+    Ok(UnresolvedCancel { received })
+}
+
+/// Cancelling with a non-UUID id is rejected before any request lookup and is
+/// never forwarded to the agent.
+#[nvim_oxi::test]
+fn test_cancel_with_invalid_request_id_does_not_notify_agent() -> Result<(), nvim_oxi::Error> {
+    let result = run_cancel_with_unresolved_id("not-a-request-id".to_string())?;
+
+    assert_eq!(
+        result.received, None,
+        "Hermes should not send $/cancel_request for an id that is not a UUID"
+    );
+    Ok(())
+}
+
+/// Cancelling with a valid UUID that matches no pending request is rejected
+/// and never forwarded to the agent.
+#[nvim_oxi::test]
+fn test_cancel_with_unknown_request_id_does_not_notify_agent() -> Result<(), nvim_oxi::Error> {
+    let result = run_cancel_with_unresolved_id(uuid::Uuid::new_v4().to_string())?;
+
+    assert_eq!(
+        result.received, None,
+        "Hermes should not send $/cancel_request for an unknown request id"
+    );
+    Ok(())
+}
+
 /// Cancelling a pending incoming request fires `RequestCancelled` carrying the
 /// cancelled request's id.
 #[nvim_oxi::test]

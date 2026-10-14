@@ -376,6 +376,14 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_commands_request_cancelled_display() {
+        assert_eq!(
+            format!("{}", Commands::RequestCancelled),
+            "RequestCancelled"
+        );
+    }
+
     // Tests for Session lifecycle commands
     #[test]
     fn test_commands_connection_initialized() {
