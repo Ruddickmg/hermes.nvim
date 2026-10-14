@@ -1821,7 +1821,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="modelconfigurations">
       <td><code>ModelConfigurations</code></td>
       <td>Available model configuration options retrieved</td>
-      <td>⚡ <a href="#-modelconfigurations">model_configurations()</a></td>
+      <td>⚡ <a href="#-model-configurations">model_configurations()</a></td>
       <td><pre><code class="language-json">[{
   "id": "string",
   "name": "string",
@@ -2350,7 +2350,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="thoughtlevels">
       <td><code>ThoughtLevels</code></td>
       <td>Available thought levels retrieved</td>
-      <td>⚡ <a href="#-thoughtlevels">thought_levels()</a></td>
+      <td>⚡ <a href="#-thought-levels">thought_levels()</a></td>
       <td><pre><code class="language-json">{
   "options": [
     {
