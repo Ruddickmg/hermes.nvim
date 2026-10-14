@@ -509,6 +509,18 @@ mod tests {
     }
 
     #[test]
+    fn test_build_session_capabilities_advertises_compaction_when_supported() {
+        let capabilities = build_session_capabilities(true);
+        assert_eq!(capabilities.compaction, Some(CompactionCapabilities::new()));
+    }
+
+    #[test]
+    fn test_build_session_capabilities_omits_compaction_when_unsupported() {
+        let capabilities = build_session_capabilities(false);
+        assert_eq!(capabilities.compaction, None);
+    }
+
+    #[test]
     fn test_protocol_display() {
         // Test Display for all Protocol variants using slice comparison
         let protocols: Vec<Protocol> = vec![

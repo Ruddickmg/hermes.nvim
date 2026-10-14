@@ -1614,6 +1614,41 @@ Below is a list of all autocommands and their associated data (passed to the cal
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
+    <tr id="compactionsummarychunk">
+      <td><code>CompactionSummaryChunk</code></td>
+      <td>Streamed chunk of a compaction summary</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "promptId": "uuid string",
+  "update": {
+    "sessionUpdate": "compaction_summary_chunk",
+    "compactionId": "string",
+    "content": {
+      "type": "text",
+      "text": "string"
+    }
+  }
+}</code></pre></td>
+    </tr>
+    <tr id="compactionupdate">
+      <td><code>CompactionUpdate</code></td>
+      <td>Status update for a context compaction</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "promptId": "uuid string",
+  "update": {
+    "sessionUpdate": "compaction_update",
+    "compactionId": "string",
+    "status": "in_progress",
+    "summary": [
+      { "type": "text", "text": "string" }
+    ],
+    "error": "string (optional)"
+  }
+}</code></pre></td>
+    </tr>
     <tr>
       <td><code>AvailableCommands</code></td>
       <td>Available commands are updated</td>
