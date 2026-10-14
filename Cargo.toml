@@ -22,11 +22,9 @@ fmt = "cargo fmt && { git diff --cached --name-only --diff-filter=ACM | while IF
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-agent-client-protocol = { version = "2.0.0", features = [
+agent-client-protocol = { version = "3.3.0", features = [
     "unstable_session_fork",
     "unstable_mcp_over_acp",
-    "unstable_auth_methods",
-    # "unstable_boolean_config",
     # "unstable_llm_providers",
     # "unstable_nes",
 ] }
@@ -52,7 +50,7 @@ tar = "0.4"
 tracing = "0.1"
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 flate2 = "1"
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 tracing-subscriber = { version = "0.3.0", features = ["json", "env-filter"] }
 uuid = { version = "1.22.0", features = ["v4"] }
 resvg = "0.48"
@@ -71,7 +69,7 @@ tiny-skia = "0.12"
 usvg = "0.48"
 
 
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 # panic = "abort" removed - errors are logged and Ok returned instead
 
 [dev-dependencies]

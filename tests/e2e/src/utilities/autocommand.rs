@@ -130,7 +130,10 @@ where
                     "Timed out waiting for Autocmd".into(),
                 )));
             }
-            api::command("sleep 100m")?;
+            // The sleep is only used to pump Neovim's event loop. An unrelated
+            // error notification (e.g. from a background thread) can interrupt
+            // it, so don't treat that as a failure of the wait itself.
+            let _ = api::command("sleep 100m");
         }
     })
 }

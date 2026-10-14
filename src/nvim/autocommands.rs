@@ -14,12 +14,16 @@ pub enum Commands {
     WriteTextFile,
     ReadTextFile,
     PermissionRequest,
+    FormElicitation,
+    UrlElicitation,
+    ElicitationComplete,
     ToolCall,
     ToolCallUpdate,
     Plan,
     AvailableCommands,
     ModeCurrent,
     ConfigurationOption,
+    RequestCancelled,
 
     // Session lifecycle commands
     ConnectionInitialized,
@@ -27,6 +31,7 @@ pub enum Commands {
     SessionUpdate,
     Prompted,
     Authenticated,
+    TerminalAuthentication,
     LoggedOut,
     ConfigurationUpdated,
     ModelConfigurations,
@@ -64,6 +69,7 @@ pub enum Commands {
     Models,
     Modes,
     ThoughtLevels,
+    ConfigOptions,
 
     // Agent registry
     AgentList,
@@ -84,12 +90,16 @@ impl TryFrom<&str> for Commands {
             "WriteTextFile" => Ok(Commands::WriteTextFile),
             "ReadTextFile" => Ok(Commands::ReadTextFile),
             "PermissionRequest" => Ok(Commands::PermissionRequest),
+            "FormElicitation" => Ok(Commands::FormElicitation),
+            "UrlElicitation" => Ok(Commands::UrlElicitation),
+            "ElicitationComplete" => Ok(Commands::ElicitationComplete),
             "ToolCall" => Ok(Commands::ToolCall),
             "ToolCallUpdate" => Ok(Commands::ToolCallUpdate),
             "Plan" => Ok(Commands::Plan),
             "AvailableCommands" => Ok(Commands::AvailableCommands),
             "ModeCurrent" => Ok(Commands::ModeCurrent),
             "ConfigurationOption" => Ok(Commands::ConfigurationOption),
+            "RequestCancelled" => Ok(Commands::RequestCancelled),
 
             // Session lifecycle commands
             "ConnectionInitialized" => Ok(Commands::ConnectionInitialized),
@@ -97,6 +107,7 @@ impl TryFrom<&str> for Commands {
             "SessionUpdate" => Ok(Commands::SessionUpdate),
             "Prompted" => Ok(Commands::Prompted),
             "Authenticated" => Ok(Commands::Authenticated),
+            "TerminalAuthentication" => Ok(Commands::TerminalAuthentication),
             "LoggedOut" => Ok(Commands::LoggedOut),
             "ConfigurationUpdated" => Ok(Commands::ConfigurationUpdated),
             "ModelConfigurations" => Ok(Commands::ModelConfigurations),
@@ -134,6 +145,7 @@ impl TryFrom<&str> for Commands {
             "Models" => Ok(Commands::Models),
             "Modes" => Ok(Commands::Modes),
             "ThoughtLevels" => Ok(Commands::ThoughtLevels),
+            "ConfigOptions" => Ok(Commands::ConfigOptions),
 
             // Agent registry
             "AgentList" => Ok(Commands::AgentList),
@@ -273,6 +285,48 @@ mod tests {
     }
 
     #[test]
+    fn test_commands_form_elicitation_try_from() {
+        assert_eq!(
+            Commands::try_from("FormElicitation").unwrap(),
+            Commands::FormElicitation
+        );
+    }
+
+    #[test]
+    fn test_commands_form_elicitation_display() {
+        assert_eq!(format!("{}", Commands::FormElicitation), "FormElicitation");
+    }
+
+    #[test]
+    fn test_commands_url_elicitation_try_from() {
+        assert_eq!(
+            Commands::try_from("UrlElicitation").unwrap(),
+            Commands::UrlElicitation
+        );
+    }
+
+    #[test]
+    fn test_commands_url_elicitation_display() {
+        assert_eq!(format!("{}", Commands::UrlElicitation), "UrlElicitation");
+    }
+
+    #[test]
+    fn test_commands_elicitation_complete_try_from() {
+        assert_eq!(
+            Commands::try_from("ElicitationComplete").unwrap(),
+            Commands::ElicitationComplete
+        );
+    }
+
+    #[test]
+    fn test_commands_elicitation_complete_display() {
+        assert_eq!(
+            format!("{}", Commands::ElicitationComplete),
+            "ElicitationComplete"
+        );
+    }
+
+    #[test]
     fn test_commands_tool_call() {
         assert_eq!(Commands::try_from("ToolCall").unwrap(), Commands::ToolCall);
     }
@@ -314,6 +368,22 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_commands_request_cancelled() {
+        assert_eq!(
+            Commands::try_from("RequestCancelled").unwrap(),
+            Commands::RequestCancelled
+        );
+    }
+
+    #[test]
+    fn test_commands_request_cancelled_display() {
+        assert_eq!(
+            format!("{}", Commands::RequestCancelled),
+            "RequestCancelled"
+        );
+    }
+
     // Tests for Session lifecycle commands
     #[test]
     fn test_commands_connection_initialized() {
@@ -349,6 +419,22 @@ mod tests {
         assert_eq!(
             Commands::try_from("Authenticated").unwrap(),
             Commands::Authenticated
+        );
+    }
+
+    #[test]
+    fn test_commands_terminal_authentication() {
+        assert_eq!(
+            Commands::try_from("TerminalAuthentication").unwrap(),
+            Commands::TerminalAuthentication
+        );
+    }
+
+    #[test]
+    fn test_commands_terminal_authentication_display() {
+        assert_eq!(
+            format!("{}", Commands::TerminalAuthentication),
+            "TerminalAuthentication"
         );
     }
 
@@ -577,6 +663,14 @@ mod tests {
         assert_eq!(
             Commands::try_from("ThoughtLevels").unwrap(),
             Commands::ThoughtLevels
+        );
+    }
+
+    #[test]
+    fn test_commands_config_options() {
+        assert_eq!(
+            Commands::try_from("ConfigOptions").unwrap(),
+            Commands::ConfigOptions
         );
     }
 

@@ -33,12 +33,18 @@ local M = {}
 ---@field message? HermesLogTargetConfig Message logging settings
 ---@field file? HermesLogFileConfig File logging settings
 
+---@class HermesElicitationConfig
+---@field form? boolean Allow agent to send form elicitation requests (default: true)
+---@field url? boolean Allow agent to send URL elicitation requests (default: true)
+---@field reject_unknown_elicitation_values? boolean Reject responses for unknown/future elicitation property types (default: false)
+
 ---@class HermesPermissionsConfig
 ---@field fs_write_access? boolean Allow agent to write files (default: true)
 ---@field fs_read_access? boolean Allow agent to read files (default: true)
 ---@field terminal_access? boolean Allow agent to execute terminal commands (default: true)
 ---@field request_permissions? boolean Allow agent to send permission requests (default: true)
 ---@field send_notifications? boolean Allow agent to send notifications (default: true)
+---@field elicitation? HermesElicitationConfig Elicitation permission settings
 
 ---@class HermesTerminalConfig
 ---@field delete? boolean Auto-delete terminals on exit (default: false)
@@ -151,6 +157,11 @@ local default_config = {
 		terminal_access = true,
 		request_permissions = true,
 		send_notifications = true,
+		elicitation = {
+			form = true,
+			url = true,
+			reject_unknown_elicitation_values = false,
+		},
 	},
 	terminal = {
 		delete = false,

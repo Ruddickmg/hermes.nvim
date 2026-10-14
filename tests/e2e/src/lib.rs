@@ -1,9 +1,13 @@
 pub const TIMEOUT_IN_SECONDS: u64 = 30; // seconds
 
+pub mod authenticate;
+pub mod cancellation;
+pub mod config_options;
 pub mod configure_model;
 pub mod connection;
 pub mod copilot;
 pub mod disconnect;
+pub mod elicitation;
 pub mod error_handling;
 pub mod file_system;
 pub mod logout;

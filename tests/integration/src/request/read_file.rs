@@ -3,7 +3,9 @@
 //! Each test verifies exactly ONE behavior with exactly ONE assertion.
 //! Setup code and .expect() calls don't count as assertions.
 use crate::helpers::ui::wait_for;
-use agent_client_protocol::schema::v1::{ReadTextFileRequest, ReadTextFileResponse, SessionId};
+use agent_client_protocol::schema::v1::{
+    ReadTextFileRequest, ReadTextFileResponse, RequestId, SessionId,
+};
 use assert_fs::NamedTempFile;
 use assert_fs::prelude::*;
 use async_channel::bounded as oneshot_channel;
@@ -68,7 +70,7 @@ fn setup_read_request(
     let (sender, receiver) =
         oneshot_channel::<agent_client_protocol::Result<ReadTextFileResponse>>(1);
     let responder = Responder::ReadFileResponse(sender, create_read_request(path, start, limit));
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
     (requests, request_id, receiver)
 }
 
@@ -107,7 +109,7 @@ fn read_file_creates_request_in_pending() -> nvim_oxi::Result<()> {
     let (_temp_file, path) = create_file_with_lines(5);
     let (requests, request_id, _receiver) = setup_read_request(&path, None, None);
 
-    assert!(block_on(requests.get_request(&request_id)).is_some());
+    assert!(block_on(requests.get(&request_id)).is_some());
 
     Ok(())
 }
@@ -120,7 +122,7 @@ fn read_file_gets_removed_from_pending() -> nvim_oxi::Result<()> {
     block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let cleaned_up = wait_for(
-        || block_on(requests.get_request(&request_id)).is_none(),
+        || block_on(requests.get(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(cleaned_up);
@@ -165,7 +167,7 @@ fn read_file_buffer_cleanup_works() -> nvim_oxi::Result<()> {
     block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let cleaned_up = wait_for(
-        || block_on(requests.get_request(&request_id)).is_none(),
+        || block_on(requests.get(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(cleaned_up);
@@ -202,7 +204,7 @@ fn read_file_line_range_cleanup_works() -> nvim_oxi::Result<()> {
     block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let cleaned_up = wait_for(
-        || block_on(requests.get_request(&request_id)).is_none(),
+        || block_on(requests.get(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(cleaned_up);
@@ -438,7 +440,7 @@ fn read_file_line_zero_cleanup_works() -> nvim_oxi::Result<()> {
     block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let cleaned_up = wait_for(
-        || block_on(requests.get_request(&request_id)).is_none(),
+        || block_on(requests.get(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(
@@ -476,7 +478,7 @@ fn read_file_missing_file_returns_error() -> nvim_oxi::Result<()> {
         sender,
         create_read_request(PathBuf::from("/nonexistent/file.txt").as_path(), None, None),
     );
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
@@ -496,12 +498,12 @@ fn read_file_missing_file_cleanup_works() -> nvim_oxi::Result<()> {
         sender,
         create_read_request(PathBuf::from("/nonexistent/file.txt").as_path(), None, None),
     );
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let cleaned_up = wait_for(
-        || block_on(requests.get_request(&request_id)).is_none(),
+        || block_on(requests.get(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(cleaned_up);
@@ -537,7 +539,7 @@ fn read_file_empty_file_cleanup_works() -> nvim_oxi::Result<()> {
     block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let cleaned_up = wait_for(
-        || block_on(requests.get_request(&request_id)).is_none(),
+        || block_on(requests.get(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(cleaned_up);
@@ -570,7 +572,7 @@ fn read_file_start_beyond_length_cleanup_works() -> nvim_oxi::Result<()> {
         .expect("Failed to send default response for out-of-range read request");
 
     let cleaned_up = wait_for(
-        || block_on(requests.get_request(&request_id)).is_none(),
+        || block_on(requests.get(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(cleaned_up);
@@ -588,7 +590,7 @@ fn read_file_respond_path_sends_custom_content() -> nvim_oxi::Result<()> {
     );
     let (sender, receiver) = oneshot_channel::<Result<ReadTextFileResponse, _>>(1);
     let responder = Responder::ReadFileResponse(sender, create_read_request(&path, None, None));
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     let custom_content = "Custom content from user";
     let response_obj = nvim_oxi::Object::from(custom_content);
@@ -612,14 +614,14 @@ fn read_file_respond_path_cleanup_works() -> nvim_oxi::Result<()> {
     );
     let (sender, _receiver) = async_channel::bounded::<Result<ReadTextFileResponse, _>>(1);
     let responder = Responder::ReadFileResponse(sender, create_read_request(&path, None, None));
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     let response_obj = nvim_oxi::Object::from("test content");
     block_on(requests.handle_response(&request_id, response_obj))
         .expect("Failed to handle response for cleanup verification");
 
     let cleaned_up = wait_for(
-        || block_on(requests.get_request(&request_id)).is_none(),
+        || block_on(requests.get(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(cleaned_up);
@@ -656,7 +658,7 @@ fn read_file_large_cleanup_works() -> nvim_oxi::Result<()> {
     block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
     let cleaned_up = wait_for(
-        || block_on(requests.get_request(&request_id)).is_none(),
+        || block_on(requests.get(&request_id)).is_none(),
         Duration::from_millis(500),
     );
     assert!(cleaned_up);
