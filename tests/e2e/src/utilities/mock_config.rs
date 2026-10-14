@@ -2,17 +2,18 @@
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, AuthenticateResponse, CloseSessionResponse, CompleteElicitationNotification,
-    CreateElicitationRequest, CreateTerminalRequest, DeleteSessionResponse, ExtResponse,
-    Implementation, InitializeRequest, InitializeResponse, ListSessionsResponse,
-    LoadSessionResponse, McpCapabilities, NewSessionResponse, PermissionOption, PermissionOptionId,
-    PermissionOptionKind, PromptCapabilities, ReadTextFileRequest, ReleaseTerminalRequest,
-    RequestId, RequestPermissionRequest, ResumeSessionResponse,
-    SessionAdditionalDirectoriesCapabilities, SessionCapabilities, SessionCloseCapabilities,
-    SessionDeleteCapabilities, SessionForkCapabilities, SessionId, SessionInfo,
-    SessionListCapabilities, SessionResumeCapabilities, SetSessionConfigOptionRequest,
-    SetSessionConfigOptionResponse, SetSessionModeResponse, TerminalOutputRequest, ToolCallId,
-    ToolCallUpdate, ToolCallUpdateFields, WaitForTerminalExitRequest, WriteTextFileRequest,
+    AgentCapabilities, AuthenticateResponse, CloseSessionResponse, CompactionSummaryChunk,
+    CompactionUpdate, CompleteElicitationNotification, CreateElicitationRequest,
+    CreateTerminalRequest, DeleteSessionResponse, ExtResponse, Implementation, InitializeRequest,
+    InitializeResponse, ListSessionsResponse, LoadSessionResponse, McpCapabilities,
+    NewSessionResponse, Notice, PermissionOption, PermissionOptionId, PermissionOptionKind,
+    PromptCapabilities, ReadTextFileRequest, ReleaseTerminalRequest, RequestId,
+    RequestPermissionRequest, ResumeSessionResponse, SessionAdditionalDirectoriesCapabilities,
+    SessionCapabilities, SessionCloseCapabilities, SessionDeleteCapabilities,
+    SessionForkCapabilities, SessionId, SessionInfo, SessionListCapabilities,
+    SessionResumeCapabilities, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
+    SetSessionModeResponse, TerminalOutputRequest, ToolCallId, ToolCallUpdate,
+    ToolCallUpdateFields, WaitForTerminalExitRequest, WriteTextFileRequest,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -62,6 +63,12 @@ pub struct MockConfig {
     pub elicitation_request: Option<CreateElicitationRequest>,
     /// Elicitation complete notification to send during prompt (None = skip)
     pub elicitation_complete_notification: Option<CompleteElicitationNotification>,
+    /// Compaction update notification to send during prompt (None = skip)
+    pub compaction_update: Option<CompactionUpdate>,
+    /// Compaction summary chunk notification to send during prompt (None = skip)
+    pub compaction_summary_chunk: Option<CompactionSummaryChunk>,
+    /// Notice notification to send during prompt (None = skip)
+    pub notice: Option<Notice>,
     /// Close session response to return when a CloseSessionRequest is received
     pub close_session_response: Option<CloseSessionResponse>,
     /// Delete session response to return when a DeleteSessionRequest is received
@@ -128,6 +135,9 @@ impl Default for MockConfig {
             release_terminal_request: None,
             elicitation_request: None,
             elicitation_complete_notification: None,
+            compaction_update: None,
+            compaction_summary_chunk: None,
+            notice: None,
             close_session_response: None,
             delete_session_response: None,
             last_read_file_request_id: None,
@@ -281,6 +291,24 @@ impl MockConfig {
         notification: CompleteElicitationNotification,
     ) -> Self {
         self.elicitation_complete_notification = Some(notification);
+        self
+    }
+
+    /// Set a compaction update notification to send during prompt
+    pub fn set_compaction_update(mut self, update: CompactionUpdate) -> Self {
+        self.compaction_update = Some(update);
+        self
+    }
+
+    /// Set a compaction summary chunk notification to send during prompt
+    pub fn set_compaction_summary_chunk(mut self, chunk: CompactionSummaryChunk) -> Self {
+        self.compaction_summary_chunk = Some(chunk);
+        self
+    }
+
+    /// Set a notice notification to send during prompt
+    pub fn set_notice(mut self, notice: Notice) -> Self {
+        self.notice = Some(notice);
         self
     }
 

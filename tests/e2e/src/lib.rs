@@ -2,6 +2,7 @@ pub const TIMEOUT_IN_SECONDS: u64 = 30; // seconds
 
 pub mod authenticate;
 pub mod cancellation;
+pub mod compaction;
 pub mod config_options;
 pub mod configure_model;
 pub mod connection;
@@ -17,6 +18,7 @@ pub mod model;
 pub mod model_configurations;
 pub mod models;
 pub mod modes;
+pub mod notice;
 pub mod opencode;
 pub mod prompt;
 pub mod response;

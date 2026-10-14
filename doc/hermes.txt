@@ -755,6 +755,8 @@ notifications sourced from the agent.
 *AgentTextThought*              Textual thought/reasoning from the agent
 *Authenticated*                 Authentication completed (authenticate())
 *AvailableCommands*             Available commands are updated
+*CompactionSummaryChunk*        Streamed chunk of a compaction summary
+*CompactionUpdate*              Status update for a context compaction
 *ConfigOptions*                 All configuration options for a session
                                  (config_options())
 *ConfigurationOption*           Configuration option updates
@@ -773,6 +775,7 @@ notifications sourced from the agent.
 *Models*                        Available models retrieved (models())
 *Modes*                         Available modes retrieved (modes())
 *ModeUpdated*                   Session mode changed (set_mode())
+*Notice*                        Informational notice for the user
 *PermissionRequest*             Agent requests permission to execute a tool
                                  (respond())
 *Plan*                          Agent generates a plan
