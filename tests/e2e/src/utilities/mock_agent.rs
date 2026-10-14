@@ -14,11 +14,11 @@ use agent_client_protocol::{
         CloseSessionRequest, CloseSessionResponse, ContentBlock, ContentChunk,
         DeleteSessionRequest, DeleteSessionResponse, InitializeRequest, InitializeResponse,
         ListSessionsRequest, ListSessionsResponse, LoadSessionRequest, LoadSessionResponse,
-        LogoutRequest, LogoutResponse, NewSessionRequest, NewSessionResponse, PromptRequest,
-        PromptResponse, ResumeSessionRequest, ResumeSessionResponse, SessionNotification,
-        SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
-        SetSessionModeRequest, SetSessionModeResponse, StopReason, TerminalOutputRequest,
-        TextContent, WaitForTerminalExitRequest,
+        LogoutRequest, LogoutResponse, NewSessionRequest, NewSessionResponse, Notice,
+        PromptRequest, PromptResponse, ResumeSessionRequest, ResumeSessionResponse,
+        SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
+        SetSessionConfigOptionResponse, SetSessionModeRequest, SetSessionModeResponse, StopReason,
+        TerminalOutputRequest, TextContent, WaitForTerminalExitRequest,
     },
 };
 use async_channel::bounded;
@@ -931,6 +931,19 @@ async fn handle_prompt(
             );
             cx.send_notification(notification)
                 .map_err(|e| internal_error(format!("compaction summary chunk failed: {}", e)))?;
+        }
+
+        // Send notice notification (if configured)
+        let notice = {
+            let config = config.lock().unwrap();
+            config.notice.clone()
+        };
+
+        if let Some(notice) = notice {
+            let notification =
+                SessionNotification::new(request.session_id.clone(), SessionUpdate::Notice(notice));
+            cx.send_notification(notification)
+                .map_err(|e| internal_error(format!("notice failed: {}", e)))?;
         }
 
         // Echo back the prompt content as agent message chunks

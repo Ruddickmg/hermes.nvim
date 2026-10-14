@@ -43,7 +43,7 @@ fn create_test_autocmd(command: Commands) -> nvim_oxi::Result<u32> {
 fn test_listener_attached_no_listener() -> nvim_oxi::Result<()> {
     create_test_autogroup()?;
     assert!(
-        !autocmd_listeners_attached(GROUP, "User", &Commands::ToolCall.to_string()),
+        !autocmd_listeners_attached(Commands::ToolCall),
         "Should return false when no listener is attached"
     );
     Ok(())
@@ -55,7 +55,7 @@ fn test_listener_attached_with_listener() -> nvim_oxi::Result<()> {
     create_test_autogroup()?;
     create_test_autocmd(Commands::PermissionRequest)?;
     assert!(
-        autocmd_listeners_attached(GROUP, "User", &Commands::PermissionRequest.to_string()),
+        autocmd_listeners_attached(Commands::PermissionRequest),
         "Should return true when a listener is attached"
     );
     Ok(())

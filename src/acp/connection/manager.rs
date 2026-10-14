@@ -3,7 +3,7 @@ use crate::acp::connection::{Connection, http, socket, stdio, tcp};
 use crate::acp::registry::distribution::Distribution;
 use crate::acp::registry::entry::AgentEntry;
 use crate::acp::registry::resolution::fetch_agent_from_registry;
-use crate::nvim::GROUP;
+use crate::nvim::autocommands::Commands;
 use crate::nvim::configuration::{DistributionsConfig, Permissions};
 use crate::utilities::autocmd::autocmd_listeners_attached;
 use crate::{Handler, acp::error::Error};
@@ -12,7 +12,7 @@ use agent_client_protocol::schema::v1::{
     AuthCapabilities, BooleanConfigOptionCapabilities, ClientCapabilities,
     ClientSessionCapabilities, CompactionCapabilities, ElicitationCapabilities,
     ElicitationFormCapabilities, ElicitationUrlCapabilities, FileSystemCapabilities,
-    Implementation, InitializeRequest, SessionConfigOptionsCapabilities,
+    Implementation, InitializeRequest, NoticeCapabilities, SessionConfigOptionsCapabilities,
 };
 use async_lock::Mutex;
 use serde::{Deserialize, Serialize};
@@ -244,12 +244,20 @@ fn build_elicitation_capabilities(
         .url((url_allowed && url_listener_attached).then(ElicitationUrlCapabilities::new))
 }
 
-fn build_session_capabilities(compaction_supported: bool) -> ClientSessionCapabilities {
+fn build_session_capabilities(
+    compaction_supported: bool,
+    notices_supported: bool,
+) -> ClientSessionCapabilities {
     let capabilities = ClientSessionCapabilities::new().config_options(
         SessionConfigOptionsCapabilities::new().boolean(BooleanConfigOptionCapabilities::new()),
     );
-    if compaction_supported {
+    let capabilities = if compaction_supported {
         capabilities.compaction(CompactionCapabilities::new())
+    } else {
+        capabilities
+    };
+    if notices_supported {
+        capabilities.notices(NoticeCapabilities::new())
     } else {
         capabilities
     }
@@ -337,16 +345,17 @@ impl ConnectionManager {
             .elicitation(build_elicitation_capabilities(
                 permissions.elicitation.form,
                 permissions.elicitation.url,
-                autocmd_listeners_attached(GROUP, "User", "FormElicitation"),
-                autocmd_listeners_attached(GROUP, "User", "UrlElicitation"),
+                autocmd_listeners_attached(Commands::FormElicitation),
+                autocmd_listeners_attached(Commands::UrlElicitation),
             ))
             .auth(AuthCapabilities::new().terminal(
-                autocmd_listeners_attached(GROUP, "User", "TerminalAuthentication")
+                autocmd_listeners_attached(Commands::TerminalAuthentication)
                     && agent.base_command().is_some(),
             ))
             .session(build_session_capabilities(
-                autocmd_listeners_attached(GROUP, "User", "CompactionUpdate")
-                    || autocmd_listeners_attached(GROUP, "User", "CompactionSummaryChunk"),
+                autocmd_listeners_attached(Commands::CompactionUpdate)
+                    || autocmd_listeners_attached(Commands::CompactionSummaryChunk),
+                autocmd_listeners_attached(Commands::Notice),
             ));
 
         let init_config = InitializeRequest::new(ProtocolVersion::LATEST)
@@ -911,13 +920,25 @@ mod tests {
 
     #[test]
     fn test_build_session_capabilities_advertises_compaction_when_supported() {
-        let capabilities = build_session_capabilities(true);
+        let capabilities = build_session_capabilities(true, false);
         assert_eq!(capabilities.compaction, Some(CompactionCapabilities::new()));
     }
 
     #[test]
     fn test_build_session_capabilities_omits_compaction_when_unsupported() {
-        let capabilities = build_session_capabilities(false);
+        let capabilities = build_session_capabilities(false, false);
         assert_eq!(capabilities.compaction, None);
+    }
+
+    #[test]
+    fn test_build_session_capabilities_advertises_notices_when_supported() {
+        let capabilities = build_session_capabilities(false, true);
+        assert_eq!(capabilities.notices, Some(NoticeCapabilities::new()));
+    }
+
+    #[test]
+    fn test_build_session_capabilities_omits_notices_when_unsupported() {
+        let capabilities = build_session_capabilities(false, false);
+        assert_eq!(capabilities.notices, None);
     }
 }

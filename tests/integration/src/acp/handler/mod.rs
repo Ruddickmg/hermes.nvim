@@ -11,11 +11,11 @@ use agent_client_protocol::{
     schema::v1::{
         AgentCapabilities, CompactionStatus, CompactionSummaryChunk, CompactionUpdate,
         CompleteElicitationNotification, ContentBlock, ContentChunk, ElicitationId,
-        InitializeResponse, LoadSessionResponse, NewSessionResponse, ResumeSessionResponse,
-        SessionCapabilities, SessionConfigKind, SessionConfigOption, SessionConfigOptionCategory,
-        SessionConfigSelectOption, SessionMode, SessionModeState, SessionNotification,
-        SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionResponse,
-        SetSessionModeResponse, TextContent, UsageUpdate,
+        InitializeResponse, LoadSessionResponse, NewSessionResponse, Notice, NoticeSeverity,
+        ResumeSessionResponse, SessionCapabilities, SessionConfigKind, SessionConfigOption,
+        SessionConfigOptionCategory, SessionConfigSelectOption, SessionMode, SessionModeState,
+        SessionNotification, SessionResumeCapabilities, SessionUpdate,
+        SetSessionConfigOptionResponse, SetSessionModeResponse, TextContent, UsageUpdate,
     },
 };
 use async_lock::Mutex;
@@ -237,6 +237,82 @@ fn test_session_notification_compaction_update_succeeds() -> nvim_oxi::Result<()
     let res: agent_client_protocol::Result<()> =
         smol::block_on(handler.session_notification(notification));
     assert_eq!(res, Ok(()), "Compaction update notification should succeed");
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_session_notification_notice_succeeds() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+
+    let handler = Handler::new(
+        state.clone(),
+        mock_connection_manager(&state),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
+
+    let notice = Notice::new(NoticeSeverity::Info, "title");
+    let notification = SessionNotification::new("session_id", SessionUpdate::Notice(notice));
+    let res: agent_client_protocol::Result<()> =
+        smol::block_on(handler.session_notification(notification));
+    assert_eq!(res, Ok(()), "Notice notification should succeed");
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_session_notification_notice_not_stored_in_history() -> nvim_oxi::Result<()> {
+    let temp_dir = TempDir::new().unwrap();
+    let state = Arc::new(Mutex::new(
+        PluginState::new().with_storage_path(temp_dir.path().to_path_buf()),
+    ));
+    let handler = Handler::new(
+        state.clone(),
+        mock_connection_manager(&state),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
+
+    let agent = hermes::acp::connection::Assistant::from("test-agent");
+    let session_caps = SessionCapabilities::new().resume(Some(SessionResumeCapabilities::new()));
+    let info = InitializeResponse::new(ProtocolVersion::V1).agent_capabilities(
+        AgentCapabilities::new()
+            .load_session(false)
+            .session_capabilities(session_caps),
+    );
+    smol::block_on(handler.set_agent_info(agent.clone(), info));
+    smol::block_on(async {
+        state.lock().await.agent_info.set_agent(agent);
+    });
+
+    let session = NewSessionResponse::new("test-session");
+    smol::block_on(async {
+        state.lock().await.set_session_info(&session);
+    });
+
+    let notice = Notice::new(NoticeSeverity::Info, "title");
+    let notification = SessionNotification::new("test-session", SessionUpdate::Notice(notice));
+    smol::block_on(handler.session_notification(notification))
+        .expect("Notice notification should succeed");
+
+    smol::block_on(async {
+        let mut guard = state.lock().await;
+        guard.agent_info.history.flush().unwrap();
+    });
+    std::thread::sleep(std::time::Duration::from_millis(200));
+
+    let history_path = temp_dir
+        .path()
+        .join("history")
+        .join("test-agent")
+        .join("test-session.jsonl");
+    assert!(
+        !history_path.exists(),
+        "Notice should not be stored in history"
+    );
 
     Ok(())
 }

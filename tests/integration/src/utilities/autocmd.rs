@@ -1,9 +1,22 @@
 //! Integration tests for autocommand utilities
+use hermes::nvim::{GROUP, autocommands::Commands};
 use hermes::utilities::autocmd::{
     autocmd_listeners_attached, create_augroup, create_autocmd, exec_autocmd,
 };
+use nvim_oxi::api::opts::CreateAutocmdOpts;
 use std::cell::RefCell;
 use std::rc::Rc;
+
+fn attach_listener(command: Commands) -> nvim_oxi::Result<()> {
+    create_augroup(GROUP, true)?;
+    let opts = CreateAutocmdOpts::builder()
+        .patterns([command.to_string().as_str()])
+        .group(GROUP)
+        .command("echo 'test'")
+        .build();
+    nvim_oxi::api::create_autocmd(["User"], &opts)?;
+    Ok(())
+}
 
 #[nvim_oxi::test]
 fn create_augroup_returns_positive_id() -> nvim_oxi::Result<()> {
@@ -35,13 +48,10 @@ fn create_autocmd_and_exec_autocmd_trigger_callback() -> nvim_oxi::Result<()> {
 
 #[nvim_oxi::test]
 fn autocmd_listeners_attached_true_when_listener_exists() -> nvim_oxi::Result<()> {
-    let group_name = "hermes_test_attached";
-    let group_id = create_augroup(group_name, true)?;
-
-    create_autocmd(group_id, "User", || Ok(true))?;
+    attach_listener(Commands::ToolCall)?;
 
     assert!(
-        autocmd_listeners_attached(group_name, "User", "*"),
+        autocmd_listeners_attached(Commands::ToolCall),
         "should return true when a listener is registered"
     );
     Ok(())
@@ -49,11 +59,10 @@ fn autocmd_listeners_attached_true_when_listener_exists() -> nvim_oxi::Result<()
 
 #[nvim_oxi::test]
 fn autocmd_listeners_attached_false_when_no_listener() -> nvim_oxi::Result<()> {
-    let group_name = "hermes_test_not_attached";
-    create_augroup(group_name, true)?;
+    create_augroup(GROUP, true)?;
 
     assert!(
-        !autocmd_listeners_attached(group_name, "User", "MissingPattern"),
+        !autocmd_listeners_attached(Commands::ToolCall),
         "should return false when no listener is registered"
     );
     Ok(())
@@ -99,19 +108,6 @@ fn create_autocmd_callback_error_path_logs_and_returns_nil() -> nvim_oxi::Result
     assert!(
         result.is_ok(),
         "exec_autocmd should succeed even when callback returns an error"
-    );
-
-    Ok(())
-}
-
-#[nvim_oxi::test]
-fn autocmd_listeners_attached_invalid_event_returns_false() -> nvim_oxi::Result<()> {
-    let group_name = "hermes_test_invalid_event";
-    create_augroup(group_name, true)?;
-
-    assert!(
-        !autocmd_listeners_attached(group_name, "InvalidEvent123", "*"),
-        "should return false when event is invalid (covers map_err error path)"
     );
 
     Ok(())

@@ -46,6 +46,7 @@ pub enum Commands {
     SessionModelUpdated,
     ThoughtLevelUpdated,
     UsageUpdate,
+    Notice,
     CompactionUpdate,
     CompactionSummaryChunk,
 
@@ -124,6 +125,7 @@ impl TryFrom<&str> for Commands {
             "SessionModelUpdated" => Ok(Commands::SessionModelUpdated),
             "ThoughtLevelUpdated" => Ok(Commands::ThoughtLevelUpdated),
             "UsageUpdate" => Ok(Commands::UsageUpdate),
+            "Notice" => Ok(Commands::Notice),
             "CompactionUpdate" => Ok(Commands::CompactionUpdate),
             "CompactionSummaryChunk" => Ok(Commands::CompactionSummaryChunk),
 
@@ -528,6 +530,16 @@ mod tests {
             Commands::try_from("UsageUpdate").unwrap(),
             Commands::UsageUpdate
         );
+    }
+
+    #[test]
+    fn test_commands_notice() {
+        assert_eq!(Commands::try_from("Notice").unwrap(), Commands::Notice);
+    }
+
+    #[test]
+    fn test_commands_notice_display() {
+        assert_eq!(format!("{}", Commands::Notice), "Notice");
     }
 
     #[test]
