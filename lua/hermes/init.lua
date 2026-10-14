@@ -351,6 +351,14 @@
 ---@class HermesUsageUpdate: HermesSessionNotification
 ---@field update { sessionUpdate: "usage_update", used: number, size: number, cost: { amount: number, currency: string } }
 
+---@alias HermesCompactionStatus "in_progress"|"completed"|"failed"|"cancelled"
+
+---@class HermesCompactionUpdate: HermesSessionNotification
+---@field update { sessionUpdate: "compaction_update", compactionId: string, status: HermesCompactionStatus, summary?: (HermesTextChunk|HermesImageChunk|HermesAudioChunk|HermesResourceChunk|HermesResourceLinkChunk)[], error?: string }
+
+---@class HermesCompactionSummaryChunk: HermesSessionNotification
+---@field update { sessionUpdate: "compaction_summary_chunk", compactionId: string, content: HermesTextChunk|HermesImageChunk|HermesAudioChunk|HermesResourceChunk|HermesResourceLinkChunk }
+
 ---@alias HermesToolCallKind "Read"|"Edit"|"Delete"|"Move"|"Search"|"Execute"|"Think"|"Fetch"|"SwitchMode"|"Other"
 
 ---@alias HermesToolCallStatus "Pending"|"InProgress"|"Completed"|"Cancelled"|"Error"

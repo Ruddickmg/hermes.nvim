@@ -46,6 +46,8 @@ pub enum Commands {
     SessionModelUpdated,
     ThoughtLevelUpdated,
     UsageUpdate,
+    CompactionUpdate,
+    CompactionSummaryChunk,
 
     // User message commands (format: User{ContentType}Message)
     UserResourceMessage,
@@ -122,6 +124,8 @@ impl TryFrom<&str> for Commands {
             "SessionModelUpdated" => Ok(Commands::SessionModelUpdated),
             "ThoughtLevelUpdated" => Ok(Commands::ThoughtLevelUpdated),
             "UsageUpdate" => Ok(Commands::UsageUpdate),
+            "CompactionUpdate" => Ok(Commands::CompactionUpdate),
+            "CompactionSummaryChunk" => Ok(Commands::CompactionSummaryChunk),
 
             // User message commands
             "UserResourceMessage" => Ok(Commands::UserResourceMessage),
@@ -523,6 +527,38 @@ mod tests {
         assert_eq!(
             Commands::try_from("UsageUpdate").unwrap(),
             Commands::UsageUpdate
+        );
+    }
+
+    #[test]
+    fn test_commands_compaction_update() {
+        assert_eq!(
+            Commands::try_from("CompactionUpdate").unwrap(),
+            Commands::CompactionUpdate
+        );
+    }
+
+    #[test]
+    fn test_commands_compaction_update_display() {
+        assert_eq!(
+            format!("{}", Commands::CompactionUpdate),
+            "CompactionUpdate"
+        );
+    }
+
+    #[test]
+    fn test_commands_compaction_summary_chunk() {
+        assert_eq!(
+            Commands::try_from("CompactionSummaryChunk").unwrap(),
+            Commands::CompactionSummaryChunk
+        );
+    }
+
+    #[test]
+    fn test_commands_compaction_summary_chunk_display() {
+        assert_eq!(
+            format!("{}", Commands::CompactionSummaryChunk),
+            "CompactionSummaryChunk"
         );
     }
 

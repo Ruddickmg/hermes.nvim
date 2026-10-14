@@ -9,12 +9,13 @@ use agent_client_protocol::{
     Error,
     schema::ProtocolVersion,
     schema::v1::{
-        AgentCapabilities, CompleteElicitationNotification, ContentBlock, ContentChunk,
-        ElicitationId, InitializeResponse, LoadSessionResponse, NewSessionResponse,
-        ResumeSessionResponse, SessionCapabilities, SessionConfigKind, SessionConfigOption,
-        SessionConfigOptionCategory, SessionConfigSelectOption, SessionMode, SessionModeState,
-        SessionNotification, SessionResumeCapabilities, SessionUpdate,
-        SetSessionConfigOptionResponse, SetSessionModeResponse, TextContent, UsageUpdate,
+        AgentCapabilities, CompactionStatus, CompactionSummaryChunk, CompactionUpdate,
+        CompleteElicitationNotification, ContentBlock, ContentChunk, ElicitationId,
+        InitializeResponse, LoadSessionResponse, NewSessionResponse, ResumeSessionResponse,
+        SessionCapabilities, SessionConfigKind, SessionConfigOption, SessionConfigOptionCategory,
+        SessionConfigSelectOption, SessionMode, SessionModeState, SessionNotification,
+        SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionResponse,
+        SetSessionModeResponse, TextContent, UsageUpdate,
     },
 };
 use async_lock::Mutex;
@@ -214,6 +215,55 @@ fn test_session_notification_usage_update_succeeds() -> nvim_oxi::Result<()> {
     let res: agent_client_protocol::Result<()> =
         smol::block_on(handler.session_notification(notification));
     assert_eq!(res, Ok(()), "Usage update notification should succeed");
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_session_notification_compaction_update_succeeds() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+
+    let handler = Handler::new(
+        state.clone(),
+        mock_connection_manager(&state),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
+
+    let update = CompactionUpdate::new("cmp_001", CompactionStatus::InProgress);
+    let notification =
+        SessionNotification::new("session_id", SessionUpdate::CompactionUpdate(update));
+    let res: agent_client_protocol::Result<()> =
+        smol::block_on(handler.session_notification(notification));
+    assert_eq!(res, Ok(()), "Compaction update notification should succeed");
+
+    Ok(())
+}
+
+#[nvim_oxi::test]
+fn test_session_notification_compaction_summary_chunk_succeeds() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+
+    let handler = Handler::new(
+        state.clone(),
+        mock_connection_manager(&state),
+        mock_runtime(),
+        Rc::new(MockRequestHandler::new()),
+    )
+    .expect("Handler creation should succeed");
+
+    let chunk =
+        CompactionSummaryChunk::new("cmp_001", ContentBlock::Text(TextContent::new("summary")));
+    let notification =
+        SessionNotification::new("session_id", SessionUpdate::CompactionSummaryChunk(chunk));
+    let res: agent_client_protocol::Result<()> =
+        smol::block_on(handler.session_notification(notification));
+    assert_eq!(
+        res,
+        Ok(()),
+        "Compaction summary chunk notification should succeed"
+    );
 
     Ok(())
 }
