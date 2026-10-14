@@ -398,7 +398,9 @@ Autocommands triggered: ~
 *hermes.set_config_option()*                Set any configuration option
 
 hermes.cancel() cancels the current operation of the agent (e.g., stop
-generating text, stop a tool call in progress, etc).
+generating text, stop a tool call in progress, etc). The argument may be a
+session ID, or the requestId of a pending incoming request (from a
+PermissionRequest/ReadTextFile/etc. autocommand payload).
 
 set_mode/set_model/set_thought_level take a session ID and the mode/model/
 thought level ID. modes()/models()/thought_levels() fire the corresponding
@@ -713,6 +715,27 @@ On |ToolCallUpdate| a supplied `name` sets or replaces the current name.
 Omitting it, or sending null, leaves the previous name unchanged rather than
 clearing it.
 
+Request cancellation ~                              *hermes-request-cancellation*
+
+An agent may cancel a request it previously sent (for example a
+|PermissionRequest| or |ReadTextFile|) before it is answered, using the ACP
+`$/cancel_request` notification. When this happens Hermes drops the pending
+request and fires the `RequestCancelled` autocommand so any UI opened for the
+request can be dismissed. No response is expected for a cancelled request.
+Example: >
+    vim.api.nvim_create_autocmd("User", {
+        group = "hermes",
+        pattern = "RequestCancelled",
+        callback = function(args)
+            ---@type HermesRequestCancelled
+            local data = args.data
+            local request_id = data.requestId
+            local session_id = data.sessionId
+            -- e.g. close a prompt opened for this request
+        end
+    })
+<
+
 Autocommand list ~                             *hermes-autocommands-list*
 
 The following autocommands are fired by Hermes (with `args.data` populated
@@ -757,6 +780,7 @@ notifications sourced from the agent.
                                  agent)
 *Prompted*                      Agent response received (prompt())
 *ReadTextFile*                  Agent requests to read a text file (respond())
+*RequestCancelled*              Agent cancelled a pending request
 *SessionClosed*                 Active session closed (close_session())
 *SessionCreated*                New session created (create_session())
 *SessionDeleted*                Session deleted (delete_session())

@@ -465,6 +465,10 @@
 ---@class HermesElicitationComplete
 ---@field elicitationId string UUID of the completed elicitation
 
+---@class HermesRequestCancelled
+---@field requestId string UUID of the request the agent cancelled
+---@field sessionId string
+
 ---@class HermesAgentInfo
 ---@field id string
 ---@field name string
@@ -1104,11 +1108,11 @@ function M.delete_session(session_id, opts)
 	end)
 end
 
----Cancel current operation
----@param session_id string Session ID
-function M.cancel(session_id)
+---Cancel an active session's operation, or a pending incoming request by its request ID
+---@param id string Session ID, or a Hermes request ID for a pending agent request
+function M.cancel(id)
 	execute_async(function()
-		M._load_native_sync().cancel(session_id)
+		M._load_native_sync().cancel(id)
 	end)
 end
 

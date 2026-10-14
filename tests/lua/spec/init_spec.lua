@@ -291,6 +291,12 @@ describe("hermes.init (main API)", function()
 			end)
 		end)
 
+		it("cancel accepts a request id", function()
+			assert.has_no.errors(function()
+				hermes.cancel("00000000-0000-0000-0000-000000000000")
+			end)
+		end)
+
 		it("modes returns nil when session does not exist", function()
 			assert.is_nil(hermes.modes("nonexistent-session"))
 		end)

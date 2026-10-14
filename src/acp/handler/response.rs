@@ -3,9 +3,9 @@ use std::sync::Arc;
 use agent_client_protocol::schema::v1::{
     AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse, ExtResponse,
     ForkSessionResponse, InitializeResponse, ListSessionsResponse, LoadSessionResponse,
-    LogoutResponse, NewSessionResponse, PromptResponse, ResumeSessionResponse, SessionConfigKind,
-    SessionConfigOption, SessionConfigOptionCategory, SetSessionConfigOptionResponse,
-    SetSessionModeResponse,
+    LogoutResponse, NewSessionResponse, PromptResponse, RequestId, ResumeSessionResponse,
+    SessionConfigKind, SessionConfigOption, SessionConfigOptionCategory,
+    SetSessionConfigOptionResponse, SetSessionModeResponse,
 };
 use async_channel::bounded;
 use serde::Serialize;
@@ -107,18 +107,21 @@ impl Handler {
         let (sender, receiver) = bounded::<bool>(1);
         self.execute_autocommand_request(
             Uuid::new_v4().to_string(),
+            RequestId::Null,
             Commands::TerminalAuthentication,
             response,
             Responder::TerminalAuthentication(sender),
         )
         .await?;
-        if let Ok(authenticated) = receiver.recv().await {
-            if authenticated {
-                let mut connection_manager = self.connection_manager.lock().await;
-                connection_manager.reconnect(handler, &agent).await?;
-                drop(connection_manager);
-                self.authenticated(AuthenticateResponse::new()).await?;
-            }
+        if receiver
+            .recv()
+            .await
+            .map_err(|e| Error::Internal(e.to_string()))?
+        {
+            let mut connection_manager = self.connection_manager.lock().await;
+            connection_manager.reconnect(handler, &agent).await?;
+            drop(connection_manager);
+            self.authenticated(AuthenticateResponse::new()).await?;
         }
         Ok(())
     }

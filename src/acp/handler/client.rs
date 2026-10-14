@@ -8,10 +8,10 @@ use agent_client_protocol::{
         CompleteElicitationNotification, CreateElicitationRequest, CreateElicitationResponse,
         CreateTerminalRequest, CreateTerminalResponse, ElicitationMode, ElicitationScope,
         ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
-        RequestPermissionRequest, RequestPermissionResponse, SessionId, SessionNotification,
-        SessionUpdate, TerminalExitStatus, TerminalOutputRequest, TerminalOutputResponse,
-        WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
-        WriteTextFileResponse,
+        RequestId, RequestPermissionRequest, RequestPermissionResponse, SessionId,
+        SessionNotification, SessionUpdate, TerminalExitStatus, TerminalOutputRequest,
+        TerminalOutputResponse, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
+        WriteTextFileRequest, WriteTextFileResponse,
     },
 };
 use async_channel::bounded;
@@ -26,13 +26,11 @@ pub struct HermesNotification {
     pub update: SessionUpdate,
 }
 
-// Handlers are registered as builder closures (see `src/acp/handler/builder.rs`)
-// rather than trait methods. These methods are inherent on `Handler` so the
-// builder closures can delegate to them.
 impl Handler {
     pub async fn request_permission(
         &self,
         args: RequestPermissionRequest,
+        request_id: RequestId,
     ) -> Result<RequestPermissionResponse> {
         if !self.can_request_permissions().await {
             return Err(Error::method_not_found());
@@ -43,6 +41,7 @@ impl Handler {
 
         self.execute_autocommand_request(
             args.session_id.to_string(),
+            request_id.clone(),
             Commands::PermissionRequest,
             args.clone(),
             Responder::PermissionResponse(sender),
@@ -61,6 +60,7 @@ impl Handler {
     pub async fn create_elicitation(
         &self,
         args: CreateElicitationRequest,
+        request_id: RequestId,
     ) -> Result<CreateElicitationResponse> {
         let (session_id, command) = match &args.mode {
             ElicitationMode::Form(mode) => {
@@ -85,23 +85,18 @@ impl Handler {
         }
         let (sender, receiver) = bounded::<CreateElicitationResponse>(1);
         info!("Requesting elicitation: {:?}", args);
-
         self.execute_autocommand_request(
             session_id,
+            request_id.clone(),
             command,
             args.clone(),
             Responder::Elicitation(sender, args),
         )
         .await?;
-        let resp = receiver
-            .recv()
-            .await
-            .map_err(|e| {
-                error!("{:?}", e);
-                Error::internal_error()
-            })
-            .map(CreateElicitationResponse::from);
-        resp
+        receiver.recv().await.map_err(|e| {
+            error!("{:?}", e);
+            Error::internal_error()
+        })
     }
 
     pub async fn elicitation_complete(
@@ -117,12 +112,6 @@ impl Handler {
             .await?)
     }
 
-    /// Shared notification processing logic.
-    ///
-    /// Maps a `SessionUpdate` to the corresponding `Commands` variant, generates
-    /// prompt IDs for user messages, and builds the `HermesNotification` payload.
-    ///
-    /// Does **not** write to history or fire autocommands — callers handle those.
     async fn process_notification(
         &self,
         session_notification: &SessionNotification,
@@ -200,11 +189,6 @@ impl Handler {
             .await?)
     }
 
-    /// Replay a session notification without writing to history.
-    ///
-    /// Intended for use during `load_session` when resuming from local history.
-    /// Checks `can_receive_notifications()` once and logs a single warning if
-    /// notifications are disabled, then replays all queued events.
     pub async fn replay_session_notifications(
         &self,
         session_notifications: Vec<SessionNotification>,
@@ -227,6 +211,7 @@ impl Handler {
     pub async fn write_text_file(
         &self,
         args: WriteTextFileRequest,
+        request_id: RequestId,
     ) -> Result<WriteTextFileResponse> {
         if !self.can_write().await {
             return Err(Error::method_not_found());
@@ -234,6 +219,7 @@ impl Handler {
         let (sender, receiver) = bounded::<WriteTextFileResponse>(1);
         self.execute_autocommand_request(
             args.session_id.to_string(),
+            request_id.clone(),
             Commands::WriteTextFile,
             args.clone(),
             Responder::WriteFileResponse(sender, args),
@@ -245,13 +231,18 @@ impl Handler {
         })
     }
 
-    pub async fn read_text_file(&self, args: ReadTextFileRequest) -> Result<ReadTextFileResponse> {
+    pub async fn read_text_file(
+        &self,
+        args: ReadTextFileRequest,
+        request_id: RequestId,
+    ) -> Result<ReadTextFileResponse> {
         if !self.can_read().await {
             return Err(Error::method_not_found());
         }
         let (sender, receiver) = bounded::<Result<ReadTextFileResponse>>(1);
         self.execute_autocommand_request(
             args.session_id.to_string(),
+            request_id.clone(),
             Commands::ReadTextFile,
             args.clone(),
             Responder::ReadFileResponse(sender, args),
@@ -266,6 +257,7 @@ impl Handler {
     pub async fn create_terminal(
         &self,
         args: CreateTerminalRequest,
+        request_id: RequestId,
     ) -> Result<CreateTerminalResponse> {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
@@ -273,6 +265,7 @@ impl Handler {
         let (sender, receiver) = bounded::<acp::Result<CreateTerminalResponse>>(1);
         self.execute_autocommand_request(
             args.session_id.to_string(),
+            request_id.clone(),
             Commands::TerminalCreate,
             args.clone(),
             Responder::TerminalCreate(sender, args),
@@ -288,10 +281,10 @@ impl Handler {
             .map_err(|_e| Error::internal_error())
     }
 
-    /// Gets the terminal output and exit status
     pub async fn terminal_output(
         &self,
         args: TerminalOutputRequest,
+        request_id: RequestId,
     ) -> Result<TerminalOutputResponse> {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
@@ -299,6 +292,7 @@ impl Handler {
         let (sender, receiver) = bounded::<acp::Result<TerminalOutputResponse>>(1);
         self.execute_autocommand_request(
             args.session_id.to_string(),
+            request_id.clone(),
             Commands::TerminalOutput,
             args.clone(),
             Responder::TerminalOutput(sender, args),
@@ -314,10 +308,10 @@ impl Handler {
             .map_err(|_| Error::internal_error())
     }
 
-    /// Waits for a terminal command to exit
     pub async fn wait_for_terminal_exit(
         &self,
         args: WaitForTerminalExitRequest,
+        request_id: RequestId,
     ) -> Result<WaitForTerminalExitResponse> {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
@@ -325,6 +319,7 @@ impl Handler {
         let (sender, receiver) = bounded::<acp::Result<(Option<u32>, Option<String>)>>(1);
         self.execute_autocommand_request(
             args.session_id.to_string(),
+            request_id.clone(),
             Commands::TerminalExit,
             args.clone(),
             Responder::TerminalExit(sender, args),
@@ -335,7 +330,6 @@ impl Handler {
             .await
             .map_err(|_| Error::internal_error())?
             .and_then(|(exit_code, signal)| {
-                // Validate that at least one field is present
                 if exit_code.is_none() && signal.is_none() {
                     Err(acp::error::Error::InvalidInput(
                         "Both exit code and signal are undefined".to_string(),
@@ -354,10 +348,10 @@ impl Handler {
             })?)
     }
 
-    /// Releases a terminal resource
     pub async fn release_terminal(
         &self,
         args: ReleaseTerminalRequest,
+        request_id: RequestId,
     ) -> Result<ReleaseTerminalResponse> {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
@@ -365,6 +359,7 @@ impl Handler {
         let (sender, receiver) = bounded::<acp::Result<ReleaseTerminalResponse>>(1);
         self.execute_autocommand_request(
             args.session_id.to_string(),
+            request_id.clone(),
             Commands::TerminalRelease,
             args.clone(),
             Responder::TerminalRelease(sender, args),
