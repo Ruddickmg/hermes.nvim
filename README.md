@@ -727,7 +727,8 @@ vim.api.nvim_create_autocmd("User", {
 
 > **Triggers:** [RequestCancelled](#requestcancelled) autocommand upon completion.
 
-> [!NOTE]: [RequestCancelled](#requestcancelled) may also be triggered by the agent (agents can cancel requests)
+> [!NOTE]
+> [RequestCancelled](#requestcancelled) may also be triggered by the agent (agents can cancel requests)
 
 ### 🎯 Set mode (**Optional**)
 
