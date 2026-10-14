@@ -903,6 +903,36 @@ async fn handle_prompt(
                 .map_err(|e| internal_error(format!("elicitation complete failed: {}", e)))?;
         }
 
+        // Send compaction update notification (if configured)
+        let compaction_update = {
+            let config = config.lock().unwrap();
+            config.compaction_update.clone()
+        };
+
+        if let Some(update) = compaction_update {
+            let notification = SessionNotification::new(
+                request.session_id.clone(),
+                SessionUpdate::CompactionUpdate(update),
+            );
+            cx.send_notification(notification)
+                .map_err(|e| internal_error(format!("compaction update failed: {}", e)))?;
+        }
+
+        // Send compaction summary chunk notification (if configured)
+        let compaction_summary_chunk = {
+            let config = config.lock().unwrap();
+            config.compaction_summary_chunk.clone()
+        };
+
+        if let Some(chunk) = compaction_summary_chunk {
+            let notification = SessionNotification::new(
+                request.session_id.clone(),
+                SessionUpdate::CompactionSummaryChunk(chunk),
+            );
+            cx.send_notification(notification)
+                .map_err(|e| internal_error(format!("compaction summary chunk failed: {}", e)))?;
+        }
+
         // Echo back the prompt content as agent message chunks
         for content in &request.prompt {
             let text = match content {
