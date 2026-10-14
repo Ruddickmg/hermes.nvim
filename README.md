@@ -39,7 +39,7 @@ Binaries are available for:
 > [!NOTE]
 > Hermes will automatically detect and download a pre-built binary for supported platforms.
 >
-> You can disable this if you would prefer to [build from source](#building-from-source)
+> You can disable this if you would prefer to [build from source](#-building-from-source)
 > ```lua
 > -- Will have to set up manually with `:Hermes build` or build manually from source
 > require("hermes").setup({ 
@@ -1468,7 +1468,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="agentslist">
       <td><code>AgentList</code></td>
       <td>List of available agents</td>
-      <td>⚡ <a href="#agents">agents()</a></td>
+      <td>⚡ <a href="#-agents">agents()</a></td>
       <td><pre><code class="language-json">{
   "agents": [
     {
@@ -1610,7 +1610,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="authenticated">
       <td><code>Authenticated</code></td>
       <td>Authentication completed</td>
-      <td>⚡ <a href="#authenticate">authenticate()</a></td>
+      <td>⚡ <a href="#-authenticate">authenticate()</a></td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
@@ -1725,7 +1725,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="configoptions">
       <td><code>ConfigOptions</code></td>
       <td>All configuration options for a session</td>
-      <td>⚡ <a href="#config-options">config_options()</a></td>
+      <td>⚡ <a href="#-config-options">config_options()</a></td>
       <td><pre><code class="language-json">[
   {
     "id": "string",
@@ -1765,7 +1765,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="configurationupdated">
       <td><code>ConfigurationUpdated</code></td>
       <td>Session configuration updated</td>
-      <td>⚡ <a href="#set-config-option-optional">set_config_option()</a> / <a href="#configure-model-optional">configure_model()</a></td>
+      <td>⚡ <a href="#-set-config-option-optional">set_config_option()</a> / <a href="#-configure-model-optional">configure_model()</a></td>
       <td><pre><code class="language-json">{
   "configOptions": [
     {
@@ -1792,7 +1792,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="connectioninitialized">
       <td><code>ConnectionInitialized</code></td>
       <td>Connection established with agent</td>
-      <td>⚡ <a href="#connect">connect()</a></td>
+      <td>⚡ <a href="#-connect">connect()</a></td>
       <td><pre><code class="language-json">{
   "protocolVersion": "string",
   "agentCapabilities": {
@@ -1844,7 +1844,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="formelicitation">
       <td><code>FormElicitation</code></td>
       <td>Agent requests form-based elicitation (structured user input)</td>
-      <td>🤖 Agent (requires -> <a href="#responding-to-form-elicitation">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-responding-to-form-elicitation">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "mode": "form",
@@ -1856,7 +1856,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="loggedout">
       <td><code>LoggedOut</code></td>
       <td>Agent logout completed</td>
-      <td>⚡ <a href="#logout">logout()</a></td>
+      <td>⚡ <a href="#-logout">logout()</a></td>
       <td><pre><code class="language-json">{}</code></pre></td>
     </tr>
     <tr id="modecurrent">
@@ -1875,7 +1875,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="modelconfigurations">
       <td><code>ModelConfigurations</code></td>
       <td>Available model configuration options retrieved</td>
-      <td>⚡ <a href="#modelconfigurations">model_configurations()</a></td>
+      <td>⚡ <a href="#-modelconfigurations">model_configurations()</a></td>
       <td><pre><code class="language-json">[{
   "id": "string",
   "name": "string",
@@ -1901,7 +1901,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="modelconfigurationupdated">
       <td><code>ModelConfigurationUpdated</code></td>
       <td>Model configuration options updated</td>
-      <td>⚡ <a href="#configure-model-optional">configure_model()</a></td>
+      <td>⚡ <a href="#-configure-model-optional">configure_model()</a></td>
       <td><pre><code class="language-json">[{
   "id": "string",
   "name": "string",
@@ -1927,7 +1927,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="models-1">
       <td><code>Models</code></td>
       <td>Available models retrieved</td>
-      <td>⚡ <a href="#models">models()</a></td>
+      <td>⚡ <a href="#-models">models()</a></td>
       <td><pre><code class="language-json">{
   "options": [
     {
@@ -1948,7 +1948,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="modes-1">
       <td><code>Modes</code></td>
       <td>Available modes retrieved</td>
-      <td>⚡ <a href="#modes">modes()</a></td>
+      <td>⚡ <a href="#-modes">modes()</a></td>
       <td><pre><code class="language-json">{
   "options": [
     {
@@ -1969,7 +1969,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="modeupdated">
       <td><code>ModeUpdated</code></td>
       <td>Session mode changed</td>
-      <td>⚡ <a href="#set-mode-optional">set_mode()</a></td>
+      <td>⚡ <a href="#-set-mode-optional">set_mode()</a></td>
       <td><pre><code class="language-json">{
   "value": "string",
   "name": "string",
@@ -1980,7 +1980,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="permissionrequest">
       <td><code>PermissionRequest</code></td>
       <td>Agent requests permission to execute a tool</td>
-      <td>🤖 Agent (requires -> <a href="#permission-request">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-permission-request">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -2069,7 +2069,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="progress">
       <td><code>Progress</code></td>
       <td>Download progress update (binary, registry, agent)</td>
-      <td>⚡ <a href="#commands">:Hermes install</a>, <a href="#commands">:Hermes update</a>, <a href="#agents">agents()</a>, <a href="#connect">connect()</a>, <a href="#setup">setup()</a></td>
+      <td>⚡ <a href="#-commands">:Hermes install</a>, <a href="#-commands">:Hermes update</a>, <a href="#-agents">agents()</a>, <a href="#-connect">connect()</a>, <a href="#-setup">setup()</a></td>
       <td><pre><code class="language-json">{
   "id": "string",
   "title": "string",
@@ -2082,7 +2082,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="prompted">
       <td><code>Prompted</code></td>
       <td>Agent response received</td>
-      <td>⚡ <a href="#prompt">prompt()</a></td>
+      <td>⚡ <a href="#-prompt">prompt()</a></td>
       <td><pre><code class="language-json">{
   "stopReason": "string (e.g., 'Stop', 'Cancelled', 'Error')"
 }</code></pre></td>
@@ -2090,7 +2090,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="readtextfile">
       <td><code>ReadTextFile</code></td>
       <td>Agent requests to read a text file</td>
-      <td>🤖 Agent (requires -> <a href="#read-from-file">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-read-from-file">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -2102,7 +2102,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="requestcancelled">
       <td><code>RequestCancelled</code></td>
       <td>Cancelled a pending request (Can be triggered by the user or the agent)</td>
-      <td>🤖 Agent (notification), ⚡ <a href="#cancel">cancel()</a></td>
+      <td>🤖 Agent (notification), ⚡ <a href="#-cancel">cancel()</a></td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string"
@@ -2111,7 +2111,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionclosed">
       <td><code>SessionClosed</code></td>
       <td>Active session closed</td>
-      <td>⚡ <a href="#close-session-optional">close_session()</a></td>
+      <td>⚡ <a href="#-close-session-optional">close_session()</a></td>
       <td><pre><code class="language-json">{
   "sessionId": "string"
 }</code></pre></td>
@@ -2119,7 +2119,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessioncreated">
       <td><code>SessionCreated</code></td>
       <td>New session created</td>
-      <td>⚡ <a href="#create-session">create_session()</a></td>
+      <td>⚡ <a href="#-create-session">create_session()</a></td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "modes": {
@@ -2157,7 +2157,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessiondeleted">
       <td><code>SessionDeleted</code></td>
       <td>Session deleted</td>
-      <td>⚡ <a href="#delete-session-optional">delete_session()</a></td>
+      <td>⚡ <a href="#-delete-session-optional">delete_session()</a></td>
       <td><pre><code class="language-json">{
   "sessionId": "string"
 }</code></pre></td>
@@ -2165,7 +2165,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionforked">
       <td><code>SessionForked</code></td>
       <td>Session forked successfully</td>
-      <td>⚡ <a href="#load-session-optional">fork_session()</a></td>
+      <td>⚡ <a href="#-load-session-optional">fork_session()</a></td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "modes": {
@@ -2203,7 +2203,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionloaded">
       <td><code>SessionLoaded</code></td>
       <td>Session loaded successfully</td>
-      <td>⚡ <a href="#load-session-optional">load_session()</a></td>
+      <td>⚡ <a href="#-load-session-optional">load_session()</a></td>
       <td><pre><code class="language-json">{
   "modes": {
     "currentModeId": "string",
@@ -2240,7 +2240,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionmodelupdated">
       <td><code>SessionModelUpdated</code></td>
       <td>Session model updated</td>
-      <td>⚡ <a href="#set-model-optional">set_model()</a></td>
+      <td>⚡ <a href="#-set-model-optional">set_model()</a></td>
       <td><pre><code class="language-json">{
   "value": "string",
   "name": "string",
@@ -2251,7 +2251,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionresumed">
       <td><code>SessionResumed</code></td>
       <td>Session resumed successfully</td>
-      <td>⚡ <a href="#load-session-optional">resume_session()</a></td>
+      <td>⚡ <a href="#-load-session-optional">resume_session()</a></td>
       <td><pre><code class="language-json">{
   "modes": {
     "currentModeId": "string",
@@ -2288,7 +2288,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionslisted">
       <td><code>SessionsListed</code></td>
       <td>Session list received</td>
-      <td>⚡ <a href="#load-session-optional">list_sessions()</a></td>
+      <td>⚡ <a href="#-load-session-optional">list_sessions()</a></td>
       <td><pre><code class="language-json">{
   "sessions": [
     {
@@ -2319,7 +2319,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="terminalauthentication">
       <td><code>TerminalAuthentication</code></td>
       <td>Terminal auth method selected, run it in a terminal</td>
-      <td>⚡ <a href="#authenticate">authenticate()</a></td>
+      <td>⚡ <a href="#-authenticate">authenticate()</a></td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "id": "string",
@@ -2333,7 +2333,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="terminalcreate">
       <td><code>TerminalCreate</code></td>
       <td>Agent requests to create a terminal for command execution</td>
-      <td>🤖 Agent (requires -> <a href="#create-terminal-for-agent-communication">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-create-terminal-for-agent-communication">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -2347,7 +2347,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="terminalexit">
       <td><code>TerminalExit</code></td>
       <td>Agent requests notification when terminal process exits</td>
-      <td>🤖 Agent (requires -> <a href="#reporting-terminal-exit">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-reporting-terminal-exit">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -2357,7 +2357,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="terminalkill">
       <td><code>TerminalKill</code></td>
       <td>Agent requests to kill a terminal process</td>
-      <td>🤖 Agent (requires -> <a href="#kill-terminal-process">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-kill-terminal-process">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -2368,7 +2368,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="terminaloutput">
       <td><code>TerminalOutput</code></td>
       <td>Agent requests terminal output</td>
-      <td>🤖 Agent (requires -> <a href="#provide-terminal-output-to-the-assistant">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-provide-terminal-output-to-the-assistant">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -2379,7 +2379,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="terminalrelease">
       <td><code>TerminalRelease</code></td>
       <td>Agent requests to release a terminal</td>
-      <td>🤖 Agent (requires -> <a href="#release-terminal-process">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-release-terminal-process">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -2389,7 +2389,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="thoughtlevels">
       <td><code>ThoughtLevels</code></td>
       <td>Available thought levels retrieved</td>
-      <td>⚡ <a href="#thoughtlevels">thought_levels()</a></td>
+      <td>⚡ <a href="#-thoughtlevels">thought_levels()</a></td>
       <td><pre><code class="language-json">{
   "options": [
     {
@@ -2410,7 +2410,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="thoughtlevelupdated">
       <td><code>ThoughtLevelUpdated</code></td>
       <td>Session thought level updated</td>
-      <td>⚡ <a href="#set-thought-level-optional">set_thought_level()</a></td>
+      <td>⚡ <a href="#-set-thought-level-optional">set_thought_level()</a></td>
       <td><pre><code class="language-json">{
   "value": "string",
   "name": "string",
@@ -2579,7 +2579,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="urlelicitation">
       <td><code>UrlElicitation</code></td>
       <td>Agent requests URL-based elicitation (direct user to a browser URL)</td>
-      <td>🤖 Agent (requires -> <a href="#responding-to-url-elicitation">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-responding-to-url-elicitation">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "mode": "url",
@@ -2693,7 +2693,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="writetextfile">
       <td><code>WriteTextFile</code></td>
       <td>Agent requests to write to a text file</td>
-      <td>🤖 Agent (requires -> <a href="#write-to-file">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-write-to-file">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
