@@ -351,6 +351,11 @@
 ---@class HermesUsageUpdate: HermesSessionNotification
 ---@field update { sessionUpdate: "usage_update", used: number, size: number, cost: { amount: number, currency: string } }
 
+---@alias HermesNoticeSeverity "info"|"warning"|"error"
+
+---@class HermesNotice: HermesSessionNotification
+---@field update { sessionUpdate: "notice", severity: HermesNoticeSeverity, title: string, description?: string }
+
 ---@alias HermesCompactionStatus "in_progress"|"completed"|"failed"|"cancelled"
 
 ---@class HermesCompactionUpdate: HermesSessionNotification

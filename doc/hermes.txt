@@ -775,6 +775,7 @@ notifications sourced from the agent.
 *Models*                        Available models retrieved (models())
 *Modes*                         Available modes retrieved (modes())
 *ModeUpdated*                   Session mode changed (set_mode())
+*Notice*                        Informational notice for the user
 *PermissionRequest*             Agent requests permission to execute a tool
                                  (respond())
 *Plan*                          Agent generates a plan

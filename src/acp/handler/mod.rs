@@ -284,5 +284,7 @@ fn listener_attached<S>(pattern: S) -> bool
 where
     S: Display + Debug,
 {
-    autocmd_listeners_attached(GROUP, "User", &pattern.to_string())
+    Commands::try_from(pattern.to_string())
+        .map(autocmd_listeners_attached)
+        .unwrap_or(false)
 }

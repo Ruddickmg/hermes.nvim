@@ -18,6 +18,7 @@ pub mod model;
 pub mod model_configurations;
 pub mod models;
 pub mod modes;
+pub mod notice;
 pub mod opencode;
 pub mod prompt;
 pub mod response;

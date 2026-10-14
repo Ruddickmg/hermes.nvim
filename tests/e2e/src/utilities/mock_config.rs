@@ -6,7 +6,7 @@ use agent_client_protocol::schema::v1::{
     CompactionUpdate, CompleteElicitationNotification, CreateElicitationRequest,
     CreateTerminalRequest, DeleteSessionResponse, ExtResponse, Implementation, InitializeRequest,
     InitializeResponse, ListSessionsResponse, LoadSessionResponse, McpCapabilities,
-    NewSessionResponse, PermissionOption, PermissionOptionId, PermissionOptionKind,
+    NewSessionResponse, Notice, PermissionOption, PermissionOptionId, PermissionOptionKind,
     PromptCapabilities, ReadTextFileRequest, ReleaseTerminalRequest, RequestId,
     RequestPermissionRequest, ResumeSessionResponse, SessionAdditionalDirectoriesCapabilities,
     SessionCapabilities, SessionCloseCapabilities, SessionDeleteCapabilities,
@@ -67,6 +67,8 @@ pub struct MockConfig {
     pub compaction_update: Option<CompactionUpdate>,
     /// Compaction summary chunk notification to send during prompt (None = skip)
     pub compaction_summary_chunk: Option<CompactionSummaryChunk>,
+    /// Notice notification to send during prompt (None = skip)
+    pub notice: Option<Notice>,
     /// Close session response to return when a CloseSessionRequest is received
     pub close_session_response: Option<CloseSessionResponse>,
     /// Delete session response to return when a DeleteSessionRequest is received
@@ -135,6 +137,7 @@ impl Default for MockConfig {
             elicitation_complete_notification: None,
             compaction_update: None,
             compaction_summary_chunk: None,
+            notice: None,
             close_session_response: None,
             delete_session_response: None,
             last_read_file_request_id: None,
@@ -300,6 +303,12 @@ impl MockConfig {
     /// Set a compaction summary chunk notification to send during prompt
     pub fn set_compaction_summary_chunk(mut self, chunk: CompactionSummaryChunk) -> Self {
         self.compaction_summary_chunk = Some(chunk);
+        self
+    }
+
+    /// Set a notice notification to send during prompt
+    pub fn set_notice(mut self, notice: Notice) -> Self {
+        self.notice = Some(notice);
         self
     }
 

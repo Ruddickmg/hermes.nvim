@@ -147,6 +147,7 @@ impl Handler {
             SessionUpdate::CurrentModeUpdate(_) => Ok(Commands::ModeCurrent),
             SessionUpdate::ConfigOptionUpdate(_) => Ok(Commands::ConfigurationOption),
             SessionUpdate::UsageUpdate(_) => Ok(Commands::UsageUpdate),
+            SessionUpdate::Notice(_) => Ok(Commands::Notice),
             SessionUpdate::CompactionUpdate(_) => Ok(Commands::CompactionUpdate),
             SessionUpdate::CompactionSummaryChunk(_) => Ok(Commands::CompactionSummaryChunk),
             SessionUpdate::SessionInfoUpdate(_) => Ok(Commands::SessionUpdate),
@@ -175,9 +176,10 @@ impl Handler {
             self.process_notification(&session_notification).await?;
 
         let state = self.state.lock().await;
-        if state
-            .agent_info
-            .needs_local_history(state.config.session.store_history)
+        if !matches!(session_notification.update, SessionUpdate::Notice(_))
+            && state
+                .agent_info
+                .needs_local_history(state.config.session.store_history)
         {
             let key = format!("{}/{}.jsonl", state.agent_info.current, session_id);
             if let Ok(content) = serde_json::to_string(&session_notification) {
