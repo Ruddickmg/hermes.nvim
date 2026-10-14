@@ -7,12 +7,12 @@ use agent_client_protocol::schema::v1::{
     Implementation, InitializeRequest, InitializeResponse, ListSessionsResponse,
     LoadSessionResponse, McpCapabilities, NewSessionResponse, PermissionOption, PermissionOptionId,
     PermissionOptionKind, PromptCapabilities, ReadTextFileRequest, ReleaseTerminalRequest,
-    RequestPermissionRequest, ResumeSessionResponse, SessionAdditionalDirectoriesCapabilities,
-    SessionCapabilities, SessionCloseCapabilities, SessionDeleteCapabilities,
-    SessionForkCapabilities, SessionId, SessionInfo, SessionListCapabilities,
-    SessionResumeCapabilities, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
-    SetSessionModeResponse, TerminalOutputRequest, ToolCallId, ToolCallUpdate,
-    ToolCallUpdateFields, WaitForTerminalExitRequest, WriteTextFileRequest,
+    RequestId, RequestPermissionRequest, ResumeSessionResponse,
+    SessionAdditionalDirectoriesCapabilities, SessionCapabilities, SessionCloseCapabilities,
+    SessionDeleteCapabilities, SessionForkCapabilities, SessionId, SessionInfo,
+    SessionListCapabilities, SessionResumeCapabilities, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, SetSessionModeResponse, TerminalOutputRequest, ToolCallId,
+    ToolCallUpdate, ToolCallUpdateFields, WaitForTerminalExitRequest, WriteTextFileRequest,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -66,6 +66,18 @@ pub struct MockConfig {
     pub close_session_response: Option<CloseSessionResponse>,
     /// Delete session response to return when a DeleteSessionRequest is received
     pub delete_session_response: Option<DeleteSessionResponse>,
+    /// Request id the agent used for the most recent outgoing read request (None = none sent)
+    pub last_read_file_request_id: Option<RequestId>,
+    /// Request id carried by the most recent `$/cancel_request` notification (None = none received)
+    pub cancel_request_id: Option<RequestId>,
+    /// When true the agent cancels its own outgoing read request instead of
+    /// waiting for a response (false = don't cancel)
+    pub cancel_read_file_request: bool,
+    /// Signal the agent awaits before cancelling the read request. Lets the test
+    /// wait until Hermes has registered the request before cancellation arrives.
+    pub cancel_read_file_signal: Option<std::sync::Arc<async_channel::Receiver<()>>>,
+    /// Error code returned by the most recent outgoing read request (None = not yet resolved)
+    pub last_read_file_response_error_code: Option<i32>,
 }
 
 impl Default for MockConfig {
@@ -118,6 +130,11 @@ impl Default for MockConfig {
             elicitation_complete_notification: None,
             close_session_response: None,
             delete_session_response: None,
+            last_read_file_request_id: None,
+            cancel_request_id: None,
+            cancel_read_file_request: false,
+            cancel_read_file_signal: None,
+            last_read_file_response_error_code: None,
         }
     }
 }
@@ -226,6 +243,17 @@ impl MockConfig {
     /// Set a read text file request to send during prompt
     pub fn set_read_file_request(mut self, request: ReadTextFileRequest) -> Self {
         self.read_file_request = Some(request);
+        self
+    }
+
+    /// Cancel the configured read request once `signal` fires instead of
+    /// waiting for Hermes to answer it.
+    pub fn set_cancel_read_file_request(
+        mut self,
+        signal: std::sync::Arc<async_channel::Receiver<()>>,
+    ) -> Self {
+        self.cancel_read_file_request = true;
+        self.cancel_read_file_signal = Some(signal);
         self
     }
 

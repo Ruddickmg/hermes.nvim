@@ -18,7 +18,7 @@ use agent_client_protocol::{
     },
 };
 use async_lock::Mutex;
-use hermes::acp::handler::Handler;
+use hermes::acp::handler::{Handler, NvimHandleArgs};
 use hermes::nvim::state::PluginState;
 use pretty_assertions::assert_eq;
 use std::io::{Read, Write};
@@ -387,6 +387,7 @@ fn test_execute_autocommand_request_sends_with_responder() -> nvim_oxi::Result<(
     // This should succeed - covers lines 207-208
     let result = smol::block_on(handler.execute_autocommand_request(
         "test-session".to_string(),
+        agent_client_protocol::schema::v1::RequestId::Null,
         "TestCommand",
         serde_json::json!({"test": "data"}),
         responder,
@@ -436,11 +437,33 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
             Ok(())
         }
 
-        async fn add_request(&self, _session_id: String, _responder: Responder) -> Uuid {
+        async fn add(
+            &self,
+            _session_id: String,
+            _agent_request_id: agent_client_protocol::schema::v1::RequestId,
+            _responder: Responder,
+        ) -> Uuid {
             Uuid::new_v4()
         }
 
-        async fn get_request(&self, _request_id: &Uuid) -> Option<hermes::nvim::requests::Request> {
+        async fn remove(
+            &self,
+            request_id: &Uuid,
+        ) -> hermes::acp::Result<hermes::nvim::requests::Request> {
+            Err(hermes::acp::error::Error::InvalidInput(format!(
+                "No request found for {}",
+                request_id
+            )))
+        }
+
+        async fn get(&self, _request_id: &Uuid) -> Option<hermes::nvim::requests::Request> {
+            None
+        }
+
+        async fn remove_by_request_id(
+            &self,
+            _agent_request_id: &agent_client_protocol::schema::v1::RequestId,
+        ) -> Option<hermes::nvim::requests::Request> {
             None
         }
     }
@@ -470,6 +493,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
     // With the failing mock, default_response will fail, triggering the error! at 74-77
     let result = smol::block_on(handler.execute_autocommand_request(
         "test-session".to_string(),
+        agent_client_protocol::schema::v1::RequestId::Null,
         "TestErrorCommand", // No listener for this command
         serde_json::json!({"data": "value"}),
         responder,
@@ -517,11 +541,33 @@ fn test_no_listener_with_request_logs_default_response_error() -> nvim_oxi::Resu
             Ok(())
         }
 
-        async fn add_request(&self, _session_id: String, _responder: Responder) -> Uuid {
+        async fn add(
+            &self,
+            _session_id: String,
+            _agent_request_id: agent_client_protocol::schema::v1::RequestId,
+            _responder: Responder,
+        ) -> Uuid {
             Uuid::new_v4()
         }
 
-        async fn get_request(&self, _request_id: &Uuid) -> Option<hermes::nvim::requests::Request> {
+        async fn remove(
+            &self,
+            request_id: &Uuid,
+        ) -> hermes::acp::Result<hermes::nvim::requests::Request> {
+            Err(hermes::acp::error::Error::InvalidInput(format!(
+                "No request found for {}",
+                request_id
+            )))
+        }
+
+        async fn get(&self, _request_id: &Uuid) -> Option<hermes::nvim::requests::Request> {
+            None
+        }
+
+        async fn remove_by_request_id(
+            &self,
+            _agent_request_id: &agent_client_protocol::schema::v1::RequestId,
+        ) -> Option<hermes::nvim::requests::Request> {
             None
         }
     }
@@ -547,6 +593,7 @@ fn test_no_listener_with_request_logs_default_response_error() -> nvim_oxi::Resu
 
     let _result = smol::block_on(handler.execute_autocommand_request(
         "test-session".to_string(),
+        agent_client_protocol::schema::v1::RequestId::Null,
         "TestErrorCommand",
         serde_json::json!({"data": "value"}),
         responder,
@@ -1728,10 +1775,9 @@ fn handler_callback_fires_autocmd_when_listener_attached() -> nvim_oxi::Result<(
     smol::block_on(executor.run(async {
         handler
             .channel
-            .send((
+            .send(NvimHandleArgs::Event(
                 Commands::PermissionRequest.to_string(),
                 serde_json::json!({}),
-                None,
             ))
             .await
             .expect("Send should succeed");
@@ -1778,13 +1824,12 @@ fn handler_callback_sends_default_response_when_no_listener() -> nvim_oxi::Resul
     smol::block_on(executor.run(async {
         handler
             .channel
-            .send((
+            .send(NvimHandleArgs::Request(
                 "UnknownCommand".to_string(),
                 serde_json::json!({}),
-                Some((
-                    Responder::PermissionResponse(sender),
-                    "test-session".to_string(),
-                )),
+                Responder::PermissionResponse(sender),
+                "test-session".to_string(),
+                agent_client_protocol::schema::v1::RequestId::Null,
             ))
             .await
             .expect("Send should succeed");
@@ -1819,10 +1864,9 @@ fn handler_callback_warns_when_no_listener_and_no_request() -> nvim_oxi::Result<
     smol::block_on(executor.run(async {
         handler
             .channel
-            .send((
+            .send(NvimHandleArgs::Event(
                 "AnotherUnknownCommand".to_string(),
                 serde_json::json!({}),
-                None,
             ))
             .await
             .expect("Send should succeed");
@@ -1835,6 +1879,41 @@ fn handler_callback_warns_when_no_listener_and_no_request() -> nvim_oxi::Result<
     assert!(
         logs_contain("No listener attached for command"),
         "Expected warn log for unknown command with no listener and no request"
+    );
+
+    Ok(())
+}
+
+#[tracing_test::traced_test]
+#[nvim_oxi::test]
+fn handler_callback_logs_error_when_cancel_has_no_matching_request() -> nvim_oxi::Result<()> {
+    let state = Arc::new(Mutex::new(PluginState::default()));
+    let requests = Rc::new(MockRequestHandler::new());
+    let handler = Handler::new(
+        state.clone(),
+        mock_connection_manager(&state),
+        mock_runtime(),
+        requests,
+    )
+    .expect("Handler creation should succeed");
+
+    let executor = smol::LocalExecutor::new();
+    smol::block_on(executor.run(async {
+        handler
+            .channel
+            .send(NvimHandleArgs::Cancel(
+                agent_client_protocol::schema::v1::RequestId::Number(1),
+            ))
+            .await
+            .expect("Send should succeed");
+    }));
+
+    // Give the event loop a moment to process.
+    nvim_oxi::api::command("sleep 50m").ok();
+
+    assert!(
+        logs_contain("no matching request was found"),
+        "Expected error log when cancelling a request id that is not pending"
     );
 
     Ok(())

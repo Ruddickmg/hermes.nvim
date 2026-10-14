@@ -2,13 +2,14 @@ use agent_client_protocol::schema::v1::{
     CreateElicitationRequest, CreateElicitationResponse, CreateTerminalRequest,
     CreateTerminalResponse, ElicitationAction, KillTerminalRequest, KillTerminalResponse,
     ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
-    RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
+    RequestId, RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
     TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
     WriteTextFileRequest, WriteTextFileResponse,
 };
 use async_channel::Sender;
 use async_lock::Mutex;
 use nvim_oxi::conversion::FromObject;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{error, warn};
 use uuid::Uuid;
@@ -25,10 +26,9 @@ use crate::utilities::{
 };
 use crate::utilities::{find_existing_buffer, get_permission_prompt, read_file_content};
 
-/// Type alias for oneshot channel sender (async_channel::bounded(1))
 pub type OneshotSender<T> = Sender<T>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Responder {
     PermissionResponse(OneshotSender<RequestPermissionOutcome>),
     ReadFileResponse(
@@ -90,17 +90,38 @@ pub struct Request {
     id: Uuid,
     nvim_runtime: NvimRuntime,
     session_id: String,
+    request_id: RequestId,
     responder: Arc<Mutex<Option<Responder>>>,
     remove: NvimMessenger<Uuid>,
     pub(super) state: Arc<Mutex<PluginState>>,
     is_permission_request: bool,
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestDetails {
+    pub request_id: String,
+    pub session_id: String,
+}
+
 impl Request {
     pub fn id(&self) -> Uuid {
         self.id
     }
+    pub fn details(&self) -> RequestDetails {
+        RequestDetails {
+            request_id: self.id.to_string(),
+            session_id: self.session_id(),
+        }
+    }
+    pub fn request_id(&self) -> RequestId {
+        self.request_id.clone()
+    }
+    pub fn session_id(&self) -> String {
+        self.session_id.clone()
+    }
     pub fn new(
+        request_id: RequestId,
         session_id: String,
         remove: NvimMessenger<Uuid>,
         responder: Responder,
@@ -112,6 +133,7 @@ impl Request {
             nvim_runtime,
             id: Uuid::new_v4(),
             session_id,
+            request_id,
             is_permission_request: matches!(responder, Responder::PermissionResponse(..)),
             responder: Arc::new(Mutex::new(Some(responder))),
             remove,

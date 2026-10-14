@@ -702,28 +702,33 @@ vim.api.nvim_create_autocmd("User", {
 
 ### ⏹️ Cancel (**Optional**)
 
-Cancel the current operation of the agent (e.g., stop generating text, stop a tool call in progress, etc)
+Cancel the current operation of the agent (e.g., stop generating text, stop a tool call in progress, etc).
 
 ```lua
 local hermes = require("hermes")
-local sessionId = 'session-id-from-create-session-response'
+local session_id = 'session-id-from-create-session-response'
 
--- call signature
-hermes.cancel(sessionId)
+-- call signature (session ID or pending request ID)
+hermes.cancel(session_id)
 
 -- example
 vim.api.nvim_create_autocmd("User", {
   group = "hermes",
-  pattern = "SessionCreated",
+  pattern = "PermissionRequest",
   callback = function(args)
-    ---@type HermesSessionCreated
+    ---@type HermesPermissionRequest
     local data = args.data
-    local sessionId = data.sessionId
+    local request_id = data.requestId
 
-    hermes.cancel(sessionId)
+    hermes.cancel(request_id)
   end,
 })
 ```
+
+> **Triggers:** [RequestCancelled](#requestcancelled) autocommand upon completion.
+
+> [!NOTE]
+> [RequestCancelled](#requestcancelled) may also be triggered by the agent (agents can cancel requests)
 
 ### 🎯 Set mode (**Optional**)
 
@@ -2005,6 +2010,15 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "limit": "number (optional, max lines to read)"
 }</code></pre></td>
     </tr>
+    <tr id="requestcancelled">
+      <td><code>RequestCancelled</code></td>
+      <td>Cancelled a pending request (Can be triggered by the user or the agent)</td>
+      <td>🤖 Agent (notification), ⚡ <a href="#cancel">cancel()</a></td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string"
+}</code></pre></td>
+    </tr>
     <tr id="sessionclosed">
       <td><code>SessionClosed</code></td>
       <td>Active session closed</td>
@@ -2692,7 +2706,8 @@ cargo build --release
 ## 📋 TODO:
 
 -- functionality
-- [ ] [Request Cancellation Mechanism](https://agentclientprotocol.com/rfds/request-cancellation)
+- [ ] [Session Compaction](https://agentclientprotocol.com/rfds/session-compaction)
+- [ ] [Session Notices](https://agentclientprotocol.com/rfds/session-notices)
 - [ ] Support "unstable"/proposed ACP methods
   - [ ] [Fork sessions](https://agentclientprotocol.com/rfds/session-fork)
   - [ ] [Agent Extensions via ACP Proxies](https://agentclientprotocol.com/rfds/proxy-chains)
