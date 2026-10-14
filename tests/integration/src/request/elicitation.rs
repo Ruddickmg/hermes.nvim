@@ -3,7 +3,7 @@ use agent_client_protocol::schema::v1::{
     CreateElicitationRequest, CreateElicitationResponse, ElicitationAcceptAction,
     ElicitationAction, ElicitationContentValue, ElicitationFormMode, ElicitationPropertySchema,
     ElicitationSchema, ElicitationScope, ElicitationSessionScope, OtherElicitationPropertySchema,
-    StringPropertySchema,
+    RequestId, StringPropertySchema,
 };
 use async_lock::Mutex;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
@@ -51,7 +51,7 @@ fn add_elicitation_request_with(
 ) {
     let (sender, receiver) = async_channel::bounded::<CreateElicitationResponse>(1);
     let responder = Responder::Elicitation(sender, request);
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
     (request_id, receiver)
 }
 

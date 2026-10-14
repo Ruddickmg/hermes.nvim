@@ -43,7 +43,7 @@ fn authenticated_succeeds() -> nvim_oxi::Result<()> {
 }
 
 #[nvim_oxi::test]
-fn terminal_authentication_succeeds() -> nvim_oxi::Result<()> {
+fn terminal_authentication_errors_when_response_channel_closed() -> nvim_oxi::Result<()> {
     let handler = Arc::new(mock_handler());
     let request = hermes::api::authenticate::TerminalAuthRequest::new(
         AuthMethodTerminal::new("tui-auth".to_string(), "Terminal Auth"),
@@ -52,7 +52,10 @@ fn terminal_authentication_succeeds() -> nvim_oxi::Result<()> {
     let result =
         drive(handler.terminal_authentication(Assistant::Opencode, handler.clone(), request))
             .expect("terminal_authentication should settle before the deadline");
-    assert!(result.is_ok(), "terminal_authentication should succeed");
+    assert!(
+        result.is_err(),
+        "terminal_authentication should error when the responder channel closes without a response"
+    );
     Ok(())
 }
 

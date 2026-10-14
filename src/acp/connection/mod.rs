@@ -15,8 +15,8 @@ use crate::{
 use agent_client_protocol::schema::v1::{
     AuthenticateRequest, CancelNotification, CloseSessionRequest, DeleteSessionRequest,
     ForkSessionRequest, InitializeRequest, ListSessionsRequest, LoadSessionRequest, LogoutRequest,
-    NewSessionRequest, PromptRequest, ResumeSessionRequest, SetSessionConfigOptionRequest,
-    SetSessionModeRequest,
+    NewSessionRequest, PromptRequest, RequestId, ResumeSessionRequest,
+    SetSessionConfigOptionRequest, SetSessionModeRequest,
 };
 use async_channel::Sender;
 pub use manager::*;
@@ -26,6 +26,7 @@ pub enum UserRequest {
     Close,
     Initialize(InitializeRequest),
     Cancel(CancelNotification),
+    CancelRequest(RequestId),
     CreateSession(NewSessionRequest),
     Prompt(PromptRequest),
     Authenticate(AuthenticateRequest),
@@ -107,6 +108,12 @@ impl Connection {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn cancel(&self, notification: CancelNotification) -> Result<()> {
         self.send(UserRequest::Cancel(notification)).await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub async fn cancel_request(&self, id: RequestId) -> Result<()> {
+        self.send(UserRequest::CancelRequest(id)).await?;
         Ok(())
     }
 
@@ -271,7 +278,7 @@ mod tests {
 
     use super::*;
     use agent_client_protocol::schema::ProtocolVersion;
-    use agent_client_protocol::schema::v1::{InitializeRequest, SessionId};
+    use agent_client_protocol::schema::v1::{InitializeRequest, RequestId, SessionId};
     use pretty_assertions::assert_eq;
 
     /// Creates a mock thread handle that immediately returns Ok for testing
@@ -307,6 +314,28 @@ mod tests {
                 assert_eq!(received.protocol_version, request.protocol_version);
             } else {
                 panic!("Expected Initialize request");
+            }
+        }));
+    }
+
+    #[test]
+    fn test_connection_cancel_request() {
+        let executor = mock_runtime();
+        let (sender, receiver) = async_channel::bounded(1);
+        let connection = Arc::new(mock_connection(sender));
+        let request_id = RequestId::Number(1);
+
+        smol::block_on(executor.run(async {
+            connection.cancel_request(request_id.clone()).await.unwrap();
+        }));
+
+        drop(connection);
+
+        smol::block_on(executor.run(async {
+            if let Ok(UserRequest::CancelRequest(received)) = receiver.recv().await {
+                assert_eq!(received, request_id);
+            } else {
+                panic!("Expected CancelRequest");
             }
         }));
     }
