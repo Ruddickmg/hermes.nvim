@@ -2706,7 +2706,8 @@ cargo build --release
 ## 📋 TODO:
 
 -- functionality
-- [ ] [Request Cancellation Mechanism](https://agentclientprotocol.com/rfds/request-cancellation)
+- [ ] [Session Compaction](https://agentclientprotocol.com/rfds/session-compaction)
+- [ ] [Session Notices](https://agentclientprotocol.com/rfds/session-notices)
 - [ ] Support "unstable"/proposed ACP methods
   - [ ] [Fork sessions](https://agentclientprotocol.com/rfds/session-fork)
   - [ ] [Agent Extensions via ACP Proxies](https://agentclientprotocol.com/rfds/proxy-chains)
