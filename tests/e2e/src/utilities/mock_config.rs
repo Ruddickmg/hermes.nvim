@@ -71,7 +71,7 @@ pub struct MockConfig {
     /// Request id carried by the most recent `$/cancel_request` notification (None = none received)
     pub cancel_request_id: Option<RequestId>,
     /// When true the agent cancels its own outgoing read request instead of
-    /// waiting for a response (None = don't cancel)
+    /// waiting for a response (false = don't cancel)
     pub cancel_read_file_request: bool,
     /// Signal the agent awaits before cancelling the read request. Lets the test
     /// wait until Hermes has registered the request before cancellation arrives.
