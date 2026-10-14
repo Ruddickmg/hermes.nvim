@@ -8,7 +8,7 @@ pub mod terminal;
 
 use crate::{
     Handler,
-    acp::{error::Error, registry::Registry},
+    acp::{connection::ConnectionManager, error::Error, registry::Registry},
     api::{DisconnectArgs, Hermes},
     utilities::{
         Downloader, Logger, NvimRuntime, create_augroup, create_autocmd,
@@ -40,12 +40,14 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
             .with_storage_path(std::path::PathBuf::from(&storage_path))
             .with_registry(registry),
     ));
+    let connection_manager = Arc::new(Mutex::new(ConnectionManager::new(plugin_state.clone())));
     let request_handler = Rc::new(requests::Requests::new(
         nvim_runtime.clone(),
         plugin_state.clone(),
     )?);
     let event_handler = Arc::new(Handler::new(
         plugin_state.clone(),
+        connection_manager.clone(),
         nvim_runtime.clone(),
         request_handler.clone(),
     )?);
@@ -54,6 +56,7 @@ pub fn hermes() -> nvim_oxi::Result<Dictionary> {
         logger,
         event_handler,
         request_handler,
+        connection_manager,
     )));
     let cloned = api.clone();
     let shutdown_runtime = nvim_runtime.clone();

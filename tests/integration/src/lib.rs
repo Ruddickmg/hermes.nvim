@@ -4,7 +4,7 @@
 //! and communicates with the Neovim main thread.
 #![allow(clippy::arc_with_non_send_sync)]
 
-use crate::helpers::mock_runtime;
+use crate::helpers::{mock_connection_manager, mock_runtime};
 use async_lock::Mutex;
 use hermes::acp::handler::Handler;
 use hermes::nvim::{GROUP, autocommands::Commands, requests::Requests, state::PluginState};
@@ -68,8 +68,13 @@ fn test_handler_new_creates_valid_instance() -> nvim_oxi::Result<()> {
     // This tests the constructor which sets up mpsc channel and AsyncHandle
     let state = Arc::new(Mutex::new(PluginState::default()));
     let requests = Rc::new(Requests::new(mock_runtime(), state.clone())?);
-    let handler =
-        Handler::new(state, mock_runtime(), requests).expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_connection_manager(&state),
+        mock_runtime(),
+        requests,
+    )
+    .expect("Handler creation should succeed");
 
     // If we get here without error, the integration worked
     // The instance is valid and ready to use
@@ -84,8 +89,13 @@ fn test_execute_autocommand_sends_to_channel() -> nvim_oxi::Result<()> {
     // Uses: channel.send(), AsyncHandle.send()
     let state = Arc::new(Mutex::new(PluginState::default()));
     let requests = Rc::new(Requests::new(mock_runtime(), state.clone())?);
-    let handler =
-        Handler::new(state, mock_runtime(), requests).expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_connection_manager(&state),
+        mock_runtime(),
+        requests,
+    )
+    .expect("Handler creation should succeed");
 
     // Execute an autocommand with test data
     let test_data = serde_json::json!({"test": "data"});

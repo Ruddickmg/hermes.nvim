@@ -250,6 +250,14 @@ describe("hermes.init (main API)", function()
 		it("exports logout from Rust", function()
 			assert.is_function(native.logout)
 		end)
+
+		it("exports config_options from Rust", function()
+			assert.is_function(native.config_options)
+		end)
+
+		it("exports set_config_option from Rust", function()
+			assert.is_function(native.set_config_option)
+		end)
 	end)
 
 	describe("API function signatures", function()
@@ -293,6 +301,22 @@ describe("hermes.init (main API)", function()
 
 		it("thought_levels returns nil when session does not exist", function()
 			assert.is_nil(hermes.thought_levels("nonexistent-session"))
+		end)
+
+		it("config_options returns nil when session does not exist", function()
+			assert.is_nil(hermes.config_options("nonexistent-session"))
+		end)
+
+		it("set_config_option accepts session_id and config table as arguments", function()
+			assert.has_no.errors(function()
+				hermes.set_config_option("test-session-id", { id = "test", value = "val" })
+			end)
+		end)
+
+		it("set_config_option accepts boolean value", function()
+			assert.has_no.errors(function()
+				hermes.set_config_option("test-session-id", { id = "brave_mode", value = true })
+			end)
 		end)
 
 		it("set_thought_level accepts session_id and level as arguments", function()

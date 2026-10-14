@@ -6,7 +6,10 @@ pub use builder::build_client;
 
 use crate::{
     PluginState,
-    acp::{Result, connection::Assistant},
+    acp::{
+        Result,
+        connection::{Assistant, ConnectionManager},
+    },
     nvim::{
         GROUP,
         requests::{RequestHandler, Responder},
@@ -27,6 +30,7 @@ use tracing::{debug, error, instrument, warn};
 type NvimHandleArgs = (String, serde_json::Value, Option<(Responder, String)>);
 
 pub struct Handler {
+    pub connection_manager: Arc<Mutex<ConnectionManager>>,
     pub channel: NvimMessenger<NvimHandleArgs>,
     pub state: Arc<Mutex<PluginState>>,
 }
@@ -35,6 +39,7 @@ impl Handler {
     #[instrument(level = "trace", skip_all)]
     pub fn new<R: RequestHandler + 'static>(
         state: Arc<Mutex<PluginState>>,
+        connection_manager: Arc<Mutex<ConnectionManager>>,
         nvim_runtime: NvimRuntime,
         requests: Rc<R>,
     ) -> Result<Self> {
@@ -87,7 +92,11 @@ impl Handler {
                 }
             },
         )?;
-        Ok(Self { channel, state })
+        Ok(Self {
+            channel,
+            state,
+            connection_manager,
+        })
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -150,9 +159,9 @@ impl Handler {
 
     #[instrument(level = "trace", skip(self))]
     pub async fn can_request_permissions(&self) -> bool {
-        let config = self.state.lock().await;
-        let can_request_permissions = config.config.permissions.request_permissions;
-        drop(config);
+        let state = self.state.lock().await;
+        let can_request_permissions = state.config.permissions.request_permissions;
+        drop(state);
         can_request_permissions
     }
 
@@ -162,6 +171,31 @@ impl Handler {
         let send_notifications = config.config.permissions.send_notifications;
         drop(config);
         send_notifications
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub async fn can_request_form_elicitation(&self) -> bool {
+        let state = self.state.lock().await;
+        let elicitation_form = state.config.permissions.elicitation.form;
+        drop(state);
+        elicitation_form
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub async fn can_request_url_elicitation(&self) -> bool {
+        let state = self.state.lock().await;
+        let elicitation_url = state.config.permissions.elicitation.url;
+        drop(state);
+        elicitation_url
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub async fn elicitation_enabled(&self) -> bool {
+        let state = self.state.lock().await;
+        let elicitation_url = state.config.permissions.elicitation.url;
+        let elicitation_form = state.config.permissions.elicitation.form;
+        drop(state);
+        elicitation_url || elicitation_form
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -178,7 +212,7 @@ impl Handler {
         &self,
         command: C,
         data: S,
-        respons_data: Option<(Responder, String)>,
+        response_data: Option<(Responder, String)>,
     ) -> Result<()>
     where
         C: ToString + Debug,
@@ -187,7 +221,7 @@ impl Handler {
         let serialized: serde_json::Value = data.serialize(serde_json::value::Serializer)?;
         debug!("Serialized data: {:#?}", serialized);
         self.channel
-            .send((command.to_string(), serialized, respons_data))
+            .send((command.to_string(), serialized, response_data))
             .await
     }
 

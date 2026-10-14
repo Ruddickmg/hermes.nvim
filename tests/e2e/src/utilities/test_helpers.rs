@@ -82,6 +82,32 @@ pub fn connect_to_mock_agent(
         .map_err(|e| nvim_oxi::Error::Api(nvim_oxi::api::Error::Other(e.to_string())))
 }
 
+/// Connect to the stdio mock agent binary that hermes spawns as a subprocess.
+///
+/// `argv` selects what the mock advertises in its `initialize` response (see
+/// the `mock-agent-stdio` binary). Only tests that need a command-carrying
+/// agent — terminal authentication — connect this way; every other e2e test
+/// uses `connect_to_mock_agent`.
+pub fn connect_to_mock_agent_stdio(
+    connect: &Function<ConnectionArgs, ()>,
+    argv: &[&str],
+) -> Result<(), nvim_oxi::Error> {
+    let mut options = Dictionary::new();
+    options.insert("protocol", "stdio");
+    options.insert("command", env!("HERMES_MOCK_AGENT_BIN"));
+    let arg_array: nvim_oxi::Array = argv.iter().map(|s| nvim_oxi::String::from(*s)).collect();
+    options.insert("args", arg_array);
+    let connection_options: ConnectionOptions =
+        FromObject::from_object(nvim_oxi::Object::from(options))
+            .map_err(|e| nvim_oxi::Error::Api(nvim_oxi::api::Error::Other(e.to_string())))?;
+    connect
+        .call((
+            nvim_oxi::String::from("mock-agent"),
+            Some(connection_options),
+        ))
+        .map_err(|e| nvim_oxi::Error::Api(nvim_oxi::api::Error::Other(e.to_string())))
+}
+
 /// Connect to a mock agent via HTTP (WebSocket) protocol
 pub fn connect_to_mock_agent_http(
     connect: &Function<ConnectionArgs, ()>,

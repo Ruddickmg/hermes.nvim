@@ -4,9 +4,6 @@ use crate::{
     nvim::autocommands::Commands,
 };
 
-/// Single positional argument: session_id
-pub type ModesArgs = String;
-
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn modes(&self, session_id: String) -> Result<()> {

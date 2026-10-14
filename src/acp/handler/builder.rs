@@ -1,10 +1,9 @@
-//! Builder factory for the ACP 0.11 `Client` role.
+//! Builder factory for the ACP `Client` role.
 //!
-//! In 0.10.x, request/notification handlers lived in `impl Client for Handler`.
-//! In 0.11 there is no `Client` trait — handlers are closures registered on a
-//! `Client.builder()`. This module wires our existing `Handler` inherent methods
-//! into the builder so the dispatch loop calls into them automatically when the
-//! agent sends a request or notification.
+//! Request/notification handlers are closures registered on a `Client.builder()`.
+//! This module wires our existing `Handler` inherent methods into the builder so
+//! the dispatch loop calls into them automatically when the agent sends a request
+//! or notification.
 //!
 //! Every closure clones an `Arc<Handler>`, calls the matching method on the
 //! handler, and forwards the result back to the responder. Permission gating
@@ -16,6 +15,7 @@ use std::sync::Arc;
 use agent_client_protocol::{
     self as acp, Client, ConnectionTo, Responder, on_receive_notification, on_receive_request,
     schema::v1::{
+        CompleteElicitationNotification, CreateElicitationRequest, CreateElicitationResponse,
         CreateTerminalRequest, CreateTerminalResponse, ReadTextFileRequest, ReadTextFileResponse,
         ReleaseTerminalRequest, ReleaseTerminalResponse, RequestPermissionRequest,
         RequestPermissionResponse, SessionNotification, TerminalOutputRequest,
@@ -135,6 +135,30 @@ pub fn build_client(
                 move |notif: SessionNotification, _cx: ConnectionTo<acp::Agent>| {
                     let handler = handler.clone();
                     async move { handler.session_notification(notif).await }
+                }
+            },
+            on_receive_notification!(),
+        )
+        .on_receive_request(
+            {
+                let handler = handler.clone();
+                move |req: CreateElicitationRequest,
+                      responder: Responder<CreateElicitationResponse>,
+                      _cx: ConnectionTo<acp::Agent>| {
+                    let handler = handler.clone();
+                    async move {
+                        responder.respond_with_result(handler.create_elicitation(req).await)
+                    }
+                }
+            },
+            on_receive_request!(),
+        )
+        .on_receive_notification(
+            {
+                let handler = handler.clone();
+                move |notif: CompleteElicitationNotification, _cx: ConnectionTo<acp::Agent>| {
+                    let handler = handler.clone();
+                    async move { handler.elicitation_complete(notif).await }
                 }
             },
             on_receive_notification!(),
