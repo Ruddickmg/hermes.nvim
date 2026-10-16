@@ -3,11 +3,16 @@ use crate::acp::connection::{Connection, http, socket, stdio, tcp};
 use crate::acp::registry::distribution::Distribution;
 use crate::acp::registry::entry::AgentEntry;
 use crate::acp::registry::resolution::fetch_agent_from_registry;
+use crate::nvim::autocommands::Commands;
 use crate::nvim::configuration::{DistributionsConfig, Permissions};
+use crate::utilities::autocmd::autocmd_listeners_attached;
 use crate::{Handler, acp::error::Error};
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    ClientCapabilities, FileSystemCapabilities, Implementation, InitializeRequest,
+    AuthCapabilities, BooleanConfigOptionCapabilities, ClientCapabilities,
+    ClientSessionCapabilities, CompactionCapabilities, ElicitationCapabilities,
+    ElicitationFormCapabilities, ElicitationUrlCapabilities, FileSystemCapabilities,
+    Implementation, InitializeRequest, NoticeCapabilities, SessionConfigOptionsCapabilities,
 };
 use async_lock::Mutex;
 use serde::{Deserialize, Serialize};
@@ -124,10 +129,6 @@ impl std::fmt::Display for Assistant {
 }
 
 impl Assistant {
-    /// Build the `async_process::Command` for this agent without spawning it.
-    ///
-    /// The caller is responsible for spawning the command on the correct
-    /// executor (the one whose reactor will handle the child's IO).
     #[instrument(level = "trace", skip(self))]
     pub async fn command(&self) -> crate::acp::Result<async_process::Command> {
         let owned_command;
@@ -195,6 +196,15 @@ impl Assistant {
             assistant => assistant.to_string(),
         }
     }
+
+    #[instrument(level = "trace", skip(self))]
+    pub fn base_command(&self) -> Option<String> {
+        match self {
+            Assistant::CustomStdio { command, .. } => Some(command.clone()),
+            Assistant::Registered { command, .. } => command.clone(),
+            _ => None,
+        }
+    }
 }
 
 impl From<&str> for Assistant {
@@ -221,6 +231,36 @@ impl From<String> for Assistant {
 pub struct ConnectionDetails {
     pub agent: Assistant,
     pub protocol: Protocol,
+}
+
+fn build_elicitation_capabilities(
+    form_allowed: bool,
+    url_allowed: bool,
+    form_listener_attached: bool,
+    url_listener_attached: bool,
+) -> ElicitationCapabilities {
+    ElicitationCapabilities::new()
+        .form((form_allowed && form_listener_attached).then(ElicitationFormCapabilities::new))
+        .url((url_allowed && url_listener_attached).then(ElicitationUrlCapabilities::new))
+}
+
+fn build_session_capabilities(
+    compaction_supported: bool,
+    notices_supported: bool,
+) -> ClientSessionCapabilities {
+    let capabilities = ClientSessionCapabilities::new().config_options(
+        SessionConfigOptionsCapabilities::new().boolean(BooleanConfigOptionCapabilities::new()),
+    );
+    let capabilities = if compaction_supported {
+        capabilities.compaction(CompactionCapabilities::new())
+    } else {
+        capabilities
+    };
+    if notices_supported {
+        capabilities.notices(NoticeCapabilities::new())
+    } else {
+        capabilities
+    }
 }
 
 pub struct ConnectionManager {
@@ -279,35 +319,48 @@ impl ConnectionManager {
     pub async fn connect(
         &mut self,
         handler: Arc<Handler>,
-        ConnectionDetails { agent, protocol }: ConnectionDetails,
+        connection_details: ConnectionDetails,
     ) -> crate::acp::Result<&Connection> {
+        let ConnectionDetails { agent, protocol } = connection_details.clone();
         let permissions = self.get_permissions().await;
         let agent_name = agent.name();
-
-        // Check if connection already exists without borrowing
         let already_connected = self.connection.contains_key(&agent_name);
+
         if already_connected {
             warn!(
                 "A connection already exists for '{}'. Returning existing connection",
                 agent
             );
             return self
-                .connection
-                .get(&agent_name)
+                .get_connection(&agent)
                 .ok_or_else(|| Error::Internal("Connection not found".to_string()));
         }
 
-        // Now we can safely do mutable operations
         let (sender, receiver) = async_channel::bounded(100);
+        let client_capabilities = ClientCapabilities::new()
+            .terminal(permissions.terminal_access)
+            .fs(FileSystemCapabilities::new()
+                .read_text_file(permissions.fs_read_access)
+                .write_text_file(permissions.fs_write_access))
+            .elicitation(build_elicitation_capabilities(
+                permissions.elicitation.form,
+                permissions.elicitation.url,
+                autocmd_listeners_attached(Commands::FormElicitation),
+                autocmd_listeners_attached(Commands::UrlElicitation),
+            ))
+            .auth(AuthCapabilities::new().terminal(
+                autocmd_listeners_attached(Commands::TerminalAuthentication)
+                    && agent.base_command().is_some(),
+            ))
+            .session(build_session_capabilities(
+                autocmd_listeners_attached(Commands::CompactionUpdate)
+                    || autocmd_listeners_attached(Commands::CompactionSummaryChunk),
+                autocmd_listeners_attached(Commands::Notice),
+            ));
+
         let init_config = InitializeRequest::new(ProtocolVersion::LATEST)
             .client_info(Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"))
-            .client_capabilities(
-                ClientCapabilities::new()
-                    .terminal(permissions.terminal_access)
-                    .fs(FileSystemCapabilities::new()
-                        .read_text_file(permissions.fs_read_access)
-                        .write_text_file(permissions.fs_write_access)),
-            );
+            .client_capabilities(client_capabilities);
 
         let thread_agent = agent.clone();
         trace!("Starting agent communication in new thread");
@@ -325,12 +378,6 @@ impl ConnectionManager {
 
             trace!("Starting smol executor for {}", agent_display_name);
 
-            // Run the connection in the executor.
-            // smol::block_on drives the top-level future, while executor.run()
-            // continuously polls all tasks spawned onto the LocalExecutor.
-            // Each protocol module owns its transport-specific orchestration
-            // (stream acquisition, post-disconnect cleanup) and delegates the
-            // shared ACP `Client.builder()` plumbing to `connect::run_connection`.
             let run_result = smol::block_on(executor.run(async {
                 match protocol {
                     Protocol::Stdio => {
@@ -355,13 +402,35 @@ impl ConnectionManager {
             run_result
         });
 
-        self.add_connection(agent.clone(), Connection::new(sender, handle, stdio_child));
+        self.add_connection(
+            agent.clone(),
+            Connection::new(sender, handle, stdio_child, connection_details),
+        );
         self.set_agent(agent.clone()).await;
         let connection = self.get_connection(&agent).unwrap();
         debug!("Stored connection to '{}'", agent);
         connection.initialize(init_config).await?;
         info!("Initialized connection to '{}'", agent);
         Ok(connection)
+    }
+
+    #[instrument(level = "trace", skip(self, handler))]
+    pub async fn reconnect(
+        &mut self,
+        handler: Arc<Handler>,
+        assistant: &Assistant,
+    ) -> crate::acp::Result<()> {
+        let mut connection = self.connection.remove(&assistant.name()).ok_or_else(|| {
+            Error::Connection(format!("No connection found for assistant {}", assistant))
+        })?;
+        let details = connection.details();
+        // This runs on the connection's own thread, so we must not wait for it
+        // to exit (it can never observe itself as finished). `shutdown()` just
+        // closes the channel; the thread exits once this dispatch returns.
+        connection.shutdown();
+        drop(connection);
+        self.connect(handler, details).await?;
+        Ok(())
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -424,6 +493,15 @@ mod tests {
     use crate::acp::registry::{DistributionCommand, PackageDistribution};
     use pretty_assertions::assert_eq;
     use proptest::prelude::*;
+
+    /// A `Connection` with no live `Handler` behind it; enough for exercising
+    /// `ConnectionManager` bookkeeping, which never touches `Connection::details()`.
+    fn mock_connection(
+        sender: async_channel::Sender<crate::acp::connection::UserRequest>,
+        handle: std::thread::JoinHandle<crate::acp::Result<()>>,
+    ) -> Connection {
+        Connection::new(sender, handle, None, ConnectionDetails::default())
+    }
 
     proptest! {
         #[test]
@@ -523,7 +601,7 @@ mod tests {
         let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
         let (sender, _) = async_channel::unbounded();
         let handle = std::thread::spawn(|| Ok(()));
-        let connection = Connection::new(sender, handle, None);
+        let connection = mock_connection(sender, handle);
         manager.add_connection(Assistant::Copilot, connection);
         let agents = manager.connected_agents();
         assert_eq!(agents.len(), 1);
@@ -535,18 +613,44 @@ mod tests {
         let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
         let (sender1, _) = async_channel::unbounded();
         let handle1 = std::thread::spawn(|| Ok(()));
-        let connection1 = Connection::new(sender1, handle1, None);
+        let connection1 = mock_connection(sender1, handle1);
         manager.add_connection(Assistant::Copilot, connection1);
 
         let (sender2, _) = async_channel::unbounded();
         let handle2 = std::thread::spawn(|| Ok(()));
-        let connection2 = Connection::new(sender2, handle2, None);
+        let connection2 = mock_connection(sender2, handle2);
         manager.add_connection(Assistant::Opencode, connection2);
 
         let agents = manager.connected_agents();
         assert_eq!(agents.len(), 2);
         assert!(agents.contains(&Assistant::Copilot));
         assert!(agents.contains(&Assistant::Opencode));
+    }
+
+    #[test]
+    fn disconnect_returns_error_when_connection_missing() {
+        let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
+
+        let result = manager.disconnect(vec![Assistant::Copilot]);
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Connection error: A problem occurred while trying to disconnect from agent(s): copilot"
+        );
+    }
+
+    #[test]
+    fn disconnect_removes_connection() {
+        let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
+        let (sender, _) = async_channel::unbounded();
+        let handle = std::thread::spawn(|| Ok(()));
+        manager.add_connection(Assistant::Copilot, mock_connection(sender, handle));
+
+        manager
+            .disconnect(vec![Assistant::Copilot])
+            .expect("disconnect should succeed");
+
+        assert!(manager.connected_agents().is_empty());
     }
 
     #[test]
@@ -691,8 +795,150 @@ mod tests {
     }
 
     #[test]
+    fn base_command_custom_stdio_returns_configured_command() {
+        let agent = Assistant::CustomStdio {
+            name: "custom".to_string(),
+            command: "mock-agent".to_string(),
+            args: vec!["serve".to_string()],
+        };
+        assert_eq!(agent.base_command(), Some("mock-agent".to_string()));
+    }
+
+    #[test]
+    fn base_command_registered_with_command_override_returns_override() {
+        let entry = AgentEntry {
+            id: "test-agent".to_string(),
+            name: "Test Agent".to_string(),
+            version: "1.0.0".to_string(),
+            description: String::new(),
+            repository: None,
+            website: None,
+            authors: None,
+            license: None,
+            icon: None,
+            distribution: HashMap::new(),
+        };
+        let assistant = Assistant::Registered {
+            agent: entry,
+            configuration: Default::default(),
+            distribution: None,
+            command: Some("override-agent".to_string()),
+            args: None,
+            registry: None,
+        };
+        assert_eq!(assistant.base_command(), Some("override-agent".to_string()));
+    }
+
+    #[test]
+    fn base_command_registered_without_command_returns_none() {
+        let entry = AgentEntry {
+            id: "test-agent".to_string(),
+            name: "Test Agent".to_string(),
+            version: "1.0.0".to_string(),
+            description: String::new(),
+            repository: None,
+            website: None,
+            authors: None,
+            license: None,
+            icon: None,
+            distribution: HashMap::new(),
+        };
+        let assistant = Assistant::Registered {
+            agent: entry,
+            configuration: Default::default(),
+            distribution: None,
+            command: None,
+            args: None,
+            registry: None,
+        };
+        assert_eq!(assistant.base_command(), None);
+    }
+
+    #[test]
+    fn base_command_builtin_agents_return_none() {
+        let agents = vec![Assistant::Opencode, Assistant::Copilot];
+        let results: Vec<Option<String>> = agents.iter().map(|a| a.base_command()).collect();
+        assert_eq!(results, vec![None, None]);
+    }
+
+    #[test]
+    fn base_command_custom_url_returns_none() {
+        let agent = Assistant::CustomUrl {
+            name: "remote".to_string(),
+            host: "localhost".to_string(),
+            port: 8080,
+            path: None,
+        };
+        assert_eq!(agent.base_command(), None);
+    }
+
+    #[test]
+    fn base_command_custom_socket_returns_none() {
+        let agent = Assistant::CustomSocket {
+            name: "socket".to_string(),
+            path: "/tmp/agent.sock".to_string(),
+        };
+        assert_eq!(agent.base_command(), None);
+    }
+
+    #[test]
     fn test_protocol_default_is_stdio() {
         let protocol: Protocol = Default::default();
         assert!(matches!(protocol, Protocol::Stdio));
+    }
+
+    #[test]
+    fn elicitation_capabilities_advertised_when_permission_and_listener_present() {
+        let caps = build_elicitation_capabilities(true, true, true, true);
+
+        let expected = ElicitationCapabilities::new()
+            .form(ElicitationFormCapabilities::new())
+            .url(ElicitationUrlCapabilities::new());
+        assert_eq!(caps, expected);
+    }
+
+    #[test]
+    fn elicitation_form_capability_suppressed_when_permission_disabled() {
+        let caps = build_elicitation_capabilities(false, false, true, true);
+
+        assert_eq!(caps, ElicitationCapabilities::new());
+    }
+
+    #[test]
+    fn elicitation_form_capability_suppressed_without_listener() {
+        let caps = build_elicitation_capabilities(true, false, false, true);
+
+        assert_eq!(caps, ElicitationCapabilities::new());
+    }
+
+    #[test]
+    fn elicitation_url_capability_suppressed_without_listener() {
+        let caps = build_elicitation_capabilities(false, true, true, false);
+
+        assert_eq!(caps, ElicitationCapabilities::new());
+    }
+
+    #[test]
+    fn test_build_session_capabilities_advertises_compaction_when_supported() {
+        let capabilities = build_session_capabilities(true, false);
+        assert_eq!(capabilities.compaction, Some(CompactionCapabilities::new()));
+    }
+
+    #[test]
+    fn test_build_session_capabilities_omits_compaction_when_unsupported() {
+        let capabilities = build_session_capabilities(false, false);
+        assert_eq!(capabilities.compaction, None);
+    }
+
+    #[test]
+    fn test_build_session_capabilities_advertises_notices_when_supported() {
+        let capabilities = build_session_capabilities(false, true);
+        assert_eq!(capabilities.notices, Some(NoticeCapabilities::new()));
+    }
+
+    #[test]
+    fn test_build_session_capabilities_omits_notices_when_unsupported() {
+        let capabilities = build_session_capabilities(false, false);
+        assert_eq!(capabilities.notices, None);
     }
 }

@@ -39,7 +39,7 @@ Binaries are available for:
 > [!NOTE]
 > Hermes will automatically detect and download a pre-built binary for supported platforms.
 >
-> You can disable this if you would prefer to [build from source](#building-from-source)
+> You can disable this if you would prefer to [build from source](#-building-from-source)
 > ```lua
 > -- Will have to set up manually with `:Hermes build` or build manually from source
 > require("hermes").setup({ 
@@ -83,7 +83,7 @@ programs.nixvim = {
 
 ## ⌨️ Commands
 
-Show recent log messages and current state information.
+Open the most recent log file in a new tab (read-only, cursor at the end). The buffer's filetype follows your `log.file.format` configuration — JSON logs open as `jsonl` (newline-delimited JSON).
 ```vim
 :Hermes log
 ```
@@ -154,6 +154,11 @@ hermes.setup({
     terminal_access = true,      -- Allow terminal access to the agent 
     request_permissions = true,  -- Allow agent to send permission requests 
     send_notifications = true,  -- Allow the agent to send notifications 
+    elicitation = {
+      form = true, -- Allow the agent to send form elicitation requests
+      url = true, -- Allow the agent to send URL elicitation requests
+      reject_unknown_elicitation_values = false, -- Reject responses for unknown/future elicitation property types
+    },
   },
   distributions = { -- path to distributions
     uvx = true, -- allows installing agents via UVX
@@ -287,7 +292,9 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "AgentList",
   callback = function(args)
-    local agent = table.remove(args.data.agents) -- select auth method id somehow
+    ---@type HermesAgentList
+    local data = args.data
+    local agent = table.remove(data.agents) -- select auth method id somehow
 
     hermes.connect(agent.id, {
       distribution = table.remove(agent.distributions), -- select distribution somehow
@@ -353,14 +360,16 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "ConnectionInitialized",
   callback = function(args)
-    local auth_method_id = table.remove(args.data.authMethods).id -- select auth method id somehow
+    ---@type HermesConnectionInitialized
+    local data = args.data
+    local auth_method_id = table.remove(data.authMethods).id -- select auth method id somehow
 
     hermes.authenticate(auth_method_id)
   end,
 })
 ```
 
-> **Triggers:** [Authenticated](#authenticated) autocommand upon completion.
+> **Triggers:** [Authenticated](#authenticated) on success, or [TerminalAuthentication](#terminalauthentication) when the selected method is terminal.
 
 ### 💬 Prompt
 > **Note on `promptId`:** All agent notification autocommands (sourced from 🤖 Agent) include a `promptId` field. This UUID is generated when a prompt is sent (via `prompt()`) or when a user message chunk arrives from the agent, and it is attached to all subsequent notifications for that session so you can correlate messages within a single prompt/response cycle.
@@ -377,10 +386,9 @@ There are five types of prompts you can send to an agent
 
 ```lua
 local hermes = require("hermes")
-local session_id = "current-session-id";
 
 -- single prompt call signature
-hermes.prompt(sessionId, {
+hermes.prompt(session_id, {
   type = "text",
   text = "What time is it?"
 })
@@ -429,7 +437,9 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "SessionCreated",
   callback = function(args)
-    local sessionId = args.data.sessionId
+    ---@type HermesSessionCreated
+    local data = args.data
+    local sessionId = data.sessionId
 
     local prompt_id = hermes.prompt(sessionId, {
       type = "text",
@@ -524,7 +534,9 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "SessionCreated",
   callback = function(args)
-    local session_id = args.data.sessionId
+    ---@type HermesSessionCreated
+    local data = args.data
+    local session_id = data.sessionId
 
     hermes.load_session(session_id)
   end,
@@ -575,7 +587,9 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "SessionCreated",
   callback = function(args)
-    local seesion_id = args.data.sessionId
+    ---@type HermesSessionCreated
+    local data = args.data
+    local session_id = data.sessionId
 
     hermes.resume_session(session_id)
   end,
@@ -610,7 +624,9 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "SessionsListed",
   callback = function(args)
-    local next_page = args.data.nextCursor
+    ---@type HermesSessionsListed
+    local data = args.data
+    local next_page = data.nextCursor
 
     -- get next page of sessions with this cursor in the current directory
     hermes.list_sessions({
@@ -639,7 +655,9 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "SessionCreated",
   callback = function(args)
-    local session_id = args.data.sessionId
+    ---@type HermesSessionCreated
+    local data = args.data
+    local session_id = data.sessionId
 
     hermes.close_session(session_id)
   end,
@@ -670,7 +688,9 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "SessionCreated",
   callback = function(args)
-    local session_id = args.data.sessionId
+    ---@type HermesSessionCreated
+    local data = args.data
+    local session_id = data.sessionId
 
     hermes.delete_session(session_id)
   end,
@@ -682,26 +702,33 @@ vim.api.nvim_create_autocmd("User", {
 
 ### ⏹️ Cancel (**Optional**)
 
-Cancel the current operation of the agent (e.g., stop generating text, stop a tool call in progress, etc)
+Cancel the current operation of the agent (e.g., stop generating text, stop a tool call in progress, etc).
 
 ```lua
 local hermes = require("hermes")
-local sessionId = 'session-id-from-create-session-response'
+local session_id = 'session-id-from-create-session-response'
 
--- call signature
-hermes.cancel(sessionId)
+-- call signature (session ID or pending request ID)
+hermes.cancel(session_id)
 
 -- example
 vim.api.nvim_create_autocmd("User", {
   group = "hermes",
-  pattern = "SessionCreated",
+  pattern = "PermissionRequest",
   callback = function(args)
-    local sessionId = args.data.sessionId
+    ---@type HermesPermissionRequest
+    local data = args.data
+    local request_id = data.requestId
 
-    hermes.cancel(sessionId)
+    hermes.cancel(request_id)
   end,
 })
 ```
+
+> **Triggers:** [RequestCancelled](#requestcancelled) autocommand upon completion.
+
+> [!NOTE]
+> [RequestCancelled](#requestcancelled) may also be triggered by the agent (agents can cancel requests)
 
 ### 🎯 Set mode (**Optional**)
 
@@ -720,7 +747,9 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "ModeUpdated",
   callback = function(args)
-    print("Mode changed to: " .. args.data.name)
+    ---@type HermesModeUpdated
+    local data = args.data
+    print("Mode changed to: " .. data.name)
   end,
 })
 ```
@@ -730,8 +759,6 @@ vim.api.nvim_create_autocmd("User", {
 ### 🎯 Modes
 
 Get the selectable modes for a session.
-
-Fires a `Modes` User autocommand with the selection data instead of returning it.
 
 ```lua
 local hermes = require("hermes")
@@ -744,7 +771,9 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "Modes",
   callback = function(args)
-    local options = args.data.options
+    ---@type HermesModes
+    local data = args.data
+    local options = data.options
     for _, option in ipairs(options) do
       print("Mode: " .. option.name .. " (value: " .. option.value .. ")")
     end
@@ -771,7 +800,9 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "SessionModelUpdated",
   callback = function(args)
-    print("Model changed to: " .. args.data.name)
+    ---@type HermesSessionModelUpdated
+    local data = args.data
+    print("Model changed to: " .. data.name)
   end,
 })
 ```
@@ -781,8 +812,6 @@ vim.api.nvim_create_autocmd("User", {
 ### 🧠 Models
 
 Get the selectable models for a session.
-
-Fires a `Models` User autocommand with the selection data instead of returning it.
 
 ```lua
 local hermes = require("hermes")
@@ -796,7 +825,9 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "Models",
   callback = function(args)
-    local options = args.data.options
+    ---@type HermesModels
+    local data = args.data
+    local options = data.options
     for _, option in ipairs(options) do
       print("Model: " .. option.name .. " (value: " .. option.value .. ")")
     end
@@ -808,11 +839,9 @@ vim.api.nvim_create_autocmd("User", {
 > - `options` (array): Available model options
 > - `current` (object): The currently selected model
 
-### ⚙️ ModelConfigurations
+### ⚙️ Model configurations
 
 Get the model configuration options for a session.
-
-Fires a `ModelConfigurations` User autocommand with the configuration data instead of returning it.
 
 ```lua
 local hermes = require("hermes")
@@ -825,6 +854,7 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "ModelConfigurations",
   callback = function(args)
+    ---@type HermesModelConfigurations
     local configs = args.data
     for _, config in ipairs(configs) do
       print("Config: " .. config.name .. " (current: " .. config.selection.current.value .. ")")
@@ -872,31 +902,33 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "ThoughtLevelUpdated",
   callback = function(args)
-    print("Thought level changed to: " .. args.data.name)
+    ---@type HermesThoughtLevelUpdated
+    local data = args.data
+    print("Thought level changed to: " .. data.name)
   end,
 })
 ```
 
 > **Triggers:** [ThoughtLevelUpdated](#thoughtlevelupdated) autocommand upon completion.
 
-### 💭 ThoughtLevels
+### 💭 Thought levels
 
 Get the selectable thought levels for a session.
-
-Fires a `ThoughtLevels` User autocommand with the selection data instead of returning it.
 
 ```lua
 local hermes = require("hermes")
 
 -- call signature
-hermes.thought_levels(sessionId)
+hermes.thought_levels(session_id)
 
 -- example
 vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "ThoughtLevels",
   callback = function(args)
-    local options = args.data.options
+    ---@type HermesThoughtLevels
+    local data = args.data
+    local options = data.options
     for _, option in ipairs(options) do
       print("Thought Level: " .. option.name .. " (value: " .. option.value .. ")")
     end
@@ -907,6 +939,66 @@ vim.api.nvim_create_autocmd("User", {
 > **Triggers:** [ThoughtLevels](#thoughtlevels) autocommand with a `Selection` payload containing:
 > - `options` (array): Available thought level options
 > - `current` (object): The currently selected thought level
+
+### ⚙️ Config options
+
+Get all configuration options available for a session.
+
+```lua
+local hermes = require("hermes")
+
+-- call signature
+hermes.config_options(session_id)
+
+-- example
+vim.api.nvim_create_autocmd("User", {
+  group = "hermes",
+  pattern = "ConfigOptions",
+  callback = function(args)
+    ---@type HermesConfigOptions
+    local options = args.data
+    for _, option in ipairs(options) do
+      print(option.name .. " (" .. option.type .. ") = " .. tostring(option.currentValue))
+    end
+  end,
+})
+```
+
+> **Triggers:** [ConfigOptions](#configoptions) autocommand with the array of all
+> configuration options.
+
+### ⚙️ Set config option (**Optional**)
+
+Set a single configuration option by id. Takes a table with `id` and `value` keys.
+
+`value` may be a string (for select options) or a boolean (for boolean options).
+
+```lua
+local hermes = require("hermes")
+
+-- call signature
+hermes.set_config_option(session_id, { id = "brave_mode", value = true })
+
+-- example: toggle a boolean option whenever the agent reports new values
+vim.api.nvim_create_autocmd("User", {
+  group = "hermes",
+  pattern = "ConfigOptions",
+  callback = function(args)
+    ---@type HermesConfigOptions
+    local options = args.data
+    for _, option in ipairs(options) do
+      if option.id == "brave_mode" then
+        hermes.set_config_option(session_id, {
+          id = option.id,
+          value = not option.currentValue,
+        })
+      end
+    end
+  end,
+})
+```
+
+> **Triggers:** [ConfigurationUpdated](#configurationupdated) autocommand upon completion.
 
 ### ↩️ Respond
 
@@ -928,8 +1020,10 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "PermissionRequest",
   callback = function(args)
-    local selected_option_id = table.remove(args.data.options).optionId -- select id somehow
-    local request_id = args.data.requestId
+    ---@type HermesPermissionRequest
+    local data = args.data
+    local selected_option_id = table.remove(data.options).id -- select id somehow
+    local request_id = data.requestId
 
     hermes.respond(request_id, selected_option_id)
   end,
@@ -954,7 +1048,9 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "WriteTextFile",
   callback = function(args)
-    local request_id = args.data.requestId
+    ---@type HermesWriteTextFile
+    local data = args.data
+    local request_id = data.requestId
 
     -- writing to a file doesn't take any data, but a notification is required when it is finished
     hermes.respond(request_id)
@@ -983,10 +1079,12 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "ReadTextFile",
   callback = function(args)
-    local requestId = args.data.requestId
-    local filename = args.data.path
-    local _start = args.data.line -- optional, may not be provided by the agent
-    local _end = args.data.limit -- optional, may not be provided by the agent 
+    ---@type HermesReadTextFile
+    local data = args.data
+    local requestId = data.requestId
+    local filename = data.path
+    local _start = data.line -- optional, may not be provided by the agent
+    local _end = data.limit -- optional, may not be provided by the agent 
     local file = io.open(filename, "r")
     local content = file:read("*all")
     file:close()
@@ -1004,6 +1102,45 @@ vim.api.nvim_create_autocmd("User", {
 > - Start at the `line` number if defined
 > - End at the `limit` number if defined
 
+#### 🔑 Authentication via terminal
+
+```lua
+local hermes = require("hermes")
+
+-- simple boolean response, true if successful, false if authentication failed
+local successfully_authenticated = true;
+
+-- call signature
+hermes.respond("requestId", successfully_authenticated);
+
+vim.api.nvim_create_autocmd("User", {
+  group = "hermes",
+  pattern = "TerminalAuthentication",
+  callback = function(event)
+    ---@type HermesTerminalAuthentication
+    local data = event.data
+    local request_id = data.requestId
+
+    -- set up commands
+    local cmd = vim.list_extend({ data.command }, data.args or {})
+    local env = vim.tbl_extend("force", vim.fn.environ(), data.env or {})
+
+    -- trigger authentication flow
+    vim.api.nvim_command("botright new")
+    vim.fn.termopen(cmd, {
+      env = env,
+      on_exit = function(_, exit_code)
+        hermes.respond(request_id, exit_code == 0)
+      end,
+    })
+  end,
+})
+```
+
+> **Responds to:** [TerminalAuthentication](#terminalauthentication) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for `TerminalAuthentication`, Hermes will:
+> - Report terminal authentication as unsupported (no default can be applied)
 
 #### 💻 Create Terminal for agent communication 
 
@@ -1019,18 +1156,20 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "TerminalCreate",
   callback = function(event)
+    ---@type HermesTerminalCreate
+    local data = event.data
     local terminal_id = "your-generated-terminal-id" -- generate a unique id for terminal
-    local request_id = event.data.requestId
-    local command = event.data.command
-    local term_args = event.data.args or {}
-    local byte_limit = event.data.output_byte_limit
+    local request_id = data.requestId
+    local command = data.command
+    local term_args = data.args or {}
+    local byte_limit = data.outputByteLimit
 
     -- lua combines args and command (add command to the beginning of args)
     table.insert(term_args, 1, command)
 
     terminals[terminal_id] = vim.fn.jobstart(term_args, {
-      env = event.data.env,
-      cwd = event.data.cwd,
+      env = data.env,
+      cwd = data.cwd,
     })
 
     hermes.respond(request_id, terminal_id);
@@ -1068,8 +1207,10 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "TerminalOutput",
   callback = function(args)
-    local requestId = args.data.requestId
-    local terminalId = args.data.terminalId
+    ---@type HermesTerminalOutput
+    local data = args.data
+    local requestId = data.requestId
+    local terminalId = data.terminalId
     local terminalOutput = terminals[terminalId].output -- get output somehow
 
     hermes.respond(requestId, terminalOutput);
@@ -1106,8 +1247,10 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "TerminalExit",
   callback = function(args)
-    local requestId = args.data.requestId
-    local terminalId = args.data.terminalId
+    ---@type HermesTerminalExit
+    local data = args.data
+    local requestId = data.requestId
+    local terminalId = data.terminalId
 
     hermes.respond(requestId, {
       exitCode = terminals[terminalId].exitCode, -- get output somehow
@@ -1136,7 +1279,9 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "TerminalKill",
   callback = function(args)
-    local request_id = args.data.requestId
+    ---@type HermesTerminalKill
+    local data = args.data
+    local request_id = data.requestId
 
     hermes.respond(request_id);
   end,
@@ -1162,7 +1307,9 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "TerminalRelease",
   callback = function(args)
-    local request_id = args.data.requestId
+    ---@type HermesTerminalRelease
+    local data = args.data
+    local request_id = data.requestId
 
     hermes.respond(request_id);
   end,
@@ -1176,6 +1323,79 @@ vim.api.nvim_create_autocmd("User", {
 > - Remove the terminal
 > - Delete the attached buffer (can be configured to omit this step)
 
+#### 📋 User/Form input (elicitation)
+
+```lua
+local hermes = require("hermes")
+
+-- Accept and provide content for the requested fields:
+hermes.respond("requestId", {
+  action = "accept",
+  content = { name = "Alice", age = 30 },
+})
+
+-- Decline without providing content:
+hermes.respond("requestId", { action = "decline" })
+
+-- Cancel the elicitation entirely:
+hermes.respond("requestId", { action = "cancel" })
+
+-- example:
+vim.api.nvim_create_autocmd("User", {
+  group = "hermes",
+  pattern = "FormElicitation",
+  callback = function(args)
+    ---@type HermesFormElicitation
+    local data = args.data
+    local requestId = data.requestId
+    local mode = data.mode -- "form"
+    local message = data.message -- the prompt shown to the user
+
+    hermes.respond(requestId, {
+      action = "accept",
+      content = { name = vim.fn.input(message .. ": ") },
+    })
+  end,
+})
+```
+
+> **Responds to:** [FormElicitation](#formelicitation) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for [FormElicitation](#formelicitation), Hermes will:
+> - Report that form elicitation is not a supported capability
+> - Cancel any elicitation requests it may receive (should not happen when capabilities are reported as unsupported)
+
+#### 🔗 Browser input (elicitation)
+
+```lua
+local hermes = require("hermes")
+
+-- Decline without providing content:
+hermes.respond("requestId", { action = "decline" })
+
+-- Cancel the elicitation entirely:
+hermes.respond("requestId", { action = "cancel" })
+
+-- example:
+vim.api.nvim_create_autocmd("User", {
+  group = "hermes",
+  pattern = "UrlElicitation",
+  callback = function(args)
+    ---@type HermesUrlElicitation
+    local data = args.data
+    local requestId = data.requestId
+
+    hermes.respond(requestId, { action = "decline" })
+  end,
+})
+```
+
+> **Responds to:** [UrlElicitation](#urlelicitation) autocommand.
+>
+> **Default behavior:** If no autocommand handler is defined for [UrlElicitation](#urlelicitation), Hermes will:
+> - Report that url elicitation is not a supported capability
+> - Cancel any elicitation requests it may receive (should not happen when capabilities are reported as unsupported)
+
 ## 📡 Autocommands
 
 Hermes generates autocommands for all communication between agent and client. Here's an example of hooking into one:
@@ -1185,12 +1405,17 @@ vim.api.nvim_create_autocmd("User", {
   group = "hermes",
   pattern = "AgentTextMessage",
   callback = function(args)
-    print("Received some text from our assistant: " .. args.data.update.content.text)
+    ---@type HermesAgentTextMessage
+    local data = args.data
+    print("Received some text from our assistant: " .. data.update.content.text)
   end,
 })
 ```
 
 Below is a list of all autocommands and their associated data (passed to the callback in the `args.data` field). Hermes will only trigger autocommands if there is a listener defined for it (I.E. You have created one like the example above)
+
+> [!TIP]
+> Every autocommand's payload has a corresponding LuaLS class named after the autocommand (e.g. `AgentTextMessage` delivers a `HermesAgentTextMessage` payload, `PermissionRequest` delivers a `HermesPermissionRequest`, `ConfigOptions` delivers a `HermesConfigOptions` array). Cast `args.data` inside your callback — as in the example above — to get completion and type checking for the payload fields.
 
 <table>
   <thead>
@@ -1243,7 +1468,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="agentslist">
       <td><code>AgentList</code></td>
       <td>List of available agents</td>
-      <td>⚡ <a href="#agents">agents()</a></td>
+      <td>⚡ <a href="#-agents">agents()</a></td>
       <td><pre><code class="language-json">{
   "agents": [
     {
@@ -1385,7 +1610,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="authenticated">
       <td><code>Authenticated</code></td>
       <td>Authentication completed</td>
-      <td>⚡ <a href="#authenticate">authenticate()</a></td>
+      <td>⚡ <a href="#-authenticate">authenticate()</a></td>
       <td><pre><code class="language-json">{
 }</code></pre></td>
     </tr>
@@ -1408,7 +1633,57 @@ Below is a list of all autocommands and their associated data (passed to the cal
   }
 }</code></pre></td>
     </tr>
-    <tr>
+    <tr id="compactionsummarychunk">
+      <td><code>CompactionSummaryChunk</code></td>
+      <td>Streamed chunk of a compaction summary</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "promptId": "uuid string",
+  "update": {
+    "sessionUpdate": "compaction_summary_chunk",
+    "compactionId": "string",
+    "content": {
+      "type": "text",
+      "text": "string"
+    }
+  }
+}</code></pre></td>
+    </tr>
+    <tr id="compactionupdate">
+      <td><code>CompactionUpdate</code></td>
+      <td>Status update for a context compaction</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "promptId": "uuid string",
+  "update": {
+    "sessionUpdate": "compaction_update",
+    "compactionId": "string",
+    "status": "in_progress",
+    "summary": [
+      { "type": "text", "text": "string" }
+    ],
+    "error": "string (optional)"
+  }
+}</code></pre></td>
+    </tr>
+    <tr id="configoptions">
+      <td><code>ConfigOptions</code></td>
+      <td>All configuration options for a session</td>
+      <td>⚡ <a href="#-config-options">config_options()</a></td>
+      <td><pre><code class="language-json">[
+  {
+    "id": "string",
+    "name": "string",
+    "description": "string (optional)",
+    "category": "string (optional)",
+    "type": "boolean",
+    "currentValue": true
+  }
+]</code></pre></td>
+    </tr>
+    <tr id="configurationoption">
       <td><code>ConfigurationOption</code></td>
       <td>Configuration option updates</td>
       <td>🤖 Agent</td>
@@ -1423,20 +1698,11 @@ Below is a list of all autocommands and their associated data (passed to the cal
         "name": "string",
         "description": "string (optional)",
         "category": "string (optional)",
-        "kind": {
-          "currentValue": "string",
-          "options": [
-            { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
-            {
-              "type": "grouped",
-              "group": "string",
-              "name": "string",
-              "options": [
-                { "value": "string", "name": "string", "description": "string (optional)" }
-              ]
-            }
-          ]
-        }
+        "type": "select",
+        "currentValue": "string",
+        "options": [
+          { "value": "string", "name": "string", "description": "string (optional)" }
+        ]
       }
     ]
   }
@@ -1445,7 +1711,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="configurationupdated">
       <td><code>ConfigurationUpdated</code></td>
       <td>Session configuration updated</td>
-      <td>⚡ <a href="#load-session-optional">set_session_config_option()</a></td>
+      <td>⚡ <a href="#-set-config-option-optional">set_config_option()</a> / <a href="#-configure-model-optional">configure_model()</a></td>
       <td><pre><code class="language-json">{
   "configOptions": [
     {
@@ -1453,20 +1719,18 @@ Below is a list of all autocommands and their associated data (passed to the cal
       "name": "string",
       "description": "string (optional)",
       "category": "string (optional)",
-      "kind": {
-        "currentValue": "string",
-        "options": [
-          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
-          {
-            "type": "grouped",
-            "group": "string",
-            "name": "string",
-            "options": [
-              { "value": "string", "name": "string", "description": "string (optional)" }
-            ]
-          }
-        ]
-      }
+      "type": "select",
+      "currentValue": "string",
+      "options": [
+        { "value": "string", "name": "string", "description": "string (optional)" },
+        {
+          "group": "string",
+          "name": "string",
+          "options": [
+            { "value": "string", "name": "string", "description": "string (optional)" }
+          ]
+        }
+      ]
     }
   ]
 }</code></pre></td>
@@ -1474,7 +1738,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="connectioninitialized">
       <td><code>ConnectionInitialized</code></td>
       <td>Connection established with agent</td>
-      <td>⚡ <a href="#connect">connect()</a></td>
+      <td>⚡ <a href="#-connect">connect()</a></td>
       <td><pre><code class="language-json">{
   "protocolVersion": "string",
   "agentCapabilities": {
@@ -1515,10 +1779,30 @@ Below is a list of all autocommands and their associated data (passed to the cal
   }
 }</code></pre></td>
     </tr>
+    <tr id="elicitationcomplete">
+      <td><code>ElicitationComplete</code></td>
+      <td>Agent notifies that an elicitation has completed</td>
+      <td>🤖 Agent (notification)</td>
+      <td><pre><code class="language-json">{
+  "elicitationId": "uuid string"
+}</code></pre></td>
+    </tr>
+    <tr id="formelicitation">
+      <td><code>FormElicitation</code></td>
+      <td>Agent requests form-based elicitation (structured user input)</td>
+      <td>🤖 Agent (requires -> <a href="#-responding-to-form-elicitation">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "mode": "form",
+  "scope": { ... },
+  "schema": { ... },
+  "message": "string"
+}</code></pre></td>
+    </tr>
     <tr id="loggedout">
       <td><code>LoggedOut</code></td>
       <td>Agent logout completed</td>
-      <td>⚡ <a href="#logout">logout()</a></td>
+      <td>⚡ <a href="#-logout">logout()</a></td>
       <td><pre><code class="language-json">{}</code></pre></td>
     </tr>
     <tr id="modecurrent">
@@ -1537,7 +1821,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="modelconfigurations">
       <td><code>ModelConfigurations</code></td>
       <td>Available model configuration options retrieved</td>
-      <td>⚡ <a href="#modelconfigurations">model_configurations()</a></td>
+      <td>⚡ <a href="#-model-configurations">model_configurations()</a></td>
       <td><pre><code class="language-json">[{
   "id": "string",
   "name": "string",
@@ -1563,7 +1847,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="modelconfigurationupdated">
       <td><code>ModelConfigurationUpdated</code></td>
       <td>Model configuration options updated</td>
-      <td>⚡ <a href="#configure-model-optional">configure_model()</a></td>
+      <td>⚡ <a href="#-configure-model-optional">configure_model()</a></td>
       <td><pre><code class="language-json">[{
   "id": "string",
   "name": "string",
@@ -1589,7 +1873,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="models-1">
       <td><code>Models</code></td>
       <td>Available models retrieved</td>
-      <td>⚡ <a href="#models">models()</a></td>
+      <td>⚡ <a href="#-models">models()</a></td>
       <td><pre><code class="language-json">{
   "options": [
     {
@@ -1610,7 +1894,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="modes-1">
       <td><code>Modes</code></td>
       <td>Available modes retrieved</td>
-      <td>⚡ <a href="#modes">modes()</a></td>
+      <td>⚡ <a href="#-modes">modes()</a></td>
       <td><pre><code class="language-json">{
   "options": [
     {
@@ -1631,7 +1915,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="modeupdated">
       <td><code>ModeUpdated</code></td>
       <td>Session mode changed</td>
-      <td>⚡ <a href="#set-mode-optional">set_mode()</a></td>
+      <td>⚡ <a href="#-set-mode-optional">set_mode()</a></td>
       <td><pre><code class="language-json">{
   "value": "string",
   "name": "string",
@@ -1639,10 +1923,25 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "group": "string (optional)"
 }</code></pre></td>
     </tr>
+    <tr id="notice">
+      <td><code>Notice</code></td>
+      <td>Informational notice for the user</td>
+      <td>🤖 Agent</td>
+      <td><pre><code class="language-json">{
+  "sessionId": "string",
+  "promptId": "uuid string",
+  "update": {
+    "sessionUpdate": "notice",
+    "severity": "info",
+    "title": "string",
+    "description": "string (optional)"
+  }
+}</code></pre></td>
+    </tr>
     <tr id="permissionrequest">
       <td><code>PermissionRequest</code></td>
       <td>Agent requests permission to execute a tool</td>
-      <td>🤖 Agent (requires -> <a href="#permission-request">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-permission-request">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -1651,6 +1950,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other (optional)",
     "status": "Pending | InProgress | Completed | Cancelled | Error (optional)",
     "title": "string (optional)",
+    "name": "string (optional)",
     "content": [
       {
         "type": "content",
@@ -1730,7 +2030,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="progress">
       <td><code>Progress</code></td>
       <td>Download progress update (binary, registry, agent)</td>
-      <td>⚡ <a href="#commands">:Hermes install</a>, <a href="#commands">:Hermes update</a>, <a href="#agents">agents()</a>, <a href="#connect">connect()</a>, <a href="#setup">setup()</a></td>
+      <td>⚡ <a href="#-commands">:Hermes install</a>, <a href="#-commands">:Hermes update</a>, <a href="#-agents">agents()</a>, <a href="#-connect">connect()</a>, <a href="#-setup">setup()</a></td>
       <td><pre><code class="language-json">{
   "id": "string",
   "title": "string",
@@ -1743,7 +2043,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="prompted">
       <td><code>Prompted</code></td>
       <td>Agent response received</td>
-      <td>⚡ <a href="#prompt">prompt()</a></td>
+      <td>⚡ <a href="#-prompt">prompt()</a></td>
       <td><pre><code class="language-json">{
   "stopReason": "string (e.g., 'Stop', 'Cancelled', 'Error')"
 }</code></pre></td>
@@ -1751,7 +2051,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="readtextfile">
       <td><code>ReadTextFile</code></td>
       <td>Agent requests to read a text file</td>
-      <td>🤖 Agent (requires -> <a href="#read-from-file">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-read-from-file">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -1760,10 +2060,19 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "limit": "number (optional, max lines to read)"
 }</code></pre></td>
     </tr>
+    <tr id="requestcancelled">
+      <td><code>RequestCancelled</code></td>
+      <td>Cancelled a pending request (Can be triggered by the user or the agent)</td>
+      <td>🤖 Agent (notification), ⚡ <a href="#-cancel">cancel()</a></td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "sessionId": "string"
+}</code></pre></td>
+    </tr>
     <tr id="sessionclosed">
       <td><code>SessionClosed</code></td>
       <td>Active session closed</td>
-      <td>⚡ <a href="#close-session-optional">close_session()</a></td>
+      <td>⚡ <a href="#-close-session-optional">close_session()</a></td>
       <td><pre><code class="language-json">{
   "sessionId": "string"
 }</code></pre></td>
@@ -1771,7 +2080,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessioncreated">
       <td><code>SessionCreated</code></td>
       <td>New session created</td>
-      <td>⚡ <a href="#create-session">create_session()</a></td>
+      <td>⚡ <a href="#-create-session">create_session()</a></td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "modes": {
@@ -1790,20 +2099,18 @@ Below is a list of all autocommands and their associated data (passed to the cal
       "name": "string",
       "description": "string (optional)",
       "category": "string (optional)",
-      "kind": {
-        "currentValue": "string",
-        "options": [
-          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
-          {
-            "type": "grouped",
-            "group": "string",
-            "name": "string",
-            "options": [
-              { "value": "string", "name": "string", "description": "string (optional)" }
-            ]
-          }
-        ]
-      }
+      "type": "select",
+      "currentValue": "string",
+      "options": [
+        { "value": "string", "name": "string", "description": "string (optional)" },
+        {
+          "group": "string",
+          "name": "string",
+          "options": [
+            { "value": "string", "name": "string", "description": "string (optional)" }
+          ]
+        }
+      ]
     }
   ]
 }</code></pre></td>
@@ -1811,7 +2118,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessiondeleted">
       <td><code>SessionDeleted</code></td>
       <td>Session deleted</td>
-      <td>⚡ <a href="#delete-session-optional">delete_session()</a></td>
+      <td>⚡ <a href="#-delete-session-optional">delete_session()</a></td>
       <td><pre><code class="language-json">{
   "sessionId": "string"
 }</code></pre></td>
@@ -1819,7 +2126,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionforked">
       <td><code>SessionForked</code></td>
       <td>Session forked successfully</td>
-      <td>⚡ <a href="#load-session-optional">fork_session()</a></td>
+      <td>⚡ <a href="#-load-session-optional">fork_session()</a></td>
       <td><pre><code class="language-json">{
   "sessionId": "string",
   "modes": {
@@ -1838,20 +2145,18 @@ Below is a list of all autocommands and their associated data (passed to the cal
       "name": "string",
       "description": "string (optional)",
       "category": "string (optional)",
-      "kind": {
-        "currentValue": "string",
-        "options": [
-          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
-          {
-            "type": "grouped",
-            "group": "string",
-            "name": "string",
-            "options": [
-              { "value": "string", "name": "string", "description": "string (optional)" }
-            ]
-          }
-        ]
-      }
+      "type": "select",
+      "currentValue": "string",
+      "options": [
+        { "value": "string", "name": "string", "description": "string (optional)" },
+        {
+          "group": "string",
+          "name": "string",
+          "options": [
+            { "value": "string", "name": "string", "description": "string (optional)" }
+          ]
+        }
+      ]
     }
   ]
 }</code></pre></td>
@@ -1859,7 +2164,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionloaded">
       <td><code>SessionLoaded</code></td>
       <td>Session loaded successfully</td>
-      <td>⚡ <a href="#load-session-optional">load_session()</a></td>
+      <td>⚡ <a href="#-load-session-optional">load_session()</a></td>
       <td><pre><code class="language-json">{
   "modes": {
     "currentModeId": "string",
@@ -1877,20 +2182,18 @@ Below is a list of all autocommands and their associated data (passed to the cal
       "name": "string",
       "description": "string (optional)",
       "category": "string (optional)",
-      "kind": {
-        "currentValue": "string",
-        "options": [
-          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
-          {
-            "type": "grouped",
-            "group": "string",
-            "name": "string",
-            "options": [
-              { "value": "string", "name": "string", "description": "string (optional)" }
-            ]
-          }
-        ]
-      }
+      "type": "select",
+      "currentValue": "string",
+      "options": [
+        { "value": "string", "name": "string", "description": "string (optional)" },
+        {
+          "group": "string",
+          "name": "string",
+          "options": [
+            { "value": "string", "name": "string", "description": "string (optional)" }
+          ]
+        }
+      ]
     }
   ]
 }</code></pre></td>
@@ -1898,7 +2201,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionmodelupdated">
       <td><code>SessionModelUpdated</code></td>
       <td>Session model updated</td>
-      <td>⚡ <a href="#set-model-optional">set_model()</a></td>
+      <td>⚡ <a href="#-set-model-optional">set_model()</a></td>
       <td><pre><code class="language-json">{
   "value": "string",
   "name": "string",
@@ -1909,7 +2212,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionresumed">
       <td><code>SessionResumed</code></td>
       <td>Session resumed successfully</td>
-      <td>⚡ <a href="#load-session-optional">resume_session()</a></td>
+      <td>⚡ <a href="#-load-session-optional">resume_session()</a></td>
       <td><pre><code class="language-json">{
   "modes": {
     "currentModeId": "string",
@@ -1927,20 +2230,18 @@ Below is a list of all autocommands and their associated data (passed to the cal
       "name": "string",
       "description": "string (optional)",
       "category": "string (optional)",
-      "kind": {
-        "currentValue": "string",
-        "options": [
-          { "type": "ungrouped", "value": "string", "name": "string", "description": "string (optional)" },
-          {
-            "type": "grouped",
-            "group": "string",
-            "name": "string",
-            "options": [
-              { "value": "string", "name": "string", "description": "string (optional)" }
-            ]
-          }
-        ]
-      }
+      "type": "select",
+      "currentValue": "string",
+      "options": [
+        { "value": "string", "name": "string", "description": "string (optional)" },
+        {
+          "group": "string",
+          "name": "string",
+          "options": [
+            { "value": "string", "name": "string", "description": "string (optional)" }
+          ]
+        }
+      ]
     }
   ]
 }</code></pre></td>
@@ -1948,7 +2249,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="sessionslisted">
       <td><code>SessionsListed</code></td>
       <td>Session list received</td>
-      <td>⚡ <a href="#load-session-optional">list_sessions()</a></td>
+      <td>⚡ <a href="#-load-session-optional">list_sessions()</a></td>
       <td><pre><code class="language-json">{
   "sessions": [
     {
@@ -1976,10 +2277,24 @@ Below is a list of all autocommands and their associated data (passed to the cal
   }
 }</code></pre></td>
     </tr>
+    <tr id="terminalauthentication">
+      <td><code>TerminalAuthentication</code></td>
+      <td>Terminal auth method selected, run it in a terminal</td>
+      <td>⚡ <a href="#-authenticate">authenticate()</a></td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "id": "string",
+  "name": "string",
+  "description": "string (optional)",
+  "args": ["string"],
+  "env": {"key": "value"},
+  "command": "string"
+}</code></pre></td>
+    </tr>
     <tr id="terminalcreate">
       <td><code>TerminalCreate</code></td>
       <td>Agent requests to create a terminal for command execution</td>
-      <td>🤖 Agent (requires -> <a href="#create-terminal-for-agent-communication">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-create-terminal-for-agent-communication">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -1993,7 +2308,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="terminalexit">
       <td><code>TerminalExit</code></td>
       <td>Agent requests notification when terminal process exits</td>
-      <td>🤖 Agent (requires -> <a href="#reporting-terminal-exit">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-reporting-terminal-exit">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -2003,7 +2318,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="terminalkill">
       <td><code>TerminalKill</code></td>
       <td>Agent requests to kill a terminal process</td>
-      <td>🤖 Agent (requires -> <a href="#kill-terminal-process">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-kill-terminal-process">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -2014,7 +2329,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="terminaloutput">
       <td><code>TerminalOutput</code></td>
       <td>Agent requests terminal output</td>
-      <td>🤖 Agent (requires -> <a href="#provide-terminal-output-to-the-assistant">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-provide-terminal-output-to-the-assistant">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -2025,7 +2340,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="terminalrelease">
       <td><code>TerminalRelease</code></td>
       <td>Agent requests to release a terminal</td>
-      <td>🤖 Agent (requires -> <a href="#release-terminal-process">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-release-terminal-process">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -2035,7 +2350,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="thoughtlevels">
       <td><code>ThoughtLevels</code></td>
       <td>Available thought levels retrieved</td>
-      <td>⚡ <a href="#thoughtlevels">thought_levels()</a></td>
+      <td>⚡ <a href="#-thought-levels">thought_levels()</a></td>
       <td><pre><code class="language-json">{
   "options": [
     {
@@ -2056,7 +2371,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="thoughtlevelupdated">
       <td><code>ThoughtLevelUpdated</code></td>
       <td>Session thought level updated</td>
-      <td>⚡ <a href="#set-thought-level-optional">set_thought_level()</a></td>
+      <td>⚡ <a href="#-set-thought-level-optional">set_thought_level()</a></td>
       <td><pre><code class="language-json">{
   "value": "string",
   "name": "string",
@@ -2075,6 +2390,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     "sessionUpdate": "tool_call",
     "toolCallId": "string",
     "title": "string",
+    "name": "string (optional)",
     "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other",
     "status": "Pending | InProgress | Completed | Cancelled | Error",
     "content": [
@@ -2155,6 +2471,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     "kind": "Read | Edit | Delete | Move | Search | Execute | Think | Fetch | SwitchMode | Other (optional)",
     "status": "Pending | InProgress | Completed | Cancelled | Error (optional)",
     "title": "string (optional)",
+    "name": "string (optional)",
     "content": [
       {
         "type": "content",
@@ -2218,6 +2535,18 @@ Below is a list of all autocommands and their associated data (passed to the cal
     "rawInput": "JSON value (optional)",
     "rawOutput": "JSON value (optional)"
   }
+}</code></pre></td>
+    </tr>
+    <tr id="urlelicitation">
+      <td><code>UrlElicitation</code></td>
+      <td>Agent requests URL-based elicitation (direct user to a browser URL)</td>
+      <td>🤖 Agent (requires -> <a href="#-responding-to-url-elicitation">respond()</a>)</td>
+      <td><pre><code class="language-json">{
+  "requestId": "uuid string",
+  "mode": "url",
+  "scope": { ... },
+  "url": "string",
+  "message": "string"
 }</code></pre></td>
     </tr>
     <tr>
@@ -2325,7 +2654,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
     <tr id="writetextfile">
       <td><code>WriteTextFile</code></td>
       <td>Agent requests to write to a text file</td>
-      <td>🤖 Agent (requires -> <a href="#write-to-file">respond()</a>)</td>
+      <td>🤖 Agent (requires -> <a href="#-write-to-file">respond()</a>)</td>
       <td><pre><code class="language-json">{
   "requestId": "uuid string",
   "sessionId": "string",
@@ -2333,7 +2662,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
   "content": "string"
 }</code></pre></td>
     </tr>
-  </tbody>
+    </tbody>
 </table>
 
 
@@ -2428,16 +2757,15 @@ cargo build --release
 
 -- functionality
 - [ ] Support "unstable"/proposed ACP methods
-  - [ ] [improve authentication data](https://agentclientprotocol.com/rfds/auth-methods)
   - [ ] [Fork sessions](https://agentclientprotocol.com/rfds/session-fork)
+  - [ ] [Agent Extensions via ACP Proxies](https://agentclientprotocol.com/rfds/proxy-chains)
   - [ ] [ACP over MCP](https://agentclientprotocol.com/rfds/mcp-over-acp)
-  - [ ] [Boolean config option](https://agentclientprotocol.com/rfds/boolean-config-option)
-  - [ ] [NES (next edit suggestions)](https://agentclientprotocol.com/rfds/next-edit-suggestions)
-  - [ ] ["elicitation"](https://agentclientprotocol.com/rfds/elicitation)
+  - [ ] [Represent deleted files in diff](https://agentclientprotocol.com/rfds/diff-delete)
   - [ ] [Configurable LLM Providers](https://agentclientprotocol.com/rfds/custom-llm-endpoint)
   - [ ] [Plan Operations Support](https://agentclientprotocol.com/rfds/plan-operations)
+  - [ ] [End-Turn Token Usage](https://agentclientprotocol.com/rfds/end-turn-token-usage)
+  - [ ] [Agent Authentication State Query](https://agentclientprotocol.com/rfds/get-auth-state)
+  - [ ] [Subagent Sessions](https://agentclientprotocol.com/rfds/subagents)
 
 -- nice to haves
 - [ ] research RLM ([example](https://github.com/JaredStewart/coderlm))
-- [ ] connect agent to lsp (try to set it up as a tool call/connect to neovim lsp)
-- [ ] use [whisper.rs](https://crates.io/crates/whisper-rs) to facilitate speech to text

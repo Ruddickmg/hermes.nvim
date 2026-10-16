@@ -8,8 +8,8 @@
 use crate::helpers::mock_runtime;
 use crate::helpers::ui::{wait_for_floating_window, wait_for_some};
 use agent_client_protocol::schema::v1::{
-    PermissionOption, PermissionOptionId, PermissionOptionKind, RequestPermissionRequest,
-    SessionId, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
+    PermissionOption, PermissionOptionId, PermissionOptionKind, RequestId,
+    RequestPermissionRequest, SessionId, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
 };
 use async_lock::Mutex;
 use hermes::nvim::requests::Responder;
@@ -141,10 +141,10 @@ fn test_non_permission_request_not_permission() -> nvim_oxi::Result<()> {
         "test content",
     );
     let responder = Responder::WriteFileResponse(sender, write_request);
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     // Get the request and check if it's a permission request
-    let request = block_on(requests.get_request(&request_id)).expect("Request should exist");
+    let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     // Verify this is NOT a permission request
     assert!(

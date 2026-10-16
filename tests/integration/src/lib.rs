@@ -4,7 +4,7 @@
 //! and communicates with the Neovim main thread.
 #![allow(clippy::arc_with_non_send_sync)]
 
-use crate::helpers::mock_runtime;
+use crate::helpers::{mock_connection_manager, mock_runtime};
 use async_lock::Mutex;
 use hermes::acp::handler::Handler;
 use hermes::nvim::{GROUP, autocommands::Commands, requests::Requests, state::PluginState};
@@ -43,7 +43,7 @@ fn create_test_autocmd(command: Commands) -> nvim_oxi::Result<u32> {
 fn test_listener_attached_no_listener() -> nvim_oxi::Result<()> {
     create_test_autogroup()?;
     assert!(
-        !autocmd_listeners_attached(GROUP, "User", &Commands::ToolCall.to_string()),
+        !autocmd_listeners_attached(Commands::ToolCall),
         "Should return false when no listener is attached"
     );
     Ok(())
@@ -55,7 +55,7 @@ fn test_listener_attached_with_listener() -> nvim_oxi::Result<()> {
     create_test_autogroup()?;
     create_test_autocmd(Commands::PermissionRequest)?;
     assert!(
-        autocmd_listeners_attached(GROUP, "User", &Commands::PermissionRequest.to_string()),
+        autocmd_listeners_attached(Commands::PermissionRequest),
         "Should return true when a listener is attached"
     );
     Ok(())
@@ -68,8 +68,13 @@ fn test_handler_new_creates_valid_instance() -> nvim_oxi::Result<()> {
     // This tests the constructor which sets up mpsc channel and AsyncHandle
     let state = Arc::new(Mutex::new(PluginState::default()));
     let requests = Rc::new(Requests::new(mock_runtime(), state.clone())?);
-    let handler =
-        Handler::new(state, mock_runtime(), requests).expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_connection_manager(&state),
+        mock_runtime(),
+        requests,
+    )
+    .expect("Handler creation should succeed");
 
     // If we get here without error, the integration worked
     // The instance is valid and ready to use
@@ -84,8 +89,13 @@ fn test_execute_autocommand_sends_to_channel() -> nvim_oxi::Result<()> {
     // Uses: channel.send(), AsyncHandle.send()
     let state = Arc::new(Mutex::new(PluginState::default()));
     let requests = Rc::new(Requests::new(mock_runtime(), state.clone())?);
-    let handler =
-        Handler::new(state, mock_runtime(), requests).expect("Handler creation should succeed");
+    let handler = Handler::new(
+        state.clone(),
+        mock_connection_manager(&state),
+        mock_runtime(),
+        requests,
+    )
+    .expect("Handler creation should succeed");
 
     // Execute an autocommand with test data
     let test_data = serde_json::json!({"test": "data"});

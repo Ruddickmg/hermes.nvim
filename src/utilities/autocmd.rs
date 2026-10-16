@@ -1,4 +1,7 @@
-use crate::acp::Result;
+use crate::{
+    acp::Result,
+    nvim::{GROUP, autocommands::Commands},
+};
 use nvim_oxi::{Array, Dictionary, Object};
 use std::cell::RefCell;
 use tracing::{error, instrument};
@@ -137,31 +140,29 @@ pub fn exec_autocmd(
     Ok(())
 }
 
-/// Checks whether any autocommand listeners are attached for a given pattern.
+/// Checks whether any autocommand listeners are attached for a given command.
 ///
 /// Abstracts away the `GetAutocmdsOpts` builder by calling `nvim_get_autocmds`
 /// directly via `call_function` with a constructed Dictionary.
 ///
 /// # Arguments
 ///
-/// * `group` - The autocommand group name
-/// * `event` - The event name (e.g., `"User"`)
-/// * `pattern` - The pattern to match
+/// * `command` - The autocommand command whose `User` pattern is matched
 ///
 /// # Returns
 ///
 /// `true` if at least one autocommand listener is registered, `false` otherwise.
 #[instrument(level = "trace")]
-pub fn autocmd_listeners_attached(group: &str, event: &str, pattern: &str) -> bool {
+pub fn autocmd_listeners_attached(command: Commands) -> bool {
     let mut opts_dict = Dictionary::default();
-    opts_dict.insert("group", Object::from(group));
-    opts_dict.insert("event", Array::from((Object::from(event),)));
-    opts_dict.insert("pattern", Array::from((Object::from(pattern),)));
+    opts_dict.insert("group", Object::from(GROUP));
+    opts_dict.insert("event", Array::from((Object::from("User"),)));
+    opts_dict.insert("pattern", Array::from((Object::from(command.to_string()),)));
 
     nvim_oxi::api::call_function::<(Object,), Array>("nvim_get_autocmds", (opts_dict.into(),))
         .map(|commands| !commands.is_empty())
         .map_err(|e| {
-            error!("Error detecting autocommand for '{}': {:?}", pattern, e);
+            error!("Error detecting autocommand for '{}': {:?}", command, e);
             e
         })
         .unwrap_or(false)
@@ -218,7 +219,7 @@ mod tests {
 
     #[test]
     fn autocmd_listeners_attached_signature_compiles() {
-        fn assert_compiles(_f: impl Fn(&str, &str, &str) -> bool) {}
+        fn assert_compiles(_f: impl Fn(Commands) -> bool) {}
         assert_compiles(autocmd_listeners_attached);
     }
 }

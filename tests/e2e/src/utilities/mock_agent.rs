@@ -1,27 +1,24 @@
 #![allow(private_interfaces)]
 
-// MockAgent for e2e tests, rewritten for agent-client-protocol 0.11.
+// MockAgent for e2e tests.
 //
-// In 0.10.x this was an `impl Agent for MockAgent` block driven by
-// `AgentSideConnection::new(...)`. In 0.11 there is no `Agent` trait; handlers
-// are closures registered on `Agent.builder()`. The prompt handler runs inside
-// `cx.spawn(...)` and calls `cx.send_request(...).block_task().await` directly
-// on the cloned `ConnectionTo<Client>`, eliminating the AgentToConnection channel
-// indirection that was carried over from 0.10.x.
+// Handlers are closures registered on `Agent.builder()`. The prompt handler runs
+// inside `cx.spawn(...)` and calls `cx.send_request(...).block_task().await` directly
+// on the cloned `ConnectionTo<Client>`.
 
 use agent_client_protocol::{
-    self as acp, Agent, ByteStreams, ConnectionTo, Lines, Responder, on_receive_notification,
-    on_receive_request,
+    self as acp, Agent, ByteStreams, ConnectionTo, Lines, Responder, Stdio,
+    on_receive_notification, on_receive_request,
     schema::v1::{
-        AuthenticateRequest, AuthenticateResponse, CancelNotification, CloseSessionRequest,
-        CloseSessionResponse, ContentBlock, ContentChunk, DeleteSessionRequest,
-        DeleteSessionResponse, InitializeRequest, InitializeResponse, ListSessionsRequest,
-        ListSessionsResponse, LoadSessionRequest, LoadSessionResponse, LogoutRequest,
-        LogoutResponse, NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse,
-        ResumeSessionRequest, ResumeSessionResponse, SessionNotification, SessionUpdate,
-        SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, SetSessionModeRequest,
-        SetSessionModeResponse, StopReason, TerminalOutputRequest, TextContent,
-        WaitForTerminalExitRequest,
+        AuthenticateRequest, AuthenticateResponse, CancelNotification, CancelRequestNotification,
+        CloseSessionRequest, CloseSessionResponse, ContentBlock, ContentChunk,
+        DeleteSessionRequest, DeleteSessionResponse, InitializeRequest, InitializeResponse,
+        ListSessionsRequest, ListSessionsResponse, LoadSessionRequest, LoadSessionResponse,
+        LogoutRequest, LogoutResponse, NewSessionRequest, NewSessionResponse, Notice,
+        PromptRequest, PromptResponse, ResumeSessionRequest, ResumeSessionResponse,
+        SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
+        SetSessionConfigOptionResponse, SetSessionModeRequest, SetSessionModeResponse, StopReason,
+        TerminalOutputRequest, TextContent, WaitForTerminalExitRequest,
     },
 };
 use async_channel::bounded;
@@ -65,9 +62,9 @@ impl MockAgent {
     /// Start the mock agent on a random available port.
     ///
     /// Spawns a thread with a smol LocalExecutor that:
-    /// 1. Accepts one TCP connection
+    /// 1. Accepts TCP connections in a loop until shutdown is signaled
     /// 2. Builds an `Agent.builder()` with handlers that delegate to MockConfig
-    /// 3. Drives the connection until the transport closes or shutdown is signaled
+    /// 3. Drives each connection until the transport closes or shutdown is signaled
     pub fn start(agent: MockAgent) -> Result<MockAgentHandle, std::io::Error> {
         let std_listener = std::net::TcpListener::bind("127.0.0.1:0")?;
         let port = std_listener.local_addr()?.port();
@@ -90,52 +87,59 @@ impl MockAgent {
             };
 
             smol::block_on(executor.clone().run(async move {
-                let accept_fut = async {
-                    match listener.accept().await {
-                        Ok((stream, addr)) => {
-                            info!("Mock agent accepted connection from {}", addr);
-                            Some(stream)
-                        }
-                        Err(e) => {
-                            error!("Failed to accept connection: {}", e);
-                            None
-                        }
-                    }
-                };
-
-                let shutdown_fut = async {
-                    let _ = shutdown_rx.recv().await;
-                    info!("Mock agent received shutdown signal before connection");
-                };
-
-                match select(Box::pin(accept_fut), Box::pin(shutdown_fut)).await {
-                    Either::Left((Some(stream), _)) => {
-                        let (read_half, write_half) = stream.split();
-
-                        let builder = build_mock_agent_builder(config.clone());
-
-                        let serve_fut = async move {
-                            let result = builder
-                                .connect_to(ByteStreams::new(write_half, read_half))
-                                .await;
-                            if let Err(e) = result {
-                                error!("Mock agent connection error: {}", e);
+                // INFO: Accept connections until shutdown is signaled or the
+                // listener fails. Reconnects (e.g. terminal authentication
+                // acceptance) arrive as subsequent connections on this listener.
+                loop {
+                    let accept_fut = async {
+                        match listener.accept().await {
+                            Ok((stream, addr)) => {
+                                info!("Mock agent accepted connection from {}", addr);
+                                Some(stream)
                             }
-                            info!("Mock agent connection completed");
-                        };
+                            Err(e) => {
+                                error!("Failed to accept connection: {}", e);
+                                None
+                            }
+                        }
+                    };
 
-                        let shutdown_wait = async {
-                            let _ = shutdown_rx.recv().await;
-                            info!("Shutdown received while serving connection");
-                        };
+                    let shutdown_fut = async {
+                        let _ = shutdown_rx.recv().await;
+                        info!("Mock agent received shutdown signal");
+                    };
 
-                        let _ = select(Box::pin(serve_fut), Box::pin(shutdown_wait)).await;
-                    }
-                    Either::Left((None, _)) => {
-                        info!("Mock agent accept failed, exiting");
-                    }
-                    Either::Right((_, _)) => {
-                        info!("Mock agent shutting down before connection established");
+                    match select(Box::pin(accept_fut), Box::pin(shutdown_fut)).await {
+                        Either::Left((Some(stream), _)) => {
+                            let (read_half, write_half) = stream.split();
+
+                            let builder = build_mock_agent_builder(config.clone());
+
+                            let serve_fut = async move {
+                                let result = builder
+                                    .connect_to(ByteStreams::new(write_half, read_half))
+                                    .await;
+                                if let Err(e) = result {
+                                    error!("Mock agent connection error: {}", e);
+                                }
+                                info!("Mock agent connection completed");
+                            };
+
+                            let shutdown_wait = async {
+                                let _ = shutdown_rx.recv().await;
+                                info!("Shutdown received while serving connection");
+                            };
+
+                            let _ = select(Box::pin(serve_fut), Box::pin(shutdown_wait)).await;
+                        }
+                        Either::Left((None, _)) => {
+                            info!("Mock agent accept failed, exiting");
+                            break;
+                        }
+                        Either::Right((_, _)) => {
+                            info!("Mock agent shutting down");
+                            break;
+                        }
                     }
                 }
 
@@ -151,6 +155,19 @@ impl MockAgent {
             thread_handle,
             shutdown_tx,
         ))
+    }
+
+    /// Serve a single ACP connection over this process's stdin/stdout.
+    ///
+    /// Used by the `mock-agent-stdio` binary that hermes spawns when an e2e
+    /// test connects via the `stdio` protocol. Each spawned process handles the
+    /// one connection hermes drives; reconnects (e.g. terminal authentication
+    /// acceptance) spawn fresh processes that re-read their configuration from
+    /// argv.
+    pub async fn run_stdio(self) -> Result<(), acp::Error> {
+        let MockAgent { config } = self;
+        let builder = build_mock_agent_builder(config);
+        builder.connect_to(Stdio::new()).await
     }
 
     /// Start the mock agent on a random available port, accepting WebSocket connections.
@@ -413,11 +430,12 @@ fn build_mock_agent_builder(
         .on_receive_request(
             {
                 let config = config.clone();
-                move |_req: InitializeRequest,
+                move |req: InitializeRequest,
                       responder: Responder<InitializeResponse>,
                       _cx: ConnectionTo<acp::Client>| {
                     let config = config.clone();
                     async move {
+                        config.lock().unwrap().initialize_request = Some(req);
                         let dur = config.lock().unwrap().timeout;
                         let result = timeout(dur, async {
                             Ok::<_, acp::Error>(config.lock().unwrap().initialize_response.clone())
@@ -508,6 +526,20 @@ fn build_mock_agent_builder(
         .on_receive_notification(
             move |_notification: CancelNotification, _cx: ConnectionTo<acp::Client>| async move {
                 Ok(())
+            },
+            on_receive_notification!(),
+        )
+        .on_receive_notification(
+            {
+                let config = config.clone();
+                move |notification: CancelRequestNotification, _cx: ConnectionTo<acp::Client>| {
+                    let config = config.clone();
+                    async move {
+                        config.lock().unwrap().cancel_request_id =
+                            Some(notification.request_id.clone());
+                        Ok(())
+                    }
+                }
             },
             on_receive_notification!(),
         )
@@ -602,11 +634,12 @@ fn build_mock_agent_builder(
         .on_receive_request(
             {
                 let config = config.clone();
-                move |_req: SetSessionConfigOptionRequest,
+                move |req: SetSessionConfigOptionRequest,
                       responder: Responder<SetSessionConfigOptionResponse>,
                       _cx: ConnectionTo<acp::Client>| {
                     let config = config.clone();
                     async move {
+                        config.lock().unwrap().set_session_config_option_request = Some(req);
                         let dur = config.lock().unwrap().timeout;
                         let result = timeout(dur, async {
                             let config = config.lock().unwrap();
@@ -721,7 +754,7 @@ fn build_mock_agent_builder(
             on_receive_request!(),
         )
     // NOTE: `ExtRequest`/`ExtNotification` are not `JsonRpcRequest`/`JsonRpcNotification`
-    // in agent-client-protocol 0.11. Handling them would require defining a custom
+    // in the ACP SDK. Handling them would require defining a custom
     // typed wrapper or registering a catch-all `on_receive_dispatch`. The previous
     // MockAgent implementation only returned a default response for them, which the
     // existing test suite never exercises meaningfully. They are intentionally omitted
@@ -797,10 +830,27 @@ async fn handle_prompt(
         };
 
         if let Some(read_req) = read_file_request {
-            cx.send_request(read_req)
-                .block_task()
-                .await
-                .map_err(|e| internal_error(format!("read_text_file failed: {}", e)))?;
+            let sent = cx.send_request(read_req);
+            let (should_cancel, signal) = {
+                let mut config = config.lock().unwrap();
+                config.last_read_file_request_id = Some(sent.id().clone());
+                (
+                    config.cancel_read_file_request,
+                    config.cancel_read_file_signal.clone(),
+                )
+            };
+            if should_cancel {
+                if let Some(signal) = signal {
+                    let _ = signal.recv().await;
+                }
+                let _ = sent.cancel();
+            }
+            if let Err(error) = sent.block_task().await {
+                config.lock().unwrap().last_read_file_response_error_code = Some(error.code.into());
+                if !should_cancel {
+                    return Err(internal_error(format!("read_text_file failed: {}", error)));
+                }
+            }
         }
 
         // Write text file (if configured)
@@ -827,6 +877,73 @@ async fn handle_prompt(
                 .block_task()
                 .await
                 .map_err(|e| internal_error(format!("release_terminal failed: {}", e)))?;
+        }
+
+        // Send elicitation request (if configured)
+        let elicitation_request = {
+            let config = config.lock().unwrap();
+            config.elicitation_request.clone()
+        };
+
+        if let Some(elic_req) = elicitation_request {
+            cx.send_request(elic_req)
+                .block_task()
+                .await
+                .map_err(|e| internal_error(format!("elicitation failed: {}", e)))?;
+        }
+
+        // Send elicitation complete notification (if configured)
+        let elicitation_complete_notification = {
+            let config = config.lock().unwrap();
+            config.elicitation_complete_notification.clone()
+        };
+
+        if let Some(complete_notif) = elicitation_complete_notification {
+            cx.send_notification(complete_notif)
+                .map_err(|e| internal_error(format!("elicitation complete failed: {}", e)))?;
+        }
+
+        // Send compaction update notification (if configured)
+        let compaction_update = {
+            let config = config.lock().unwrap();
+            config.compaction_update.clone()
+        };
+
+        if let Some(update) = compaction_update {
+            let notification = SessionNotification::new(
+                request.session_id.clone(),
+                SessionUpdate::CompactionUpdate(update),
+            );
+            cx.send_notification(notification)
+                .map_err(|e| internal_error(format!("compaction update failed: {}", e)))?;
+        }
+
+        // Send compaction summary chunk notification (if configured)
+        let compaction_summary_chunk = {
+            let config = config.lock().unwrap();
+            config.compaction_summary_chunk.clone()
+        };
+
+        if let Some(chunk) = compaction_summary_chunk {
+            let notification = SessionNotification::new(
+                request.session_id.clone(),
+                SessionUpdate::CompactionSummaryChunk(chunk),
+            );
+            cx.send_notification(notification)
+                .map_err(|e| internal_error(format!("compaction summary chunk failed: {}", e)))?;
+        }
+
+        // Send notice notification (if configured)
+        let notice = {
+            let config = config.lock().unwrap();
+            config.notice.clone()
+        };
+
+        if let Some(notice) = notice {
+            let notification =
+                SessionNotification::new(request.session_id.clone(), SessionUpdate::Notice(notice));
+            cx.send_notification(notification)
+                .map_err(|e| internal_error(format!("notice failed: {}", e)))?;
         }
 
         // Echo back the prompt content as agent message chunks
