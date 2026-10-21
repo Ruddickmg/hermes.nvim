@@ -33,6 +33,21 @@
 ---@field session? HermesSessionConfig Session configuration
 ---@field log? HermesLogConfig Logging configuration
 ---@field progress? HermesProgressConfig Progress display configuration
+---@field agents? table<string, HermesAgentConnection> User-defined agent connections, keyed by agent id
+
+---@class HermesAgentConnection
+---User-defined connection for an agent. When the id matches a registry entry,
+---only the connection fields are used and the registry metadata is kept.
+---Otherwise the agent is treated as a brand new agent.
+---@field name? string Display name (defaults to the agent id for new agents)
+---@field description? string Description (new agents only)
+---@field icon? string HTTP(S) URL or local path to an SVG icon
+---@field protocol? "stdio"|"http"|"socket"|"tcp"|"https" Connection protocol (default: "stdio")
+---@field command? string Command to run (required for stdio connections)
+---@field args? string[] Command arguments for stdio connections
+---@field host? string Host (required for tcp/http/https connections)
+---@field port? number Port (required for tcp/http/https connections)
+---@field path? string Path (required for socket connections)
 
 ---@class HermesPermissions
 ---Permission settings for agent operations
@@ -89,6 +104,7 @@
 ---@field port? number Port for socket/tcp/http connections
 ---@field url? string URL for http/sse connections
 ---@field distribution? "npx"|"uvx"|"binary" Preferred distribution type for registry agents (default: auto-select npx > uvx > binary)
+---@field download? boolean Force (re)download of a registry agent distribution instead of using a configured command
 
 ---@class EnvVar
 ---Environment variable entry
@@ -483,14 +499,15 @@
 ---@field sessionId string
 
 ---@class HermesAgentInfo
----@field id string
----@field name string
----@field version string
----@field license string
----@field description string
----@field website string
----@field repository string
----@field icon string
+---@field id string Agent identifier
+---@field name string Human-readable name
+---@field version string Agent version
+---@field license? string License identifier
+---@field description string Description
+---@field website? string Website URL
+---@field repository? string Repository URL
+---@field icon? string Icon URL or path
+---@field icon_pixel_data? { width: number, height: number, pixels: number[] } Rendered icon pixels
 ---@field distributions string[] e.g. { "binary", "npx", "uvx" }
 
 ---@class HermesAgentList

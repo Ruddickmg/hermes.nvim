@@ -216,6 +216,21 @@ hermes.setup({
     cmdline = false, -- Show progress messages in cmdline (0.12+ only)
     update_frequency = 150 -- how often to poll the download for progress in milliseconds
   },
+  agents = {
+    -- User-defined agent connections, keyed by agent id.
+    -- If the id matches a registry agent, only the connection fields are used
+    -- and the registry metadata (name, icon, description) is kept. Otherwise a
+    -- brand new agent is created (default icon: question mark).
+    -- Required fields depend on `protocol` (default "stdio"):
+    --   stdio           -> command (+ optional args)
+    --   socket          -> path
+    --   tcp/http/https  -> host + port (+ optional path)
+    opencode = {
+      command = "opencode", -- command to run for stdio connections
+      args = { "acp" },     -- command arguments
+      icon = "~/icons/opencode.svg", -- HTTP(S) URL or local path to an SVG icon (optional)
+    },
+  },
 })
 ```
 
@@ -265,6 +280,11 @@ hermes.connect("opencode", {
 hermes.connect("kilo", {
   -- Some agents have multiple different distributions; you can specify which to use.
   distribution = "binary", -- "binary", "npx", and/or "uvx"
+})
+
+-- force a fresh download instead of using a configured command
+hermes.connect("opencode", {
+  download = true, -- ignores `agents.opencode.command` and (re)installs the registry distribution
 })
 
 -- connect to custom agent (not pre-defined)
@@ -1480,6 +1500,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
       "website": "url string",
       "repository": "url string",
       "icon": "url string",
+      "icon_pixel_data": { "width": 16, "height": 16, "pixels": [0] },
       "distributions": ["binary", "npx", "uvx"]
     }
   ]

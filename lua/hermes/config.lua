@@ -71,6 +71,20 @@ local M = {}
 ---@field cmdline? boolean Show progress messages in cmdline (0.12+ only, default: false)
 ---@field update_frequency? integer How often to poll for progress in milliseconds (default: 150)
 
+---@class HermesAgentConnection
+---User-defined connection for an agent. When the id matches a registry entry,
+---only the connection fields are used and the registry metadata is kept.
+---Otherwise the agent is treated as a brand new agent.
+---@field name? string Display name (defaults to the agent id for new agents)
+---@field description? string Description (new agents only)
+---@field icon? string HTTP(S) URL or local path to an SVG icon
+---@field protocol? "stdio"|"http"|"socket"|"tcp"|"https" Connection protocol (default: "stdio")
+---@field command? string Command to run (required for stdio connections)
+---@field args? string[] Command arguments for stdio connections
+---@field host? string Host (required for tcp/http/https connections)
+---@field port? number Port (required for tcp/http/https connections)
+---@field path? string Path (required for socket connections)
+
 ---@class HermesConfig
 ---Full Hermes configuration
 ---@field download? HermesDownloadConfig Download configuration
@@ -81,6 +95,7 @@ local M = {}
 ---@field session? HermesSessionConfig Session configuration
 ---@field distributions? HermesDistributionsConfig Distribution settings
 ---@field progress? HermesProgressConfig Progress display configuration
+---@field agents? table<string, HermesAgentConnection> User-defined agent connections, keyed by agent id
 ---@field root_markers? string[] Files/directories to identify project root (default: {".git"})
 
 -- luacov: disable
@@ -187,6 +202,7 @@ local default_config = {
 		cmdline = false,
 		update_frequency = 150,
 	},
+	agents = {},
 	root_markers = { ".git" },
 }
 

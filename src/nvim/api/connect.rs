@@ -24,42 +24,32 @@ pub struct ConnectionOptions {
     host: Option<String>,
     port: Option<u16>,
     path: Option<String>,
+    download: bool,
 }
 
 impl ConnectionOptions {
     fn into_assistant(self, name: String) -> Result<Assistant> {
         match self.protocol {
             Protocol::Stdio => match self.command {
-                Some(command) => {
-                    if command.is_empty() {
-                        return Err(Error::InvalidInput(
-                            "Command cannot be empty for custom stdio connections".into(),
-                        ));
-                    }
-                    Ok(Assistant::CustomStdio {
-                        name,
-                        command,
-                        args: self.args.unwrap_or_default(),
-                    })
-                }
-                None => {
-                    let assistant = Assistant::from(name);
-                    if matches!(assistant, Assistant::CustomStdio { .. }) {
-                        return Err(Error::InvalidInput(
-                            "Custom stdio connections require options with a 'command' field"
-                                .into(),
-                        ));
-                    }
-                    Ok(assistant)
-                }
+                Some(command) if !command.is_empty() => Ok(Assistant::CustomStdio {
+                    name,
+                    command,
+                    args: self.args.unwrap_or_default(),
+                }),
+                Some(_) => Err(Error::InvalidInput(
+                    "Command cannot be empty for stdio connections".into(),
+                )),
+                None => Err(Error::InvalidInput(
+                    "A 'command' is required for stdio connections".into(),
+                )),
             },
             Protocol::Socket => match self.path {
                 Some(path) => Ok(Assistant::CustomSocket { name, path }),
                 None => Err(Error::InvalidInput(
-                    "Path must be provided for socket connections".into(),
+                    "A 'path' is required for socket connections".into(),
                 )),
             },
-            _ => match (self.host, self.port) {
+            Protocol::Tcp | Protocol::Http | Protocol::Https => match (self.host, self.port) {
                 (Some(host), Some(port)) => Ok(Assistant::CustomUrl {
                     name,
                     host,
@@ -67,7 +57,7 @@ impl ConnectionOptions {
                     path: self.path,
                 }),
                 _ => Err(Error::InvalidInput(format!(
-                    "Host and port must be provided for {} connections",
+                    "'host' and 'port' are required for {} connections",
                     self.protocol
                 ))),
             },
@@ -151,6 +141,11 @@ impl FromObject for ConnectionOptions {
                 .map(|s: nvim_oxi::String| s.to_string())
         });
 
+        let download: bool = dict
+            .get("download")
+            .and_then(|o| bool::from_object(o.clone()).ok())
+            .unwrap_or(false);
+
         Ok(Self {
             protocol,
             distribution,
@@ -159,6 +154,7 @@ impl FromObject for ConnectionOptions {
             host,
             port,
             path,
+            download,
         })
     }
 }
@@ -195,6 +191,9 @@ impl Pushable for ConnectionOptions {
         if let Some(path) = self.path {
             dict.insert("path", path);
         }
+        if self.download {
+            dict.insert("download", true);
+        }
         unsafe { Object::from(dict).push(lua_state) }
     }
 }
@@ -209,34 +208,38 @@ impl Api {
         let state = self.state.lock().await;
         let registry = state.registry.clone();
         let distribution_config = state.config.distributions.clone();
+        let custom = state.config.agents.get(&agent_id).cloned();
         drop(state);
 
-        let agent = if let Some(Some(entry)) = registry
+        let registry_entry = registry
             .as_ref()
-            .map(|r| r.data.get_entry(&agent_id).cloned())
-        {
-            Assistant::Registered {
-                agent: entry,
-                configuration: distribution_config,
-                distribution: opts.distribution,
-                command: opts.command,
-                args: opts.args,
-                registry: registry.clone(),
-            }
-        } else {
-            opts.clone().into_assistant(agent_id)?
+            .and_then(|r| r.data.get_entry(&agent_id).cloned());
+
+        let (agent, protocol) = match custom.as_ref() {
+            Some(entry) if !opts.download => (
+                entry.connection.clone().with_name(&agent_id),
+                entry.protocol,
+            ),
+            _ => match registry_entry {
+                Some(entry) => (
+                    Assistant::Registered {
+                        agent: entry,
+                        configuration: distribution_config,
+                        distribution: opts.distribution,
+                        command: opts.command.clone(),
+                        args: opts.args.clone(),
+                        registry: registry.clone(),
+                    },
+                    opts.protocol,
+                ),
+                None => (opts.clone().into_assistant(agent_id)?, opts.protocol),
+            },
         };
 
         let handler = self.response_handler.clone();
         let mut connection_manager = self.connection_manager.lock().await;
         let result = connection_manager
-            .connect(
-                handler,
-                ConnectionDetails {
-                    agent,
-                    protocol: opts.protocol,
-                },
-            )
+            .connect(handler, ConnectionDetails { agent, protocol })
             .await
             .map(|_| ());
         drop(connection_manager);
@@ -336,7 +339,7 @@ mod tests {
         let result = opts.into_assistant("test-agent".to_string());
         let assistant = result.unwrap();
         assert!(
-            matches!(assistant, Assistant::CustomStdio { name, command, args } 
+            matches!(assistant, Assistant::CustomStdio { name, command, args }
             if name == "test-agent" && command == "my-agent" && args == vec!["arg1", "arg2"])
         );
     }
@@ -394,7 +397,7 @@ mod tests {
         };
         let result = opts.into_assistant("socket-agent".to_string());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("Path must be provided"));
+        assert!(err.contains("A 'path' is required"));
     }
 
     #[test]
@@ -426,7 +429,7 @@ mod tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("Host and port must be provided")
+                .contains("'host' and 'port' are required")
         );
     }
 
@@ -584,6 +587,21 @@ mod tests {
         let dict = Dictionary::new();
         let result = ConnectionOptions::from_object(Object::from(dict));
         assert_eq!(result.unwrap().protocol, Protocol::Stdio);
+    }
+
+    #[test]
+    fn connection_options_from_object_download_true() {
+        let mut dict = Dictionary::new();
+        dict.insert("download", true);
+        let result = ConnectionOptions::from_object(Object::from(dict));
+        assert!(result.unwrap().download);
+    }
+
+    #[test]
+    fn connection_options_from_object_download_defaults_false() {
+        let dict = Dictionary::new();
+        let result = ConnectionOptions::from_object(Object::from(dict));
+        assert!(!result.unwrap().download);
     }
 
     // Tests for Protocol parsing
