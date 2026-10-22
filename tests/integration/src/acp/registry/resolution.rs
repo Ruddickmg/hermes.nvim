@@ -50,6 +50,14 @@ fn npx_dist(
     dist
 }
 
+fn enabled_distributions() -> DistributionsConfig {
+    DistributionsConfig {
+        npx: true,
+        uvx: true,
+        binary: Default::default(),
+    }
+}
+
 async fn test_registry() -> Registry {
     let messenger = NotificationMessenger::initialize().expect("Failed to create messenger");
     let downloader = Downloader::new(messenger, ProgressConfig::default());
@@ -69,7 +77,7 @@ async fn test_registry() -> Registry {
 #[nvim_oxi::test]
 fn resolve_npx_with_preference() {
     let entry = entry_with_distribution("test-agent", npx_dist("my-agent", None));
-    let config = DistributionsConfig::default();
+    let config = enabled_distributions();
     let registry = smol::block_on(test_registry());
     let result = smol::block_on(fetch_agent_from_registry(
         &entry,
@@ -93,7 +101,7 @@ fn resolve_npx_includes_dist_args() {
             Some(vec!["--verbose".into(), "--port".into(), "8080".into()]),
         ),
     );
-    let config = DistributionsConfig::default();
+    let config = enabled_distributions();
     let registry = smol::block_on(test_registry());
     let result = smol::block_on(fetch_agent_from_registry(
         &entry,
@@ -113,7 +121,7 @@ fn resolve_npx_includes_dist_args() {
 #[nvim_oxi::test]
 fn resolve_nonexistent_preference_returns_error() {
     let entry = entry_with_distribution("test-agent", HashMap::new());
-    let config = DistributionsConfig::default();
+    let config = enabled_distributions();
     let registry = smol::block_on(test_registry());
     let result = smol::block_on(fetch_agent_from_registry(
         &entry,
@@ -184,7 +192,7 @@ fn resolve_all_disabled_error_mentions_toggle() {
 #[nvim_oxi::test]
 fn resolve_no_supported_distribution_error_mentions_agent_id() {
     let entry = entry_with_distribution("my-agent", HashMap::new());
-    let config = DistributionsConfig::default();
+    let config = enabled_distributions();
     let registry = smol::block_on(test_registry());
     let result = smol::block_on(fetch_agent_from_registry(&entry, None, &config, &registry));
     let err = result.unwrap_err().to_string();
@@ -202,7 +210,7 @@ fn resolve_binary_no_platform_match_returns_error() {
         DistributionCommand::BinaryTargets(HashMap::new()),
     );
     let entry = entry_with_distribution("test-agent", dist);
-    let config = DistributionsConfig::default();
+    let config = enabled_distributions();
     let registry = smol::block_on(test_registry());
     let result = smol::block_on(fetch_agent_from_registry(
         &entry,

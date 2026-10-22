@@ -161,11 +161,11 @@ hermes.setup({
     },
   },
   distributions = { -- path to distributions
-    uvx = true, -- allows installing agents via UVX
-    npx = true, -- allows installing agents via NPX
+    uvx = true, -- allows installing agents via UVX (default: true, false in Nix environments)
+    npx = true, -- allows installing agents via NPX (default: true, false in Nix environments)
     binary = { -- configuration for binary behavior
       path = vim.fn.stdpath('state') .. "/nvim/hermes/binaries", -- path where binaries will be downloaded to
-      enabled = true, -- allows installing agents via binary
+      enabled = true, -- allows installing agents via binary (default: true, false in Nix environments)
     },
   },
   terminal = {

@@ -590,10 +590,17 @@ distributions ~
     Agent distribution settings:
     • binary: Binary distribution behavior >
         • path: Path where binaries will be downloaded to
-        • enabled: Allows installing agents via binary (default: true)
+        • enabled: Allows installing agents via binary (default: true,
+                   false in Nix environments)
     <
-    • uvx: Allows installing agents via UVX (default: true)
-    • npx: Allows installing agents via NPX (default: true)
+    • uvx: Allows installing agents via UVX (default: true, false in Nix
+           environments)
+    • npx: Allows installing agents via NPX (default: true, false in Nix
+           environments)
+
+    Nix environments are detected when running on NixOS or when the plugin
+    is loaded from the Nix store. These defaults can be overridden
+    explicitly in setup().
 
 progress ~
     Download progress display settings:
