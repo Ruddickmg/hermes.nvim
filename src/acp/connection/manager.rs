@@ -3,7 +3,6 @@ use crate::acp::connection::{Connection, http, socket, stdio, tcp};
 use crate::acp::registry::distribution::Distribution;
 use crate::acp::registry::entry::AgentEntry;
 use crate::acp::registry::resolution::fetch_agent_from_registry;
-use crate::acp::utilities::command::command_available;
 use crate::nvim::autocommands::Commands;
 use crate::nvim::configuration::{DistributionsConfig, Permissions};
 use crate::utilities::autocmd::autocmd_listeners_attached;

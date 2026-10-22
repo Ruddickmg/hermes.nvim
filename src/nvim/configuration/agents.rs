@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
 use nvim_oxi::{
     Dictionary, Object,
@@ -11,12 +12,17 @@ use tracing::instrument;
 use crate::{
     acp::{
         connection::{Assistant, Protocol},
-        utilities::command::command_available,
+        utilities::{command::command_available, network::probe_tcp},
     },
     api::AgentListEntry,
 };
 
 use super::dict_from_object;
+
+#[cfg(unix)]
+use std::os::unix::fs::FileTypeExt;
+
+const URL_PROBE_TIMEOUT: Duration = Duration::from_secs(3);
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct AgentConnectionConfig {
@@ -31,8 +37,7 @@ pub struct AgentConnectionConfig {
 impl AgentConnectionConfig {
     #[instrument(level = "trace", skip(self))]
     pub async fn is_valid(&self) -> bool {
-        let protocol = self.protocol.clone();
-        match self.connection.clone() {
+        match &self.connection {
             Assistant::Registered { command, .. } => {
                 if let Some(cmd) = command {
                     command_available(cmd.as_str()).await
@@ -40,22 +45,28 @@ impl AgentConnectionConfig {
                     false
                 }
             }
-            Assistant::CustomStdio { command, .. } => command_available(&command).await,
-            Assistant::CustomUrl { .. } => {
-                // TODO: ping url to check if it is valid
-                match protocol {
-                    Protocol::Http => true,
-                    Protocol::Https => true,
-                    Protocol::Tcp => true,
-                    _ => false,
+            Assistant::CustomStdio { command, .. } => command_available(command).await,
+            Assistant::CustomUrl { host, port, .. } => match self.protocol {
+                Protocol::Http | Protocol::Https | Protocol::Tcp => {
+                    probe_tcp(host, *port, URL_PROBE_TIMEOUT).await
                 }
-            }
-            Assistant::CustomSocket { .. } => {
-                // TODO: check file path for existing socket
-                true
-            }
+                _ => false,
+            },
+            Assistant::CustomSocket { path, .. } => socket_is_valid(path),
         }
     }
+}
+
+#[cfg(unix)]
+fn socket_is_valid(path: &str) -> bool {
+    std::fs::metadata(path)
+        .map(|metadata| metadata.file_type().is_socket())
+        .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn socket_is_valid(_path: &str) -> bool {
+    false
 }
 
 impl FromObject for AgentConnectionConfig {
@@ -258,6 +269,111 @@ mod tests {
                 args: vec!["acp".to_string()],
             },
         }
+    }
+
+    fn custom_url_config(protocol: Protocol, host: &str, port: u16) -> AgentConnectionConfig {
+        AgentConnectionConfig {
+            description: None,
+            icon: None,
+            protocol,
+            connection: Assistant::CustomUrl {
+                name: String::new(),
+                host: host.to_string(),
+                port,
+                path: None,
+            },
+        }
+    }
+
+    fn custom_socket_config(path: &str) -> AgentConnectionConfig {
+        AgentConnectionConfig {
+            description: None,
+            icon: None,
+            protocol: Protocol::Socket,
+            connection: Assistant::CustomSocket {
+                name: String::new(),
+                path: path.to_string(),
+            },
+        }
+    }
+
+    #[test]
+    fn is_valid_custom_url_tcp_reachable_returns_true() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind listener");
+        let port = listener.local_addr().expect("local addr").port();
+        let config = custom_url_config(Protocol::Tcp, "127.0.0.1", port);
+
+        let result = futures_lite::future::block_on(config.is_valid());
+
+        assert!(result);
+    }
+
+    #[test]
+    fn is_valid_custom_url_unreachable_returns_false() {
+        let config = custom_url_config(Protocol::Tcp, "127.0.0.1", 1);
+
+        let result = futures_lite::future::block_on(config.is_valid());
+
+        assert!(!result);
+    }
+
+    #[test]
+    fn is_valid_custom_url_stdio_protocol_returns_false() {
+        let config = custom_url_config(Protocol::Stdio, "127.0.0.1", 80);
+
+        let result = futures_lite::future::block_on(config.is_valid());
+
+        assert!(!result);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn is_valid_custom_socket_existing_socket_returns_true() {
+        let dir = std::env::temp_dir().join(format!("hermes-is-valid-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let path = dir.join("agent.sock");
+        let _listener = std::os::unix::net::UnixListener::bind(&path).expect("bind unix listener");
+        let config = custom_socket_config(path.to_str().expect("utf8 path"));
+
+        let result = futures_lite::future::block_on(config.is_valid());
+
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(result);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn is_valid_custom_socket_regular_file_returns_false() {
+        let dir = std::env::temp_dir().join(format!("hermes-is-valid-file-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let path = dir.join("not-a-socket");
+        std::fs::write(&path, "content").expect("write file");
+        let config = custom_socket_config(path.to_str().expect("utf8 path"));
+
+        let result = futures_lite::future::block_on(config.is_valid());
+
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(!result);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn is_valid_custom_socket_missing_path_returns_false() {
+        let config = custom_socket_config("/nonexistent/hermes/agent.sock");
+
+        let result = futures_lite::future::block_on(config.is_valid());
+
+        assert!(!result);
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn is_valid_custom_socket_unsupported_platform_returns_false() {
+        let config = custom_socket_config("/tmp/hermes/agent.sock");
+
+        let result = futures_lite::future::block_on(config.is_valid());
+
+        assert!(!result);
     }
 
     #[test]
