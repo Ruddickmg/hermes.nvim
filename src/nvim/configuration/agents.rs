@@ -74,7 +74,7 @@ impl lua::Pushable for AgentConnectionConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CustomAgentsConfig(pub HashMap<String, AgentConnectionConfig>);
 
 impl CustomAgentsConfig {
@@ -84,6 +84,14 @@ impl CustomAgentsConfig {
 
     pub fn remove(&mut self, id: &str) -> Option<AgentConnectionConfig> {
         self.0.remove(id)
+    }
+
+    pub fn insert(
+        &mut self,
+        id: String,
+        config: AgentConnectionConfig,
+    ) -> Option<AgentConnectionConfig> {
+        self.0.insert(id.to_string(), config)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -106,18 +114,78 @@ impl Into<Vec<AgentListEntry>> for CustomAgentsConfig {
     }
 }
 
+impl From<Assistant> for AgentConnectionConfig {
+    fn from(value: Assistant) -> Self {
+        Self {
+            icon: None,
+            description: None,
+            protocol: match value {
+                Assistant::Registered { .. } | Assistant::CustomStdio { .. } => Protocol::Stdio,
+                Assistant::CustomUrl { .. } => Protocol::Tcp,
+                Assistant::CustomSocket { .. } => Protocol::Socket,
+            },
+            connection: value,
+        }
+    }
+}
+
+impl Default for CustomAgentsConfig {
+    fn default() -> Self {
+        Self(
+            vec![
+                (
+                    "opencode",
+                    Assistant::CustomStdio {
+                        name: "Opencode".to_string(),
+                        command: "opencode".to_string(),
+                        args: vec!["acp".to_string()],
+                    },
+                ),
+                (
+                    "claude-acp",
+                    Assistant::CustomStdio {
+                        name: "Claude Agent".to_string(),
+                        // TODO: get the correct commands for this
+                        command: "claude-agent-acp".to_string(),
+                        args: vec![],
+                    },
+                ),
+                (
+                    "github-copilot-cli",
+                    Assistant::CustomStdio {
+                        name: "Copilot".to_string(),
+                        command: "copilot".to_string(),
+                        args: vec!["--acp".to_string()],
+                    },
+                ),
+                (
+                    "gemini",
+                    Assistant::CustomStdio {
+                        name: "Gemini".to_string(),
+                        command: "gemini".to_string(),
+                        args: vec!["--acp".to_string()],
+                    },
+                ),
+            ]
+            .into_iter()
+            .map(|(id, agent)| (id.to_string(), AgentConnectionConfig::from(agent)))
+            .collect::<HashMap<String, AgentConnectionConfig>>(),
+        )
+    }
+}
+
 impl FromObject for CustomAgentsConfig {
     fn from_object(obj: Object) -> Result<Self, Error> {
         let dict = dict_from_object(obj)?;
 
-        let mut agents = HashMap::new();
+        let mut agents = Self::default();
         for (key, value) in dict {
             let id = key.to_string();
             let entry = AgentConnectionConfig::from_object(value)?;
             agents.insert(id, entry);
         }
 
-        Ok(Self(agents))
+        Ok(agents)
     }
 }
 
