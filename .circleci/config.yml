@@ -13,9 +13,9 @@ executors:
     docker:
       - image: node:24.22.1
   mac-aarch64:
-    macos:
-      xcode: 27.1.0
     resource_class: m4pro.medium
+    macos:
+      xcode: 27.2.0
   rust-linux-x86_64:
     docker:
       - image: cimg/rust:1.99.1
