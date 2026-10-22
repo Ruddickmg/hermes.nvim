@@ -279,6 +279,7 @@ impl Api {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::acp::registry::entry::AgentEntry;
     use pretty_assertions::assert_eq;
     use proptest::prelude::*;
 
@@ -343,6 +344,152 @@ mod tests {
     fn test_assistant_custom_with_command() {
         let assistant = Assistant::from("custom-agent");
         assert!(matches!(assistant, Assistant::CustomStdio { name, .. } if name == "custom-agent"));
+    }
+
+    fn agent_entry() -> AgentEntry {
+        AgentEntry {
+            id: "test-agent".to_string(),
+            name: "Test Agent".to_string(),
+            version: "1.0.0".to_string(),
+            description: String::new(),
+            repository: None,
+            website: None,
+            authors: None,
+            license: None,
+            icon: None,
+            distribution: Default::default(),
+        }
+    }
+
+    #[test]
+    fn connection_options_from_registered_assistant_maps_to_stdio() {
+        let assistant = Assistant::Registered {
+            agent: agent_entry(),
+            distribution: Some(Distribution::Npx),
+            configuration: Default::default(),
+            command: Some("registry-agent".to_string()),
+            args: Some(vec!["--acp".to_string()]),
+            registry: None,
+        };
+
+        let opts = ConnectionOptions::from(assistant);
+
+        assert_eq!(
+            (
+                opts.protocol,
+                opts.distribution,
+                opts.command,
+                opts.args,
+                opts.host,
+                opts.port,
+                opts.path,
+            ),
+            (
+                Protocol::Stdio,
+                Some(Distribution::Npx),
+                Some("registry-agent".to_string()),
+                Some(vec!["--acp".to_string()]),
+                None,
+                None,
+                None,
+            )
+        );
+    }
+
+    #[test]
+    fn connection_options_from_custom_stdio_assistant_maps_to_stdio() {
+        let assistant = Assistant::CustomStdio {
+            name: "custom".to_string(),
+            command: "custom-agent".to_string(),
+            args: vec!["serve".to_string()],
+        };
+
+        let opts = ConnectionOptions::from(assistant);
+
+        assert_eq!(
+            (
+                opts.protocol,
+                opts.distribution,
+                opts.command,
+                opts.args,
+                opts.host,
+                opts.port,
+                opts.path,
+            ),
+            (
+                Protocol::Stdio,
+                None,
+                Some("custom-agent".to_string()),
+                Some(vec!["serve".to_string()]),
+                None,
+                None,
+                None,
+            )
+        );
+    }
+
+    #[test]
+    fn connection_options_from_custom_socket_assistant_maps_to_socket() {
+        let assistant = Assistant::CustomSocket {
+            name: "socket".to_string(),
+            path: "/tmp/agent.sock".to_string(),
+        };
+
+        let opts = ConnectionOptions::from(assistant);
+
+        assert_eq!(
+            (
+                opts.protocol,
+                opts.distribution,
+                opts.command,
+                opts.args,
+                opts.host,
+                opts.port,
+                opts.path,
+            ),
+            (
+                Protocol::Socket,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some("/tmp/agent.sock".to_string()),
+            )
+        );
+    }
+
+    #[test]
+    fn connection_options_from_custom_url_assistant_maps_to_tcp() {
+        let assistant = Assistant::CustomUrl {
+            name: "remote".to_string(),
+            host: "api.example.com".to_string(),
+            port: 443,
+            path: Some("/v1/acp".to_string()),
+        };
+
+        let opts = ConnectionOptions::from(assistant);
+
+        assert_eq!(
+            (
+                opts.protocol,
+                opts.distribution,
+                opts.command,
+                opts.args,
+                opts.host,
+                opts.port,
+                opts.path,
+            ),
+            (
+                Protocol::Tcp,
+                None,
+                None,
+                None,
+                Some("api.example.com".to_string()),
+                Some(443),
+                Some("/v1/acp".to_string()),
+            )
+        );
     }
 
     // Tests for ConnectionOptions into_assistant
