@@ -643,6 +643,22 @@ mod tests {
     use pretty_assertions::assert_eq;
     use proptest::prelude::*;
 
+    fn agent_opencode() -> Assistant {
+        Assistant::CustomStdio {
+            name: "opencode".to_string(),
+            command: "opencode".to_string(),
+            args: vec!["acp".to_string()],
+        }
+    }
+
+    fn agent_copilot() -> Assistant {
+        Assistant::CustomStdio {
+            name: "copilot".to_string(),
+            command: "copilot".to_string(),
+            args: vec!["--acp".to_string()],
+        }
+    }
+
     /// A `Connection` with no live `Handler` behind it; enough for exercising
     /// `ConnectionManager` bookkeeping, which never touches `Connection::details()`.
     fn mock_connection(
@@ -818,11 +834,7 @@ mod tests {
         }];
         let results: Vec<String> = assistants.iter().map(|a| format!("{}", a)).collect();
 
-        let expected: Vec<String> = vec![
-            "copilot".to_string(),
-            "opencode".to_string(),
-            "my-claude".to_string(),
-        ];
+        let expected: Vec<String> = vec!["my-claude".to_string()];
 
         assert_eq!(results, expected);
     }
@@ -840,10 +852,10 @@ mod tests {
         let (sender, _) = async_channel::unbounded();
         let handle = std::thread::spawn(|| Ok(()));
         let connection = mock_connection(sender, handle);
-        manager.add_connection(Assistant::Copilot, connection);
+        manager.add_connection(agent_copilot(), connection);
         let agents = manager.connected_agents();
         assert_eq!(agents.len(), 1);
-        assert_eq!(agents[0], Assistant::Copilot);
+        assert_eq!(agents[0], Assistant::from("copilot"));
     }
 
     #[test]
@@ -852,24 +864,24 @@ mod tests {
         let (sender1, _) = async_channel::unbounded();
         let handle1 = std::thread::spawn(|| Ok(()));
         let connection1 = mock_connection(sender1, handle1);
-        manager.add_connection(Assistant::Copilot, connection1);
+        manager.add_connection(agent_copilot(), connection1);
 
         let (sender2, _) = async_channel::unbounded();
         let handle2 = std::thread::spawn(|| Ok(()));
         let connection2 = mock_connection(sender2, handle2);
-        manager.add_connection(Assistant::Opencode, connection2);
+        manager.add_connection(agent_opencode(), connection2);
 
         let agents = manager.connected_agents();
         assert_eq!(agents.len(), 2);
-        assert!(agents.contains(&Assistant::Copilot));
-        assert!(agents.contains(&Assistant::Opencode));
+        assert!(agents.contains(&Assistant::from("copilot")));
+        assert!(agents.contains(&Assistant::from("opencode")));
     }
 
     #[test]
     fn disconnect_returns_error_when_connection_missing() {
         let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
 
-        let result = manager.disconnect(vec![Assistant::Copilot]);
+        let result = manager.disconnect(vec![agent_copilot()]);
 
         assert_eq!(
             result.unwrap_err().to_string(),
@@ -882,10 +894,10 @@ mod tests {
         let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
         let (sender, _) = async_channel::unbounded();
         let handle = std::thread::spawn(|| Ok(()));
-        manager.add_connection(Assistant::Copilot, mock_connection(sender, handle));
+        manager.add_connection(agent_copilot(), mock_connection(sender, handle));
 
         manager
-            .disconnect(vec![Assistant::Copilot])
+            .disconnect(vec![agent_copilot()])
             .expect("disconnect should succeed");
 
         assert!(manager.connected_agents().is_empty());
@@ -893,17 +905,38 @@ mod tests {
 
     #[test]
     fn test_assistant_from_str_copilot_lowercase() {
-        assert_eq!(Assistant::from("copilot"), Assistant::Copilot);
+        assert_eq!(
+            Assistant::from("copilot"),
+            Assistant::CustomStdio {
+                name: "copilot".to_string(),
+                command: String::new(),
+                args: Vec::new(),
+            }
+        );
     }
 
     #[test]
     fn test_assistant_from_str_opencode_lowercase() {
-        assert_eq!(Assistant::from("opencode"), Assistant::Opencode);
+        assert_eq!(
+            Assistant::from("opencode"),
+            Assistant::CustomStdio {
+                name: "opencode".to_string(),
+                command: String::new(),
+                args: Vec::new(),
+            }
+        );
     }
 
     #[test]
     fn test_assistant_from_str_copilot_uppercase() {
-        assert_eq!(Assistant::from("COPILOT"), Assistant::Copilot);
+        assert_eq!(
+            Assistant::from("COPILOT"),
+            Assistant::CustomStdio {
+                name: "COPILOT".to_string(),
+                command: String::new(),
+                args: Vec::new(),
+            }
+        );
     }
 
     #[test]
@@ -940,7 +973,11 @@ mod tests {
 
     #[test]
     fn test_assistant_gemini_display() {
-        let assistant = Assistant::Gemini;
+        let assistant = Assistant::CustomStdio {
+            name: String::from("gemini"),
+            command: String::from("gemini"),
+            args: vec![String::from("--acp")],
+        };
         assert_eq!(format!("{}", assistant), "gemini");
     }
 
@@ -1029,7 +1066,7 @@ mod tests {
     #[test]
     fn test_assistant_from_string() {
         let result = Assistant::from(String::from("opencode"));
-        assert!(matches!(result, Assistant::Opencode));
+        assert!(matches!(result, Assistant::CustomStdio { name, .. } if name == "opencode"));
     }
 
     #[test]
@@ -1090,13 +1127,6 @@ mod tests {
             registry: None,
         };
         assert_eq!(assistant.base_command(), None);
-    }
-
-    #[test]
-    fn base_command_builtin_agents_return_none() {
-        let agents = vec![Assistant::Opencode, Assistant::Copilot];
-        let results: Vec<Option<String>> = agents.iter().map(|a| a.base_command()).collect();
-        assert_eq!(results, vec![None, None]);
     }
 
     #[test]

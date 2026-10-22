@@ -142,23 +142,12 @@ mod tests {
     fn arb_logout_args() -> impl Strategy<Value = LogoutArgs> {
         prop_oneof!(
             Just(LogoutArgs::All),
-            arb_assistant_name().prop_map(|name| {
-                match Assistant::from(name.as_str()) {
-                    Assistant::Copilot | Assistant::Opencode => {
-                        LogoutArgs::Single(Assistant::from(name.as_str()))
-                    }
-                    _ => LogoutArgs::All,
-                }
-            }),
+            arb_assistant_name()
+                .prop_map(|name| { LogoutArgs::Single(Assistant::from(name.as_str())) }),
             prop::collection::vec(arb_assistant_name(), 0..5).prop_map(|names| {
                 let assistants: Vec<Assistant> = names
                     .into_iter()
-                    .filter_map(|name| match Assistant::from(name.as_str()) {
-                        Assistant::Copilot | Assistant::Opencode => {
-                            Some(Assistant::from(name.as_str()))
-                        }
-                        _ => None,
-                    })
+                    .map(|name| Assistant::from(name.as_str()))
                     .collect();
                 if assistants.is_empty() {
                     LogoutArgs::All
@@ -184,7 +173,7 @@ mod tests {
                 }
                 LogoutArgs::Single(ref assistant) => {
                     prop_assert!(
-                        matches!(assistant, Assistant::Copilot | Assistant::Opencode | Assistant::CustomStdio { .. }),
+                        matches!(assistant, Assistant::CustomStdio { .. }),
                         "Single variant should contain valid assistant"
                     );
                 }
@@ -195,7 +184,7 @@ mod tests {
                     );
                     for assistant in assistants {
                         prop_assert!(
-                            matches!(assistant, Assistant::Copilot | Assistant::Opencode | Assistant::CustomStdio { .. }),
+                            matches!(assistant, Assistant::CustomStdio { .. }),
                             "Each assistant in Multiple should be valid"
                         );
                     }

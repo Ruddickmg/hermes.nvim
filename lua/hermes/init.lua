@@ -104,7 +104,6 @@
 ---@field port? number Port for socket/tcp/http connections
 ---@field url? string URL for http/sse connections
 ---@field distribution? "npx"|"uvx"|"binary" Preferred distribution type for registry agents (default: auto-select npx > uvx > binary)
----@field download? boolean Force (re)download of a registry agent distribution instead of using a configured command
 
 ---@class EnvVar
 ---Environment variable entry

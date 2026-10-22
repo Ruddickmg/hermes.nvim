@@ -24,7 +24,6 @@ pub struct ConnectionOptions {
     host: Option<String>,
     port: Option<u16>,
     path: Option<String>,
-    download: bool,
 }
 
 impl ConnectionOptions {
@@ -141,11 +140,6 @@ impl FromObject for ConnectionOptions {
                 .map(|s: nvim_oxi::String| s.to_string())
         });
 
-        let download: bool = dict
-            .get("download")
-            .and_then(|o| bool::from_object(o.clone()).ok())
-            .unwrap_or(false);
-
         Ok(Self {
             protocol,
             distribution,
@@ -154,7 +148,6 @@ impl FromObject for ConnectionOptions {
             host,
             port,
             path,
-            download,
         })
     }
 }
@@ -191,9 +184,6 @@ impl Pushable for ConnectionOptions {
         if let Some(path) = self.path {
             dict.insert("path", path);
         }
-        if self.download {
-            dict.insert("download", true);
-        }
         unsafe { Object::from(dict).push(lua_state) }
     }
 }
@@ -216,11 +206,12 @@ impl Api {
             .and_then(|r| r.data.get_entry(&agent_id).cloned());
 
         let (agent, protocol) = match custom.as_ref() {
-            Some(entry) if !opts.download => (
+            // A user-configured agent always wins over the registry.
+            Some(entry) => (
                 entry.connection.clone().with_name(&agent_id),
                 entry.protocol,
             ),
-            _ => match registry_entry {
+            None => match registry_entry {
                 Some(entry) => (
                     Assistant::Registered {
                         agent: entry,
@@ -280,32 +271,34 @@ mod tests {
             Just("COPILOT"),
             Just("OPENCODE")
         )) {
-            // Property: Known agents should parse to their respective variants
+            // Property: known names parse to a CustomStdio named after the input
             let assistant = Assistant::from(name);
-            let name_lower = name.to_lowercase();
-
-            if name_lower == "copilot" {
-                prop_assert!(matches!(assistant, Assistant::Copilot), "Expected Copilot variant");
-            } else if name_lower == "opencode" {
-                prop_assert!(matches!(assistant, Assistant::Opencode), "Expected Opencode variant");
-            }
+            prop_assert!(
+                matches!(&assistant, Assistant::CustomStdio { name: agent_name, .. } if agent_name == name),
+                "Expected CustomStdio named after the input"
+            );
         }
     }
 
     #[test]
     fn test_assistant_from_str_copilot() {
-        assert!(matches!(Assistant::from("copilot"), Assistant::Copilot));
+        assert!(
+            matches!(Assistant::from("copilot"), Assistant::CustomStdio { name, .. } if name == "copilot")
+        );
     }
 
     #[test]
     fn test_assistant_from_str_opencode() {
-        assert!(matches!(Assistant::from("opencode"), Assistant::Opencode));
+        assert!(
+            matches!(Assistant::from("opencode"), Assistant::CustomStdio { name, .. } if name == "opencode")
+        );
     }
 
     #[test]
     fn test_assistant_from_str_case_insensitive() {
-        assert!(matches!(Assistant::from("COPILOT"), Assistant::Copilot));
-        assert!(matches!(Assistant::from("OpEnCoDe"), Assistant::Opencode));
+        assert!(
+            matches!(Assistant::from("COPILOT"), Assistant::CustomStdio { name, .. } if name == "COPILOT")
+        );
     }
 
     #[test]
@@ -315,20 +308,6 @@ mod tests {
     }
 
     // Tests for ConnectionOptions into_assistant
-    #[test]
-    fn connection_options_into_assistant_copilot() {
-        let opts = ConnectionOptions::default();
-        let result = opts.into_assistant("copilot".to_string());
-        assert!(matches!(result.unwrap(), Assistant::Copilot));
-    }
-
-    #[test]
-    fn connection_options_into_assistant_opencode() {
-        let opts = ConnectionOptions::default();
-        let result = opts.into_assistant("opencode".to_string());
-        assert!(matches!(result.unwrap(), Assistant::Opencode));
-    }
-
     #[test]
     fn connection_options_into_assistant_custom_stdio() {
         let opts = ConnectionOptions {
@@ -458,7 +437,7 @@ mod tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("require options with a 'command' field")
+                .contains("A 'command' is required")
         );
     }
 
@@ -587,21 +566,6 @@ mod tests {
         let dict = Dictionary::new();
         let result = ConnectionOptions::from_object(Object::from(dict));
         assert_eq!(result.unwrap().protocol, Protocol::Stdio);
-    }
-
-    #[test]
-    fn connection_options_from_object_download_true() {
-        let mut dict = Dictionary::new();
-        dict.insert("download", true);
-        let result = ConnectionOptions::from_object(Object::from(dict));
-        assert!(result.unwrap().download);
-    }
-
-    #[test]
-    fn connection_options_from_object_download_defaults_false() {
-        let dict = Dictionary::new();
-        let result = ConnectionOptions::from_object(Object::from(dict));
-        assert!(!result.unwrap().download);
     }
 
     // Tests for Protocol parsing

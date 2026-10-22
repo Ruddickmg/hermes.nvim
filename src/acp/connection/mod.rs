@@ -377,7 +377,14 @@ mod tests {
 
         smol::block_on(executor.run(async {
             connection
-                .terminal_authentication(Assistant::Opencode, request)
+                .terminal_authentication(
+                    Assistant::CustomStdio {
+                        name: "opencode".to_string(),
+                        command: "opencode".to_string(),
+                        args: vec!["acp".to_string()],
+                    },
+                    request,
+                )
                 .await
                 .unwrap();
         }));

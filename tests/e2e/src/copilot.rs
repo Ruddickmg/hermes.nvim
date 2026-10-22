@@ -4,10 +4,10 @@ use crate::utilities::agent;
 
 #[nvim_oxi::test]
 fn test_copilot_prompt() {
-    agent::test_agent_prompt(Assistant::Copilot, None).unwrap();
+    agent::test_agent_prompt(Assistant::from("copilot"), None).unwrap();
 }
 
 #[nvim_oxi::test]
 fn test_copilot_session_creation() {
-    agent::test_session_creation(Assistant::Copilot, None).unwrap();
+    agent::test_session_creation(Assistant::from("copilot"), None).unwrap();
 }

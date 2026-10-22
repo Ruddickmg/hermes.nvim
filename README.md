@@ -282,11 +282,6 @@ hermes.connect("kilo", {
   distribution = "binary", -- "binary", "npx", and/or "uvx"
 })
 
--- force a fresh download instead of using a configured command
-hermes.connect("opencode", {
-  download = true, -- ignores `agents.opencode.command` and (re)installs the registry distribution
-})
-
 -- connect to custom agent (not pre-defined)
 hermes.connect(
   "my-claude", -- this will be the key you use for other methods (disconnect for example) 

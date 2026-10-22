@@ -975,7 +975,7 @@ mod tests {
             icon: None,
             protocol: crate::acp::connection::Protocol::Stdio,
             connection: Assistant::CustomStdio {
-                name: String::new(),
+                name: "my-agent".to_string(),
                 command: "my-agent".to_string(),
                 args: Vec::new(),
             },
@@ -991,7 +991,7 @@ mod tests {
             icon: None,
             protocol: crate::acp::connection::Protocol::Stdio,
             connection: Assistant::CustomStdio {
-                name: String::new(),
+                name: "My Agent".to_string(),
                 command: "my-agent".to_string(),
                 args: Vec::new(),
             },

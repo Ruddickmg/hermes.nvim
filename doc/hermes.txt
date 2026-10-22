@@ -186,14 +186,9 @@ Options: ~
     • host:         Host for tcp connections
     • port:         Port for tcp connections
     • distribution: Agent distribution to use ("binary", "npx", "uvx")
-    • download:     Force a fresh download of the registry distribution,
-                    ignoring any configured `agents` command (boolean)
 
 Example: >
     require("hermes").connect("opencode")
-
-    -- Force re-install from the registry
-    require("hermes").connect("opencode", { download = true })
 
     -- With custom configuration
     require("hermes").connect("my-agent", {
