@@ -6,9 +6,13 @@ use nvim_oxi::{
     lua,
 };
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
 use crate::{
-    acp::connection::{Assistant, Protocol},
+    acp::{
+        connection::{Assistant, Protocol},
+        utilities::command::command_available,
+    },
     api::AgentListEntry,
 };
 
@@ -22,6 +26,36 @@ pub struct AgentConnectionConfig {
     pub icon: Option<String>,
     pub protocol: Protocol,
     pub connection: Assistant,
+}
+
+impl AgentConnectionConfig {
+    #[instrument(level = "trace", skip(self))]
+    pub async fn is_valid(&self) -> bool {
+        let protocol = self.protocol.clone();
+        match self.connection.clone() {
+            Assistant::Registered { command, .. } => {
+                if let Some(cmd) = command {
+                    command_available(cmd.as_str()).await
+                } else {
+                    false
+                }
+            }
+            Assistant::CustomStdio { command, .. } => command_available(&command).await,
+            Assistant::CustomUrl { .. } => {
+                // TODO: ping url to check if it is valid
+                match protocol {
+                    Protocol::Http => true,
+                    Protocol::Https => true,
+                    Protocol::Tcp => true,
+                    _ => false,
+                }
+            }
+            Assistant::CustomSocket { .. } => {
+                // TODO: check file path for existing socket
+                true
+            }
+        }
+    }
 }
 
 impl FromObject for AgentConnectionConfig {
@@ -406,16 +440,16 @@ mod tests {
     }
 
     #[test]
-    fn custom_agents_config_empty_dict_is_empty() {
+    fn custom_agents_config_empty_dict_yields_defaults() {
         let config =
             CustomAgentsConfig::from_object(Object::from(Dictionary::new())).expect("parses");
-        assert!(config.is_empty());
+        assert_eq!(config.0.len(), CustomAgentsConfig::default().0.len());
     }
 
     #[test]
-    fn custom_agents_config_empty_array_is_empty() {
+    fn custom_agents_config_empty_array_yields_defaults() {
         let config = CustomAgentsConfig::from_object(Object::from(Array::new())).expect("parses");
-        assert!(config.is_empty());
+        assert_eq!(config.0.len(), CustomAgentsConfig::default().0.len());
     }
 
     #[test]

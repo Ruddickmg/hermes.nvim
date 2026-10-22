@@ -206,12 +206,11 @@ impl Api {
             .and_then(|r| r.data.get_entry(&agent_id).cloned());
 
         let (agent, protocol) = match custom.as_ref() {
-            // A user-configured agent always wins over the registry.
-            Some(entry) => (
+            Some(entry) if entry.is_valid().await => (
                 entry.connection.clone().with_name(&agent_id),
                 entry.protocol,
             ),
-            None => match registry_entry {
+            _ => match registry_entry {
                 Some(entry) => (
                     Assistant::Registered {
                         agent: entry,
