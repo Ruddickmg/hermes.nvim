@@ -26,6 +26,45 @@ pub struct ConnectionOptions {
     path: Option<String>,
 }
 
+impl From<Assistant> for ConnectionOptions {
+    fn from(value: Assistant) -> Self {
+        match value {
+            Assistant::Registered {
+                distribution,
+                command,
+                args,
+                ..
+            } => Self {
+                protocol: Protocol::Stdio,
+                distribution,
+                command,
+                args,
+                ..Default::default()
+            },
+            Assistant::CustomStdio { command, args, .. } => Self {
+                protocol: Protocol::Stdio,
+                command: Some(command),
+                args: Some(args),
+                ..Default::default()
+            },
+            Assistant::CustomSocket { path, .. } => Self {
+                protocol: Protocol::Socket,
+                path: Some(path),
+                ..Default::default()
+            },
+            Assistant::CustomUrl {
+                host, port, path, ..
+            } => Self {
+                protocol: Protocol::Tcp,
+                host: Some(host),
+                port: Some(port),
+                path,
+                ..Default::default()
+            },
+        }
+    }
+}
+
 impl ConnectionOptions {
     fn into_assistant(self, name: String) -> Result<Assistant> {
         match self.protocol {
