@@ -216,19 +216,12 @@ hermes.setup({
     cmdline = false, -- Show progress messages in cmdline (0.12+ only)
     update_frequency = 150 -- how often to poll the download for progress in milliseconds
   },
-  agents = {
-    -- User-defined agent connections, keyed by agent id.
-    -- If the id matches a registry agent, only the connection fields are used
-    -- and the registry metadata (name, icon, description) is kept. Otherwise a
-    -- brand new agent is created (default icon: question mark).
-    -- Required fields depend on `protocol` (default "stdio"):
-    --   stdio           -> command (+ optional args)
-    --   socket          -> path
-    --   tcp/http/https  -> host + port (+ optional path)
-    opencode = {
+  agents = { -- User-defined agent connections to add to the agents list, keyed by agent id.
+    opencode = { -- matching ids with an agent from the ACP registry will override the registered agent.
       command = "opencode", -- command to run for stdio connections
       args = { "acp" },     -- command arguments
       icon = "~/icons/opencode.svg", -- HTTP(S) URL or local path to an SVG icon (optional)
+      description = "Some custom description",
     },
   },
 })
