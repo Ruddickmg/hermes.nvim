@@ -979,6 +979,7 @@ mod tests {
                 command: "my-agent".to_string(),
                 args: Vec::new(),
             },
+            is_default: false,
         };
         let entry = AgentListEntry::from_custom("my-agent", &config);
         assert_eq!(entry.name, "my-agent");
@@ -995,6 +996,7 @@ mod tests {
                 command: "my-agent".to_string(),
                 args: Vec::new(),
             },
+            is_default: false,
         };
         let entry = AgentListEntry::from_custom("my-agent", &config);
         assert_eq!(entry.name, "My Agent");

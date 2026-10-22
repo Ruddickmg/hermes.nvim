@@ -206,7 +206,7 @@ impl Api {
             .and_then(|r| r.data.get_entry(&agent_id).cloned());
 
         let (agent, protocol) = match custom.as_ref() {
-            Some(entry) if entry.is_valid().await => (
+            Some(entry) if entry.is_valid().await? => (
                 entry.connection.clone().with_name(&agent_id),
                 entry.protocol,
             ),

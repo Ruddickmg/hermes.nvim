@@ -7,11 +7,13 @@ use nvim_oxi::{
     lua,
 };
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{instrument, warn};
 
 use crate::{
     acp::{
+        Result as AcpResult,
         connection::{Assistant, Protocol},
+        error::Error as AcpError,
         utilities::{command::command_available, network::probe_tcp},
     },
     api::AgentListEntry,
@@ -32,41 +34,82 @@ pub struct AgentConnectionConfig {
     pub icon: Option<String>,
     pub protocol: Protocol,
     pub connection: Assistant,
+    /// Whether this entry comes from the built-in defaults rather than user
+    /// configuration. Not user-facing; forced to `false` when parsed from Lua.
+    #[serde(skip)]
+    pub is_default: bool,
 }
 
 impl AgentConnectionConfig {
     #[instrument(level = "trace", skip(self))]
-    pub async fn is_valid(&self) -> bool {
-        match &self.connection {
-            Assistant::Registered { command, .. } => {
-                if let Some(cmd) = command {
-                    command_available(cmd.as_str()).await
+    pub async fn is_valid(&self) -> AcpResult<bool> {
+        let name = self.connection.name();
+        let result: Result<bool, String> = match &self.connection {
+            Assistant::Registered { command, .. } => match command {
+                Some(cmd) if command_available(cmd.as_str()).await => Ok(true),
+                Some(cmd) => Err(format!("command '{}' was not found locally", cmd)),
+                _ => Ok(true),
+            },
+            Assistant::CustomStdio { command, .. } => {
+                if command_available(command).await {
+                    Ok(true)
                 } else {
-                    false
+                    Err(format!("command '{}' was not found locally", command))
                 }
             }
-            Assistant::CustomStdio { command, .. } => command_available(command).await,
             Assistant::CustomUrl { host, port, .. } => match self.protocol {
                 Protocol::Http | Protocol::Https | Protocol::Tcp => {
-                    probe_tcp(host, *port, URL_PROBE_TIMEOUT).await
+                    if probe_tcp(host, *port, URL_PROBE_TIMEOUT).await {
+                        Ok(true)
+                    } else {
+                        Err(format!("could not reach {}:{}", host, port))
+                    }
                 }
-                _ => false,
+                other => Err(format!(
+                    "protocol '{}' is not valid for a url connection",
+                    other
+                )),
             },
-            Assistant::CustomSocket { path, .. } => socket_is_valid(path),
+            Assistant::CustomSocket { path, .. } => socket_is_valid(path)
+                .map(|_| true)
+                .map_err(|e| e.to_string()),
+        };
+
+        match result {
+            Err(error) => {
+                let message = format!("Couldn't connect to agent: \"{}\", {}", name, error);
+                if self.is_default {
+                    warn!("{}", message);
+                    Ok(false)
+                } else {
+                    Err(AcpError::InvalidInput(message))
+                }
+            }
+            Ok(r) => Ok(r),
         }
     }
 }
 
 #[cfg(unix)]
-fn socket_is_valid(path: &str) -> bool {
-    std::fs::metadata(path)
-        .map(|metadata| metadata.file_type().is_socket())
-        .unwrap_or(false)
+fn socket_is_valid(path: &str) -> AcpResult<()> {
+    match std::fs::metadata(path) {
+        Ok(metadata) if metadata.file_type().is_socket() => Ok(()),
+        Ok(_) => Err(AcpError::InvalidInput(format!(
+            "'{}' exists but is not a socket",
+            path
+        ))),
+        Err(e) => Err(AcpError::InvalidInput(format!(
+            "'{}' is not a valid socket: {}",
+            path, e
+        ))),
+    }
 }
 
 #[cfg(not(unix))]
-fn socket_is_valid(_path: &str) -> bool {
-    false
+fn socket_is_valid(_path: &str) -> AcpResult<()> {
+    Err(AcpError::InvalidInput(
+        "unix domain sockets are not supported on this platform".to_string(),
+    ))
 }
 
 impl FromObject for AgentConnectionConfig {
@@ -90,6 +133,7 @@ impl FromObject for AgentConnectionConfig {
             icon: optional_string(&dict, "icon"),
             protocol,
             connection,
+            is_default: false,
         })
     }
 }
@@ -170,6 +214,7 @@ impl From<Assistant> for AgentConnectionConfig {
                 Assistant::CustomSocket { .. } => Protocol::Socket,
             },
             connection: value,
+            is_default: false,
         }
     }
 }
@@ -213,7 +258,11 @@ impl Default for CustomAgentsConfig {
                 ),
             ]
             .into_iter()
-            .map(|(id, agent)| (id.to_string(), AgentConnectionConfig::from(agent)))
+            .map(|(id, agent)| {
+                let mut config = AgentConnectionConfig::from(agent);
+                config.is_default = true;
+                (id.to_string(), config)
+            })
             .collect::<HashMap<String, AgentConnectionConfig>>(),
         )
     }
@@ -268,6 +317,7 @@ mod tests {
                 command: "my-agent".to_string(),
                 args: vec!["acp".to_string()],
             },
+            is_default: false,
         }
     }
 
@@ -282,6 +332,7 @@ mod tests {
                 port,
                 path: None,
             },
+            is_default: false,
         }
     }
 
@@ -294,6 +345,7 @@ mod tests {
                 name: String::new(),
                 path: path.to_string(),
             },
+            is_default: false,
         }
     }
 
@@ -305,7 +357,7 @@ mod tests {
 
         let result = futures_lite::future::block_on(config.is_valid());
 
-        assert!(result);
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -314,7 +366,7 @@ mod tests {
 
         let result = futures_lite::future::block_on(config.is_valid());
 
-        assert!(!result);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -323,7 +375,7 @@ mod tests {
 
         let result = futures_lite::future::block_on(config.is_valid());
 
-        assert!(!result);
+        assert!(result.is_err());
     }
 
     #[cfg(unix)]
@@ -338,7 +390,7 @@ mod tests {
         let result = futures_lite::future::block_on(config.is_valid());
 
         let _ = std::fs::remove_dir_all(&dir);
-        assert!(result);
+        assert!(result.is_ok());
     }
 
     #[cfg(unix)]
@@ -353,7 +405,7 @@ mod tests {
         let result = futures_lite::future::block_on(config.is_valid());
 
         let _ = std::fs::remove_dir_all(&dir);
-        assert!(!result);
+        assert!(result.is_err());
     }
 
     #[cfg(unix)]
@@ -363,7 +415,7 @@ mod tests {
 
         let result = futures_lite::future::block_on(config.is_valid());
 
-        assert!(!result);
+        assert!(result.is_err());
     }
 
     #[cfg(not(unix))]
@@ -373,7 +425,7 @@ mod tests {
 
         let result = futures_lite::future::block_on(config.is_valid());
 
-        assert!(!result);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -518,6 +570,7 @@ mod tests {
                 port: 443,
                 path: Some("/acp".to_string()),
             },
+            is_default: false,
         };
 
         let reparsed =
@@ -552,6 +605,7 @@ mod tests {
                 command: command.to_string(),
                 args: Vec::new(),
             },
+            is_default: false,
         }
     }
 
