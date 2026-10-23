@@ -15,7 +15,7 @@ executors:
   mac-aarch64:
     resource_class: m4pro.medium
     macos:
-      xcode: 27.2.0
+      xcode: 27.0.0
   rust-linux-x86_64:
     docker:
       - image: cimg/rust:1.99.1
