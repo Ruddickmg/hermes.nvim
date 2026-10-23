@@ -116,7 +116,7 @@ impl AgentListEntry {
 }
 
 impl Api {
-    // #[tracing::instrument(level = "trace", skip(self))]
+    #[tracing::instrument(level = "trace", skip(self))]
     pub async fn agents(&self, maybe_config: Option<AgentsConfig>) -> crate::acp::Result<()> {
         let config = maybe_config.unwrap_or_default();
         let url = config.url.as_deref().unwrap_or(DEFAULT_REGISTRY_URL);
