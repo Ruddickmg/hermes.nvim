@@ -14,11 +14,11 @@ use agent_client_protocol::{
         CloseSessionRequest, CloseSessionResponse, ContentBlock, ContentChunk,
         DeleteSessionRequest, DeleteSessionResponse, InitializeRequest, InitializeResponse,
         ListSessionsRequest, ListSessionsResponse, LoadSessionRequest, LoadSessionResponse,
-        LogoutRequest, LogoutResponse, NewSessionRequest, NewSessionResponse, Notice,
-        PromptRequest, PromptResponse, ResumeSessionRequest, ResumeSessionResponse,
-        SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
-        SetSessionConfigOptionResponse, SetSessionModeRequest, SetSessionModeResponse, StopReason,
-        TerminalOutputRequest, TextContent, WaitForTerminalExitRequest,
+        LogoutRequest, LogoutResponse, NewSessionRequest, NewSessionResponse, PromptRequest,
+        PromptResponse, ResumeSessionRequest, ResumeSessionResponse, SessionNotification,
+        SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
+        SetSessionModeRequest, SetSessionModeResponse, StopReason, TerminalOutputRequest,
+        TextContent, WaitForTerminalExitRequest,
     },
 };
 use async_channel::bounded;

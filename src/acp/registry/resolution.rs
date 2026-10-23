@@ -29,13 +29,13 @@ pub async fn fetch_agent_from_registry(
 ) -> Result<Assistant> {
     let agent_id = &entry.id;
 
-    if let Some(pref) = preference {
-        if !pref.is_enabled(distributions_config) {
-            return Err(Error::InvalidInput(format!(
-                "Cannot install distribution: '{}' is disabled",
-                pref
-            )));
-        }
+    if let Some(pref) = preference
+        && !pref.is_enabled(distributions_config)
+    {
+        return Err(Error::InvalidInput(format!(
+            "Cannot install distribution: '{}' is disabled",
+            pref
+        )));
     }
 
     let mut considered_distributions: Vec<Distribution> = preference

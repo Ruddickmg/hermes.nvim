@@ -218,7 +218,12 @@ mod tests {
     #[test]
     fn set_agent_changes_current_agent() {
         let mut state = PluginState::default();
-        state.set_agent(Assistant::Opencode);
-        assert_eq!(state.agent_info.current, Assistant::Opencode);
+        let agent = Assistant::CustomStdio {
+            name: "opencode".to_string(),
+            command: "opencode".to_string(),
+            args: vec!["acp".to_string()],
+        };
+        state.set_agent(agent.clone());
+        assert_eq!(state.agent_info.current, agent);
     }
 }

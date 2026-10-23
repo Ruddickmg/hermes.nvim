@@ -1,3 +1,4 @@
+mod agents;
 mod buffer;
 mod distribution;
 mod elicitation;
@@ -9,6 +10,7 @@ mod terminal;
 
 use std::path::PathBuf;
 
+pub use agents::{AgentConnectionConfig, CustomAgentsConfig};
 pub use buffer::{BufferConfig, BufferConfigPartial};
 pub use distribution::{
     BinaryConfig, BinaryConfigPartial, DistributionsConfig, DistributionsConfigPartial,
@@ -63,6 +65,7 @@ pub struct ClientConfig {
     pub session: SessionConfig,
     pub distributions: DistributionsConfig,
     pub progress: ProgressConfig,
+    pub agents: CustomAgentsConfig,
     pub root_markers: Vec<String>,
     pub project_root: PathBuf,
 }
@@ -85,6 +88,7 @@ pub struct ClientConfigPartial {
     pub session: Option<SessionConfigPartial>,
     pub distributions: Option<DistributionsConfigPartial>,
     pub progress: Option<ProgressConfigPartial>,
+    pub agents: Option<CustomAgentsConfig>,
     pub root_markers: Option<Vec<String>>,
 }
 
@@ -99,6 +103,7 @@ impl Default for ClientConfig {
             session: Default::default(),
             distributions: Default::default(),
             progress: Default::default(),
+            agents: Default::default(),
             project_root: default_project_root(root_markers.clone()),
             root_markers,
         }
@@ -128,6 +133,9 @@ impl ClientConfigPartial {
         }
         if let Some(progress) = self.progress {
             progress.apply_to(&mut config.progress);
+        }
+        if let Some(agents) = self.agents {
+            agents.apply_to(&mut config.agents);
         }
         if let Some(root_markers) = self.root_markers {
             config.project_root = default_project_root(root_markers.clone());
@@ -180,6 +188,11 @@ impl FromObject for ClientConfigPartial {
             .map(|o| Vec::<String>::from_object(o.clone()))
             .transpose()?;
 
+        let agents = dict
+            .get("agents")
+            .map(|o| CustomAgentsConfig::from_object(o.clone()))
+            .transpose()?;
+
         Ok(Self {
             permissions,
             root_markers,
@@ -189,6 +202,7 @@ impl FromObject for ClientConfigPartial {
             session,
             distributions,
             progress,
+            agents,
         })
     }
 }
@@ -346,6 +360,10 @@ impl nvim_oxi::lua::Pushable for ClientConfigPartial {
             dict.insert("progress", progress_dict);
         }
 
+        if let Some(agents) = self.agents {
+            dict.insert("agents", Dictionary::from(agents));
+        }
+
         unsafe { dict.push(lua_state) }
     }
 }
@@ -365,6 +383,7 @@ mod tests {
             session: Default::default(),
             distributions: Default::default(),
             progress: Default::default(),
+            agents: Default::default(),
             permissions: Some(PermissionsPartial {
                 fs_write_access: Some(false),
                 ..Default::default()
@@ -406,6 +425,7 @@ mod tests {
             session: SessionConfig::default(),
             distributions: Default::default(),
             progress: Default::default(),
+            agents: Default::default(),
             permissions: Permissions {
                 fs_write_access: false,
                 fs_read_access: false,

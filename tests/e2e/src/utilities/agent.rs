@@ -6,7 +6,8 @@ use agent_client_protocol::schema::v1::{
 use hermes::{
     acp::connection::Assistant,
     api::{
-        ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent, SetupArgs,
+        ConnectionArgs, ConnectionOptions, CreateSessionArgs, DisconnectArgs, PromptArgs,
+        PromptContent, SetupArgs,
     },
     nvim::{autocommands::Commands, configuration::ClientConfigPartial, hermes},
 };
@@ -43,7 +44,10 @@ pub fn test_agent_prompt(
         autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
     let wait_for_prompt = autocommand::listen_for_autocommand::<PromptResponse>(Commands::Prompted);
 
-    connect.call((agent.to_string().into(), None))?;
+    connect.call((
+        agent.to_string().into(),
+        Some(ConnectionOptions::from(agent)),
+    ))?;
 
     wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
@@ -96,7 +100,10 @@ pub fn test_session_creation(
     let wait_for_session =
         autocommand::listen_for_autocommand::<NewSessionResponse>(Commands::SessionCreated);
 
-    connect.call((agent.to_string().into(), None))?;
+    connect.call((
+        agent.to_string().into(),
+        Some(ConnectionOptions::from(agent)),
+    ))?;
 
     wait_for_initialization(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
@@ -125,7 +132,7 @@ pub fn test_session_creation(
 //     let wait_for_authentication =
 //         autocommand::listen_for_autocommand::<AuthenticateResponse>(Commands::Authenticated);
 //
-//     connect.call((agent.to_string().into(), None))?;
+//     connect.call((agent.to_string().into(), Some(ConnectionOptions::from(agent))))?;
 //
 //     let mut init_response = wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 //     let auth_method = init_response.auth_methods.pop().unwrap();

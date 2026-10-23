@@ -231,11 +231,15 @@ function M.is_luarocks_install()
 end
 
 -- luacov: disable
----Check if the plugin is installed via Nix
----Detects Nix install by checking if the module source path contains "/nix/store/"
----@return boolean true if installed via Nix
+---Check if the plugin is running in a Nix environment
+---Detects NixOS or a Nix install via the module source path
+---@return boolean true if in a Nix environment
 -- luacov: enable
 function M.is_nix_install()
+  local uv = vim.uv or vim.loop
+  if uv.fs_stat("/etc/NIXOS") ~= nil then
+    return true
+  end
   local info = debug.getinfo(1)
   if not info or type(info.source) ~= "string" then
     return false

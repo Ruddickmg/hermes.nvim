@@ -161,11 +161,11 @@ hermes.setup({
     },
   },
   distributions = { -- path to distributions
-    uvx = true, -- allows installing agents via UVX
-    npx = true, -- allows installing agents via NPX
+    uvx = true, -- allows installing agents via UVX (default: true, false in Nix environments)
+    npx = true, -- allows installing agents via NPX (default: true, false in Nix environments)
     binary = { -- configuration for binary behavior
       path = vim.fn.stdpath('state') .. "/nvim/hermes/binaries", -- path where binaries will be downloaded to
-      enabled = true, -- allows installing agents via binary
+      enabled = true, -- allows installing agents via binary (default: true, false in Nix environments)
     },
   },
   terminal = {
@@ -215,6 +215,14 @@ hermes.setup({
   progress = {
     cmdline = false, -- Show progress messages in cmdline (0.12+ only)
     update_frequency = 150 -- how often to poll the download for progress in milliseconds
+  },
+  agents = { -- User-defined agent connections to add to the agents list, keyed by agent id.
+    opencode = { -- matching ids with an agent from the ACP registry will override the registered agent.
+      command = "opencode", -- command to run for stdio connections
+      args = { "acp" },     -- command arguments
+      icon = "~/icons/opencode.svg", -- HTTP(S) URL or local path to an SVG icon (optional)
+      description = "Some custom description",
+    },
   },
 })
 ```
@@ -1480,6 +1488,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
       "website": "url string",
       "repository": "url string",
       "icon": "url string",
+      "icon_pixel_data": { "width": 16, "height": 16, "pixels": [0] },
       "distributions": ["binary", "npx", "uvx"]
     }
   ]

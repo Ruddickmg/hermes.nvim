@@ -1,5 +1,6 @@
 pub const TIMEOUT_IN_SECONDS: u64 = 30; // seconds
 
+pub mod agents;
 pub mod authenticate;
 pub mod cancellation;
 pub mod compaction;

@@ -66,7 +66,7 @@ fn authenticate_returns_invalid_input_when_auth_method_unknown() -> nvim_oxi::Re
 
     assert_eq!(
         result.unwrap_err().to_string(),
-        "Invalid input provided: No auth method with id: \"missing-id\" found for agent: copilot"
+        "Invalid input provided: No auth method with id: \"missing-id\" found for agent: opencode"
     );
     Ok(())
 }
@@ -74,7 +74,7 @@ fn authenticate_returns_invalid_input_when_auth_method_unknown() -> nvim_oxi::Re
 /// Test: `authenticate` reports a connection error when a known method has no live connection.
 #[nvim_oxi::test]
 fn authenticate_returns_connection_error_when_no_connection() -> nvim_oxi::Result<()> {
-    let api = create_test_api(state_with_terminal_method(Assistant::Opencode));
+    let api = create_test_api(state_with_terminal_method(Assistant::from("opencode")));
 
     let result = block_on(api.authenticate("tui-auth".to_string()));
 

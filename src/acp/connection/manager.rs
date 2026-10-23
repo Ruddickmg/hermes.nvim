@@ -61,12 +61,8 @@ impl From<String> for Protocol {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
+#[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug)]
 pub enum Assistant {
-    #[default]
-    Copilot,
-    Opencode,
-    Gemini,
     Registered {
         agent: AgentEntry,
         distribution: Option<Distribution>,
@@ -93,12 +89,19 @@ pub enum Assistant {
     },
 }
 
+impl Default for Assistant {
+    fn default() -> Self {
+        Self::CustomStdio {
+            name: "opencode".into(),
+            command: "opencode".into(),
+            args: vec!["acp".into()],
+        }
+    }
+}
+
 impl std::fmt::Display for Assistant {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Assistant::Copilot => write!(f, "copilot"),
-            Assistant::Opencode => write!(f, "opencode"),
-            Assistant::Gemini => write!(f, "gemini"),
             Assistant::CustomStdio { name, .. } => write!(f, "{}", name),
             Assistant::CustomUrl {
                 name,
@@ -134,9 +137,6 @@ impl Assistant {
         let owned_command;
         let owned_args;
         let (program, args) = match self {
-            Assistant::Copilot => ("copilot", vec!["--acp"]),
-            Assistant::Opencode => ("opencode", vec!["acp"]),
-            Assistant::Gemini => ("gemini", vec!["--acp"]),
             Assistant::Registered {
                 agent,
                 distribution,
@@ -145,28 +145,35 @@ impl Assistant {
                 args,
                 registry,
             } => {
-                let registry = registry.as_ref().ok_or_else(|| {
-                    Error::Internal(
-                        "Agent registry not available for registered assistant".to_string(),
+                if let (Some(command), Some(args)) = (command.as_ref(), args.as_ref()) {
+                    (
+                        command.as_str(),
+                        args.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
                     )
-                })?;
-                let Assistant::CustomStdio {
-                    command: registry_command,
-                    args: registry_args,
-                    ..
-                } = fetch_agent_from_registry(agent, *distribution, configuration, registry)
-                    .await?
-                else {
-                    return Err(Error::Internal(
-                        "agent registry should only return CustomStdio".to_string(),
-                    ));
-                };
-                owned_command = command.clone().unwrap_or(registry_command);
-                owned_args = args.clone().unwrap_or(registry_args);
-                (
-                    owned_command.as_str(),
-                    owned_args.iter().map(|s| s.as_str()).collect(),
-                )
+                } else {
+                    let registry = registry.as_ref().ok_or_else(|| {
+                        Error::Internal(
+                            "Agent registry not available for registered assistant".to_string(),
+                        )
+                    })?;
+                    let Assistant::CustomStdio {
+                        command: registry_command,
+                        args: registry_args,
+                        ..
+                    } = fetch_agent_from_registry(agent, *distribution, configuration, registry)
+                        .await?
+                    else {
+                        return Err(Error::Internal(
+                            "agent registry should only return CustomStdio".to_string(),
+                        ));
+                    };
+                    owned_command = command.clone().unwrap_or(registry_command);
+                    owned_args = args.clone().unwrap_or(registry_args);
+                    (
+                        owned_command.as_str(),
+                        owned_args.iter().map(|s| s.as_str()).collect(),
+                    )
+                }
             }
             Assistant::CustomStdio { command, args, .. } => {
                 (command.as_str(), args.iter().map(|s| s.as_str()).collect())
@@ -193,7 +200,7 @@ impl Assistant {
             Assistant::CustomStdio { name, .. } => name.clone(),
             Assistant::CustomUrl { name, .. } => name.clone(),
             Assistant::CustomSocket { name, .. } => name.clone(),
-            assistant => assistant.to_string(),
+            Assistant::Registered { agent, .. } => agent.name.clone(),
         }
     }
 
@@ -205,18 +212,38 @@ impl Assistant {
             _ => None,
         }
     }
+
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_name(self, name: &str) -> Self {
+        match self {
+            Assistant::CustomStdio { command, args, .. } => Assistant::CustomStdio {
+                name: name.to_string(),
+                command,
+                args,
+            },
+            Assistant::CustomUrl {
+                host, port, path, ..
+            } => Assistant::CustomUrl {
+                name: name.to_string(),
+                host,
+                port,
+                path,
+            },
+            Assistant::CustomSocket { path, .. } => Assistant::CustomSocket {
+                name: name.to_string(),
+                path,
+            },
+            other => other,
+        }
+    }
 }
 
 impl From<&str> for Assistant {
     fn from(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
-            "copilot" => Assistant::Copilot,
-            "opencode" => Assistant::Opencode,
-            _ => Assistant::CustomStdio {
-                name: s.to_string(),
-                command: String::new(),
-                args: Vec::new(),
-            },
+        Assistant::CustomStdio {
+            name: s.to_string(),
+            command: String::new(),
+            args: Vec::new(),
         }
     }
 }
@@ -224,6 +251,127 @@ impl From<&str> for Assistant {
 impl From<String> for Assistant {
     fn from(s: String) -> Self {
         Assistant::from(s.as_str())
+    }
+}
+
+fn optional_string(dict: &nvim_oxi::Dictionary, key: &str) -> Option<String> {
+    dict.get(key)
+        .and_then(|obj| obj.clone().try_into().ok())
+        .map(|value: nvim_oxi::String| value.to_string())
+}
+
+fn args_from_dict(dict: &nvim_oxi::Dictionary) -> Option<Vec<String>> {
+    dict.get("args").and_then(|obj| {
+        if obj.kind() == nvim_oxi::ObjectKind::Array {
+            let array =
+                <nvim_oxi::Array as nvim_oxi::conversion::FromObject>::from_object(obj.clone())
+                    .ok()?;
+            Some(
+                array
+                    .into_iter()
+                    .filter_map(|item| item.try_into().ok())
+                    .map(|item: nvim_oxi::String| item.to_string())
+                    .collect(),
+            )
+        } else {
+            None
+        }
+    })
+}
+
+impl nvim_oxi::conversion::FromObject for Assistant {
+    fn from_object(obj: nvim_oxi::Object) -> Result<Self, nvim_oxi::conversion::Error> {
+        let dict = crate::nvim::configuration::dict_from_object(obj)?;
+
+        let protocol = dict
+            .get("protocol")
+            .and_then(|obj| {
+                obj.clone()
+                    .try_into()
+                    .ok()
+                    .map(|value: nvim_oxi::String| Protocol::from(value.to_string()))
+            })
+            .unwrap_or_default();
+
+        let name = optional_string(&dict, "name").unwrap_or_default();
+
+        match protocol {
+            Protocol::Stdio => match optional_string(&dict, "command") {
+                Some(command) if !command.is_empty() => Ok(Assistant::CustomStdio {
+                    name,
+                    command,
+                    args: args_from_dict(&dict).unwrap_or_default(),
+                }),
+                _ => Err(nvim_oxi::conversion::Error::Other(
+                    "Command cannot be empty for stdio connections".to_string(),
+                )),
+            },
+            Protocol::Socket => match optional_string(&dict, "path") {
+                Some(path) => Ok(Assistant::CustomSocket { name, path }),
+                None => Err(nvim_oxi::conversion::Error::Other(
+                    "A 'path' is required for socket connections".to_string(),
+                )),
+            },
+            Protocol::Tcp | Protocol::Http | Protocol::Https => {
+                let host = optional_string(&dict, "host");
+                let port = dict.get("port").and_then(|obj| obj.clone().try_into().ok());
+                match (host, port) {
+                    (Some(host), Some(port)) => Ok(Assistant::CustomUrl {
+                        name,
+                        host,
+                        port,
+                        path: optional_string(&dict, "path"),
+                    }),
+                    _ => Err(nvim_oxi::conversion::Error::Other(format!(
+                        "'host' and 'port' are required for {} connections",
+                        protocol
+                    ))),
+                }
+            }
+        }
+    }
+}
+
+impl Assistant {
+    pub fn to_connection_dict(&self, protocol: Protocol) -> nvim_oxi::Dictionary {
+        let mut dict = nvim_oxi::Dictionary::new();
+        dict.insert("protocol", protocol.to_string());
+        match self {
+            Assistant::CustomStdio {
+                name,
+                command,
+                args,
+            } => {
+                insert_name(&mut dict, name);
+                dict.insert("command", command.clone());
+                dict.insert("args", nvim_oxi::Array::from_iter(args.clone()));
+            }
+            Assistant::CustomSocket { name, path } => {
+                insert_name(&mut dict, name);
+                dict.insert("path", path.clone());
+            }
+            Assistant::CustomUrl {
+                name,
+                host,
+                port,
+                path,
+            } => {
+                insert_name(&mut dict, name);
+                dict.insert("host", host.clone());
+                dict.insert("port", *port as i64);
+                if let Some(path) = path {
+                    dict.insert("path", path.clone());
+                }
+            }
+            _ => {}
+        }
+        dict
+    }
+}
+
+fn insert_name(dict: &mut nvim_oxi::Dictionary, name: &str) {
+    if !name.is_empty() {
+        dict.insert("name", name.to_string());
     }
 }
 
@@ -491,8 +639,25 @@ impl Drop for ConnectionManager {
 mod tests {
     use super::*;
     use crate::acp::registry::{DistributionCommand, PackageDistribution};
+    use nvim_oxi::conversion::FromObject;
     use pretty_assertions::assert_eq;
     use proptest::prelude::*;
+
+    fn agent_opencode() -> Assistant {
+        Assistant::CustomStdio {
+            name: "opencode".to_string(),
+            command: "opencode".to_string(),
+            args: vec!["acp".to_string()],
+        }
+    }
+
+    fn agent_copilot() -> Assistant {
+        Assistant::CustomStdio {
+            name: "copilot".to_string(),
+            command: "copilot".to_string(),
+            args: vec!["--acp".to_string()],
+        }
+    }
 
     /// A `Connection` with no live `Handler` behind it; enough for exercising
     /// `ConnectionManager` bookkeeping, which never touches `Connection::details()`.
@@ -515,6 +680,100 @@ mod tests {
             // Property: converting string to Protocol should never panic
             let _ = Protocol::from(name.as_str());
         }
+    }
+
+    #[test]
+    fn assistant_from_object_parses_stdio() {
+        let mut dict = nvim_oxi::Dictionary::new();
+        dict.insert("command", "my-agent");
+        dict.insert("name", "My Agent");
+
+        let assistant = Assistant::from_object(nvim_oxi::Object::from(dict)).expect("parses");
+
+        assert_eq!(
+            assistant,
+            Assistant::CustomStdio {
+                name: "My Agent".to_string(),
+                command: "my-agent".to_string(),
+                args: Vec::new(),
+            }
+        );
+    }
+
+    #[test]
+    fn assistant_from_object_parses_socket() {
+        let mut dict = nvim_oxi::Dictionary::new();
+        dict.insert("protocol", "socket");
+        dict.insert("path", "/tmp/agent.sock");
+
+        let assistant = Assistant::from_object(nvim_oxi::Object::from(dict)).expect("parses");
+
+        assert_eq!(
+            assistant,
+            Assistant::CustomSocket {
+                name: String::new(),
+                path: "/tmp/agent.sock".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn assistant_from_object_parses_url() {
+        let mut dict = nvim_oxi::Dictionary::new();
+        dict.insert("protocol", "tcp");
+        dict.insert("host", "localhost");
+        dict.insert("port", 8080i64);
+
+        let assistant = Assistant::from_object(nvim_oxi::Object::from(dict)).expect("parses");
+
+        assert_eq!(
+            assistant,
+            Assistant::CustomUrl {
+                name: String::new(),
+                host: "localhost".to_string(),
+                port: 8080,
+                path: None,
+            }
+        );
+    }
+
+    #[test]
+    fn assistant_from_object_stdio_without_command_is_error() {
+        let dict = nvim_oxi::Dictionary::new();
+
+        let result = Assistant::from_object(nvim_oxi::Object::from(dict));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn assistant_to_connection_dict_uses_passed_protocol() {
+        let assistant = Assistant::CustomUrl {
+            name: "remote".to_string(),
+            host: "example.com".to_string(),
+            port: 443,
+            path: None,
+        };
+
+        let dict = assistant.to_connection_dict(Protocol::Https);
+
+        assert_eq!(
+            dict.get("protocol").and_then(|o| o.clone().try_into().ok()),
+            Some(nvim_oxi::String::from("https"))
+        );
+    }
+
+    #[test]
+    fn assistant_to_connection_dict_skips_empty_name() {
+        let assistant = Assistant::CustomStdio {
+            name: String::new(),
+            command: "my-agent".to_string(),
+            args: Vec::new(),
+        };
+
+        let dict = assistant.to_connection_dict(Protocol::Stdio);
+
+        assert!(dict.get("name").is_none());
     }
 
     #[test]
@@ -568,23 +827,14 @@ mod tests {
 
     #[test]
     fn test_assistant_display() {
-        // Test Display for all Assistant variants using slice comparison
-        let assistants: Vec<Assistant> = vec![
-            Assistant::Copilot,
-            Assistant::Opencode,
-            Assistant::CustomStdio {
-                name: String::from("my-claude"),
-                command: String::from("claude-acp"),
-                args: vec![String::from("--socket")],
-            },
-        ];
+        let assistants: Vec<Assistant> = vec![Assistant::CustomStdio {
+            name: String::from("my-claude"),
+            command: String::from("claude-acp"),
+            args: vec![String::from("--socket")],
+        }];
         let results: Vec<String> = assistants.iter().map(|a| format!("{}", a)).collect();
 
-        let expected: Vec<String> = vec![
-            "copilot".to_string(),
-            "opencode".to_string(),
-            "my-claude".to_string(),
-        ];
+        let expected: Vec<String> = vec!["my-claude".to_string()];
 
         assert_eq!(results, expected);
     }
@@ -602,10 +852,10 @@ mod tests {
         let (sender, _) = async_channel::unbounded();
         let handle = std::thread::spawn(|| Ok(()));
         let connection = mock_connection(sender, handle);
-        manager.add_connection(Assistant::Copilot, connection);
+        manager.add_connection(agent_copilot(), connection);
         let agents = manager.connected_agents();
         assert_eq!(agents.len(), 1);
-        assert_eq!(agents[0], Assistant::Copilot);
+        assert_eq!(agents[0], Assistant::from("copilot"));
     }
 
     #[test]
@@ -614,24 +864,24 @@ mod tests {
         let (sender1, _) = async_channel::unbounded();
         let handle1 = std::thread::spawn(|| Ok(()));
         let connection1 = mock_connection(sender1, handle1);
-        manager.add_connection(Assistant::Copilot, connection1);
+        manager.add_connection(agent_copilot(), connection1);
 
         let (sender2, _) = async_channel::unbounded();
         let handle2 = std::thread::spawn(|| Ok(()));
         let connection2 = mock_connection(sender2, handle2);
-        manager.add_connection(Assistant::Opencode, connection2);
+        manager.add_connection(agent_opencode(), connection2);
 
         let agents = manager.connected_agents();
         assert_eq!(agents.len(), 2);
-        assert!(agents.contains(&Assistant::Copilot));
-        assert!(agents.contains(&Assistant::Opencode));
+        assert!(agents.contains(&Assistant::from("copilot")));
+        assert!(agents.contains(&Assistant::from("opencode")));
     }
 
     #[test]
     fn disconnect_returns_error_when_connection_missing() {
         let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
 
-        let result = manager.disconnect(vec![Assistant::Copilot]);
+        let result = manager.disconnect(vec![agent_copilot()]);
 
         assert_eq!(
             result.unwrap_err().to_string(),
@@ -644,10 +894,10 @@ mod tests {
         let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
         let (sender, _) = async_channel::unbounded();
         let handle = std::thread::spawn(|| Ok(()));
-        manager.add_connection(Assistant::Copilot, mock_connection(sender, handle));
+        manager.add_connection(agent_copilot(), mock_connection(sender, handle));
 
         manager
-            .disconnect(vec![Assistant::Copilot])
+            .disconnect(vec![agent_copilot()])
             .expect("disconnect should succeed");
 
         assert!(manager.connected_agents().is_empty());
@@ -655,17 +905,38 @@ mod tests {
 
     #[test]
     fn test_assistant_from_str_copilot_lowercase() {
-        assert_eq!(Assistant::from("copilot"), Assistant::Copilot);
+        assert_eq!(
+            Assistant::from("copilot"),
+            Assistant::CustomStdio {
+                name: "copilot".to_string(),
+                command: String::new(),
+                args: Vec::new(),
+            }
+        );
     }
 
     #[test]
     fn test_assistant_from_str_opencode_lowercase() {
-        assert_eq!(Assistant::from("opencode"), Assistant::Opencode);
+        assert_eq!(
+            Assistant::from("opencode"),
+            Assistant::CustomStdio {
+                name: "opencode".to_string(),
+                command: String::new(),
+                args: Vec::new(),
+            }
+        );
     }
 
     #[test]
     fn test_assistant_from_str_copilot_uppercase() {
-        assert_eq!(Assistant::from("COPILOT"), Assistant::Copilot);
+        assert_eq!(
+            Assistant::from("COPILOT"),
+            Assistant::CustomStdio {
+                name: "COPILOT".to_string(),
+                command: String::new(),
+                args: Vec::new(),
+            }
+        );
     }
 
     #[test]
@@ -702,7 +973,11 @@ mod tests {
 
     #[test]
     fn test_assistant_gemini_display() {
-        let assistant = Assistant::Gemini;
+        let assistant = Assistant::CustomStdio {
+            name: String::from("gemini"),
+            command: String::from("gemini"),
+            args: vec![String::from("--acp")],
+        };
         assert_eq!(format!("{}", assistant), "gemini");
     }
 
@@ -791,7 +1066,7 @@ mod tests {
     #[test]
     fn test_assistant_from_string() {
         let result = Assistant::from(String::from("opencode"));
-        assert!(matches!(result, Assistant::Opencode));
+        assert!(matches!(result, Assistant::CustomStdio { name, .. } if name == "opencode"));
     }
 
     #[test]
@@ -852,13 +1127,6 @@ mod tests {
             registry: None,
         };
         assert_eq!(assistant.base_command(), None);
-    }
-
-    #[test]
-    fn base_command_builtin_agents_return_none() {
-        let agents = vec![Assistant::Opencode, Assistant::Copilot];
-        let results: Vec<Option<String>> = agents.iter().map(|a| a.base_command()).collect();
-        assert_eq!(results, vec![None, None]);
     }
 
     #[test]

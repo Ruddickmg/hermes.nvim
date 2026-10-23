@@ -184,7 +184,11 @@ mod tests {
 
     #[test]
     fn build_url_rejects_non_custom_url() {
-        let agent = Assistant::Copilot;
+        let agent = Assistant::CustomStdio {
+            name: String::from("copilot"),
+            command: String::from("copilot"),
+            args: vec![String::from("--acp")],
+        };
         let result = build_url(Protocol::Http, &agent);
         assert!(result.is_err());
         assert!(
