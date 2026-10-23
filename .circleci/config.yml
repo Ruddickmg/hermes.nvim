@@ -109,6 +109,7 @@ workflows:
           requires:
             - update-cargo-version
             - fetch-registry
+            - build-mac-aarch64
       - build-windows-x86_64:
           filters:
             branches:
