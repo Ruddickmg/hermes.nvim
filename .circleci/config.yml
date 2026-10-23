@@ -13,9 +13,9 @@ executors:
     docker:
       - image: node:24.22.1
   mac-aarch64:
-    resource_class: m4pro.medium
     macos:
-      xcode: 27.0.0
+      xcode: 27.1.0
+    resource_class: m4pro.medium
   rust-linux-x86_64:
     docker:
       - image: cimg/rust:1.99.1
@@ -125,6 +125,7 @@ workflows:
             branches:
               only:
                 - main
+                - development
           requires:
             - build-linux-x86_64
             - build-linux-aarch64
