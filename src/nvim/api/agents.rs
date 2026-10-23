@@ -116,7 +116,7 @@ impl AgentListEntry {
 }
 
 impl Api {
-    #[tracing::instrument(level = "trace", skip(self))]
+    // #[tracing::instrument(level = "trace", skip(self))]
     pub async fn agents(&self, maybe_config: Option<AgentsConfig>) -> crate::acp::Result<()> {
         let config = maybe_config.unwrap_or_default();
         let url = config.url.as_deref().unwrap_or(DEFAULT_REGISTRY_URL);
@@ -146,7 +146,7 @@ impl Api {
             }
         }
 
-        let registered_agents: Vec<AgentListEntry> = registry
+        let mut agents: Vec<AgentListEntry> = registry
             .as_ref()
             .map(|r| {
                 r.data
@@ -165,19 +165,14 @@ impl Api {
             })
             .unwrap_or_default();
 
-        let mut agents = registered_agents
-            .into_iter()
-            .map(|agent| {
-                custom_agents
-                    .remove(&agent.id)
-                    .map(|entry| AgentListEntry::from_custom(&agent.id, &entry))
-                    .unwrap_or(agent)
-            })
-            .collect::<Vec<AgentListEntry>>();
+        agents.iter().for_each(|agent| {
+            custom_agents.remove(&agent.id);
+        });
+
         let additional_agents: Vec<AgentListEntry> = custom_agents.into();
 
         agents.extend(additional_agents);
-        agents.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        agents.sort_by_key(|a| a.name.to_lowercase());
 
         let renderer = IconRenderer::new(icon_cache_dir);
         let render_tasks: Vec<_> = agents

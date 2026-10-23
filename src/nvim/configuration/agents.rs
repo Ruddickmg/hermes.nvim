@@ -222,51 +222,82 @@ impl From<Assistant> for AgentConnectionConfig {
 impl Default for CustomAgentsConfig {
     fn default() -> Self {
         Self(
-            vec![
-                (
-                    "opencode",
-                    Assistant::CustomStdio {
-                        name: "Opencode".to_string(),
-                        command: "opencode".to_string(),
-                        args: vec!["acp".to_string()],
-                    },
-                ),
-                (
-                    "claude-acp",
-                    Assistant::CustomStdio {
-                        name: "Claude Agent".to_string(),
-                        // TODO: get the correct commands for this
-                        command: "claude-agent-acp".to_string(),
-                        args: vec![],
-                    },
-                ),
-                (
-                    "github-copilot-cli",
-                    Assistant::CustomStdio {
-                        name: "Copilot".to_string(),
-                        command: "copilot".to_string(),
-                        args: vec!["--acp".to_string()],
-                    },
-                ),
-                (
-                    "gemini",
-                    Assistant::CustomStdio {
-                        name: "Gemini".to_string(),
-                        command: "gemini".to_string(),
-                        args: vec!["--acp".to_string()],
-                    },
-                ),
-            ]
-            .into_iter()
-            .map(|(id, agent)| {
-                let mut config = AgentConnectionConfig::from(agent);
-                config.is_default = true;
-                (id.to_string(), config)
-            })
-            .collect::<HashMap<String, AgentConnectionConfig>>(),
+            DEFAULT_AGENTS
+                .iter()
+                .map(|(id, name, command, args)| {
+                    let mut config = AgentConnectionConfig::from(Assistant::CustomStdio {
+                        name: name.to_string(),
+                        command: command.to_string(),
+                        args: args.iter().map(|arg| arg.to_string()).collect(),
+                    });
+                    config.is_default = true;
+                    (id.to_string(), config)
+                })
+                .collect::<HashMap<String, AgentConnectionConfig>>(),
         )
     }
 }
+
+const DEFAULT_AGENTS: &[(&str, &str, &str, &[&str])] = &[
+    (
+        "agoragentic-acp",
+        "Agoragentic",
+        "agoragentic-mcp",
+        &["--acp"],
+    ),
+    ("amp-acp", "Amp", "amp-acp", &[]),
+    ("antigravity-acp", "Google Antigravity", "agy-acp", &[]),
+    ("auggie", "Auggie CLI", "auggie", &["--acp"]),
+    ("autohand", "Autohand Code", "autohand-acp", &[]),
+    ("bob", "Bob", "bob", &["acp"]),
+    ("claude-acp", "Claude Agent", "claude-agent-acp", &[]),
+    ("cline", "Cline", "cline", &["--acp"]),
+    ("codebuddy-code", "Codebuddy Code", "codebuddy", &["--acp"]),
+    ("codex-acp", "Codex", "codex-acp", &[]),
+    ("cortex-code", "Cortex Code", "cortex", &["acp", "serve"]),
+    ("corust-agent", "Corust Agent", "corust-agent-acp", &[]),
+    ("crow-cli", "crow-cli", "crow-cli", &["acp"]),
+    ("cursor", "Cursor", "cursor-agent", &["acp"]),
+    ("deepagents", "DeepAgents", "deepagents-acp", &[]),
+    ("devin", "Devin", "devin", &["acp"]),
+    ("dimcode", "DimCode", "dimcode", &["acp"]),
+    ("dirac", "Dirac", "dirac", &["--acp"]),
+    (
+        "factory-droid",
+        "Factory Droid",
+        "droid",
+        &["exec", "--output-format", "acp-daemon"],
+    ),
+    ("fast-agent", "fast-agent", "fast-agent-acp", &["-x"]),
+    ("gemini", "Gemini CLI", "gemini", &["--acp"]),
+    ("github-copilot-cli", "Copilot", "copilot", &["--acp"]),
+    ("glm-acp-agent", "GLM Agent", "glm-acp-agent", &[]),
+    ("goose", "goose", "goose", &["acp"]),
+    ("grok-build", "Grok Build", "grok", &["agent", "stdio"]),
+    ("harn", "Harn", "harn", &["serve", "acp"]),
+    ("junie", "Junie", "junie", &["--acp=true"]),
+    ("kilo", "Kilo", "kilo", &["acp"]),
+    ("kimchi", "Kimchi", "kimchi", &["--mode", "acp"]),
+    ("kimi", "Kimi CLI", "kimi", &["acp"]),
+    ("minimax-code", "MiniMax Code", "mcode", &["acp"]),
+    ("minion-code", "Minion Code", "minion-code", &["acp"]),
+    ("mistral-vibe", "Mistral Vibe", "vibe-acp", &[]),
+    ("nova", "Nova", "nova", &["acp"]),
+    ("opencode", "OpenCode", "opencode", &["acp"]),
+    ("opencode-v2", "OpenCode V2", "opencode", &["acp"]),
+    ("pi-acp", "pi ACP", "pi-acp", &[]),
+    ("poolside", "Poolside", "pool", &["acp"]),
+    ("qoder", "Qoder CLI", "qoder", &["--acp"]),
+    (
+        "qwen-code",
+        "Qwen Code",
+        "qwen",
+        &["--acp", "--experimental-skills"],
+    ),
+    ("sigit", "siGit Code", "sigit", &[]),
+    ("stakpak", "Stakpak", "stakpak", &["acp"]),
+    ("vtcode", "VT Code", "vtcode", &["acp"]),
+];
 
 impl FromObject for CustomAgentsConfig {
     fn from_object(obj: Object) -> Result<Self, Error> {
@@ -652,6 +683,35 @@ mod tests {
         incoming.apply_to(&mut base);
 
         assert_eq!(base.get("agent"), Some(&stdio_config_named("replaced")));
+    }
+
+    #[test]
+    fn custom_agents_config_defaults_include_every_registry_agent() {
+        assert_eq!(CustomAgentsConfig::default().0.len(), 43);
+    }
+
+    #[test]
+    fn custom_agents_config_defaults_are_marked_as_default() {
+        assert!(
+            CustomAgentsConfig::default()
+                .0
+                .values()
+                .all(|entry| entry.is_default)
+        );
+    }
+
+    #[test]
+    fn custom_agents_config_default_poolside_uses_acp_subcommand() {
+        let config = CustomAgentsConfig::default();
+        let Some(AgentConnectionConfig {
+            connection: Assistant::CustomStdio { command, args, .. },
+            ..
+        }) = config.get("poolside")
+        else {
+            panic!("poolside default should be a stdio agent");
+        };
+        let expected = vec!["acp".to_string()];
+        assert_eq!((command.as_str(), args), ("pool", &expected));
     }
 
     proptest! {
