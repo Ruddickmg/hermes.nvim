@@ -371,8 +371,6 @@
 
 ---@alias HermesToolCallKind "Read"|"Edit"|"Delete"|"Move"|"Search"|"Execute"|"Think"|"Fetch"|"SwitchMode"|"Other"
 
----@alias HermesToolCallStatus "Pending"|"InProgress"|"Completed"|"Cancelled"|"Error"
-
 ---@class HermesToolCallContentBlock
 ---@field type "content"
 ---@field content HermesTextChunk|HermesImageChunk|HermesAudioChunk|HermesResourceChunk|HermesResourceLinkChunk
