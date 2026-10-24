@@ -625,19 +625,6 @@
 ---@alias HermesThoughtLevelUpdated ThoughtLevelOption
 -- luacov: enable
 
----@enum Distribution
-local Distribution = {
-    Binary = "binary",
-    Uvx = "uvx",
-    Npx = "npx",
-}
-
-setmetatable(Distribution, {
-    __newindex = function()
-        error("Attempt to modify a read-only enum: \"Distribution\"")
-    end
-})
-
 -- ============================================================================
 -- Enums for type-safe API usage
 -- ============================================================================
@@ -764,24 +751,14 @@ local enums = {
 	ContentType = ContentType,
 	LogLevel = LogLevel,
 	LogFormat = LogFormat,
-	UpdateBehavior = UpdateBehavior,
 }
 
-return {
-	enums = enums,
-	Protocol = Protocol,
-	Distribution = Distribution,
-	McpServerType = McpServerType,
-	PermissionKind = PermissionKind,
-	ElicitationAction = ElicitationAction,
-	ElicitationOutcome = ElicitationOutcome,
-	PermissionOutcome = PermissionOutcome,
-	ToolCallStatus = ToolCallStatus,
-	PlanPriority = PlanPriority,
-	PlanStatus = PlanStatus,
-	ConfigOptionType = ConfigOptionType,
-	ContentType = ContentType,
-	LogLevel = LogLevel,
-	LogFormat = LogFormat,
-	UpdateBehavior = UpdateBehavior,
-}
+for key, value in pairs(enums) do
+	setmetatable(value, {
+		__newindex = function()
+			error('Attempt to modify a read-only enum: "' .. key .. '"')
+		end,
+	})
+end
+
+return enums
