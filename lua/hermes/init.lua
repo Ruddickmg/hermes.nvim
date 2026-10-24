@@ -10,9 +10,25 @@
 ---@brief ]]
 -- luacov: enable
 
-require("hermes.types")
+-- Export enums and types from the root for convenience
+local types_module = require("hermes.types")
 
 local M = {}
+
+M.Protocol = types_module.Protocol
+M.Distribution = types_module.Distribution
+M.McpServerType = types_module.McpServerType
+M.PermissionKind = types_module.PermissionKind
+M.ElicitationAction = types_module.ElicitationAction
+M.ElicitationOutcome = types_module.ElicitationOutcome
+M.PermissionOutcome = types_module.PermissionOutcome
+M.ToolCallStatus = types_module.ToolCallStatus
+M.PlanPriority = types_module.PlanPriority
+M.PlanStatus = types_module.PlanStatus
+M.ConfigOptionType = types_module.ConfigOptionType
+M.ContentType = types_module.ContentType
+M.LogLevel = types_module.LogLevel
+M.LogFormat = types_module.LogFormat
 
 -- Import logging module for notifications
 local logging = require("hermes.logging")
@@ -713,3 +729,4 @@ end
 eager_load_binary()
 
 return M
+

@@ -625,3 +625,163 @@
 ---@alias HermesThoughtLevelUpdated ThoughtLevelOption
 -- luacov: enable
 
+---@enum Distribution
+local Distribution = {
+    Binary = "binary",
+    Uvx = "uvx",
+    Npx = "npx",
+}
+
+setmetatable(Distribution, {
+    __newindex = function()
+        error("Attempt to modify a read-only enum: \"Distribution\"")
+    end
+})
+
+-- ============================================================================
+-- Enums for type-safe API usage
+-- ============================================================================
+
+---@enum HermesProtocol
+local Protocol = {
+	stdio = "stdio",
+	http = "http",
+	socket = "socket",
+	tcp = "tcp",
+	https = "https",
+}
+
+---@enum HermesDistribution
+local Distribution = {
+	npx = "npx",
+	uvx = "uvx",
+	binary = "binary",
+}
+
+---@enum HermesMcpServerType
+local McpServerType = {
+	http = "http",
+	sse = "sse",
+	stdio = "stdio",
+}
+
+---@enum HermesPermissionKind
+local PermissionKind = {
+	allow_once = "allow_once",
+	allow_always = "allow_always",
+	reject_once = "reject_once",
+	reject_always = "reject_always",
+}
+
+---@enum HermesElicitationAction
+local ElicitationAction = {
+	accept = "accept",
+	cancel = "cancel",
+	decline = "decline",
+}
+
+---@enum HermesElicitationOutcome
+local ElicitationOutcome = {
+	accepted = "accepted",
+	cancelled = "cancelled",
+	declined = "declined",
+}
+
+---@enum HermesPermissionOutcome
+local PermissionOutcome = {
+	selected = "selected",
+	cancelled = "cancelled",
+}
+
+---@enum HermesToolCallStatus
+local ToolCallStatus = {
+	pending = "pending",
+	in_progress = "in_progress",
+	completed = "completed",
+	failed = "failed",
+}
+
+---@enum HermesPlanPriority
+local PlanPriority = {
+	high = "high",
+	medium = "medium",
+	low = "low",
+}
+
+---@enum HermesPlanStatus
+local PlanStatus = {
+	pending = "pending",
+	in_progress = "in_progress",
+	completed = "completed",
+}
+
+---@enum HermesConfigOptionType
+local ConfigOptionType = {
+	select = "select",
+	boolean = "boolean",
+}
+
+---@enum HermesContentType
+local ContentType = {
+	text = "text",
+	link = "link",
+	embedded = "embedded",
+	image = "image",
+	audio = "audio",
+	resource = "resource",
+}
+
+---@enum HermesLogLevel
+local LogLevel = {
+	trace = 0,
+	debug = vim.log and vim.log.levels and vim.log.levels.DEBUG or 1,
+	info = vim.log and vim.log.levels and vim.log.levels.INFO or 2,
+	warn = vim.log and vim.log.levels and vim.log.levels.WARN or 3,
+	error = vim.log and vim.log.levels and vim.log.levels.ERROR or 4,
+	off = vim.log and vim.log.levels and vim.log.levels.OFF or 0,
+}
+
+---@enum HermesLogFormat
+local LogFormat = {
+	compact = "compact",
+	pretty = "pretty",
+	full = "full",
+	json = "json",
+}
+
+local enums = {
+	Protocol = Protocol,
+	Distribution = Distribution,
+	McpServerType = McpServerType,
+	PermissionKind = PermissionKind,
+	ElicitationAction = ElicitationAction,
+	ElicitationOutcome = ElicitationOutcome,
+	PermissionOutcome = PermissionOutcome,
+	ToolCallStatus = ToolCallStatus,
+	PlanPriority = PlanPriority,
+	PlanStatus = PlanStatus,
+	ConfigOptionType = ConfigOptionType,
+	ContentType = ContentType,
+	LogLevel = LogLevel,
+	LogFormat = LogFormat,
+	UpdateBehavior = UpdateBehavior,
+}
+
+return {
+	enums = enums,
+	Protocol = Protocol,
+	Distribution = Distribution,
+	McpServerType = McpServerType,
+	PermissionKind = PermissionKind,
+	ElicitationAction = ElicitationAction,
+	ElicitationOutcome = ElicitationOutcome,
+	PermissionOutcome = PermissionOutcome,
+	ToolCallStatus = ToolCallStatus,
+	PlanPriority = PlanPriority,
+	PlanStatus = PlanStatus,
+	ConfigOptionType = ConfigOptionType,
+	ContentType = ContentType,
+	LogLevel = LogLevel,
+	LogFormat = LogFormat,
+	UpdateBehavior = UpdateBehavior,
+}
