@@ -344,8 +344,8 @@
 
 ---@class HermesPlanEntry
 ---@field content string
----@field priority "High"|"Medium"|"Low"
----@field status "Pending"|"InProgress"|"Completed"|"Cancelled"
+---@field priority "high"|"medium"|"low"
+---@field status "pending"|"in_progress"|"completed"
 
 ---@class HermesPlan: HermesSessionNotification
 ---@field update { sessionUpdate: "plan", entries: HermesPlanEntry[] }
@@ -812,7 +812,7 @@ local enums = {
 	ContentType = ContentType,
 	LogLevel = LogLevel,
 	LogFormat = LogFormat,
-  Autocommand = Autocommand,
+	Autocommand = Autocommand,
 }
 
 for key, value in pairs(enums) do
