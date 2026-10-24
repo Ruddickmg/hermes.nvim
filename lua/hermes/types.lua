@@ -736,6 +736,69 @@ local LogFormat = {
 	json = "json",
 }
 
+---@enum HermesAutocommand
+local Autocommand = {
+	AgentImageMessage = "AgentImageMessage",
+	AgentImageThought = "AgentImageThought",
+	AgentList = "AgentList",
+	AgentResourceLinkMessage = "AgentResourceLinkMessage",
+	AgentResourceLinkThought = "AgentResourceLinkThought",
+	AgentResourceMessage = "AgentResourceMessage",
+	AgentResourceThought = "AgentResourceThought",
+	AgentTextMessage = "AgentTextMessage",
+	AgentTextThought = "AgentTextThought",
+	Authenticated = "Authenticated",
+	AvailableCommands = "AvailableCommands",
+	CompactionSummaryChunk = "CompactionSummaryChunk",
+	CompactionUpdate = "CompactionUpdate",
+	ConfigOptions = "ConfigOptions",
+	ConfigurationOption = "ConfigurationOption",
+	ConfigurationUpdated = "ConfigurationUpdated",
+	ConnectionInitialized = "ConnectionInitialized",
+	ElicitationComplete = "ElicitationComplete",
+	FormElicitation = "FormElicitation",
+	LoggedOut = "LoggedOut",
+	ModeCurrent = "ModeCurrent",
+	ModelConfigurations = "ModelConfigurations",
+	ModelConfigurationUpdated = "ModelConfigurationUpdated",
+	Models = "Models",
+	Modes = "Modes",
+	ModeUpdated = "ModeUpdated",
+	Notice = "Notice",
+	PermissionRequest = "PermissionRequest",
+	Plan = "Plan",
+	Progress = "Progress",
+	Prompted = "Prompted",
+	ReadTextFile = "ReadTextFile",
+	RequestCancelled = "RequestCancelled",
+	SessionClosed = "SessionClosed",
+	SessionCreated = "SessionCreated",
+	SessionDeleted = "SessionDeleted",
+	SessionForked = "SessionForked",
+	SessionLoaded = "SessionLoaded",
+	SessionModelUpdated = "SessionModelUpdated",
+	SessionResumed = "SessionResumed",
+	SessionsListed = "SessionsListed",
+	SessionUpdate = "SessionUpdate",
+	TerminalAuthentication = "TerminalAuthentication",
+	TerminalCreate = "TerminalCreate",
+	TerminalExit = "TerminalExit",
+	TerminalKill = "TerminalKill",
+	TerminalOutput = "TerminalOutput",
+	TerminalRelease = "TerminalRelease",
+	ThoughtLevels = "ThoughtLevels",
+	ThoughtLevelUpdated = "ThoughtLevelUpdated",
+	ToolCall = "ToolCall",
+	ToolCallUpdate = "ToolCallUpdate",
+	UrlElicitation = "UrlElicitation",
+	UsageUpdate = "UsageUpdate",
+	UserImageMessage = "UserImageMessage",
+	UserResourceLinkMessage = "UserResourceLinkMessage",
+	UserResourceMessage = "UserResourceMessage",
+	UserTextMessage = "UserTextMessage",
+	WriteTextFile = "WriteTextFile",
+}
+
 local enums = {
 	Protocol = Protocol,
 	Distribution = Distribution,
@@ -751,6 +814,7 @@ local enums = {
 	ContentType = ContentType,
 	LogLevel = LogLevel,
 	LogFormat = LogFormat,
+  Autocommand = Autocommand,
 }
 
 for key, value in pairs(enums) do
@@ -762,3 +826,4 @@ for key, value in pairs(enums) do
 end
 
 return enums
+

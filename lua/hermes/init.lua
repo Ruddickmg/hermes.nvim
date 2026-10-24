@@ -29,6 +29,7 @@ M.ConfigOptionType = types_module.ConfigOptionType
 M.ContentType = types_module.ContentType
 M.LogLevel = types_module.LogLevel
 M.LogFormat = types_module.LogFormat
+M.Autocommand = types_module.Autocommand
 
 -- Import logging module for notifications
 local logging = require("hermes.logging")
