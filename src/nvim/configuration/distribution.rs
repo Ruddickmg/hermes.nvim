@@ -4,6 +4,8 @@ use nvim_oxi::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::utilities::is_nix_environment;
+
 use super::dict_from_object;
 
 #[derive(Serialize, Deserialize, std::hash::Hash, Debug, Clone, PartialEq, Eq)]
@@ -28,13 +30,22 @@ pub struct DistributionsConfig {
     pub npx: bool,
 }
 
+impl DistributionsConfig {
+    pub(crate) fn defaults(is_nix: bool) -> Self {
+        Self {
+            binary: BinaryConfig {
+                enabled: !is_nix,
+                ..BinaryConfig::default()
+            },
+            uvx: !is_nix,
+            npx: !is_nix,
+        }
+    }
+}
+
 impl Default for DistributionsConfig {
     fn default() -> Self {
-        Self {
-            binary: BinaryConfig::default(),
-            uvx: true,
-            npx: true,
-        }
+        Self::defaults(is_nix_environment())
     }
 }
 
@@ -128,11 +139,21 @@ mod tests {
     }
 
     #[test]
-    fn distributions_config_defaults() {
-        let config = DistributionsConfig::default();
-        assert!(config.binary.enabled);
-        assert!(config.uvx);
-        assert!(config.npx);
+    fn distributions_config_defaults_outside_nix() {
+        let config = DistributionsConfig::defaults(false);
+        assert_eq!(
+            (config.binary.enabled, config.uvx, config.npx),
+            (true, true, true)
+        );
+    }
+
+    #[test]
+    fn distributions_config_defaults_in_nix() {
+        let config = DistributionsConfig::defaults(true);
+        assert_eq!(
+            (config.binary.enabled, config.uvx, config.npx),
+            (false, false, false)
+        );
     }
 
     #[test]

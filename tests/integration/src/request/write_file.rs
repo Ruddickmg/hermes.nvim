@@ -1,6 +1,8 @@
 //! Integration tests for Responder::WriteFileResponse via Request
 use crate::helpers::ui::wait_for;
-use agent_client_protocol::schema::v1::{SessionId, WriteTextFileRequest, WriteTextFileResponse};
+use agent_client_protocol::schema::v1::{
+    RequestId, SessionId, WriteTextFileRequest, WriteTextFileResponse,
+};
 use assert_fs::prelude::*;
 use assert_fs::{NamedTempFile, TempDir};
 use async_channel::bounded as oneshot_channel;
@@ -50,7 +52,7 @@ fn open_buffer_marked_modified() -> nvim_oxi::Result<()> {
         sender,
         create_write_request(temp_file.path(), "updated content"),
     );
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     // Execute the request
     block_on(requests.default_response(&request_id, serde_json::Value::Null))
@@ -96,7 +98,7 @@ fn open_buffer_disk_content_unchanged() -> nvim_oxi::Result<()> {
         sender,
         create_write_request(temp_file.path(), "updated content"),
     );
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     // Execute the request
     block_on(requests.default_response(&request_id, serde_json::Value::Null))
@@ -128,7 +130,7 @@ fn new_file_created() -> nvim_oxi::Result<()> {
         sender,
         create_write_request(new_file.path(), "created content"),
     );
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     // Execute the request
     block_on(requests.default_response(&request_id, serde_json::Value::Null))
@@ -158,7 +160,7 @@ fn file_exists_but_closed() -> nvim_oxi::Result<()> {
         sender,
         create_write_request(temp_file.path(), "new content"),
     );
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     // Execute the request
     block_on(requests.default_response(&request_id, serde_json::Value::Null))
@@ -186,7 +188,7 @@ fn responder_send_failure_returns_error() -> nvim_oxi::Result<()> {
     let (sender, receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder =
         Responder::WriteFileResponse(sender, create_write_request(temp_file.path(), "content"));
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     drop(receiver);
 
@@ -211,7 +213,7 @@ fn responder_send_failure_contains_acp_message() -> nvim_oxi::Result<()> {
     let (sender, receiver) = oneshot_channel::<WriteTextFileResponse>(1);
     let responder =
         Responder::WriteFileResponse(sender, create_write_request(temp_file.path(), "content"));
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     drop(receiver);
 
@@ -240,7 +242,7 @@ fn buffer_already_open_marked_modified() -> nvim_oxi::Result<()> {
         sender,
         create_write_request(temp_file.path(), "agent updated content"),
     );
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     // Execute the request
     block_on(requests.default_response(&request_id, serde_json::Value::Null))
@@ -282,7 +284,7 @@ fn buffer_already_open_disk_unchanged() -> nvim_oxi::Result<()> {
         sender,
         create_write_request(temp_file.path(), "agent updated content"),
     );
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     // Execute the request
     block_on(requests.default_response(&request_id, serde_json::Value::Null))
@@ -317,7 +319,7 @@ fn buffer_already_open_response_sent() -> nvim_oxi::Result<()> {
         sender,
         create_write_request(temp_file.path(), "agent updated content"),
     );
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     // Execute the request
     block_on(requests.default_response(&request_id, serde_json::Value::Null))
@@ -349,10 +351,10 @@ fn write_file_cleanup_request_exists_before_response() -> nvim_oxi::Result<()> {
         create_write_request(temp_file.path(), "test content"),
     );
 
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     // Verify request exists before response
-    let request = block_on(requests.get_request(&request_id));
+    let request = block_on(requests.get(&request_id));
     assert!(
         request.is_some(),
         "Request should exist before default_response is called"
@@ -377,7 +379,7 @@ fn write_file_cleanup_default_response_succeeds() -> nvim_oxi::Result<()> {
         create_write_request(temp_file.path(), "test content"),
     );
 
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     // Use default_response (goes through Request::default() -> now calls finish())
     let result = block_on(requests.default_response(&request_id, serde_json::Value::Null));
@@ -406,7 +408,7 @@ fn write_file_cleanup_request_removed_after_response() -> nvim_oxi::Result<()> {
         create_write_request(temp_file.path(), "test content"),
     );
 
-    let request_id = block_on(requests.add_request("test-session".to_string(), responder));
+    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
 
     // Use default_response (goes through Request::default() -> now calls finish())
     block_on(requests.default_response(&request_id, serde_json::Value::Null))
@@ -414,7 +416,7 @@ fn write_file_cleanup_request_removed_after_response() -> nvim_oxi::Result<()> {
 
     // Wait for cleanup via AsyncHandle + mpsc channel
     let cleaned_up = wait_for(
-        || block_on(requests.get_request(&request_id)).is_none(),
+        || block_on(requests.get(&request_id)).is_none(),
         Duration::from_millis(500),
     );
 

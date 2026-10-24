@@ -7,6 +7,7 @@ describe("hermes.health", function()
 	local health
 	local calls
 	local orig_health
+	local nix_install_stub
 
 	before_each(function()
 		-- Track all vim.health calls
@@ -42,6 +43,10 @@ describe("hermes.health", function()
 		package.loaded["hermes.download"] = nil
 		package.loaded["hermes"] = nil
 
+		-- Keep the host environment from affecting default-dependent assertions
+		local binary = require("hermes.binary")
+		nix_install_stub = stub(binary, "is_nix_install").returns(false)
+
 		-- Ensure config is initialized before requiring health
 		local config = require("hermes.config")
 		config.setup({})
@@ -55,6 +60,10 @@ describe("hermes.health", function()
 		vim.health.warn = orig_health.warn
 		vim.health.info = orig_health.info
 		vim.health.start = orig_health.start
+		if nix_install_stub then
+			nix_install_stub:revert()
+			nix_install_stub = nil
+		end
 	end)
 
 	local function has_call(list, pattern)

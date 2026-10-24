@@ -23,20 +23,19 @@ impl Api {
         let config_type = "mode".to_string();
 
         if let Some(is_legacy) = legacy.unwrap_or_default() {
-            let connection = self
-                .connection
+            let connection_manager = self.connection_manager.lock().await;
+            let connection = connection_manager
                 .get_current_connection()
                 .await
                 .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
-
-            if is_legacy {
+            let result = if is_legacy {
                 connection
                     .set_mode(
                         agent_client_protocol::schema::v1::SetSessionModeRequest::new(
                             session_id, mode_id,
                         ),
                     )
-                    .await?;
+                    .await
             } else {
                 connection
                     .set_config_option(
@@ -48,9 +47,10 @@ impl Api {
                             ),
                         ),
                     )
-                    .await?;
-            }
-            Ok(())
+                    .await
+            };
+            drop(connection_manager);
+            result
         } else {
             Err(Error::Unsupported(config_type))
         }

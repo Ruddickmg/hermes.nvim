@@ -94,6 +94,27 @@ impl From<AgentEntry> for AgentListEntry {
     }
 }
 
+impl AgentListEntry {
+    /// Build a list entry for a user-configured agent that has no registry match.
+    pub fn from_custom(
+        id: &str,
+        config: &crate::nvim::configuration::AgentConnectionConfig,
+    ) -> Self {
+        Self {
+            id: id.to_string(),
+            name: config.connection.name(),
+            version: String::new(),
+            license: None,
+            description: config.description.clone().unwrap_or_default(),
+            website: None,
+            repository: None,
+            icon: config.icon.clone(),
+            icon_pixel_data: None,
+            distributions: Vec::new(),
+        }
+    }
+}
+
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn agents(&self, maybe_config: Option<AgentsConfig>) -> crate::acp::Result<()> {
@@ -103,6 +124,7 @@ impl Api {
         let state = self.state.lock().await;
         let registry = state.registry.clone();
         let config_distributions = state.config.distributions.clone();
+        let mut custom_agents = state.config.agents.clone();
         let icon_cache_dir = state.config.project_root.join(".hermes").join("icons");
         drop(state);
 
@@ -143,7 +165,14 @@ impl Api {
             })
             .unwrap_or_default();
 
-        agents.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        agents.iter().for_each(|agent| {
+            custom_agents.remove(&agent.id);
+        });
+
+        let additional_agents: Vec<AgentListEntry> = custom_agents.into();
+
+        agents.extend(additional_agents);
+        agents.sort_by_key(|a| a.name.to_lowercase());
 
         let renderer = IconRenderer::new(icon_cache_dir);
         let render_tasks: Vec<_> = agents
@@ -167,9 +196,10 @@ impl Api {
             .collect();
 
         for entry in &mut agents {
-            if let Some(url) = &entry.icon {
-                entry.icon_pixel_data = results.get(url).cloned().flatten();
-            }
+            entry.icon_pixel_data = match &entry.icon {
+                Some(url) => results.get(url).cloned().flatten(),
+                None => Some(IconRenderer::default_icon()),
+            };
         }
 
         let _ = self
@@ -184,6 +214,7 @@ impl Api {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::acp::connection::Assistant;
     use crate::acp::registry::{DistributionCommand, PackageDistribution};
     use crate::nvim::configuration::{BinaryConfig, DistributionsConfig};
     use nvim_oxi::{Dictionary, Object};
@@ -930,6 +961,40 @@ mod tests {
         };
         let json = serde_json::to_value(payload).unwrap();
         assert!(json["agents"][0].get("website").is_none());
+    }
+
+    #[test]
+    fn agent_list_entry_from_custom_defaults_name_to_id() {
+        let config = crate::nvim::configuration::AgentConnectionConfig {
+            description: None,
+            icon: None,
+            protocol: crate::acp::connection::Protocol::Stdio,
+            connection: Assistant::CustomStdio {
+                name: "my-agent".to_string(),
+                command: "my-agent".to_string(),
+                args: Vec::new(),
+            },
+            is_default: false,
+        };
+        let entry = AgentListEntry::from_custom("my-agent", &config);
+        assert_eq!(entry.name, "my-agent");
+    }
+
+    #[test]
+    fn agent_list_entry_from_custom_uses_provided_name() {
+        let config = crate::nvim::configuration::AgentConnectionConfig {
+            description: None,
+            icon: None,
+            protocol: crate::acp::connection::Protocol::Stdio,
+            connection: Assistant::CustomStdio {
+                name: "My Agent".to_string(),
+                command: "my-agent".to_string(),
+                args: Vec::new(),
+            },
+            is_default: false,
+        };
+        let entry = AgentListEntry::from_custom("my-agent", &config);
+        assert_eq!(entry.name, "My Agent");
     }
 
     #[test]

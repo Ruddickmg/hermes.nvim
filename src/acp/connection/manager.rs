@@ -3,11 +3,16 @@ use crate::acp::connection::{Connection, http, socket, stdio, tcp};
 use crate::acp::registry::distribution::Distribution;
 use crate::acp::registry::entry::AgentEntry;
 use crate::acp::registry::resolution::fetch_agent_from_registry;
+use crate::nvim::autocommands::Commands;
 use crate::nvim::configuration::{DistributionsConfig, Permissions};
+use crate::utilities::autocmd::autocmd_listeners_attached;
 use crate::{Handler, acp::error::Error};
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    ClientCapabilities, FileSystemCapabilities, Implementation, InitializeRequest,
+    AuthCapabilities, BooleanConfigOptionCapabilities, ClientCapabilities,
+    ClientSessionCapabilities, CompactionCapabilities, ElicitationCapabilities,
+    ElicitationFormCapabilities, ElicitationUrlCapabilities, FileSystemCapabilities,
+    Implementation, InitializeRequest, NoticeCapabilities, SessionConfigOptionsCapabilities,
 };
 use async_lock::Mutex;
 use serde::{Deserialize, Serialize};
@@ -56,12 +61,8 @@ impl From<String> for Protocol {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug, Default)]
+#[derive(PartialEq, Eq, Clone, std::hash::Hash, Serialize, Deserialize, Debug)]
 pub enum Assistant {
-    #[default]
-    Copilot,
-    Opencode,
-    Gemini,
     Registered {
         agent: AgentEntry,
         distribution: Option<Distribution>,
@@ -88,12 +89,19 @@ pub enum Assistant {
     },
 }
 
+impl Default for Assistant {
+    fn default() -> Self {
+        Self::CustomStdio {
+            name: "opencode".into(),
+            command: "opencode".into(),
+            args: vec!["acp".into()],
+        }
+    }
+}
+
 impl std::fmt::Display for Assistant {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Assistant::Copilot => write!(f, "copilot"),
-            Assistant::Opencode => write!(f, "opencode"),
-            Assistant::Gemini => write!(f, "gemini"),
             Assistant::CustomStdio { name, .. } => write!(f, "{}", name),
             Assistant::CustomUrl {
                 name,
@@ -124,18 +132,11 @@ impl std::fmt::Display for Assistant {
 }
 
 impl Assistant {
-    /// Build the `async_process::Command` for this agent without spawning it.
-    ///
-    /// The caller is responsible for spawning the command on the correct
-    /// executor (the one whose reactor will handle the child's IO).
     #[instrument(level = "trace", skip(self))]
     pub async fn command(&self) -> crate::acp::Result<async_process::Command> {
         let owned_command;
         let owned_args;
         let (program, args) = match self {
-            Assistant::Copilot => ("copilot", vec!["--acp"]),
-            Assistant::Opencode => ("opencode", vec!["acp"]),
-            Assistant::Gemini => ("gemini", vec!["--acp"]),
             Assistant::Registered {
                 agent,
                 distribution,
@@ -144,28 +145,35 @@ impl Assistant {
                 args,
                 registry,
             } => {
-                let registry = registry.as_ref().ok_or_else(|| {
-                    Error::Internal(
-                        "Agent registry not available for registered assistant".to_string(),
+                if let (Some(command), Some(args)) = (command.as_ref(), args.as_ref()) {
+                    (
+                        command.as_str(),
+                        args.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
                     )
-                })?;
-                let Assistant::CustomStdio {
-                    command: registry_command,
-                    args: registry_args,
-                    ..
-                } = fetch_agent_from_registry(agent, *distribution, configuration, registry)
-                    .await?
-                else {
-                    return Err(Error::Internal(
-                        "agent registry should only return CustomStdio".to_string(),
-                    ));
-                };
-                owned_command = command.clone().unwrap_or(registry_command);
-                owned_args = args.clone().unwrap_or(registry_args);
-                (
-                    owned_command.as_str(),
-                    owned_args.iter().map(|s| s.as_str()).collect(),
-                )
+                } else {
+                    let registry = registry.as_ref().ok_or_else(|| {
+                        Error::Internal(
+                            "Agent registry not available for registered assistant".to_string(),
+                        )
+                    })?;
+                    let Assistant::CustomStdio {
+                        command: registry_command,
+                        args: registry_args,
+                        ..
+                    } = fetch_agent_from_registry(agent, *distribution, configuration, registry)
+                        .await?
+                    else {
+                        return Err(Error::Internal(
+                            "agent registry should only return CustomStdio".to_string(),
+                        ));
+                    };
+                    owned_command = command.clone().unwrap_or(registry_command);
+                    owned_args = args.clone().unwrap_or(registry_args);
+                    (
+                        owned_command.as_str(),
+                        owned_args.iter().map(|s| s.as_str()).collect(),
+                    )
+                }
             }
             Assistant::CustomStdio { command, args, .. } => {
                 (command.as_str(), args.iter().map(|s| s.as_str()).collect())
@@ -192,21 +200,50 @@ impl Assistant {
             Assistant::CustomStdio { name, .. } => name.clone(),
             Assistant::CustomUrl { name, .. } => name.clone(),
             Assistant::CustomSocket { name, .. } => name.clone(),
-            assistant => assistant.to_string(),
+            Assistant::Registered { agent, .. } => agent.name.clone(),
+        }
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub fn base_command(&self) -> Option<String> {
+        match self {
+            Assistant::CustomStdio { command, .. } => Some(command.clone()),
+            Assistant::Registered { command, .. } => command.clone(),
+            _ => None,
+        }
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_name(self, name: &str) -> Self {
+        match self {
+            Assistant::CustomStdio { command, args, .. } => Assistant::CustomStdio {
+                name: name.to_string(),
+                command,
+                args,
+            },
+            Assistant::CustomUrl {
+                host, port, path, ..
+            } => Assistant::CustomUrl {
+                name: name.to_string(),
+                host,
+                port,
+                path,
+            },
+            Assistant::CustomSocket { path, .. } => Assistant::CustomSocket {
+                name: name.to_string(),
+                path,
+            },
+            other => other,
         }
     }
 }
 
 impl From<&str> for Assistant {
     fn from(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
-            "copilot" => Assistant::Copilot,
-            "opencode" => Assistant::Opencode,
-            _ => Assistant::CustomStdio {
-                name: s.to_string(),
-                command: String::new(),
-                args: Vec::new(),
-            },
+        Assistant::CustomStdio {
+            name: s.to_string(),
+            command: String::new(),
+            args: Vec::new(),
         }
     }
 }
@@ -217,10 +254,161 @@ impl From<String> for Assistant {
     }
 }
 
+fn optional_string(dict: &nvim_oxi::Dictionary, key: &str) -> Option<String> {
+    dict.get(key)
+        .and_then(|obj| obj.clone().try_into().ok())
+        .map(|value: nvim_oxi::String| value.to_string())
+}
+
+fn args_from_dict(dict: &nvim_oxi::Dictionary) -> Option<Vec<String>> {
+    dict.get("args").and_then(|obj| {
+        if obj.kind() == nvim_oxi::ObjectKind::Array {
+            let array =
+                <nvim_oxi::Array as nvim_oxi::conversion::FromObject>::from_object(obj.clone())
+                    .ok()?;
+            Some(
+                array
+                    .into_iter()
+                    .filter_map(|item| item.try_into().ok())
+                    .map(|item: nvim_oxi::String| item.to_string())
+                    .collect(),
+            )
+        } else {
+            None
+        }
+    })
+}
+
+impl nvim_oxi::conversion::FromObject for Assistant {
+    fn from_object(obj: nvim_oxi::Object) -> Result<Self, nvim_oxi::conversion::Error> {
+        let dict = crate::nvim::configuration::dict_from_object(obj)?;
+
+        let protocol = dict
+            .get("protocol")
+            .and_then(|obj| {
+                obj.clone()
+                    .try_into()
+                    .ok()
+                    .map(|value: nvim_oxi::String| Protocol::from(value.to_string()))
+            })
+            .unwrap_or_default();
+
+        let name = optional_string(&dict, "name").unwrap_or_default();
+
+        match protocol {
+            Protocol::Stdio => match optional_string(&dict, "command") {
+                Some(command) if !command.is_empty() => Ok(Assistant::CustomStdio {
+                    name,
+                    command,
+                    args: args_from_dict(&dict).unwrap_or_default(),
+                }),
+                _ => Err(nvim_oxi::conversion::Error::Other(
+                    "Command cannot be empty for stdio connections".to_string(),
+                )),
+            },
+            Protocol::Socket => match optional_string(&dict, "path") {
+                Some(path) => Ok(Assistant::CustomSocket { name, path }),
+                None => Err(nvim_oxi::conversion::Error::Other(
+                    "A 'path' is required for socket connections".to_string(),
+                )),
+            },
+            Protocol::Tcp | Protocol::Http | Protocol::Https => {
+                let host = optional_string(&dict, "host");
+                let port = dict.get("port").and_then(|obj| obj.clone().try_into().ok());
+                match (host, port) {
+                    (Some(host), Some(port)) => Ok(Assistant::CustomUrl {
+                        name,
+                        host,
+                        port,
+                        path: optional_string(&dict, "path"),
+                    }),
+                    _ => Err(nvim_oxi::conversion::Error::Other(format!(
+                        "'host' and 'port' are required for {} connections",
+                        protocol
+                    ))),
+                }
+            }
+        }
+    }
+}
+
+impl Assistant {
+    pub fn to_connection_dict(&self, protocol: Protocol) -> nvim_oxi::Dictionary {
+        let mut dict = nvim_oxi::Dictionary::new();
+        dict.insert("protocol", protocol.to_string());
+        match self {
+            Assistant::CustomStdio {
+                name,
+                command,
+                args,
+            } => {
+                insert_name(&mut dict, name);
+                dict.insert("command", command.clone());
+                dict.insert("args", nvim_oxi::Array::from_iter(args.clone()));
+            }
+            Assistant::CustomSocket { name, path } => {
+                insert_name(&mut dict, name);
+                dict.insert("path", path.clone());
+            }
+            Assistant::CustomUrl {
+                name,
+                host,
+                port,
+                path,
+            } => {
+                insert_name(&mut dict, name);
+                dict.insert("host", host.clone());
+                dict.insert("port", *port as i64);
+                if let Some(path) = path {
+                    dict.insert("path", path.clone());
+                }
+            }
+            _ => {}
+        }
+        dict
+    }
+}
+
+fn insert_name(dict: &mut nvim_oxi::Dictionary, name: &str) {
+    if !name.is_empty() {
+        dict.insert("name", name.to_string());
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ConnectionDetails {
     pub agent: Assistant,
     pub protocol: Protocol,
+}
+
+fn build_elicitation_capabilities(
+    form_allowed: bool,
+    url_allowed: bool,
+    form_listener_attached: bool,
+    url_listener_attached: bool,
+) -> ElicitationCapabilities {
+    ElicitationCapabilities::new()
+        .form((form_allowed && form_listener_attached).then(ElicitationFormCapabilities::new))
+        .url((url_allowed && url_listener_attached).then(ElicitationUrlCapabilities::new))
+}
+
+fn build_session_capabilities(
+    compaction_supported: bool,
+    notices_supported: bool,
+) -> ClientSessionCapabilities {
+    let capabilities = ClientSessionCapabilities::new().config_options(
+        SessionConfigOptionsCapabilities::new().boolean(BooleanConfigOptionCapabilities::new()),
+    );
+    let capabilities = if compaction_supported {
+        capabilities.compaction(CompactionCapabilities::new())
+    } else {
+        capabilities
+    };
+    if notices_supported {
+        capabilities.notices(NoticeCapabilities::new())
+    } else {
+        capabilities
+    }
 }
 
 pub struct ConnectionManager {
@@ -279,35 +467,48 @@ impl ConnectionManager {
     pub async fn connect(
         &mut self,
         handler: Arc<Handler>,
-        ConnectionDetails { agent, protocol }: ConnectionDetails,
+        connection_details: ConnectionDetails,
     ) -> crate::acp::Result<&Connection> {
+        let ConnectionDetails { agent, protocol } = connection_details.clone();
         let permissions = self.get_permissions().await;
         let agent_name = agent.name();
-
-        // Check if connection already exists without borrowing
         let already_connected = self.connection.contains_key(&agent_name);
+
         if already_connected {
             warn!(
                 "A connection already exists for '{}'. Returning existing connection",
                 agent
             );
             return self
-                .connection
-                .get(&agent_name)
+                .get_connection(&agent)
                 .ok_or_else(|| Error::Internal("Connection not found".to_string()));
         }
 
-        // Now we can safely do mutable operations
         let (sender, receiver) = async_channel::bounded(100);
+        let client_capabilities = ClientCapabilities::new()
+            .terminal(permissions.terminal_access)
+            .fs(FileSystemCapabilities::new()
+                .read_text_file(permissions.fs_read_access)
+                .write_text_file(permissions.fs_write_access))
+            .elicitation(build_elicitation_capabilities(
+                permissions.elicitation.form,
+                permissions.elicitation.url,
+                autocmd_listeners_attached(Commands::FormElicitation),
+                autocmd_listeners_attached(Commands::UrlElicitation),
+            ))
+            .auth(AuthCapabilities::new().terminal(
+                autocmd_listeners_attached(Commands::TerminalAuthentication)
+                    && agent.base_command().is_some(),
+            ))
+            .session(build_session_capabilities(
+                autocmd_listeners_attached(Commands::CompactionUpdate)
+                    || autocmd_listeners_attached(Commands::CompactionSummaryChunk),
+                autocmd_listeners_attached(Commands::Notice),
+            ));
+
         let init_config = InitializeRequest::new(ProtocolVersion::LATEST)
             .client_info(Implementation::new("hermes", env!("CARGO_PKG_VERSION")).title("Hermes"))
-            .client_capabilities(
-                ClientCapabilities::new()
-                    .terminal(permissions.terminal_access)
-                    .fs(FileSystemCapabilities::new()
-                        .read_text_file(permissions.fs_read_access)
-                        .write_text_file(permissions.fs_write_access)),
-            );
+            .client_capabilities(client_capabilities);
 
         let thread_agent = agent.clone();
         trace!("Starting agent communication in new thread");
@@ -325,12 +526,6 @@ impl ConnectionManager {
 
             trace!("Starting smol executor for {}", agent_display_name);
 
-            // Run the connection in the executor.
-            // smol::block_on drives the top-level future, while executor.run()
-            // continuously polls all tasks spawned onto the LocalExecutor.
-            // Each protocol module owns its transport-specific orchestration
-            // (stream acquisition, post-disconnect cleanup) and delegates the
-            // shared ACP `Client.builder()` plumbing to `connect::run_connection`.
             let run_result = smol::block_on(executor.run(async {
                 match protocol {
                     Protocol::Stdio => {
@@ -355,13 +550,35 @@ impl ConnectionManager {
             run_result
         });
 
-        self.add_connection(agent.clone(), Connection::new(sender, handle, stdio_child));
+        self.add_connection(
+            agent.clone(),
+            Connection::new(sender, handle, stdio_child, connection_details),
+        );
         self.set_agent(agent.clone()).await;
         let connection = self.get_connection(&agent).unwrap();
         debug!("Stored connection to '{}'", agent);
         connection.initialize(init_config).await?;
         info!("Initialized connection to '{}'", agent);
         Ok(connection)
+    }
+
+    #[instrument(level = "trace", skip(self, handler))]
+    pub async fn reconnect(
+        &mut self,
+        handler: Arc<Handler>,
+        assistant: &Assistant,
+    ) -> crate::acp::Result<()> {
+        let mut connection = self.connection.remove(&assistant.name()).ok_or_else(|| {
+            Error::Connection(format!("No connection found for assistant {}", assistant))
+        })?;
+        let details = connection.details();
+        // This runs on the connection's own thread, so we must not wait for it
+        // to exit (it can never observe itself as finished). `shutdown()` just
+        // closes the channel; the thread exits once this dispatch returns.
+        connection.shutdown();
+        drop(connection);
+        self.connect(handler, details).await?;
+        Ok(())
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -422,8 +639,34 @@ impl Drop for ConnectionManager {
 mod tests {
     use super::*;
     use crate::acp::registry::{DistributionCommand, PackageDistribution};
+    use nvim_oxi::conversion::FromObject;
     use pretty_assertions::assert_eq;
     use proptest::prelude::*;
+
+    fn agent_opencode() -> Assistant {
+        Assistant::CustomStdio {
+            name: "opencode".to_string(),
+            command: "opencode".to_string(),
+            args: vec!["acp".to_string()],
+        }
+    }
+
+    fn agent_copilot() -> Assistant {
+        Assistant::CustomStdio {
+            name: "copilot".to_string(),
+            command: "copilot".to_string(),
+            args: vec!["--acp".to_string()],
+        }
+    }
+
+    /// A `Connection` with no live `Handler` behind it; enough for exercising
+    /// `ConnectionManager` bookkeeping, which never touches `Connection::details()`.
+    fn mock_connection(
+        sender: async_channel::Sender<crate::acp::connection::UserRequest>,
+        handle: std::thread::JoinHandle<crate::acp::Result<()>>,
+    ) -> Connection {
+        Connection::new(sender, handle, None, ConnectionDetails::default())
+    }
 
     proptest! {
         #[test]
@@ -437,6 +680,100 @@ mod tests {
             // Property: converting string to Protocol should never panic
             let _ = Protocol::from(name.as_str());
         }
+    }
+
+    #[test]
+    fn assistant_from_object_parses_stdio() {
+        let mut dict = nvim_oxi::Dictionary::new();
+        dict.insert("command", "my-agent");
+        dict.insert("name", "My Agent");
+
+        let assistant = Assistant::from_object(nvim_oxi::Object::from(dict)).expect("parses");
+
+        assert_eq!(
+            assistant,
+            Assistant::CustomStdio {
+                name: "My Agent".to_string(),
+                command: "my-agent".to_string(),
+                args: Vec::new(),
+            }
+        );
+    }
+
+    #[test]
+    fn assistant_from_object_parses_socket() {
+        let mut dict = nvim_oxi::Dictionary::new();
+        dict.insert("protocol", "socket");
+        dict.insert("path", "/tmp/agent.sock");
+
+        let assistant = Assistant::from_object(nvim_oxi::Object::from(dict)).expect("parses");
+
+        assert_eq!(
+            assistant,
+            Assistant::CustomSocket {
+                name: String::new(),
+                path: "/tmp/agent.sock".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn assistant_from_object_parses_url() {
+        let mut dict = nvim_oxi::Dictionary::new();
+        dict.insert("protocol", "tcp");
+        dict.insert("host", "localhost");
+        dict.insert("port", 8080i64);
+
+        let assistant = Assistant::from_object(nvim_oxi::Object::from(dict)).expect("parses");
+
+        assert_eq!(
+            assistant,
+            Assistant::CustomUrl {
+                name: String::new(),
+                host: "localhost".to_string(),
+                port: 8080,
+                path: None,
+            }
+        );
+    }
+
+    #[test]
+    fn assistant_from_object_stdio_without_command_is_error() {
+        let dict = nvim_oxi::Dictionary::new();
+
+        let result = Assistant::from_object(nvim_oxi::Object::from(dict));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn assistant_to_connection_dict_uses_passed_protocol() {
+        let assistant = Assistant::CustomUrl {
+            name: "remote".to_string(),
+            host: "example.com".to_string(),
+            port: 443,
+            path: None,
+        };
+
+        let dict = assistant.to_connection_dict(Protocol::Https);
+
+        assert_eq!(
+            dict.get("protocol").and_then(|o| o.clone().try_into().ok()),
+            Some(nvim_oxi::String::from("https"))
+        );
+    }
+
+    #[test]
+    fn assistant_to_connection_dict_skips_empty_name() {
+        let assistant = Assistant::CustomStdio {
+            name: String::new(),
+            command: "my-agent".to_string(),
+            args: Vec::new(),
+        };
+
+        let dict = assistant.to_connection_dict(Protocol::Stdio);
+
+        assert!(dict.get("name").is_none());
     }
 
     #[test]
@@ -490,23 +827,14 @@ mod tests {
 
     #[test]
     fn test_assistant_display() {
-        // Test Display for all Assistant variants using slice comparison
-        let assistants: Vec<Assistant> = vec![
-            Assistant::Copilot,
-            Assistant::Opencode,
-            Assistant::CustomStdio {
-                name: String::from("my-claude"),
-                command: String::from("claude-acp"),
-                args: vec![String::from("--socket")],
-            },
-        ];
+        let assistants: Vec<Assistant> = vec![Assistant::CustomStdio {
+            name: String::from("my-claude"),
+            command: String::from("claude-acp"),
+            args: vec![String::from("--socket")],
+        }];
         let results: Vec<String> = assistants.iter().map(|a| format!("{}", a)).collect();
 
-        let expected: Vec<String> = vec![
-            "copilot".to_string(),
-            "opencode".to_string(),
-            "my-claude".to_string(),
-        ];
+        let expected: Vec<String> = vec!["my-claude".to_string()];
 
         assert_eq!(results, expected);
     }
@@ -523,11 +851,11 @@ mod tests {
         let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
         let (sender, _) = async_channel::unbounded();
         let handle = std::thread::spawn(|| Ok(()));
-        let connection = Connection::new(sender, handle, None);
-        manager.add_connection(Assistant::Copilot, connection);
+        let connection = mock_connection(sender, handle);
+        manager.add_connection(agent_copilot(), connection);
         let agents = manager.connected_agents();
         assert_eq!(agents.len(), 1);
-        assert_eq!(agents[0], Assistant::Copilot);
+        assert_eq!(agents[0], Assistant::from("copilot"));
     }
 
     #[test]
@@ -535,33 +863,80 @@ mod tests {
         let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
         let (sender1, _) = async_channel::unbounded();
         let handle1 = std::thread::spawn(|| Ok(()));
-        let connection1 = Connection::new(sender1, handle1, None);
-        manager.add_connection(Assistant::Copilot, connection1);
+        let connection1 = mock_connection(sender1, handle1);
+        manager.add_connection(agent_copilot(), connection1);
 
         let (sender2, _) = async_channel::unbounded();
         let handle2 = std::thread::spawn(|| Ok(()));
-        let connection2 = Connection::new(sender2, handle2, None);
-        manager.add_connection(Assistant::Opencode, connection2);
+        let connection2 = mock_connection(sender2, handle2);
+        manager.add_connection(agent_opencode(), connection2);
 
         let agents = manager.connected_agents();
         assert_eq!(agents.len(), 2);
-        assert!(agents.contains(&Assistant::Copilot));
-        assert!(agents.contains(&Assistant::Opencode));
+        assert!(agents.contains(&Assistant::from("copilot")));
+        assert!(agents.contains(&Assistant::from("opencode")));
+    }
+
+    #[test]
+    fn disconnect_returns_error_when_connection_missing() {
+        let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
+
+        let result = manager.disconnect(vec![agent_copilot()]);
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Connection error: A problem occurred while trying to disconnect from agent(s): copilot"
+        );
+    }
+
+    #[test]
+    fn disconnect_removes_connection() {
+        let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
+        let (sender, _) = async_channel::unbounded();
+        let handle = std::thread::spawn(|| Ok(()));
+        manager.add_connection(agent_copilot(), mock_connection(sender, handle));
+
+        manager
+            .disconnect(vec![agent_copilot()])
+            .expect("disconnect should succeed");
+
+        assert!(manager.connected_agents().is_empty());
     }
 
     #[test]
     fn test_assistant_from_str_copilot_lowercase() {
-        assert_eq!(Assistant::from("copilot"), Assistant::Copilot);
+        assert_eq!(
+            Assistant::from("copilot"),
+            Assistant::CustomStdio {
+                name: "copilot".to_string(),
+                command: String::new(),
+                args: Vec::new(),
+            }
+        );
     }
 
     #[test]
     fn test_assistant_from_str_opencode_lowercase() {
-        assert_eq!(Assistant::from("opencode"), Assistant::Opencode);
+        assert_eq!(
+            Assistant::from("opencode"),
+            Assistant::CustomStdio {
+                name: "opencode".to_string(),
+                command: String::new(),
+                args: Vec::new(),
+            }
+        );
     }
 
     #[test]
     fn test_assistant_from_str_copilot_uppercase() {
-        assert_eq!(Assistant::from("COPILOT"), Assistant::Copilot);
+        assert_eq!(
+            Assistant::from("COPILOT"),
+            Assistant::CustomStdio {
+                name: "COPILOT".to_string(),
+                command: String::new(),
+                args: Vec::new(),
+            }
+        );
     }
 
     #[test]
@@ -598,7 +973,11 @@ mod tests {
 
     #[test]
     fn test_assistant_gemini_display() {
-        let assistant = Assistant::Gemini;
+        let assistant = Assistant::CustomStdio {
+            name: String::from("gemini"),
+            command: String::from("gemini"),
+            args: vec![String::from("--acp")],
+        };
         assert_eq!(format!("{}", assistant), "gemini");
     }
 
@@ -687,12 +1066,147 @@ mod tests {
     #[test]
     fn test_assistant_from_string() {
         let result = Assistant::from(String::from("opencode"));
-        assert!(matches!(result, Assistant::Opencode));
+        assert!(matches!(result, Assistant::CustomStdio { name, .. } if name == "opencode"));
+    }
+
+    #[test]
+    fn base_command_custom_stdio_returns_configured_command() {
+        let agent = Assistant::CustomStdio {
+            name: "custom".to_string(),
+            command: "mock-agent".to_string(),
+            args: vec!["serve".to_string()],
+        };
+        assert_eq!(agent.base_command(), Some("mock-agent".to_string()));
+    }
+
+    #[test]
+    fn base_command_registered_with_command_override_returns_override() {
+        let entry = AgentEntry {
+            id: "test-agent".to_string(),
+            name: "Test Agent".to_string(),
+            version: "1.0.0".to_string(),
+            description: String::new(),
+            repository: None,
+            website: None,
+            authors: None,
+            license: None,
+            icon: None,
+            distribution: HashMap::new(),
+        };
+        let assistant = Assistant::Registered {
+            agent: entry,
+            configuration: Default::default(),
+            distribution: None,
+            command: Some("override-agent".to_string()),
+            args: None,
+            registry: None,
+        };
+        assert_eq!(assistant.base_command(), Some("override-agent".to_string()));
+    }
+
+    #[test]
+    fn base_command_registered_without_command_returns_none() {
+        let entry = AgentEntry {
+            id: "test-agent".to_string(),
+            name: "Test Agent".to_string(),
+            version: "1.0.0".to_string(),
+            description: String::new(),
+            repository: None,
+            website: None,
+            authors: None,
+            license: None,
+            icon: None,
+            distribution: HashMap::new(),
+        };
+        let assistant = Assistant::Registered {
+            agent: entry,
+            configuration: Default::default(),
+            distribution: None,
+            command: None,
+            args: None,
+            registry: None,
+        };
+        assert_eq!(assistant.base_command(), None);
+    }
+
+    #[test]
+    fn base_command_custom_url_returns_none() {
+        let agent = Assistant::CustomUrl {
+            name: "remote".to_string(),
+            host: "localhost".to_string(),
+            port: 8080,
+            path: None,
+        };
+        assert_eq!(agent.base_command(), None);
+    }
+
+    #[test]
+    fn base_command_custom_socket_returns_none() {
+        let agent = Assistant::CustomSocket {
+            name: "socket".to_string(),
+            path: "/tmp/agent.sock".to_string(),
+        };
+        assert_eq!(agent.base_command(), None);
     }
 
     #[test]
     fn test_protocol_default_is_stdio() {
         let protocol: Protocol = Default::default();
         assert!(matches!(protocol, Protocol::Stdio));
+    }
+
+    #[test]
+    fn elicitation_capabilities_advertised_when_permission_and_listener_present() {
+        let caps = build_elicitation_capabilities(true, true, true, true);
+
+        let expected = ElicitationCapabilities::new()
+            .form(ElicitationFormCapabilities::new())
+            .url(ElicitationUrlCapabilities::new());
+        assert_eq!(caps, expected);
+    }
+
+    #[test]
+    fn elicitation_form_capability_suppressed_when_permission_disabled() {
+        let caps = build_elicitation_capabilities(false, false, true, true);
+
+        assert_eq!(caps, ElicitationCapabilities::new());
+    }
+
+    #[test]
+    fn elicitation_form_capability_suppressed_without_listener() {
+        let caps = build_elicitation_capabilities(true, false, false, true);
+
+        assert_eq!(caps, ElicitationCapabilities::new());
+    }
+
+    #[test]
+    fn elicitation_url_capability_suppressed_without_listener() {
+        let caps = build_elicitation_capabilities(false, true, true, false);
+
+        assert_eq!(caps, ElicitationCapabilities::new());
+    }
+
+    #[test]
+    fn test_build_session_capabilities_advertises_compaction_when_supported() {
+        let capabilities = build_session_capabilities(true, false);
+        assert_eq!(capabilities.compaction, Some(CompactionCapabilities::new()));
+    }
+
+    #[test]
+    fn test_build_session_capabilities_omits_compaction_when_unsupported() {
+        let capabilities = build_session_capabilities(false, false);
+        assert_eq!(capabilities.compaction, None);
+    }
+
+    #[test]
+    fn test_build_session_capabilities_advertises_notices_when_supported() {
+        let capabilities = build_session_capabilities(false, true);
+        assert_eq!(capabilities.notices, Some(NoticeCapabilities::new()));
+    }
+
+    #[test]
+    fn test_build_session_capabilities_omits_notices_when_unsupported() {
+        let capabilities = build_session_capabilities(false, false);
+        assert_eq!(capabilities.notices, None);
     }
 }

@@ -26,40 +26,68 @@ pub struct ConnectionOptions {
     path: Option<String>,
 }
 
+impl From<Assistant> for ConnectionOptions {
+    fn from(value: Assistant) -> Self {
+        match value {
+            Assistant::Registered {
+                distribution,
+                command,
+                args,
+                ..
+            } => Self {
+                protocol: Protocol::Stdio,
+                distribution,
+                command,
+                args,
+                ..Default::default()
+            },
+            Assistant::CustomStdio { command, args, .. } => Self {
+                protocol: Protocol::Stdio,
+                command: Some(command),
+                args: Some(args),
+                ..Default::default()
+            },
+            Assistant::CustomSocket { path, .. } => Self {
+                protocol: Protocol::Socket,
+                path: Some(path),
+                ..Default::default()
+            },
+            Assistant::CustomUrl {
+                host, port, path, ..
+            } => Self {
+                protocol: Protocol::Tcp,
+                host: Some(host),
+                port: Some(port),
+                path,
+                ..Default::default()
+            },
+        }
+    }
+}
+
 impl ConnectionOptions {
     fn into_assistant(self, name: String) -> Result<Assistant> {
         match self.protocol {
             Protocol::Stdio => match self.command {
-                Some(command) => {
-                    if command.is_empty() {
-                        return Err(Error::InvalidInput(
-                            "Command cannot be empty for custom stdio connections".into(),
-                        ));
-                    }
-                    Ok(Assistant::CustomStdio {
-                        name,
-                        command,
-                        args: self.args.unwrap_or_default(),
-                    })
-                }
-                None => {
-                    let assistant = Assistant::from(name);
-                    if matches!(assistant, Assistant::CustomStdio { .. }) {
-                        return Err(Error::InvalidInput(
-                            "Custom stdio connections require options with a 'command' field"
-                                .into(),
-                        ));
-                    }
-                    Ok(assistant)
-                }
+                Some(command) if !command.is_empty() => Ok(Assistant::CustomStdio {
+                    name,
+                    command,
+                    args: self.args.unwrap_or_default(),
+                }),
+                Some(_) => Err(Error::InvalidInput(
+                    "Command cannot be empty for stdio connections".into(),
+                )),
+                None => Err(Error::InvalidInput(
+                    "A 'command' is required for stdio connections".into(),
+                )),
             },
             Protocol::Socket => match self.path {
                 Some(path) => Ok(Assistant::CustomSocket { name, path }),
                 None => Err(Error::InvalidInput(
-                    "Path must be provided for socket connections".into(),
+                    "A 'path' is required for socket connections".into(),
                 )),
             },
-            _ => match (self.host, self.port) {
+            Protocol::Tcp | Protocol::Http | Protocol::Https => match (self.host, self.port) {
                 (Some(host), Some(port)) => Ok(Assistant::CustomUrl {
                     name,
                     host,
@@ -67,7 +95,7 @@ impl ConnectionOptions {
                     path: self.path,
                 }),
                 _ => Err(Error::InvalidInput(format!(
-                    "Host and port must be provided for {} connections",
+                    "'host' and 'port' are required for {} connections",
                     self.protocol
                 ))),
             },
@@ -209,40 +237,49 @@ impl Api {
         let state = self.state.lock().await;
         let registry = state.registry.clone();
         let distribution_config = state.config.distributions.clone();
+        let custom = state.config.agents.get(&agent_id).cloned();
         drop(state);
 
-        let agent = if let Some(Some(entry)) = registry
+        let registry_entry = registry
             .as_ref()
-            .map(|r| r.data.get_entry(&agent_id).cloned())
-        {
-            Assistant::Registered {
-                agent: entry,
-                configuration: distribution_config,
-                distribution: opts.distribution,
-                command: opts.command,
-                args: opts.args,
-                registry: registry.clone(),
-            }
-        } else {
-            opts.clone().into_assistant(agent_id)?
+            .and_then(|r| r.data.get_entry(&agent_id).cloned());
+
+        let (agent, protocol) = match custom.as_ref() {
+            Some(entry) if entry.is_valid().await? => (
+                entry.connection.clone().with_name(&agent_id),
+                entry.protocol,
+            ),
+            _ => match registry_entry {
+                Some(entry) => (
+                    Assistant::Registered {
+                        agent: entry,
+                        configuration: distribution_config,
+                        distribution: opts.distribution,
+                        command: opts.command.clone(),
+                        args: opts.args.clone(),
+                        registry: registry.clone(),
+                    },
+                    opts.protocol,
+                ),
+                None => (opts.clone().into_assistant(agent_id)?, opts.protocol),
+            },
         };
 
-        self.connection
-            .connect(
-                self.response_handler.clone(),
-                ConnectionDetails {
-                    agent,
-                    protocol: opts.protocol,
-                },
-            )
-            .await?;
-        Ok(())
+        let handler = self.response_handler.clone();
+        let mut connection_manager = self.connection_manager.lock().await;
+        let result = connection_manager
+            .connect(handler, ConnectionDetails { agent, protocol })
+            .await
+            .map(|_| ());
+        drop(connection_manager);
+        result
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::acp::registry::entry::AgentEntry;
     use pretty_assertions::assert_eq;
     use proptest::prelude::*;
 
@@ -273,32 +310,34 @@ mod tests {
             Just("COPILOT"),
             Just("OPENCODE")
         )) {
-            // Property: Known agents should parse to their respective variants
+            // Property: known names parse to a CustomStdio named after the input
             let assistant = Assistant::from(name);
-            let name_lower = name.to_lowercase();
-
-            if name_lower == "copilot" {
-                prop_assert!(matches!(assistant, Assistant::Copilot), "Expected Copilot variant");
-            } else if name_lower == "opencode" {
-                prop_assert!(matches!(assistant, Assistant::Opencode), "Expected Opencode variant");
-            }
+            prop_assert!(
+                matches!(&assistant, Assistant::CustomStdio { name: agent_name, .. } if agent_name == name),
+                "Expected CustomStdio named after the input"
+            );
         }
     }
 
     #[test]
     fn test_assistant_from_str_copilot() {
-        assert!(matches!(Assistant::from("copilot"), Assistant::Copilot));
+        assert!(
+            matches!(Assistant::from("copilot"), Assistant::CustomStdio { name, .. } if name == "copilot")
+        );
     }
 
     #[test]
     fn test_assistant_from_str_opencode() {
-        assert!(matches!(Assistant::from("opencode"), Assistant::Opencode));
+        assert!(
+            matches!(Assistant::from("opencode"), Assistant::CustomStdio { name, .. } if name == "opencode")
+        );
     }
 
     #[test]
     fn test_assistant_from_str_case_insensitive() {
-        assert!(matches!(Assistant::from("COPILOT"), Assistant::Copilot));
-        assert!(matches!(Assistant::from("OpEnCoDe"), Assistant::Opencode));
+        assert!(
+            matches!(Assistant::from("COPILOT"), Assistant::CustomStdio { name, .. } if name == "COPILOT")
+        );
     }
 
     #[test]
@@ -307,21 +346,153 @@ mod tests {
         assert!(matches!(assistant, Assistant::CustomStdio { name, .. } if name == "custom-agent"));
     }
 
+    fn agent_entry() -> AgentEntry {
+        AgentEntry {
+            id: "test-agent".to_string(),
+            name: "Test Agent".to_string(),
+            version: "1.0.0".to_string(),
+            description: String::new(),
+            repository: None,
+            website: None,
+            authors: None,
+            license: None,
+            icon: None,
+            distribution: Default::default(),
+        }
+    }
+
+    #[test]
+    fn connection_options_from_registered_assistant_maps_to_stdio() {
+        let assistant = Assistant::Registered {
+            agent: agent_entry(),
+            distribution: Some(Distribution::Npx),
+            configuration: Default::default(),
+            command: Some("registry-agent".to_string()),
+            args: Some(vec!["--acp".to_string()]),
+            registry: None,
+        };
+
+        let opts = ConnectionOptions::from(assistant);
+
+        assert_eq!(
+            (
+                opts.protocol,
+                opts.distribution,
+                opts.command,
+                opts.args,
+                opts.host,
+                opts.port,
+                opts.path,
+            ),
+            (
+                Protocol::Stdio,
+                Some(Distribution::Npx),
+                Some("registry-agent".to_string()),
+                Some(vec!["--acp".to_string()]),
+                None,
+                None,
+                None,
+            )
+        );
+    }
+
+    #[test]
+    fn connection_options_from_custom_stdio_assistant_maps_to_stdio() {
+        let assistant = Assistant::CustomStdio {
+            name: "custom".to_string(),
+            command: "custom-agent".to_string(),
+            args: vec!["serve".to_string()],
+        };
+
+        let opts = ConnectionOptions::from(assistant);
+
+        assert_eq!(
+            (
+                opts.protocol,
+                opts.distribution,
+                opts.command,
+                opts.args,
+                opts.host,
+                opts.port,
+                opts.path,
+            ),
+            (
+                Protocol::Stdio,
+                None,
+                Some("custom-agent".to_string()),
+                Some(vec!["serve".to_string()]),
+                None,
+                None,
+                None,
+            )
+        );
+    }
+
+    #[test]
+    fn connection_options_from_custom_socket_assistant_maps_to_socket() {
+        let assistant = Assistant::CustomSocket {
+            name: "socket".to_string(),
+            path: "/tmp/agent.sock".to_string(),
+        };
+
+        let opts = ConnectionOptions::from(assistant);
+
+        assert_eq!(
+            (
+                opts.protocol,
+                opts.distribution,
+                opts.command,
+                opts.args,
+                opts.host,
+                opts.port,
+                opts.path,
+            ),
+            (
+                Protocol::Socket,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some("/tmp/agent.sock".to_string()),
+            )
+        );
+    }
+
+    #[test]
+    fn connection_options_from_custom_url_assistant_maps_to_tcp() {
+        let assistant = Assistant::CustomUrl {
+            name: "remote".to_string(),
+            host: "api.example.com".to_string(),
+            port: 443,
+            path: Some("/v1/acp".to_string()),
+        };
+
+        let opts = ConnectionOptions::from(assistant);
+
+        assert_eq!(
+            (
+                opts.protocol,
+                opts.distribution,
+                opts.command,
+                opts.args,
+                opts.host,
+                opts.port,
+                opts.path,
+            ),
+            (
+                Protocol::Tcp,
+                None,
+                None,
+                None,
+                Some("api.example.com".to_string()),
+                Some(443),
+                Some("/v1/acp".to_string()),
+            )
+        );
+    }
+
     // Tests for ConnectionOptions into_assistant
-    #[test]
-    fn connection_options_into_assistant_copilot() {
-        let opts = ConnectionOptions::default();
-        let result = opts.into_assistant("copilot".to_string());
-        assert!(matches!(result.unwrap(), Assistant::Copilot));
-    }
-
-    #[test]
-    fn connection_options_into_assistant_opencode() {
-        let opts = ConnectionOptions::default();
-        let result = opts.into_assistant("opencode".to_string());
-        assert!(matches!(result.unwrap(), Assistant::Opencode));
-    }
-
     #[test]
     fn connection_options_into_assistant_custom_stdio() {
         let opts = ConnectionOptions {
@@ -332,7 +503,7 @@ mod tests {
         let result = opts.into_assistant("test-agent".to_string());
         let assistant = result.unwrap();
         assert!(
-            matches!(assistant, Assistant::CustomStdio { name, command, args } 
+            matches!(assistant, Assistant::CustomStdio { name, command, args }
             if name == "test-agent" && command == "my-agent" && args == vec!["arg1", "arg2"])
         );
     }
@@ -390,7 +561,7 @@ mod tests {
         };
         let result = opts.into_assistant("socket-agent".to_string());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("Path must be provided"));
+        assert!(err.contains("A 'path' is required"));
     }
 
     #[test]
@@ -422,7 +593,7 @@ mod tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("Host and port must be provided")
+                .contains("'host' and 'port' are required")
         );
     }
 
@@ -451,7 +622,7 @@ mod tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("require options with a 'command' field")
+                .contains("A 'command' is required")
         );
     }
 

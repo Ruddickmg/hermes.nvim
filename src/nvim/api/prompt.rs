@@ -393,8 +393,8 @@ impl Api {
         };
 
         let request = PromptRequest::new(session_id.to_string(), content_blocks);
-        let connection = self
-            .connection
+        let connection_manager = self.connection_manager.lock().await;
+        let connection = connection_manager
             .get_current_connection()
             .await
             .ok_or_else(|| {
@@ -402,8 +402,9 @@ impl Api {
                     "You are not connected to an agent, call connect before \"prompt\"".to_string(),
                 )
             })?;
-
-        connection.prompt(request).await?;
+        let result = connection.prompt(request).await;
+        drop(connection_manager);
+        result?;
 
         let state = self.state.lock().await;
         write_prompt_history(history, &agent_name, &session_id, &state.agent_info);
@@ -973,7 +974,12 @@ mod tests {
             r#"{"role":"user","content":"world"}"#.to_string(),
         ];
 
-        write_prompt_history(history, &Assistant::Copilot, "session-abc", &agent_info);
+        let agent = Assistant::CustomStdio {
+            name: "copilot".to_string(),
+            command: "copilot".to_string(),
+            args: vec!["--acp".to_string()],
+        };
+        write_prompt_history(history, &agent, "session-abc", &agent_info);
 
         // Flush and shutdown the worker to ensure writes hit disk
         agent_info.history.clone().shutdown();
@@ -999,7 +1005,12 @@ mod tests {
         agent_info.set_history(temp_dir.path().to_path_buf());
 
         let history: Vec<String> = vec![];
-        write_prompt_history(history, &Assistant::Copilot, "session-abc", &agent_info);
+        let agent = Assistant::CustomStdio {
+            name: "copilot".to_string(),
+            command: "copilot".to_string(),
+            args: vec!["--acp".to_string()],
+        };
+        write_prompt_history(history, &agent, "session-abc", &agent_info);
 
         agent_info.history.clone().shutdown();
 

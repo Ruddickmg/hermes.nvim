@@ -8,199 +8,28 @@
 ---   require("hermes").connect("opencode")  -- Connect to agent
 ---
 ---@brief ]]
-
--- ============================================================================
--- Type Definitions for IDE/LSP Support
--- ============================================================================
-
----@class HermesDownloadConfig
----Download configuration for binary management
----@field version? string Version to use ("latest" or specific version like "v0.1.0")
----@field auto? boolean Whether to auto-download pre-built binary (default: true)
----@field timeout? number Download timeout in seconds (default: 60)
-
----@class HermesProgressConfig
----@field cmdline? boolean Show progress messages in cmdline (0.12+ only, default: false)
----@field update_frequency? integer How often to poll for progress in milliseconds (default: 150)
-
----@class HermesConfig
----Hermes plugin configuration options
----@field download? HermesDownloadConfig Download configuration for binary management
----@field root_markers? string[] Files/directories to identify project root (default: {".git"})
----@field permissions? HermesPermissions Permission settings for agent operations
----@field terminal? HermesTerminalConfig Terminal configuration
----@field buffer? HermesBufferConfig Buffer configuration
----@field session? HermesSessionConfig Session configuration
----@field log? HermesLogConfig Logging configuration
----@field progress? HermesProgressConfig Progress display configuration
-
----@class HermesPermissions
----Permission settings for agent operations
----@field fs_write_access? boolean Allow agent to write files (default: true)
----@field fs_read_access? boolean Allow agent to read files (default: true)
----@field terminal_access? boolean Allow agent to execute terminal commands (default: true)
----@field request_permissions? boolean Allow agent to send permission requests (default: true)
----@field send_notifications? boolean Allow agent to send notifications (default: true)
-
----@class HermesTerminalConfig
----Terminal configuration options
----@field delete? boolean Auto-delete terminals on exit (default: false)
----@field enabled? boolean Enable terminal functionality (default: true)
----@field hidden? boolean Hide terminal windows (default: true)
----@field buffered? boolean Buffer terminal output (default: true)
-
----@class HermesBufferConfig
----Buffer configuration options
----@field auto_save? boolean Auto-save modified files after writing (default: false)
-
----@class HermesSessionConfig
----Session configuration options
----@field store_history? boolean Store session history locally when agent does not support load_session (default: true)
-
----@class HermesLogConfig
----Logging configuration options
----@field stdio? HermesLogTargetConfig Stdio logging settings
----@field notification? HermesLogTargetConfig Notification logging settings
----@field message? HermesLogTargetConfig Message logging settings (for :messages)
----@field file? HermesLogFileConfig File logging settings
-
----@class HermesLogTargetConfig
----Log target configuration (stdio, notification, message)
----@field level? number|string Log level (vim.log.levels.* or "trace", "debug", "info", "warn", "error", "off")
----@field format? "compact"|"pretty"|"full"|"json" Log format (default: "compact")
----@field show_ansi? boolean Show ANSI color codes in output (default: false)
-
----@class HermesLogFileConfig
----File logging configuration
----@field level? number|string Log level (vim.log.levels.* or string)
----@field format? "compact"|"pretty"|"full"|"json" Log format (default: "json")
----@field path? string Path to log directory (default: vim.fn.stdpath('state') .. "/hermes")
----@field name? string Log file name (default: "hermes.log")
----@field show_ansi? boolean Show ANSI color codes in output (default: false)
----@field max_size? number Maximum file size in bytes (default: 10485760 = 10MB)
----@field max_files? number Maximum number of log files to keep (default: 5)
-
----@class ConnectionOptions
----Options for connecting to an agent
----@field protocol? "stdio"|"http"|"socket"|"tcp" Connection protocol (default: "stdio")
----@field command? string Command to run for stdio connections
----@field args? string[] Command arguments for stdio connections
----@field host? string Host for socket/tcp/http connections
----@field port? number Port for socket/tcp/http connections
----@field url? string URL for http/sse connections
----@field distribution? "npx"|"uvx"|"binary" Preferred distribution type for registry agents (default: auto-select npx > uvx > binary)
-
----@class EnvVar
----Environment variable entry
----@field name string Environment variable name
----@field value string Environment variable value
-
----@class McpServer
----MCP (Model Context Protocol) server configuration
----@field type "http"|"sse"|"stdio" Server type
----@field name string Human-readable server name
----@field url? string URL for http/sse servers (required for http/sse types)
----@field headers? table<string, string>[] HTTP headers as array of key-value tables
----@field command? string Command to execute for stdio servers (required for stdio type)
----@field args? string[] Arguments for stdio server command
----@field env? EnvVar[] Environment variables as array of {name: string, value: string}
-
----@class SessionOptions
----Options for creating or loading a session
----@field cwd? string Working directory for the session
----@field additional_directories? string[] Additional workspace roots for the session (requires agent capability)
----@field mcp_servers? McpServer[] Array of MCP server configurations
-
----@class ListSessionsOptions
----Options for listing sessions
----@field cwd? string Filter by working directory path
----@field cursor? string Pagination cursor for fetching next page
-
----@class AgentsOptions
----Options for listing agents from the registry
----@field update? boolean Whether to fetch the latest registry before listing
----@field url? string Custom registry URL (default: official ACP registry)
-
----@class TextContent
----Text content for prompts
----@field type "text" Type identifier
----@field text string The text content to send
-
----@class LinkContent
----Resource link content for prompts
----@field type "link" Type identifier
----@field name string Human-readable resource name
----@field uri string Resource URI (file path or URL)
----@field description? string Optional description
----@field mimeType? string Optional MIME type
-
----@class EmbeddedResource
----Embedded resource data
----@field uri string Resource URI
----@field mimeType? string MIME type of the resource (e.g., "text/x-python", "application/pdf")
----@field text? string Text content (for text resources)
----@field blob? string Base64-encoded binary data (for blob resources)
-
----@class EmbeddedContent
----Embedded resource content for prompts
----@field type "embedded" Type identifier
----@field resource EmbeddedResource The embedded resource
-
----@class ImageContent
----Image content for prompts
----@field type "image" Type identifier
----@field data string Base64-encoded image data
----@field mimeType string MIME type (e.g., "image/png", "image/jpeg")
----@field uri? string Optional resource URI
-
----@class AudioContent
----Audio content for prompts
----@field type "audio" Type identifier
----@field data string Base64-encoded audio data
----@field mimeType string MIME type (e.g., "audio/wav", "audio/mpeg")
-
----@alias PromptContent TextContent|LinkContent|EmbeddedContent|ImageContent|AudioContent|table
-
----@class ModeOption
----@field value string Option ID
----@field name string Human-readable name
----@field description? string Optional description
----@field group? string Optional group name
-
----@class ModelOption
----@field value string Option ID
----@field name string Human-readable name
----@field description? string Optional description
----@field group? string Optional group name
-
----@class ThoughtLevelOption
----@field value string Option ID
----@field name string Human-readable name
----@field description? string Optional description
----@field group? string Optional group name
-
----@class SelectionOption
----@field value string Option ID
----@field name string Human-readable name
----@field description? string Optional description
----@field group? string Optional group name
-
----@class ModelConfigSelection
----@field options SelectionOption[] Available values
----@field current SelectionOption Currently selected value
-
----@class ModelConfigOption
----@field id string Config option ID
----@field name string Human-readable name
----@field description? string Optional description
----@field selection ModelConfigSelection Current selection and available options
-
----@class ConfigureModelConfig
----@field id string Config option ID to set
----@field value string Value to set
 -- luacov: enable
 
+-- Export enums and types from the root for convenience
+local types_module = require("hermes.types")
+
 local M = {}
+
+M.Protocol = types_module.Protocol
+M.Distribution = types_module.Distribution
+M.McpServerType = types_module.McpServerType
+M.PermissionKind = types_module.PermissionKind
+M.ElicitationAction = types_module.ElicitationAction
+M.ElicitationOutcome = types_module.ElicitationOutcome
+M.PermissionOutcome = types_module.PermissionOutcome
+M.ToolCallStatus = types_module.ToolCallStatus
+M.PlanPriority = types_module.PlanPriority
+M.PlanStatus = types_module.PlanStatus
+M.ConfigOptionType = types_module.ConfigOptionType
+M.ContentType = types_module.ContentType
+M.LogLevel = types_module.LogLevel
+M.LogFormat = types_module.LogFormat
+M.Autocommand = types_module.Autocommand
 
 -- Import logging module for notifications
 local logging = require("hermes.logging")
@@ -426,6 +255,9 @@ local function get_error_suggestion(err)
 	return "Try building from source with :Hermes build, or check your internet connection"
 end
 
+-- Forward declaration (defined below, used by async callbacks)
+local load_native_sync
+
 -- Handle download completion and trigger load (async entry point)
 local function handle_download_complete(success, result, fn)
 	if not success then
@@ -438,7 +270,7 @@ local function handle_download_complete(success, result, fn)
 
 	-- Use vim.schedule for the actual loading (only async part)
 	vim.schedule(function()
-		local ok, loaded = pcall(M._load_native_sync)
+		local ok, loaded = pcall(load_native_sync)
 
 		if not ok then
 			handle_load_failure(tostring(loaded), "Failed to load binary")
@@ -481,9 +313,8 @@ end
 
 -- luacov: disable
 ---Load native module synchronously (can be tested with mocked deps)
----@private
 -- luacov: enable
-function M._load_native_sync()
+function load_native_sync()
 	if not _native then
 		local binary = require("hermes.binary")
 		local ok, result = pcall(binary.load)
@@ -597,7 +428,7 @@ function M.setup(opts)
 
 	-- Execute async with loading state management
 	execute_async(function()
-		M._load_native_sync().setup(opts)
+		load_native_sync().setup(opts)
 	end)
 end
 
@@ -606,7 +437,7 @@ end
 ---@param opts? ConnectionOptions Connection options
 function M.connect(agent, opts)
 	execute_async(function()
-		M._load_native_sync().connect(agent, opts)
+		load_native_sync().connect(agent, opts)
 	end)
 end
 
@@ -614,7 +445,7 @@ end
 ---@param agents? string|string[] Agent name(s) to disconnect, nil for all
 function M.disconnect(agents)
 	execute_async(function()
-		M._load_native_sync().disconnect(agents)
+		load_native_sync().disconnect(agents)
 	end)
 end
 
@@ -622,7 +453,7 @@ end
 ---@param agents? string|string[] Agent name(s) to logout, nil for all
 function M.logout(agents)
 	execute_async(function()
-		M._load_native_sync().logout(agents)
+		load_native_sync().logout(agents)
 	end)
 end
 
@@ -630,7 +461,7 @@ end
 ---@param auth_method_id string Authentication method ID from ConnectionInitialized
 function M.authenticate(auth_method_id)
 	execute_async(function()
-		M._load_native_sync().authenticate(auth_method_id)
+		load_native_sync().authenticate(auth_method_id)
 	end)
 end
 
@@ -638,7 +469,7 @@ end
 ---@param opts? SessionOptions Session configuration options
 function M.create_session(opts)
 	execute_async(function()
-		M._load_native_sync().create_session(opts)
+		load_native_sync().create_session(opts)
 	end)
 end
 
@@ -647,7 +478,7 @@ end
 ---@param opts? SessionOptions Session configuration options
 function M.load_session(session_id, opts)
 	execute_async(function()
-		M._load_native_sync().load_session(session_id, opts)
+		load_native_sync().load_session(session_id, opts)
 	end)
 end
 
@@ -656,7 +487,7 @@ end
 ---@param opts? SessionOptions Session configuration options
 function M.resume_session(session_id, opts)
 	execute_async(function()
-		M._load_native_sync().resume_session(session_id, opts)
+		load_native_sync().resume_session(session_id, opts)
 	end)
 end
 
@@ -664,7 +495,7 @@ end
 ---@param opts? ListSessionsOptions Filter options
 function M.list_sessions(opts)
 	execute_async(function()
-		M._load_native_sync().list_sessions(opts)
+		load_native_sync().list_sessions(opts)
 	end)
 end
 
@@ -672,7 +503,7 @@ end
 ---@param opts? AgentsOptions Options (update: boolean to fetch latest registry)
 function M.agents(opts)
 	execute_async(function()
-		M._load_native_sync().agents(opts)
+		load_native_sync().agents(opts)
 	end)
 end
 
@@ -681,7 +512,7 @@ end
 ---@param content PromptContent|PromptContent[] Content to send (single item or array)
 function M.prompt(session_id, content)
 	execute_async(function()
-		M._load_native_sync().prompt(session_id, content)
+		load_native_sync().prompt(session_id, content)
 	end)
 end
 
@@ -689,7 +520,7 @@ end
 ---@param session_id string Session ID
 function M.close_session(session_id)
 	execute_async(function()
-		M._load_native_sync().close_session(session_id)
+		load_native_sync().close_session(session_id)
 	end)
 end
 
@@ -698,15 +529,15 @@ end
 ---@param opts? {cancel?: boolean} Options
 function M.delete_session(session_id, opts)
 	execute_async(function()
-		M._load_native_sync().delete_session(session_id, opts)
+		load_native_sync().delete_session(session_id, opts)
 	end)
 end
 
----Cancel current operation
----@param session_id string Session ID
-function M.cancel(session_id)
+---Cancel an active session's operation, or a pending incoming request by its request ID
+---@param id string Session ID, or a Hermes request ID for a pending agent request
+function M.cancel(id)
 	execute_async(function()
-		M._load_native_sync().cancel(session_id)
+		load_native_sync().cancel(id)
 	end)
 end
 
@@ -715,7 +546,7 @@ end
 ---@param mode string Mode ID/Name
 function M.set_mode(session_id, mode)
 	execute_async(function()
-		M._load_native_sync().set_mode(session_id, mode)
+		load_native_sync().set_mode(session_id, mode)
 	end)
 end
 
@@ -724,7 +555,7 @@ end
 ---@param model string Model ID/Name
 function M.set_model(session_id, model)
 	execute_async(function()
-		M._load_native_sync().set_model(session_id, model)
+		load_native_sync().set_model(session_id, model)
 	end)
 end
 
@@ -733,7 +564,7 @@ end
 ---@param level string Thought level ID/Name
 function M.set_thought_level(session_id, level)
 	execute_async(function()
-		M._load_native_sync().set_thought_level(session_id, level)
+		load_native_sync().set_thought_level(session_id, level)
 	end)
 end
 
@@ -741,7 +572,7 @@ end
 ---@param session_id string Session ID
 function M.modes(session_id)
 	return execute_async(function()
-		return M._load_native_sync().modes(session_id)
+		return load_native_sync().modes(session_id)
 	end)
 end
 
@@ -749,7 +580,7 @@ end
 ---@param session_id string Session ID
 function M.models(session_id)
 	return execute_async(function()
-		return M._load_native_sync().models(session_id)
+		return load_native_sync().models(session_id)
 	end)
 end
 
@@ -757,7 +588,7 @@ end
 ---@param session_id string Session ID
 function M.thought_levels(session_id)
 	return execute_async(function()
-		return M._load_native_sync().thought_levels(session_id)
+		return load_native_sync().thought_levels(session_id)
 	end)
 end
 
@@ -765,7 +596,7 @@ end
 ---@param session_id string Session ID
 function M.model_configurations(session_id)
 	return execute_async(function()
-		return M._load_native_sync().model_configurations(session_id)
+		return load_native_sync().model_configurations(session_id)
 	end)
 end
 
@@ -774,7 +605,24 @@ end
 ---@param config ConfigureModelConfig Table with `id` and `value` keys
 function M.configure_model(session_id, config)
 	execute_async(function()
-		M._load_native_sync().configure_model(session_id, config)
+		load_native_sync().configure_model(session_id, config)
+	end)
+end
+
+---Get all configuration options for a session
+---@param session_id string Session ID
+function M.config_options(session_id)
+	return execute_async(function()
+		return load_native_sync().config_options(session_id)
+	end)
+end
+
+---Set any configuration option for a session
+---@param session_id string Session ID
+---@param config SetConfigOptionConfig Table with `id` and `value` keys
+function M.set_config_option(session_id, config)
+	execute_async(function()
+		load_native_sync().set_config_option(session_id, config)
 	end)
 end
 
@@ -783,7 +631,7 @@ end
 ---@param response? any Response data
 function M.respond(request_id, response)
 	execute_async(function()
-		M._load_native_sync().respond(request_id, response)
+		load_native_sync().respond(request_id, response)
 	end)
 end
 
@@ -798,50 +646,29 @@ end
 -- @return table lines Array of strings to display
 -- @return table highlights Array of highlight specifications
 -- ============================================================================
--- Export internal functions for testing (marked private to hide from LSP)
+-- Export internal functions for testing (assigned via computed keys so they
+-- are not statically visible to the LSP)
 -- ============================================================================
 
 -- luacov: disable
-
----@private
-M._is_ready = is_ready
-
----@private
-M._is_loading = is_loading
-
----@private
-M._is_failed = is_failed
-
----@private
-M._set_loading_state = set_loading_state
-
----@private
-M._set_loading_error = set_loading_error
-
----@private
-M._handle_ready_state = handle_ready_state
-
----@private
-M._handle_loading_state = handle_loading_state
-
----@private
-M._handle_failed_state = handle_failed_state
-
----@private
-M._handle_load_success = handle_load_success
-
----@private
-M._handle_load_failure = handle_load_failure
-
----@private
-M._should_auto_download = should_auto_download
-
----@private
-M._format_error_for_display = format_error_for_display
-
----@private
-M._get_error_suggestion = get_error_suggestion
-
+for name, fn in pairs({
+	_is_ready = is_ready,
+	_is_loading = is_loading,
+	_is_failed = is_failed,
+	_set_loading_state = set_loading_state,
+	_set_loading_error = set_loading_error,
+	_handle_ready_state = handle_ready_state,
+	_handle_loading_state = handle_loading_state,
+	_handle_failed_state = handle_failed_state,
+	_handle_load_success = handle_load_success,
+	_handle_load_failure = handle_load_failure,
+	_should_auto_download = should_auto_download,
+	_format_error_for_display = format_error_for_display,
+	_get_error_suggestion = get_error_suggestion,
+	_load_native_sync = load_native_sync,
+}) do
+	M[name] = fn
+end
 -- luacov: enable
 
 -- Eagerly load binary at startup if it exists
@@ -884,3 +711,4 @@ end
 eager_load_binary()
 
 return M
+

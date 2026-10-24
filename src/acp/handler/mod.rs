@@ -2,13 +2,18 @@ pub mod builder;
 pub mod client;
 pub mod response;
 
+use agent_client_protocol::schema::v1::RequestId;
 pub use builder::build_client;
 
 use crate::{
     PluginState,
-    acp::{Result, connection::Assistant},
+    acp::{
+        Result,
+        connection::{Assistant, ConnectionManager},
+    },
     nvim::{
         GROUP,
+        autocommands::Commands,
         requests::{RequestHandler, Responder},
     },
     utilities::{
@@ -24,9 +29,15 @@ use std::{
 };
 use tracing::{debug, error, instrument, warn};
 
-type NvimHandleArgs = (String, serde_json::Value, Option<(Responder, String)>);
+#[derive(Clone)]
+pub enum NvimHandleArgs {
+    Event(String, serde_json::Value),
+    Request(String, serde_json::Value, Responder, String, RequestId),
+    Cancel(RequestId),
+}
 
 pub struct Handler {
+    pub connection_manager: Arc<Mutex<ConnectionManager>>,
     pub channel: NvimMessenger<NvimHandleArgs>,
     pub state: Arc<Mutex<PluginState>>,
 }
@@ -35,25 +46,54 @@ impl Handler {
     #[instrument(level = "trace", skip_all)]
     pub fn new<R: RequestHandler + 'static>(
         state: Arc<Mutex<PluginState>>,
+        connection_manager: Arc<Mutex<ConnectionManager>>,
         nvim_runtime: NvimRuntime,
         requests: Rc<R>,
     ) -> Result<Self> {
-        let channel = NvimMessenger::<NvimHandleArgs>::initialize(
-            nvim_runtime,
-            move |(command, request_data, response_data)| {
-                let datas = request_data.clone();
-                let nvim_requests = requests.clone();
+        let channel = NvimMessenger::<NvimHandleArgs>::initialize(nvim_runtime.clone(), {
+            let request_tracker = requests.clone();
+            move |event| {
+                let events = event.clone();
+                let nvim_requests = request_tracker.clone();
                 async move {
-                    let mut data = datas.clone();
-                    debug!("Received autocommand: {}, with data: {:#?}", command, data);
-                    let request = if let Some((res, session_id)) = response_data {
-                        let request_id = nvim_requests.add_request(session_id, res).await;
-                        data["requestId"] = serde_json::Value::String(request_id.to_string());
-                        debug!("Request data: {:#?}", data);
-                        Some(request_id)
-                    } else {
-                        None
+                    let (command, data, request) = match events {
+                        NvimHandleArgs::Event(command, data) => (command, data, None),
+                        NvimHandleArgs::Request(
+                            command,
+                            mut data,
+                            responder,
+                            session_id,
+                            agent_request_id,
+                        ) => {
+                            let request_id = nvim_requests
+                                .add(session_id, agent_request_id, responder)
+                                .await;
+                            data["requestId"] = serde_json::Value::String(request_id.to_string());
+                            debug!("Request data: {:#?}", data);
+                            (command, data, Some(request_id))
+                        }
+                        NvimHandleArgs::Cancel(request_id) => {
+                            if let Some(request) =
+                                nvim_requests.remove_by_request_id(&request_id).await
+                            {
+                                (
+                                    Commands::RequestCancelled.to_string(),
+                                    request
+                                        .details()
+                                        .serialize(serde_json::value::Serializer)
+                                        .unwrap(),
+                                    None,
+                                )
+                            } else {
+                                error!(
+                                    "Agent attempted to cancel request with id: \"{}\" but no matching request was found",
+                                    request_id
+                                );
+                                return;
+                            }
+                        }
                     };
+                    debug!("Received autocommand: {}, with data: {:#?}", command, data);
                     if listener_attached(command.to_string()) {
                         match serde_json::from_value::<nvim_oxi::Object>(data.clone()) {
                             Ok(obj) => {
@@ -85,9 +125,13 @@ impl Handler {
                         warn!("No listener attached for command '{}'", command);
                     }
                 }
-            },
-        )?;
-        Ok(Self { channel, state })
+            }
+        })?;
+        Ok(Self {
+            channel,
+            state,
+            connection_manager,
+        })
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -150,9 +194,9 @@ impl Handler {
 
     #[instrument(level = "trace", skip(self))]
     pub async fn can_request_permissions(&self) -> bool {
-        let config = self.state.lock().await;
-        let can_request_permissions = config.config.permissions.request_permissions;
-        drop(config);
+        let state = self.state.lock().await;
+        let can_request_permissions = state.config.permissions.request_permissions;
+        drop(state);
         can_request_permissions
     }
 
@@ -165,54 +209,82 @@ impl Handler {
     }
 
     #[instrument(level = "trace", skip(self))]
+    pub async fn can_request_form_elicitation(&self) -> bool {
+        let state = self.state.lock().await;
+        let elicitation_form = state.config.permissions.elicitation.form;
+        drop(state);
+        elicitation_form
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub async fn can_request_url_elicitation(&self) -> bool {
+        let state = self.state.lock().await;
+        let elicitation_url = state.config.permissions.elicitation.url;
+        drop(state);
+        elicitation_url
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub async fn elicitation_enabled(&self) -> bool {
+        let state = self.state.lock().await;
+        let elicitation_url = state.config.permissions.elicitation.url;
+        let elicitation_form = state.config.permissions.elicitation.form;
+        drop(state);
+        elicitation_url || elicitation_form
+    }
+
+    #[instrument(level = "trace", skip(self))]
     pub async fn execute_autocommand<C: ToString + Debug, S: Serialize + Debug>(
         &self,
         command: C,
         data: S,
     ) -> Result<()> {
-        self.send_autocommand(command, data, None).await
-    }
-
-    #[instrument(level = "trace", skip(self))]
-    async fn send_autocommand<C, S>(
-        &self,
-        command: C,
-        data: S,
-        respons_data: Option<(Responder, String)>,
-    ) -> Result<()>
-    where
-        C: ToString + Debug,
-        S: Serialize + Debug,
-    {
         let serialized: serde_json::Value = data.serialize(serde_json::value::Serializer)?;
         debug!("Serialized data: {:#?}", serialized);
         self.channel
-            .send((command.to_string(), serialized, respons_data))
-            .await
+            .send(NvimHandleArgs::Event(command.to_string(), serialized))
+            .await?;
+        Ok(())
     }
 
     #[instrument(level = "trace", skip(self, responder))]
     pub async fn execute_autocommand_request<C: ToString + Debug, S: Serialize + Debug>(
         &self,
         session_id: String,
+        request_id: RequestId,
         command: C,
         data: S,
         responder: Responder,
     ) -> Result<()> {
-        self.send_autocommand(command, data, Some((responder, session_id)))
+        let serialized: serde_json::Value = data.serialize(serde_json::value::Serializer)?;
+        debug!("Serialized data: {:#?}", serialized);
+        self.channel
+            .send(NvimHandleArgs::Request(
+                command.to_string(),
+                serialized,
+                responder,
+                session_id,
+                request_id,
+            ))
+            .await?;
+        Ok(())
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub async fn cancel_request(&self, request_id: &RequestId) -> Result<()> {
+        self.channel
+            .send(NvimHandleArgs::Cancel(request_id.clone()))
             .await?;
         Ok(())
     }
 }
 
-/// Checks whether any autocommand listeners are attached for a given command pattern.
-///
-/// Delegates to the shared `autocmd_listeners_attached` utility, which wraps
-/// `nvim_get_autocmds` and handles version differences in struct layouts.
 #[instrument(level = "trace")]
 fn listener_attached<S>(pattern: S) -> bool
 where
     S: Display + Debug,
 {
-    autocmd_listeners_attached(GROUP, "User", &pattern.to_string())
+    Commands::try_from(pattern.to_string())
+        .map(autocmd_listeners_attached)
+        .unwrap_or(false)
 }

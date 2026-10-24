@@ -82,11 +82,14 @@ impl Pushable for DisconnectArgs {
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn disconnect(&mut self, args: DisconnectArgs) -> crate::acp::Result<()> {
-        match args {
-            DisconnectArgs::Multiple(agents) => self.connection.disconnect(agents),
-            DisconnectArgs::Single(agent) => self.connection.disconnect(vec![agent]),
-            DisconnectArgs::All => self.connection.close_all(),
-        }
+        let mut connection_manager = self.connection_manager.lock().await;
+        let result = match args {
+            DisconnectArgs::Multiple(agents) => connection_manager.disconnect(agents),
+            DisconnectArgs::Single(agent) => connection_manager.disconnect(vec![agent]),
+            DisconnectArgs::All => connection_manager.close_all(),
+        };
+        drop(connection_manager);
+        result
     }
 }
 
@@ -112,23 +115,12 @@ mod tests {
     fn arb_disconnect_args() -> impl Strategy<Value = DisconnectArgs> {
         prop_oneof!(
             Just(DisconnectArgs::All),
-            arb_assistant_name().prop_map(|name| {
-                match Assistant::from(name.as_str()) {
-                    Assistant::Copilot | Assistant::Opencode => {
-                        DisconnectArgs::Single(Assistant::from(name.as_str()))
-                    }
-                    _ => DisconnectArgs::All, // Custom assistants become All for simplicity
-                }
-            }),
+            arb_assistant_name()
+                .prop_map(|name| { DisconnectArgs::Single(Assistant::from(name.as_str())) }),
             prop::collection::vec(arb_assistant_name(), 0..5).prop_map(|names| {
                 let assistants: Vec<Assistant> = names
                     .into_iter()
-                    .filter_map(|name| match Assistant::from(name.as_str()) {
-                        Assistant::Copilot | Assistant::Opencode => {
-                            Some(Assistant::from(name.as_str()))
-                        }
-                        _ => None,
-                    })
+                    .map(|name| Assistant::from(name.as_str()))
                     .collect();
                 if assistants.is_empty() {
                     DisconnectArgs::All
@@ -157,7 +149,7 @@ mod tests {
                 }
                 DisconnectArgs::Single(ref assistant) => {
                     prop_assert!(
-                        matches!(assistant, Assistant::Copilot | Assistant::Opencode | Assistant::CustomStdio { .. }),
+                        matches!(assistant, Assistant::CustomStdio { .. }),
                         "Single variant should contain valid assistant"
                     );
                 }
@@ -168,7 +160,7 @@ mod tests {
                     );
                     for assistant in assistants {
                         prop_assert!(
-                            matches!(assistant, Assistant::Copilot | Assistant::Opencode | Assistant::CustomStdio { .. }),
+                            matches!(assistant, Assistant::CustomStdio { .. }),
                             "Each assistant in Multiple should be valid"
                         );
                     }

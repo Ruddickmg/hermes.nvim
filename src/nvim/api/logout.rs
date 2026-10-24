@@ -95,15 +95,16 @@ impl Pushable for LogoutArgs {
 impl Api {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn logout(&self, args: LogoutArgs) -> crate::acp::Result<()> {
+        let connection_manager = self.connection_manager.lock().await;
         let agents: Vec<Assistant> = match &args {
             LogoutArgs::Single(agent) => vec![agent.clone()],
             LogoutArgs::Multiple(agents) => agents.clone(),
-            LogoutArgs::All => self.connection.connected_agents(),
+            LogoutArgs::All => connection_manager.connected_agents(),
         };
         let futures: Vec<_> = agents
             .iter()
             .map(|assistant| {
-                self.connection.get_connection(assistant).ok_or_else(|| {
+                connection_manager.get_connection(assistant).ok_or_else(|| {
                     Error::Connection(format!("No connection found for: {}", assistant))
                 })
             })
@@ -112,7 +113,9 @@ impl Api {
             .map(|connection| connection.logout(LogoutRequest::new()))
             .collect();
 
-        future::try_join_all(futures).await?;
+        let result = future::try_join_all(futures).await;
+        drop(connection_manager);
+        result?;
         Ok(())
     }
 }
@@ -139,23 +142,12 @@ mod tests {
     fn arb_logout_args() -> impl Strategy<Value = LogoutArgs> {
         prop_oneof!(
             Just(LogoutArgs::All),
-            arb_assistant_name().prop_map(|name| {
-                match Assistant::from(name.as_str()) {
-                    Assistant::Copilot | Assistant::Opencode => {
-                        LogoutArgs::Single(Assistant::from(name.as_str()))
-                    }
-                    _ => LogoutArgs::All,
-                }
-            }),
+            arb_assistant_name()
+                .prop_map(|name| { LogoutArgs::Single(Assistant::from(name.as_str())) }),
             prop::collection::vec(arb_assistant_name(), 0..5).prop_map(|names| {
                 let assistants: Vec<Assistant> = names
                     .into_iter()
-                    .filter_map(|name| match Assistant::from(name.as_str()) {
-                        Assistant::Copilot | Assistant::Opencode => {
-                            Some(Assistant::from(name.as_str()))
-                        }
-                        _ => None,
-                    })
+                    .map(|name| Assistant::from(name.as_str()))
                     .collect();
                 if assistants.is_empty() {
                     LogoutArgs::All
@@ -181,7 +173,7 @@ mod tests {
                 }
                 LogoutArgs::Single(ref assistant) => {
                     prop_assert!(
-                        matches!(assistant, Assistant::Copilot | Assistant::Opencode | Assistant::CustomStdio { .. }),
+                        matches!(assistant, Assistant::CustomStdio { .. }),
                         "Single variant should contain valid assistant"
                     );
                 }
@@ -192,7 +184,7 @@ mod tests {
                     );
                     for assistant in assistants {
                         prop_assert!(
-                            matches!(assistant, Assistant::Copilot | Assistant::Opencode | Assistant::CustomStdio { .. }),
+                            matches!(assistant, Assistant::CustomStdio { .. }),
                             "Each assistant in Multiple should be valid"
                         );
                     }

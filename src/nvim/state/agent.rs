@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use agent_client_protocol::schema::v1::InitializeResponse;
+use agent_client_protocol::schema::v1::{AuthMethod, InitializeResponse};
 
 use crate::acp::connection::Assistant;
 use crate::utilities::logging::channel::ChannelWriter;
@@ -43,6 +43,17 @@ impl AgentInfo {
     }
     pub fn get_current_info(&self) -> Option<&InitializeResponse> {
         self.agents.get(&self.current)
+    }
+
+    pub fn get_auth_method(&self, id: String) -> Option<AuthMethod> {
+        self.get_current_info()
+            .map(|info| {
+                info.auth_methods
+                    .iter()
+                    .find(|method| method.id().to_string() == id)
+            })
+            .unwrap_or(None)
+            .cloned()
     }
 
     pub fn get_capabilities(
@@ -170,14 +181,44 @@ mod tests {
     use super::*;
     use agent_client_protocol::schema::ProtocolVersion;
     use agent_client_protocol::schema::v1::{
-        AgentCapabilities, McpCapabilities, PromptCapabilities,
+        AgentCapabilities, AuthMethodTerminal, McpCapabilities, PromptCapabilities,
         SessionAdditionalDirectoriesCapabilities, SessionCapabilities, SessionDeleteCapabilities,
         SessionForkCapabilities, SessionListCapabilities, SessionResumeCapabilities,
     };
     use pretty_assertions::assert_eq;
 
+    fn agent_opencode() -> Assistant {
+        Assistant::CustomStdio {
+            name: "opencode".to_string(),
+            command: "opencode".to_string(),
+            args: vec!["acp".to_string()],
+        }
+    }
+
+    fn agent_copilot() -> Assistant {
+        Assistant::CustomStdio {
+            name: "copilot".to_string(),
+            command: "copilot".to_string(),
+            args: vec!["--acp".to_string()],
+        }
+    }
+
+    fn agent_gemini() -> Assistant {
+        Assistant::CustomStdio {
+            name: "gemini".to_string(),
+            command: "gemini".to_string(),
+            args: vec!["--acp".to_string()],
+        }
+    }
+
     fn create_test_response() -> InitializeResponse {
         InitializeResponse::new(ProtocolVersion::V1)
+    }
+
+    fn create_response_with_terminal_method(id: &str) -> InitializeResponse {
+        InitializeResponse::new(ProtocolVersion::V1).auth_methods(vec![AuthMethod::Terminal(
+            AuthMethodTerminal::new(id.to_string(), "Terminal Auth"),
+        )])
     }
 
     fn create_agent_info_with_agent(agent: Assistant) -> AgentInfo {
@@ -212,16 +253,16 @@ mod tests {
     #[test]
     fn test_set_agent_changes_current() {
         let mut info = AgentInfo::new();
-        info.set_agent(Assistant::Opencode);
-        assert_eq!(info.current, Assistant::Opencode);
-        info.set_agent(Assistant::Copilot);
-        assert_eq!(info.current, Assistant::Copilot);
+        info.set_agent(agent_opencode());
+        assert_eq!(info.current, agent_opencode());
+        info.set_agent(agent_copilot());
+        assert_eq!(info.current, agent_copilot());
     }
 
     #[test]
     fn test_add_agent_stores_info() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
         let response = create_test_response();
 
         info.add_agent(agent.clone(), response);
@@ -245,14 +286,50 @@ mod tests {
 
     #[test]
     fn test_get_capabilities_returns_some_when_info_exists() {
-        let info = create_agent_info_with_agent(Assistant::Opencode);
+        let info = create_agent_info_with_agent(agent_opencode());
         assert!(info.get_capabilities().is_some());
+    }
+
+    #[test]
+    fn test_get_auth_method_returns_none_without_agent_info() {
+        let info = AgentInfo::new();
+        assert_eq!(info.get_auth_method("tui-auth".to_string()), None);
+    }
+
+    #[test]
+    fn test_get_auth_method_returns_matching_terminal_method() {
+        let mut info = AgentInfo::new();
+        info.add_agent(
+            agent_opencode(),
+            create_response_with_terminal_method("tui-auth"),
+        );
+        info.set_agent(agent_opencode());
+
+        assert_eq!(
+            info.get_auth_method("tui-auth".to_string()),
+            Some(AuthMethod::Terminal(AuthMethodTerminal::new(
+                "tui-auth",
+                "Terminal Auth"
+            )))
+        );
+    }
+
+    #[test]
+    fn test_get_auth_method_returns_none_for_unknown_id() {
+        let mut info = AgentInfo::new();
+        info.add_agent(
+            agent_opencode(),
+            create_response_with_terminal_method("tui-auth"),
+        );
+        info.set_agent(agent_opencode());
+
+        assert_eq!(info.get_auth_method("missing-id".to_string()), None);
     }
 
     #[test]
     fn test_capabilities_return_false_by_default() {
         // Default response has all capabilities disabled
-        let info = create_agent_info_with_agent(Assistant::Opencode);
+        let info = create_agent_info_with_agent(agent_opencode());
 
         assert!(!info.can_load_session());
         assert!(!info.can_send_images());
@@ -287,11 +364,11 @@ mod tests {
         let mut info = AgentInfo::new();
 
         // Add first agent
-        let agent1 = Assistant::Opencode;
+        let agent1 = agent_opencode();
         info.add_agent(agent1.clone(), create_test_response());
 
         // Add second agent
-        let agent2 = Assistant::Copilot;
+        let agent2 = agent_copilot();
         info.add_agent(agent2.clone(), create_test_response());
 
         // Switch to agent1
@@ -306,7 +383,7 @@ mod tests {
     #[test]
     fn test_add_agent_updates_existing_agent() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
 
         // Add agent
         info.add_agent(agent.clone(), create_test_response());
@@ -326,9 +403,9 @@ mod tests {
     fn test_multiple_agents_stored_independently() {
         let mut info = AgentInfo::new();
 
-        let agent1 = Assistant::Opencode;
-        let agent2 = Assistant::Copilot;
-        let agent3 = Assistant::Gemini;
+        let agent1 = agent_opencode();
+        let agent2 = agent_copilot();
+        let agent3 = agent_gemini();
 
         info.add_agent(agent1.clone(), create_test_response());
         info.add_agent(agent2.clone(), create_test_response());
@@ -355,7 +432,7 @@ mod tests {
     #[test]
     fn test_get_current_info_after_adding_different_agent() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_copilot();
 
         // Add agent but don't change current
         info.add_agent(agent.clone(), create_test_response());
@@ -377,7 +454,7 @@ mod tests {
     #[test]
     fn test_can_load_session_returns_true_when_enabled() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
         info.add_agent(agent.clone(), create_response_with_load_session_enabled());
         info.set_agent(agent);
         assert_eq!(info.can_load_session(), true);
@@ -392,7 +469,7 @@ mod tests {
     #[test]
     fn test_can_send_images_returns_true_when_enabled() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
         info.add_agent(agent.clone(), create_response_with_images_enabled());
         info.set_agent(agent);
         assert_eq!(info.can_send_images(), true);
@@ -407,7 +484,7 @@ mod tests {
     #[test]
     fn test_can_send_audio_returns_true_when_enabled() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
         info.add_agent(agent.clone(), create_response_with_audio_enabled());
         info.set_agent(agent);
         assert_eq!(info.can_send_audio(), true);
@@ -423,7 +500,7 @@ mod tests {
     #[test]
     fn test_can_send_embedded_context_returns_true_when_enabled() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
         info.add_agent(
             agent.clone(),
             create_response_with_embedded_context_enabled(),
@@ -441,7 +518,7 @@ mod tests {
     #[test]
     fn test_can_connect_to_mcp_over_http_returns_true_when_enabled() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
         info.add_agent(agent.clone(), create_response_with_mcp_http_enabled());
         info.set_agent(agent);
         assert_eq!(info.can_connect_to_mcp_over_http(), true);
@@ -456,7 +533,7 @@ mod tests {
     #[test]
     fn test_can_connect_to_mcp_over_sse_returns_true_when_enabled() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
         info.add_agent(agent.clone(), create_response_with_mcp_sse_enabled());
         info.set_agent(agent);
         assert_eq!(info.can_connect_to_mcp_over_sse(), true);
@@ -473,7 +550,7 @@ mod tests {
     #[test]
     fn test_can_fork_sessions_returns_true_when_enabled() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
         info.add_agent(agent.clone(), create_response_with_fork_enabled());
         info.set_agent(agent);
         assert_eq!(info.can_fork_sessions(), true);
@@ -490,7 +567,7 @@ mod tests {
     #[test]
     fn test_can_resume_sessions_returns_true_when_enabled() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
         info.add_agent(agent.clone(), create_response_with_resume_enabled());
         info.set_agent(agent);
         assert_eq!(info.can_resume_sessions(), true);
@@ -507,7 +584,7 @@ mod tests {
     #[test]
     fn test_can_list_sessions_returns_true_when_enabled() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
         info.add_agent(agent.clone(), create_response_with_list_enabled());
         info.set_agent(agent);
         assert_eq!(info.can_list_sessions(), true);
@@ -525,7 +602,7 @@ mod tests {
     #[test]
     fn test_can_use_additional_directories_returns_true_when_enabled() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
         info.add_agent(
             agent.clone(),
             create_response_with_additional_directories_enabled(),
@@ -557,7 +634,7 @@ mod tests {
     #[test]
     fn test_needs_local_history_true_when_resume_enabled_and_load_disabled() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
         info.add_agent(agent.clone(), create_response_with_resume_no_load());
         info.set_agent(agent);
         assert_eq!(info.needs_local_history(true), true);
@@ -566,7 +643,7 @@ mod tests {
     #[test]
     fn test_needs_local_history_false_when_load_enabled_and_resume_enabled() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
         info.add_agent(agent.clone(), create_response_with_load_and_resume());
         info.set_agent(agent);
         assert_eq!(info.needs_local_history(true), false);
@@ -575,7 +652,7 @@ mod tests {
     #[test]
     fn test_needs_local_history_false_when_resume_disabled_and_load_disabled() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
         info.add_agent(agent.clone(), create_test_response());
         info.set_agent(agent);
         assert_eq!(info.needs_local_history(true), false);
@@ -584,7 +661,7 @@ mod tests {
     #[test]
     fn test_needs_local_history_false_when_store_history_disabled() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
         info.add_agent(agent.clone(), create_response_with_resume_no_load());
         info.set_agent(agent);
         assert_eq!(info.needs_local_history(false), false);
@@ -609,7 +686,7 @@ mod tests {
 
     #[test]
     fn test_can_close_session_returns_false_by_default() {
-        let info = create_agent_info_with_agent(Assistant::Opencode);
+        let info = create_agent_info_with_agent(agent_opencode());
         assert!(!info.can_close_session());
     }
 
@@ -621,7 +698,7 @@ mod tests {
 
     #[test]
     fn test_can_delete_session_returns_false_by_default() {
-        let info = create_agent_info_with_agent(Assistant::Opencode);
+        let info = create_agent_info_with_agent(agent_opencode());
         assert!(!info.can_delete_session());
     }
 
@@ -642,7 +719,7 @@ mod tests {
     #[test]
     fn test_can_delete_session_returns_true_when_enabled() {
         let mut info = AgentInfo::new();
-        let agent = Assistant::Opencode;
+        let agent = agent_opencode();
         info.add_agent(agent.clone(), create_response_with_delete_enabled());
         info.set_agent(agent);
         assert_eq!(info.can_delete_session(), true);
