@@ -125,7 +125,6 @@ workflows:
             branches:
               only:
                 - main
-                - development
           requires:
             - build-linux-x86_64
             - build-linux-aarch64
