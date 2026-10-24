@@ -59,7 +59,7 @@ fn logout_single_returns_error_when_agent_not_connected() -> nvim_oxi::Result<()
     let api = create_test_api(plugin_state, logger);
 
     let result = block_on(api.logout(hermes::api::LogoutArgs::Single(
-        hermes::acp::connection::Assistant::Copilot,
+        hermes::acp::connection::Assistant::from("copilot"),
     )));
 
     assert!(matches!(
@@ -79,8 +79,8 @@ fn logout_multiple_returns_error_when_agents_not_connected() -> nvim_oxi::Result
     let api = create_test_api(plugin_state, logger);
 
     let result = block_on(api.logout(hermes::api::LogoutArgs::Multiple(vec![
-        hermes::acp::connection::Assistant::Copilot,
-        hermes::acp::connection::Assistant::Opencode,
+        hermes::acp::connection::Assistant::from("copilot"),
+        hermes::acp::connection::Assistant::from("opencode"),
     ])));
 
     assert!(matches!(

@@ -123,6 +123,7 @@ Configuration options: ~
     • session:              Session configuration
     • distributions:        Agent distribution settings (uvx, npx, binary)
     • progress:             Download progress display settings
+    • agents:               User-defined agent connections, keyed by agent id
     • log:                  Logging configuration
     • download.version:     Binary version to use (default: "latest")
     • download.auto:        Auto-download binary on first use (default: true,
@@ -187,11 +188,14 @@ Options: ~
     • distribution: Agent distribution to use ("binary", "npx", "uvx")
 
 Example: >
-    require("hermes").connect("opencode")
+    local hermes = require("hermes")
+    local Protocol = hermes.Protocol
+
+    hermes.connect("opencode")
 
     -- With custom configuration
-    require("hermes").connect("my-agent", {
-        protocol = "socket",
+    hermes.connect("my-agent", {
+        protocol = Protocol.socket,
         command = "custom-acp",
         args = {"--port", "8080"}
     })
@@ -253,13 +257,16 @@ Parameters: ~
                                ConnectionInitialized
 
 Example: >
+    local hermes = require("hermes")
+    local Autocommand = hermes.Autocommand
+
     vim.api.nvim_create_autocmd("User", {
-        pattern = "ConnectionInitialized",
+        pattern = Autocommand.ConnectionInitialized,
         callback = function(args)
             ---@type HermesConnectionInitialized
             local data = args.data
             local auth_method_id = data.authMethods[1].id
-            require("hermes").authenticate(auth_method_id)
+            hermes.authenticate(auth_method_id)
         end
     })
 <
@@ -363,12 +370,15 @@ Content types: ~
       - audio: Audio content for communication (encoded as base64)
 
 Example: >
+    local hermes = require("hermes")
+    local ContentType = hermes.ContentType
+
     -- Text prompt
-    require("hermes").prompt(session_id, "What time is it?")
+    hermes.prompt(session_id, "What time is it?")
 
     -- Structured content
-    require("hermes").prompt(session_id, {
-        type = "link",
+    hermes.prompt(session_id, {
+        type = ContentType.link,
         name = "Example file",
         uri = "/path/to/file.txt"
     })
@@ -589,10 +599,17 @@ distributions ~
     Agent distribution settings:
     • binary: Binary distribution behavior >
         • path: Path where binaries will be downloaded to
-        • enabled: Allows installing agents via binary (default: true)
+        • enabled: Allows installing agents via binary (default: true,
+                   false in Nix environments)
     <
-    • uvx: Allows installing agents via UVX (default: true)
-    • npx: Allows installing agents via NPX (default: true)
+    • uvx: Allows installing agents via UVX (default: true, false in Nix
+           environments)
+    • npx: Allows installing agents via NPX (default: true, false in Nix
+           environments)
+
+    Nix environments are detected when running on NixOS or when the plugin
+    is loaded from the Nix store. These defaults can be overridden
+    explicitly in setup().
 
 progress ~
     Download progress display settings:
@@ -600,6 +617,29 @@ progress ~
                default: false)
     • update_frequency: How often to poll the download for progress in
                         milliseconds (default: 150)
+
+agents ~
+    User-defined agent connections, keyed by agent id. When the id matches a
+    registry agent, only the connection fields are used and the registry
+    metadata (name, icon, description) is kept. Otherwise a brand new agent
+    is created (default icon: question mark). Each entry supports:
+    • name: Display name (defaults to the agent id for new agents)
+    • description: Description (new agents only)
+    • icon: HTTP(S) URL or local path to an SVG icon
+    • protocol: Connection protocol ("stdio", "http", "socket", "tcp",
+                "https"), default: "stdio"
+    • command: Command to run for stdio connections (required for stdio)
+    • args: Command arguments for stdio connections
+    • host: Host for tcp/http/https connections (required)
+    • port: Port for tcp/http/https connections (required)
+    • path: Path for socket connections (required for socket)
+    Example: >
+        require("hermes").setup({
+            agents = {
+                opencode = { command = "opencode", args = { "acp" } },
+            },
+        })
+<
 
 log ~
     Logging configuration with targets: stdio, notification, message, file.
@@ -628,9 +668,12 @@ log ~
 
 Hermes generates autocommands for all communication between agent and client.
 Listen to them with: >
+    local hermes = require("hermes")
+    local Autocommand = hermes.Autocommand
+
     vim.api.nvim_create_autocmd("User", {
         group = "hermes",
-        pattern = "ConnectionInitialized",
+        pattern = Autocommand.ConnectionInitialized,
         callback = function(args)
             ---@type HermesConnectionInitialized
             local data = args.data
@@ -669,15 +712,19 @@ Respond with hermes.respond() (see below). When a URL elicitation flow
 finishes the agent may send an `elicitation/complete` notification, surfaced
 via the `ElicitationComplete` autocommand (an informational notification, no
 response required). Example: >
+    local hermes = require("hermes")
+    local Autocommand = hermes.Autocommand
+    local ElicitationAction = hermes.ElicitationAction
+
     vim.api.nvim_create_autocmd("User", {
-        pattern = "FormElicitation",
+        pattern = Autocommand.FormElicitation,
         group = "hermes",
         callback = function(args)
             ---@type HermesFormElicitation
             local data = args.data
             local request_id = data.requestId
-            require("hermes").respond(request_id, {
-                action = "accept",
+            hermes.respond(request_id, {
+                action = ElicitationAction.accept,
                 content = { name = "Alice" },
             })
         end,
@@ -686,12 +733,12 @@ response required). Example: >
 
 Responding to elicitation ~
 hermes.respond() for elicitation accepts a dictionary with an `action`
-field:
-- `"accept"`: provide the requested `content` as a `{ field = value, ... }`
-  dictionary. Content values may be strings, numbers, booleans, or string
-  arrays.
-- `"decline"`: decline the elicitation (no content).
-- `"cancel"`: cancel the elicitation entirely.
+field (see the `ElicitationAction` enum):
+- `ElicitationAction.accept`: provide the requested `content` as a
+  `{ field = value, ... }` dictionary. Content values may be strings,
+  numbers, booleans, or string arrays.
+- `ElicitationAction.decline`: decline the elicitation (no content).
+- `ElicitationAction.cancel`: cancel the elicitation entirely.
 
 Default behavior: If no listener is attached to `FormElicitation` or
 `UrlElicitation`, Hermes reports the corresponding elicitation capability as
@@ -723,9 +770,11 @@ An agent may cancel a request it previously sent (for example a
 request and fires the `RequestCancelled` autocommand so any UI opened for the
 request can be dismissed. No response is expected for a cancelled request.
 Example: >
+    local Autocommand = require("hermes").Autocommand
+
     vim.api.nvim_create_autocmd("User", {
         group = "hermes",
-        pattern = "RequestCancelled",
+        pattern = Autocommand.RequestCancelled,
         callback = function(args)
             ---@type HermesRequestCancelled
             local data = args.data

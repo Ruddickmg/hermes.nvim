@@ -49,9 +49,12 @@ fn terminal_authentication_errors_when_response_channel_closed() -> nvim_oxi::Re
         AuthMethodTerminal::new("tui-auth".to_string(), "Terminal Auth"),
         "opencode".to_string(),
     );
-    let result =
-        drive(handler.terminal_authentication(Assistant::Opencode, handler.clone(), request))
-            .expect("terminal_authentication should settle before the deadline");
+    let result = drive(handler.terminal_authentication(
+        Assistant::from("opencode"),
+        handler.clone(),
+        request,
+    ))
+    .expect("terminal_authentication should settle before the deadline");
     assert!(
         result.is_err(),
         "terminal_authentication should error when the responder channel closes without a response"

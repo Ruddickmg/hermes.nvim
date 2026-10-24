@@ -77,7 +77,7 @@ fn reconnect_returns_error_when_no_connection() -> nvim_oxi::Result<()> {
     let mut manager = ConnectionManager::new(Arc::new(Mutex::new(PluginState::new())));
     let handler = Arc::new(mock_handler());
 
-    let result = smol::block_on(manager.reconnect(handler, &Assistant::Opencode));
+    let result = smol::block_on(manager.reconnect(handler, &Assistant::from("opencode")));
 
     assert_eq!(
         result.unwrap_err().to_string(),

@@ -144,4 +144,22 @@ describe("hermes.config", function()
       assert.is_true(progress_cfg.cmdline)
     end)
   end)
+
+  describe("agents configuration", function()
+    it("stores user-defined agent connections", function()
+      config.setup({
+        agents = {
+          opencode = { command = "opencode", args = { "acp" } },
+        },
+      })
+
+      assert.equals("opencode", config.get().agents.opencode.command)
+    end)
+
+    it("defaults agents to an empty table", function()
+      config.setup({})
+
+      assert.same({}, config.get().agents)
+    end)
+  end)
 end)

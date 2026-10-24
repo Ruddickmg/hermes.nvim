@@ -974,7 +974,12 @@ mod tests {
             r#"{"role":"user","content":"world"}"#.to_string(),
         ];
 
-        write_prompt_history(history, &Assistant::Copilot, "session-abc", &agent_info);
+        let agent = Assistant::CustomStdio {
+            name: "copilot".to_string(),
+            command: "copilot".to_string(),
+            args: vec!["--acp".to_string()],
+        };
+        write_prompt_history(history, &agent, "session-abc", &agent_info);
 
         // Flush and shutdown the worker to ensure writes hit disk
         agent_info.history.clone().shutdown();
@@ -1000,7 +1005,12 @@ mod tests {
         agent_info.set_history(temp_dir.path().to_path_buf());
 
         let history: Vec<String> = vec![];
-        write_prompt_history(history, &Assistant::Copilot, "session-abc", &agent_info);
+        let agent = Assistant::CustomStdio {
+            name: "copilot".to_string(),
+            command: "copilot".to_string(),
+            args: vec!["--acp".to_string()],
+        };
+        write_prompt_history(history, &agent, "session-abc", &agent_info);
 
         agent_info.history.clone().shutdown();
 

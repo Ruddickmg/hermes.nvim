@@ -12,6 +12,9 @@ pub struct PixelIcon {
     pub pixels: Vec<u8>,
 }
 
+/// Outlined question mark used for custom agents that do not supply an icon.
+const DEFAULT_ICON_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#000000" d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/></svg>"##;
+
 #[derive(Debug, Clone)]
 pub struct IconRenderer {
     cache_dir: PathBuf,
@@ -24,6 +27,21 @@ impl IconRenderer {
             cache_dir,
             size: 16,
         }
+    }
+
+    /// A built-in fallback icon (question mark) for agents without a configured
+    /// icon. Rendered once per process.
+    pub fn default_icon() -> PixelIcon {
+        static DEFAULT: std::sync::OnceLock<PixelIcon> = std::sync::OnceLock::new();
+        DEFAULT
+            .get_or_init(|| {
+                render_svg(DEFAULT_ICON_SVG, 16).unwrap_or_else(|_| PixelIcon {
+                    width: 16,
+                    height: 16,
+                    pixels: vec![0u8; 256],
+                })
+            })
+            .clone()
     }
 
     pub async fn get_or_render(&self, url: &str) -> Result<Option<PixelIcon>> {
@@ -102,18 +120,37 @@ impl IconRenderer {
     }
 }
 
-fn download_svg(url: &str) -> Result<String> {
-    let mut response = ureq::get(url)
-        .call()
-        .map_err(|e| Error::Network(format!("Failed to download SVG from {url}: {e}")))?;
+fn download_svg(location: &str) -> Result<String> {
+    if location.starts_with("http://") || location.starts_with("https://") {
+        let mut response = ureq::get(location)
+            .call()
+            .map_err(|e| Error::Network(format!("Failed to fetch icon from '{location}': {e}")))?;
+        let body = response
+            .body_mut()
+            .read_to_vec()
+            .map_err(|e| Error::Network(format!("Failed to read icon response: {e}")))?;
+        String::from_utf8(body)
+            .map_err(|e| Error::Network(format!("Icon response was not valid UTF-8: {e}")))
+    } else {
+        let path = expand_home(location);
+        std::fs::read_to_string(&path).map_err(|e| {
+            Error::Network(format!(
+                "Failed to read icon file '{}': {e}",
+                path.display()
+            ))
+        })
+    }
+}
 
-    let body = response
-        .body_mut()
-        .read_to_vec()
-        .map_err(|e| Error::Network(format!("Failed to read SVG response from {url}: {e}")))?;
-
-    String::from_utf8(body)
-        .map_err(|e| Error::Network(format!("SVG response from {url} is not valid UTF-8: {e}")))
+/// Expand a leading `~` to the user's home directory, cross-platform.
+fn expand_home(path: &str) -> PathBuf {
+    let rest = path.strip_prefix("~/").or_else(|| path.strip_prefix("~\\"));
+    if let Some(rest) = rest {
+        if let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
+            return PathBuf::from(home).join(rest);
+        }
+    }
+    PathBuf::from(path)
 }
 
 fn make_svg_options() -> usvg::Options<'static> {
@@ -641,5 +678,32 @@ mod tests {
 
         let cache_path = renderer.cache_path(&url);
         assert!(cache_path.is_file());
+    }
+
+    #[test]
+    fn get_or_render_reads_local_svg_file() {
+        let tmp = TempDir::new().unwrap();
+        let icon_path = tmp.path().join("local-icon.svg");
+        std::fs::write(&icon_path, simple_svg()).unwrap();
+        let renderer = IconRenderer::new(tmp.path().join("cache"));
+
+        let result =
+            smol::block_on(async { renderer.get_or_render(icon_path.to_str().unwrap()).await });
+
+        assert_eq!(result.unwrap().unwrap().pixels.len(), 256);
+    }
+
+    #[test]
+    fn default_icon_has_expected_dimensions() {
+        let icon = IconRenderer::default_icon();
+        assert_eq!((icon.width, icon.height), (16, 16));
+    }
+
+    #[test]
+    fn expand_home_leaves_plain_path_unchanged() {
+        assert_eq!(
+            expand_home("relative/icon.svg"),
+            PathBuf::from("relative/icon.svg")
+        );
     }
 }

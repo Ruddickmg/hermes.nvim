@@ -244,6 +244,8 @@ describe("hermes.binary", function()
 
 	describe("is_nix_install()", function()
 		it("returns false when debug.getinfo returns nil", function()
+			local uv = vim.uv or vim.loop
+			local fs_stat_stub = stub(uv, "fs_stat").returns(nil)
 			local original_getinfo = debug.getinfo
 			debug.getinfo = function(level, ...)
 				if level == 1 then return nil end
@@ -251,10 +253,13 @@ describe("hermes.binary", function()
 			end
 			local result = binary.is_nix_install()
 			debug.getinfo = original_getinfo
+			fs_stat_stub:revert()
 			assert.is_false(result)
 		end)
 
 		it("returns false when source is empty after stripping @", function()
+			local uv = vim.uv or vim.loop
+			local fs_stat_stub = stub(uv, "fs_stat").returns(nil)
 			local original_getinfo = debug.getinfo
 			debug.getinfo = function(level, ...)
 				if level == 1 then return { source = "@" } end
@@ -262,7 +267,16 @@ describe("hermes.binary", function()
 			end
 			local result = binary.is_nix_install()
 			debug.getinfo = original_getinfo
+			fs_stat_stub:revert()
 			assert.is_false(result)
+		end)
+
+		it("returns true when the system is NixOS", function()
+			local uv = vim.uv or vim.loop
+			local fs_stat_stub = stub(uv, "fs_stat").returns({})
+			local result = binary.is_nix_install()
+			fs_stat_stub:revert()
+			assert.is_true(result)
 		end)
 	end)
 
