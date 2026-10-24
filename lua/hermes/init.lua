@@ -255,6 +255,9 @@ local function get_error_suggestion(err)
 	return "Try building from source with :Hermes build, or check your internet connection"
 end
 
+-- Forward declaration (defined below, used by async callbacks)
+local load_native_sync
+
 -- Handle download completion and trigger load (async entry point)
 local function handle_download_complete(success, result, fn)
 	if not success then
@@ -267,7 +270,7 @@ local function handle_download_complete(success, result, fn)
 
 	-- Use vim.schedule for the actual loading (only async part)
 	vim.schedule(function()
-		local ok, loaded = pcall(M._load_native_sync)
+		local ok, loaded = pcall(load_native_sync)
 
 		if not ok then
 			handle_load_failure(tostring(loaded), "Failed to load binary")
@@ -310,9 +313,8 @@ end
 
 -- luacov: disable
 ---Load native module synchronously (can be tested with mocked deps)
----@private
 -- luacov: enable
-function M._load_native_sync()
+function load_native_sync()
 	if not _native then
 		local binary = require("hermes.binary")
 		local ok, result = pcall(binary.load)
@@ -426,7 +428,7 @@ function M.setup(opts)
 
 	-- Execute async with loading state management
 	execute_async(function()
-		M._load_native_sync().setup(opts)
+		load_native_sync().setup(opts)
 	end)
 end
 
@@ -435,7 +437,7 @@ end
 ---@param opts? ConnectionOptions Connection options
 function M.connect(agent, opts)
 	execute_async(function()
-		M._load_native_sync().connect(agent, opts)
+		load_native_sync().connect(agent, opts)
 	end)
 end
 
@@ -443,7 +445,7 @@ end
 ---@param agents? string|string[] Agent name(s) to disconnect, nil for all
 function M.disconnect(agents)
 	execute_async(function()
-		M._load_native_sync().disconnect(agents)
+		load_native_sync().disconnect(agents)
 	end)
 end
 
@@ -451,7 +453,7 @@ end
 ---@param agents? string|string[] Agent name(s) to logout, nil for all
 function M.logout(agents)
 	execute_async(function()
-		M._load_native_sync().logout(agents)
+		load_native_sync().logout(agents)
 	end)
 end
 
@@ -459,7 +461,7 @@ end
 ---@param auth_method_id string Authentication method ID from ConnectionInitialized
 function M.authenticate(auth_method_id)
 	execute_async(function()
-		M._load_native_sync().authenticate(auth_method_id)
+		load_native_sync().authenticate(auth_method_id)
 	end)
 end
 
@@ -467,7 +469,7 @@ end
 ---@param opts? SessionOptions Session configuration options
 function M.create_session(opts)
 	execute_async(function()
-		M._load_native_sync().create_session(opts)
+		load_native_sync().create_session(opts)
 	end)
 end
 
@@ -476,7 +478,7 @@ end
 ---@param opts? SessionOptions Session configuration options
 function M.load_session(session_id, opts)
 	execute_async(function()
-		M._load_native_sync().load_session(session_id, opts)
+		load_native_sync().load_session(session_id, opts)
 	end)
 end
 
@@ -485,7 +487,7 @@ end
 ---@param opts? SessionOptions Session configuration options
 function M.resume_session(session_id, opts)
 	execute_async(function()
-		M._load_native_sync().resume_session(session_id, opts)
+		load_native_sync().resume_session(session_id, opts)
 	end)
 end
 
@@ -493,7 +495,7 @@ end
 ---@param opts? ListSessionsOptions Filter options
 function M.list_sessions(opts)
 	execute_async(function()
-		M._load_native_sync().list_sessions(opts)
+		load_native_sync().list_sessions(opts)
 	end)
 end
 
@@ -501,7 +503,7 @@ end
 ---@param opts? AgentsOptions Options (update: boolean to fetch latest registry)
 function M.agents(opts)
 	execute_async(function()
-		M._load_native_sync().agents(opts)
+		load_native_sync().agents(opts)
 	end)
 end
 
@@ -510,7 +512,7 @@ end
 ---@param content PromptContent|PromptContent[] Content to send (single item or array)
 function M.prompt(session_id, content)
 	execute_async(function()
-		M._load_native_sync().prompt(session_id, content)
+		load_native_sync().prompt(session_id, content)
 	end)
 end
 
@@ -518,7 +520,7 @@ end
 ---@param session_id string Session ID
 function M.close_session(session_id)
 	execute_async(function()
-		M._load_native_sync().close_session(session_id)
+		load_native_sync().close_session(session_id)
 	end)
 end
 
@@ -527,7 +529,7 @@ end
 ---@param opts? {cancel?: boolean} Options
 function M.delete_session(session_id, opts)
 	execute_async(function()
-		M._load_native_sync().delete_session(session_id, opts)
+		load_native_sync().delete_session(session_id, opts)
 	end)
 end
 
@@ -535,7 +537,7 @@ end
 ---@param id string Session ID, or a Hermes request ID for a pending agent request
 function M.cancel(id)
 	execute_async(function()
-		M._load_native_sync().cancel(id)
+		load_native_sync().cancel(id)
 	end)
 end
 
@@ -544,7 +546,7 @@ end
 ---@param mode string Mode ID/Name
 function M.set_mode(session_id, mode)
 	execute_async(function()
-		M._load_native_sync().set_mode(session_id, mode)
+		load_native_sync().set_mode(session_id, mode)
 	end)
 end
 
@@ -553,7 +555,7 @@ end
 ---@param model string Model ID/Name
 function M.set_model(session_id, model)
 	execute_async(function()
-		M._load_native_sync().set_model(session_id, model)
+		load_native_sync().set_model(session_id, model)
 	end)
 end
 
@@ -562,7 +564,7 @@ end
 ---@param level string Thought level ID/Name
 function M.set_thought_level(session_id, level)
 	execute_async(function()
-		M._load_native_sync().set_thought_level(session_id, level)
+		load_native_sync().set_thought_level(session_id, level)
 	end)
 end
 
@@ -570,7 +572,7 @@ end
 ---@param session_id string Session ID
 function M.modes(session_id)
 	return execute_async(function()
-		return M._load_native_sync().modes(session_id)
+		return load_native_sync().modes(session_id)
 	end)
 end
 
@@ -578,7 +580,7 @@ end
 ---@param session_id string Session ID
 function M.models(session_id)
 	return execute_async(function()
-		return M._load_native_sync().models(session_id)
+		return load_native_sync().models(session_id)
 	end)
 end
 
@@ -586,7 +588,7 @@ end
 ---@param session_id string Session ID
 function M.thought_levels(session_id)
 	return execute_async(function()
-		return M._load_native_sync().thought_levels(session_id)
+		return load_native_sync().thought_levels(session_id)
 	end)
 end
 
@@ -594,7 +596,7 @@ end
 ---@param session_id string Session ID
 function M.model_configurations(session_id)
 	return execute_async(function()
-		return M._load_native_sync().model_configurations(session_id)
+		return load_native_sync().model_configurations(session_id)
 	end)
 end
 
@@ -603,7 +605,7 @@ end
 ---@param config ConfigureModelConfig Table with `id` and `value` keys
 function M.configure_model(session_id, config)
 	execute_async(function()
-		M._load_native_sync().configure_model(session_id, config)
+		load_native_sync().configure_model(session_id, config)
 	end)
 end
 
@@ -611,7 +613,7 @@ end
 ---@param session_id string Session ID
 function M.config_options(session_id)
 	return execute_async(function()
-		return M._load_native_sync().config_options(session_id)
+		return load_native_sync().config_options(session_id)
 	end)
 end
 
@@ -620,7 +622,7 @@ end
 ---@param config SetConfigOptionConfig Table with `id` and `value` keys
 function M.set_config_option(session_id, config)
 	execute_async(function()
-		M._load_native_sync().set_config_option(session_id, config)
+		load_native_sync().set_config_option(session_id, config)
 	end)
 end
 
@@ -629,7 +631,7 @@ end
 ---@param response? any Response data
 function M.respond(request_id, response)
 	execute_async(function()
-		M._load_native_sync().respond(request_id, response)
+		load_native_sync().respond(request_id, response)
 	end)
 end
 
@@ -644,50 +646,29 @@ end
 -- @return table lines Array of strings to display
 -- @return table highlights Array of highlight specifications
 -- ============================================================================
--- Export internal functions for testing (marked private to hide from LSP)
+-- Export internal functions for testing (assigned via computed keys so they
+-- are not statically visible to the LSP)
 -- ============================================================================
 
 -- luacov: disable
-
----@private
-M._is_ready = is_ready
-
----@private
-M._is_loading = is_loading
-
----@private
-M._is_failed = is_failed
-
----@private
-M._set_loading_state = set_loading_state
-
----@private
-M._set_loading_error = set_loading_error
-
----@private
-M._handle_ready_state = handle_ready_state
-
----@private
-M._handle_loading_state = handle_loading_state
-
----@private
-M._handle_failed_state = handle_failed_state
-
----@private
-M._handle_load_success = handle_load_success
-
----@private
-M._handle_load_failure = handle_load_failure
-
----@private
-M._should_auto_download = should_auto_download
-
----@private
-M._format_error_for_display = format_error_for_display
-
----@private
-M._get_error_suggestion = get_error_suggestion
-
+for name, fn in pairs({
+	_is_ready = is_ready,
+	_is_loading = is_loading,
+	_is_failed = is_failed,
+	_set_loading_state = set_loading_state,
+	_set_loading_error = set_loading_error,
+	_handle_ready_state = handle_ready_state,
+	_handle_loading_state = handle_loading_state,
+	_handle_failed_state = handle_failed_state,
+	_handle_load_success = handle_load_success,
+	_handle_load_failure = handle_load_failure,
+	_should_auto_download = should_auto_download,
+	_format_error_for_display = format_error_for_display,
+	_get_error_suggestion = get_error_suggestion,
+	_load_native_sync = load_native_sync,
+}) do
+	M[name] = fn
+end
 -- luacov: enable
 
 -- Eagerly load binary at startup if it exists
