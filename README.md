@@ -2218,6 +2218,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
       <td>Session loaded successfully</td>
       <td>⚡ <a href="#-load-session-optional">load_session()</a></td>
       <td><pre><code class="language-json">{
+  "sessionId": "string",
   "modes": {
     "currentModeId": "string",
     "availableModes": [
@@ -2266,6 +2267,7 @@ Below is a list of all autocommands and their associated data (passed to the cal
       <td>Session resumed successfully</td>
       <td>⚡ <a href="#-load-session-optional">resume_session()</a></td>
       <td><pre><code class="language-json">{
+  "sessionId": "string",
   "modes": {
     "currentModeId": "string",
     "availableModes": [

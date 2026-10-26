@@ -304,12 +304,16 @@ impl Handler {
     ) -> Result<(), Error> {
         let details = response.clone();
         let mut state = self.state.lock().await;
-        let session = NewSessionResponse::new(session_id)
+        let session = NewSessionResponse::new(session_id.clone())
             .modes(details.modes)
             .config_options(details.config_options);
         state.set_session_info(&session);
         drop(state);
-        self.execute_autocommand(Commands::SessionLoaded, response)
+        let data = WithSessionId {
+            session_id,
+            inner: response,
+        };
+        self.execute_autocommand(Commands::SessionLoaded, data)
             .await
     }
 
@@ -338,12 +342,16 @@ impl Handler {
     ) -> Result<(), Error> {
         let details = response.clone();
         let mut state = self.state.lock().await;
-        let session = NewSessionResponse::new(session_id)
+        let session = NewSessionResponse::new(session_id.clone())
             .modes(details.modes)
             .config_options(details.config_options);
         state.set_session_info(&session);
         drop(state);
-        self.execute_autocommand(Commands::SessionResumed, response)
+        let data = WithSessionId {
+            session_id,
+            inner: response,
+        };
+        self.execute_autocommand(Commands::SessionResumed, data)
             .await
     }
 

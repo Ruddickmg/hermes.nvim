@@ -527,7 +527,7 @@ Use this checklist whenever a feature adds or changes user-facing API. Each step
 ### Lua
 
 - [ ] `M.<feature>` wrapper in `lua/hermes/init.lua` following existing patterns (getters `return execute_async(...)`, actions plain `execute_async(...)`)
-- [ ] EmmyLua annotations: `---@param` on the wrapper, `---@class` for new input tables, and a `Hermes<EventName>` payload class for any new autocommand (see the "Autocommand Payload Types" convention in `lua/hermes/types.lua`; string-literal unions also get a frozen `---@enum` table there, exported via `hermes.<EnumName>` and used in docs as `local <EnumName> = hermes.<EnumName>`)
+- [ ] EmmyLua annotations: `---@param` on the wrapper, `---@class` for new input tables, and a `Hermes<EventName>` payload class for any new autocommand (see the "Autocommand Payload Types" convention in `lua/hermes/types.lua`; payload classes must mirror the ACP schema serde output exactly — use camelCase field names as serialized by Rust and mark optional fields to match reality). String-literal unions also get a frozen `---@enum` table there, exported via `hermes.<EnumName>` and used in docs as `local <EnumName> = hermes.<EnumName>`.
 - [ ] `tests/lua/spec/init_spec.lua`: "exports `<feature>` from Rust" + signature tests
 - [ ] `tests/lua/spec/api_spec.lua`: "endpoint callable with opencode" test
 

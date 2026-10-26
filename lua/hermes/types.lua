@@ -4,7 +4,7 @@
 -- ============================================================================
 
 ---@class HermesDownloadConfig
----Download configuration for binary management
+---Download configuration for binary management (Lua only)
 ---@field version? string Version to use ("latest" or specific version like "v0.1.0")
 ---@field auto? boolean Whether to auto-download pre-built binary (default: true)
 ---@field timeout? number Download timeout in seconds (default: 60)
@@ -18,12 +18,19 @@
 ---@field download? HermesDownloadConfig Download configuration for binary management
 ---@field root_markers? string[] Files/directories to identify project root (default: {".git"})
 ---@field permissions? HermesPermissions Permission settings for agent operations
+---@field distributions? HermesDistributionsConfig Distribution/config for agent downloads
 ---@field terminal? HermesTerminalConfig Terminal configuration
 ---@field buffer? HermesBufferConfig Buffer configuration
 ---@field session? HermesSessionConfig Session configuration
 ---@field log? HermesLogConfig Logging configuration
 ---@field progress? HermesProgressConfig Progress display configuration
 ---@field agents? table<string, HermesAgentConnection> User-defined agent connections, keyed by agent id
+
+---@class HermesDistributionsConfig
+---Distribution configuration for agent downloads
+---@field binary? { path?: string, enabled?: boolean }
+---@field uvx? boolean
+---@field npx? boolean
 
 ---@class HermesAgentConnection
 ---User-defined connection for an agent. When the id matches a registry entry,
@@ -46,6 +53,12 @@
 ---@field terminal_access? boolean Allow agent to execute terminal commands (default: true)
 ---@field request_permissions? boolean Allow agent to send permission requests (default: true)
 ---@field send_notifications? boolean Allow agent to send notifications (default: true)
+---@field elicitation? HermesElicitationPermissions Elicitation permission settings
+
+---@class HermesElicitationPermissions
+---Permission settings for agent elicitation requests
+---@field form? boolean Allow agent to send form elicitation requests (default: true)
+---@field url? boolean Allow agent to send URL elicitation requests (default: true)
 
 ---@class HermesTerminalConfig
 ---Terminal configuration options
@@ -80,19 +93,20 @@
 ---@field level? number|string Log level (vim.log.levels.* or string)
 ---@field format? "compact"|"pretty"|"full"|"json" Log format (default: "json")
 ---@field path? string Path to log directory (default: vim.fn.stdpath('state') .. "/hermes")
----@field name? string Log file name (default: "hermes.log")
+---@field name? string Log file name (Lua only; ignored by Rust) (default: "hermes.log")
 ---@field show_ansi? boolean Show ANSI color codes in output (default: false)
 ---@field max_size? number Maximum file size in bytes (default: 10485760 = 10MB)
 ---@field max_files? number Maximum number of log files to keep (default: 5)
 
 ---@class ConnectionOptions
 ---Options for connecting to an agent
----@field protocol? "stdio"|"http"|"socket"|"tcp" Connection protocol (default: "stdio")
+---@field protocol? "stdio"|"http"|"socket"|"tcp"|"https" Connection protocol (default: "stdio")
 ---@field command? string Command to run for stdio connections
 ---@field args? string[] Command arguments for stdio connections
 ---@field host? string Host for socket/tcp/http connections
 ---@field port? number Port for socket/tcp/http connections
----@field url? string URL for http/sse connections
+---@field path? string Path for socket connections
+---@field url? string URL for http/sse connections (unused, prefer protocol/host/port)
 ---@field distribution? "npx"|"uvx"|"binary" Preferred distribution type for registry agents (default: auto-select npx > uvx > binary)
 
 ---@class EnvVar
@@ -102,7 +116,7 @@
 
 ---@class McpServer
 ---MCP (Model Context Protocol) server configuration
----@field type "http"|"sse"|"stdio" Server type
+---@field type? "http"|"sse"|"stdio" Server type
 ---@field name string Human-readable server name
 ---@field url? string URL for http/sse servers (required for http/sse types)
 ---@field headers? table<string, string>[] HTTP headers as array of key-value tables
@@ -290,7 +304,9 @@
 ---Base payload for session notifications sent by the agent
 ---@class HermesSessionNotification
 ---@field sessionId string
----@field promptId string UUID of the prompt turn
+---@field promptId? string UUID of the prompt turn
+---@field messageId? string
+---@field _meta? table
 
 ---@class HermesAgentTextMessage: HermesSessionNotification
 ---@field update { sessionUpdate: "agent_message_chunk", content: HermesTextChunk }
@@ -329,9 +345,9 @@
 ---@field update { sessionUpdate: "user_message_chunk", content: HermesResourceChunk }
 
 ---@class HermesAvailableCommand
----@field id string
 ---@field name string
----@field description? string
+---@field description string
+---@field input? { hint: string }
 
 ---@class HermesAvailableCommands: HermesSessionNotification
 ---@field update { sessionUpdate: "available_commands_update", availableCommands: HermesAvailableCommand[] }
@@ -354,9 +370,9 @@
 ---@field update { sessionUpdate: "session_info_update", title?: string, updatedAt?: string }
 
 ---@class HermesUsageUpdate: HermesSessionNotification
----@field update { sessionUpdate: "usage_update", used: number, size: number, cost: { amount: number, currency: string } }
+---@field update { sessionUpdate: "usage_update", used: number, size: number, cost?: { amount: number, currency: string } }
 
----@alias HermesNoticeSeverity "info"|"warning"|"error"
+---@alias HermesNoticeSeverity string
 
 ---@class HermesNotice: HermesSessionNotification
 ---@field update { sessionUpdate: "notice", severity: HermesNoticeSeverity, title: string, description?: string }
@@ -364,12 +380,12 @@
 ---@alias HermesCompactionStatus "in_progress"|"completed"|"failed"|"cancelled"
 
 ---@class HermesCompactionUpdate: HermesSessionNotification
----@field update { sessionUpdate: "compaction_update", compactionId: string, status: HermesCompactionStatus, summary?: (HermesTextChunk|HermesImageChunk|HermesAudioChunk|HermesResourceChunk|HermesResourceLinkChunk)[], error?: string }
+---@field update { sessionUpdate: "compaction_update", compactionId: string, status: HermesCompactionStatus, summary?: (HermesTextChunk|HermesImageChunk|HermesAudioChunk|HermesResourceChunk|HermesResourceLinkChunk)[]|nil, error?: string|nil }
 
 ---@class HermesCompactionSummaryChunk: HermesSessionNotification
 ---@field update { sessionUpdate: "compaction_summary_chunk", compactionId: string, content: HermesTextChunk|HermesImageChunk|HermesAudioChunk|HermesResourceChunk|HermesResourceLinkChunk }
 
----@alias HermesToolCallKind "Read"|"Edit"|"Delete"|"Move"|"Search"|"Execute"|"Think"|"Fetch"|"SwitchMode"|"Other"
+---@alias HermesToolCallKind "read"|"edit"|"delete"|"move"|"search"|"execute"|"think"|"fetch"|"switch_mode"|"other"
 
 ---@class HermesToolCallContentBlock
 ---@field type "content"
@@ -378,7 +394,7 @@
 ---@class HermesToolCallDiff
 ---@field type "diff"
 ---@field path string
----@field oldText string
+---@field oldText? string
 ---@field newText string
 
 ---@class HermesToolCallTerminalRef
@@ -404,15 +420,15 @@
 ---@field rawOutput? any
 
 ---@class HermesToolCall: HermesSessionNotification
----@field update { sessionUpdate: "tool_call", toolCallId: string, title: string, name?: string, kind: HermesToolCallKind, status: HermesToolCallStatus, content: HermesToolCallContent[], locations: HermesToolCallLocation[], rawInput?: any, rawOutput?: any }
+---@field update { sessionUpdate: "tool_call", toolCallId: string, title: string, name?: string, kind?: HermesToolCallKind, status?: HermesToolCallStatus, content?: HermesToolCallContent[], locations?: HermesToolCallLocation[], rawInput?: any, rawOutput?: any }
 
 ---@class HermesToolCallUpdate: HermesSessionNotification
 ---@field update { sessionUpdate: "tool_call_update", toolCallId: string, kind?: HermesToolCallKind, status?: HermesToolCallStatus, title?: string, name?: string, content?: HermesToolCallContent[], locations?: HermesToolCallLocation[], rawInput?: any, rawOutput?: any }
 
 ---@class HermesPermissionOption
----@field id string Option ID to pass to respond()
----@field label string Human-readable label
----@field description? string
+---@field optionId string Option ID to pass to respond()
+---@field name string Human-readable label
+---@field kind "allow_once"|"allow_always"|"reject_once"|"reject_always"
 
 ---@class HermesPermissionRequest
 ---@field requestId string UUID to pass to respond()
@@ -437,8 +453,8 @@
 ---@field requestId string UUID to pass to respond()
 ---@field sessionId string
 ---@field command string
----@field args string[]
----@field env EnvVar[]
+---@field args? string[]
+---@field env? EnvVar[]
 ---@field cwd? string
 ---@field outputByteLimit? number
 
@@ -451,12 +467,12 @@
 ---@field requestId string UUID to pass to respond()
 ---@field sessionId string
 ---@field terminalId string
----@field signal? string e.g. "SIGTERM", "SIGKILL"
 
 ---@class HermesTerminalOutput
 ---@field requestId string UUID to pass to respond()
 ---@field sessionId string
 ---@field terminalId string
+---@field output string
 ---@field byteLimit? number
 
 ---@class HermesTerminalRelease
@@ -466,9 +482,19 @@
 
 ---@class HermesFormElicitation
 ---@field requestId string UUID to pass to respond()
+---@field sessionId string
+---@field toolCallId? string
 ---@field mode "form"
----@field scope? table
----@field schema? table JSON schema describing the expected form fields
+---@field requestedSchema table JSON schema describing the expected form fields
+---@field message string Prompt shown to the user
+
+---@class HermesUrlElicitation
+---@field requestId string UUID to pass to respond()
+---@field sessionId string
+---@field toolCallId? string
+---@field elicitationId string
+---@field mode "url"
+---@field url string The URL to open in the browser
 ---@field message string Prompt shown to the user
 
 ---@class HermesUrlElicitation
@@ -536,13 +562,13 @@
 ---@field title? string
 
 ---@class HermesConnectionInitialized
----@field protocolVersion string
+---@field protocolVersion number
 ---@field agentCapabilities HermesAgentCapabilities
----@field authMethods HermesAuthMethod[]
----@field agentInfo HermesAgentImplementation
+---@field authMethods? HermesAuthMethod[]
+---@field agentInfo? HermesAgentImplementation
 
 ---@class HermesPrompted
----@field stopReason string e.g. "Stop", "Cancelled", "Error"
+---@field stopReason "end_turn"|"max_tokens"|"max_turn_requests"|"refusal"|"cancelled"|string
 
 ---@class HermesProgress
 ---@field id string
@@ -563,14 +589,16 @@
 
 ---@class HermesSessionCreated
 ---@field sessionId string
----@field modes HermesSessionModes
----@field configOptions ConfigOption[]
+---@field modes? HermesSessionModes
+---@field configOptions? ConfigOption[]
 
 ---@class HermesSessionForked: HermesSessionCreated
 
 ---@class HermesSessionLoaded
----@field modes HermesSessionModes
----@field configOptions ConfigOption[]
+---@field sessionId string
+---@field modes? HermesSessionModes
+---@field configOptions? ConfigOption[]
+---@field _meta? table
 
 ---@class HermesSessionResumed: HermesSessionLoaded
 
@@ -797,6 +825,29 @@ local Autocommand = {
 	WriteTextFile = "WriteTextFile",
 }
 
+---@enum StopReason
+local StopReason = {
+	end_turn = "end_turn",
+	max_tokens = "max_tokens",
+	max_turn_requests = "max_turn_requests",
+	refusal = "refusal",
+	cancelled = "cancelled",
+}
+
+---@enum ToolCallKind
+local ToolCallKind = {
+	read = "read",
+	edit = "edit",
+	delete = "delete",
+	move = "move",
+	search = "search",
+	execute = "execute",
+	think = "think",
+	fetch = "fetch",
+	switch_mode = "switch_mode",
+	other = "other",
+}
+
 local enums = {
 	Protocol = Protocol,
 	Distribution = Distribution,
@@ -806,6 +857,8 @@ local enums = {
 	ElicitationOutcome = ElicitationOutcome,
 	PermissionOutcome = PermissionOutcome,
 	ToolCallStatus = ToolCallStatus,
+	ToolCallKind = ToolCallKind,
+	StopReason = StopReason,
 	PlanPriority = PlanPriority,
 	PlanStatus = PlanStatus,
 	ConfigOptionType = ConfigOptionType,
