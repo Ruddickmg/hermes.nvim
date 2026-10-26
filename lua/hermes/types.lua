@@ -39,7 +39,7 @@
 ---@field name? string Display name (defaults to the agent id for new agents)
 ---@field description? string Description (new agents only)
 ---@field icon? string HTTP(S) URL or local path to an SVG icon
----@field protocol? "stdio"|"http"|"socket"|"tcp"|"https" Connection protocol (default: "stdio")
+---@field protocol? HermesProtocol Connection protocol (default: "stdio")
 ---@field command? string Command to run (required for stdio connections)
 ---@field args? string[] Command arguments for stdio connections
 ---@field host? string Host (required for tcp/http/https connections)
@@ -84,14 +84,14 @@
 
 ---@class HermesLogTargetConfig
 ---Log target configuration (stdio, notification, message)
----@field level? number|string Log level (vim.log.levels.* or "trace", "debug", "info", "warn", "error", "off")
----@field format? "compact"|"pretty"|"full"|"json" Log format (default: "compact")
+---@field level? number|HermesLogLevel Log level (vim.log.levels.* or "trace", "debug", "info", "warn", "error", "off")
+---@field format? HermesLogFormat Log format (default: "compact")
 ---@field show_ansi? boolean Show ANSI color codes in output (default: false)
 
 ---@class HermesLogFileConfig
 ---File logging configuration
----@field level? number|string Log level (vim.log.levels.* or string)
----@field format? "compact"|"pretty"|"full"|"json" Log format (default: "json")
+---@field level? number|HermesLogLevel Log level (vim.log.levels.* or string)
+---@field format? HermesLogFormat Log format (default: "json")
 ---@field path? string Path to log directory (default: vim.fn.stdpath('state') .. "/hermes")
 ---@field name? string Log file name (Lua only; ignored by Rust) (default: "hermes.log")
 ---@field show_ansi? boolean Show ANSI color codes in output (default: false)
@@ -100,14 +100,14 @@
 
 ---@class ConnectionOptions
 ---Options for connecting to an agent
----@field protocol? "stdio"|"http"|"socket"|"tcp"|"https" Connection protocol (default: "stdio")
+---@field protocol? HermesProtocol Connection protocol (default: "stdio")
 ---@field command? string Command to run for stdio connections
 ---@field args? string[] Command arguments for stdio connections
 ---@field host? string Host for socket/tcp/http connections
 ---@field port? number Port for socket/tcp/http connections
 ---@field path? string Path for socket connections
 ---@field url? string URL for http/sse connections (unused, prefer protocol/host/port)
----@field distribution? "npx"|"uvx"|"binary" Preferred distribution type for registry agents (default: auto-select npx > uvx > binary)
+---@field distribution? HermesDistribution Preferred distribution type for registry agents (default: auto-select npx > uvx > binary)
 
 ---@class EnvVar
 ---Environment variable entry
@@ -116,7 +116,7 @@
 
 ---@class McpServer
 ---MCP (Model Context Protocol) server configuration
----@field type? "http"|"sse"|"stdio" Server type
+---@field type? HermesMcpTransport Server type
 ---@field name string Human-readable server name
 ---@field url? string URL for http/sse servers (required for http/sse types)
 ---@field headers? table<string, string>[] HTTP headers as array of key-value tables
@@ -230,7 +230,7 @@
 ---@field name string Human-readable name
 ---@field description? string Optional description
 ---@field category? string Option category (e.g. "mode", "model", "thought_level", "model_config")
----@field type "select"|"boolean" Option kind
+---@field type HermesConfigOptionType Option kind
 ---@field options? (SelectionOption|HermesConfigSelectGroup)[] Available values (select options only; entries are either options or groups)
 ---@field currentValue string|boolean Current value (value ID for select options, boolean for boolean options)
 
@@ -297,7 +297,7 @@
 ---@field mimeType? string
 
 ---@class HermesResourceChunk
----@field type "resource"
+---@field type HermesContentType
 ---@field resource HermesResourceContents
 ---@field annotations? HermesAnnotations
 
@@ -360,8 +360,8 @@
 
 ---@class HermesPlanEntry
 ---@field content string
----@field priority "high"|"medium"|"low"
----@field status "pending"|"in_progress"|"completed"
+---@field priority HermesPlanPriority
+---@field status HermesPlanStatus
 
 ---@class HermesPlan: HermesSessionNotification
 ---@field update { sessionUpdate: "plan", entries: HermesPlanEntry[] }
@@ -377,7 +377,15 @@
 ---@class HermesNotice: HermesSessionNotification
 ---@field update { sessionUpdate: "notice", severity: HermesNoticeSeverity, title: string, description?: string }
 
----@alias HermesCompactionStatus "in_progress"|"completed"|"failed"|"cancelled"
+---@alias HermesCompactionStatus HermesCompactionStatusEnum
+
+---@enum HermesCompactionStatusEnum
+local CompactionStatusEnum = {
+	in_progress = "in_progress",
+	completed = "completed",
+	failed = "failed",
+	cancelled = "cancelled",
+}
 
 ---@class HermesCompactionUpdate: HermesSessionNotification
 ---@field update { sessionUpdate: "compaction_update", compactionId: string, status: HermesCompactionStatus, summary?: (HermesTextChunk|HermesImageChunk|HermesAudioChunk|HermesResourceChunk|HermesResourceLinkChunk)[]|nil, error?: string|nil }
@@ -385,10 +393,10 @@
 ---@class HermesCompactionSummaryChunk: HermesSessionNotification
 ---@field update { sessionUpdate: "compaction_summary_chunk", compactionId: string, content: HermesTextChunk|HermesImageChunk|HermesAudioChunk|HermesResourceChunk|HermesResourceLinkChunk }
 
----@alias HermesToolCallKind "read"|"edit"|"delete"|"move"|"search"|"execute"|"think"|"fetch"|"switch_mode"|"other"
+---@alias HermesToolCallKindAlias HermesToolCallKind
 
 ---@class HermesToolCallContentBlock
----@field type "content"
+---@field type HermesContentType
 ---@field content HermesTextChunk|HermesImageChunk|HermesAudioChunk|HermesResourceChunk|HermesResourceLinkChunk
 
 ---@class HermesToolCallDiff
@@ -428,7 +436,7 @@
 ---@class HermesPermissionOption
 ---@field optionId string Option ID to pass to respond()
 ---@field name string Human-readable label
----@field kind "allow_once"|"allow_always"|"reject_once"|"reject_always"
+---@field kind HermesPermissionKind
 
 ---@class HermesPermissionRequest
 ---@field requestId string UUID to pass to respond()
@@ -484,7 +492,7 @@
 ---@field requestId string UUID to pass to respond()
 ---@field sessionId string
 ---@field toolCallId? string
----@field mode "form"
+---@field mode HermesElicitationAction
 ---@field requestedSchema table JSON schema describing the expected form fields
 ---@field message string Prompt shown to the user
 
@@ -493,7 +501,7 @@
 ---@field sessionId string
 ---@field toolCallId? string
 ---@field elicitationId string
----@field mode "url"
+---@field mode HermesElicitationAction
 ---@field url string The URL to open in the browser
 ---@field message string Prompt shown to the user
 
@@ -568,13 +576,13 @@
 ---@field agentInfo? HermesAgentImplementation
 
 ---@class HermesPrompted
----@field stopReason "end_turn"|"max_tokens"|"max_turn_requests"|"refusal"|"cancelled"|string
+---@field stopReason HermesStopReason|string
 
 ---@class HermesProgress
 ---@field id string
 ---@field title string
 ---@field source string
----@field status "running"|"success"|"failure"
+---@field status HermesProgressStatus
 ---@field percent? number
 ---@field text? string[]
 
@@ -762,6 +770,20 @@ local LogFormat = {
 	json = "json",
 }
 
+---@enum HermesProgressStatus
+local ProgressStatus = {
+	running = "running",
+	success = "success",
+	failure = "failure",
+}
+
+---@enum HermesMcpTransport
+local McpTransport = {
+	http = "http",
+	sse = "sse",
+	stdio = "stdio",
+}
+
 ---@enum HermesAutocommand
 local Autocommand = {
 	AgentImageMessage = "AgentImageMessage",
@@ -825,6 +847,8 @@ local Autocommand = {
 	WriteTextFile = "WriteTextFile",
 }
 
+---@alias HermesStopReason StopReason
+
 ---@enum StopReason
 local StopReason = {
 	end_turn = "end_turn",
@@ -852,6 +876,7 @@ local enums = {
 	Protocol = Protocol,
 	Distribution = Distribution,
 	McpServerType = McpServerType,
+	McpTransport = McpTransport,
 	PermissionKind = PermissionKind,
 	ElicitationAction = ElicitationAction,
 	ElicitationOutcome = ElicitationOutcome,
@@ -865,6 +890,8 @@ local enums = {
 	ContentType = ContentType,
 	LogLevel = LogLevel,
 	LogFormat = LogFormat,
+	ProgressStatus = ProgressStatus,
+	CompactionStatusEnum = CompactionStatusEnum,
 	Autocommand = Autocommand,
 }
 
