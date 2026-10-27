@@ -1,13 +1,15 @@
 use std::sync::Arc;
 
 use agent_client_protocol::schema::v1::{
-    AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse, ExtResponse,
-    ForkSessionResponse, InitializeResponse, ListSessionsResponse, LoadSessionResponse,
-    LogoutResponse, NewSessionResponse, PromptResponse, RequestId, ResumeSessionResponse,
-    SessionConfigKind, SessionConfigOption, SessionConfigOptionCategory,
-    SetSessionConfigOptionResponse, SetSessionModeResponse,
+    AuthenticateResponse, CloseSessionResponse, ContentBlock, ContentChunk, DeleteSessionResponse,
+    ExtResponse, ForkSessionResponse, InitializeResponse, ListSessionsResponse,
+    LoadSessionResponse, LogoutResponse, NewSessionResponse, PromptRequest, PromptResponse,
+    RequestId, ResumeSessionResponse, SessionConfigKind, SessionConfigOption,
+    SessionConfigOptionCategory, SessionUpdate, SetSessionConfigOptionResponse,
+    SetSessionModeResponse,
 };
 use async_channel::bounded;
+use futures::future::try_join_all;
 use serde::Serialize;
 use tracing::instrument;
 use uuid::Uuid;
@@ -15,6 +17,7 @@ use uuid::Uuid;
 use crate::Handler;
 use crate::acp::connection::Assistant;
 use crate::acp::error::Error;
+use crate::acp::handler::client::HermesNotification;
 use crate::api::authenticate::TerminalAuthRequest;
 use crate::nvim::autocommands::Commands;
 use crate::nvim::requests::Responder;
@@ -87,8 +90,47 @@ impl Handler {
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub async fn prompted(&self, response: PromptResponse) -> Result<(), Error> {
-        self.execute_autocommand(Commands::Prompted, response).await
+    pub async fn prompted(
+        &self,
+        request: PromptRequest,
+        response: PromptResponse,
+    ) -> Result<(), Error> {
+        let mut commands = vec![];
+        let session_id = request.session_id.to_string();
+        let prompts = request
+            .prompt
+            .into_iter()
+            .filter_map(|content| {
+                match &content {
+                    ContentBlock::Text(_) => Some(Commands::UserTextMessage),
+                    ContentBlock::Image(_) => Some(Commands::UserImageMessage),
+                    ContentBlock::Audio(_) => Some(Commands::UserAudioMessage),
+                    ContentBlock::ResourceLink(_) => Some(Commands::UserResourceLinkMessage),
+                    ContentBlock::Resource(_) => Some(Commands::UserResourceMessage),
+                    _ => None,
+                }
+                .map(|command| {
+                    (
+                        command,
+                        SessionUpdate::UserMessageChunk(ContentChunk::new(content)),
+                    )
+                })
+            })
+            .collect::<Vec<(Commands, SessionUpdate)>>();
+        for (command, prompt) in prompts {
+            commands.push(self.execute_autocommand(
+                command,
+                serde_json::to_value(HermesNotification {
+                    prompt_id: self.get_prompt_id(&session_id).await?,
+                    session_id: request.session_id.clone(),
+                    update: prompt,
+                })?,
+            ));
+        }
+        commands
+            .push(self.execute_autocommand(Commands::Prompted, serde_json::to_value(response)?));
+        try_join_all(commands).await?;
+        Ok(())
     }
 
     #[instrument(level = "trace", skip(self))]

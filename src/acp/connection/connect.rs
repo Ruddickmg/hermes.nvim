@@ -31,8 +31,8 @@ async fn dispatch(
             cx.send_cancel_request(id)?;
         }
         UserRequest::Prompt(request) => {
-            let response = cx.send_request(request).block_task().await?;
-            client.prompted(response).await?;
+            let response = cx.send_request(request.clone()).block_task().await?;
+            client.prompted(request, response).await?;
         }
         UserRequest::Authenticate(request) => {
             let response = cx.send_request(request).block_task().await?;

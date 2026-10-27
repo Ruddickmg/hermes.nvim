@@ -55,6 +55,7 @@ pub enum Commands {
     UserResourceLinkMessage,
     UserImageMessage,
     UserTextMessage,
+    UserAudioMessage,
 
     // Agent message commands (format: Agent{ContentType}Message)
     AgentResourceMessage,

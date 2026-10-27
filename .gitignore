@@ -53,3 +53,5 @@ tests/lua/**/*.log
 
 #direnv
 .direnv
+
+.hermes
