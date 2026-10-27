@@ -90,11 +90,7 @@ impl Handler {
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub async fn prompted(
-        &self,
-        request: PromptRequest,
-        response: PromptResponse,
-    ) -> Result<(), Error> {
+    pub async fn report_user_message(&self, request: PromptRequest) -> Result<(), Error> {
         let mut commands = vec![];
         let session_id = request.session_id.to_string();
         let prompts = request
@@ -120,17 +116,20 @@ impl Handler {
         for (command, prompt) in prompts {
             commands.push(self.execute_autocommand(
                 command,
-                serde_json::to_value(HermesNotification {
+                HermesNotification {
                     prompt_id: self.get_prompt_id(&session_id).await?,
                     session_id: request.session_id.clone(),
                     update: prompt,
-                })?,
+                },
             ));
         }
-        commands
-            .push(self.execute_autocommand(Commands::Prompted, serde_json::to_value(response)?));
         try_join_all(commands).await?;
         Ok(())
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub async fn prompted(&self, response: PromptResponse) -> Result<(), Error> {
+        self.execute_autocommand(Commands::Prompted, response).await
     }
 
     #[instrument(level = "trace", skip(self))]
