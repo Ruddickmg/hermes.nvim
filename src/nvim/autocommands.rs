@@ -135,6 +135,7 @@ impl TryFrom<&str> for Commands {
             "UserResourceLinkMessage" => Ok(Commands::UserResourceLinkMessage),
             "UserImageMessage" => Ok(Commands::UserImageMessage),
             "UserTextMessage" => Ok(Commands::UserTextMessage),
+            "UserAudioMessage" => Ok(Commands::UserAudioMessage),
 
             // Agent message commands
             "AgentResourceMessage" => Ok(Commands::AgentResourceMessage),

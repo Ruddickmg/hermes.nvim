@@ -344,6 +344,9 @@
 ---@class HermesUserResourceMessage: HermesSessionNotification
 ---@field update { sessionUpdate: "user_message_chunk", content: HermesResourceChunk }
 
+---@class HermesUserAudioMessage: HermesSessionNotification
+---@field update { sessionUpdate: "user_message_chunk", content: HermesAudioChunk }
+
 ---@class HermesAvailableCommand
 ---@field name string
 ---@field description string
@@ -844,6 +847,7 @@ local Autocommand = {
 	UserResourceLinkMessage = "UserResourceLinkMessage",
 	UserResourceMessage = "UserResourceMessage",
 	UserTextMessage = "UserTextMessage",
+	UserAudioMessage = "UserAudioMessage",
 	WriteTextFile = "WriteTextFile",
 }
 
