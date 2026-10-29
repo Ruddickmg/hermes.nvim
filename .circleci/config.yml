@@ -11,7 +11,7 @@ orbs:
 executors:
   node:
     docker:
-      - image: node:26.12.1
+      - image: node:26.13.0
   mac-aarch64:
     macos:
       xcode: 27.1.0
