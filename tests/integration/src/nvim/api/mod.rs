@@ -27,7 +27,7 @@ use hermes::acp::handler::Handler;
 use hermes::nvim::state::PluginState;
 
 use agent_client_protocol::schema::ProtocolVersion;
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     AgentCapabilities, InitializeResponse, McpCapabilities, PromptCapabilities,
     SessionCapabilities, SessionForkCapabilities, SessionListCapabilities,
     SessionResumeCapabilities,

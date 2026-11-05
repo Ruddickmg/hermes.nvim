@@ -7,7 +7,7 @@ use crate::{
     nvim::terminal::{TerminalInfo, TerminalManager},
     utilities::{NvimMessenger, NvimRuntime},
 };
-use agent_client_protocol::schema::v1::RequestId;
+use agent_client_protocol::RawJsonRpcId;
 use async_lock::Mutex;
 use async_trait::async_trait;
 use std::{collections::HashMap, sync::Arc};
@@ -53,12 +53,12 @@ pub trait RequestHandler {
     async fn handle_response(&self, request_id: &Uuid, response: nvim_oxi::Object) -> Result<()>;
     async fn cancel_session_requests(&self, session_id: String) -> Result<()>;
     async fn remove(&self, request_id: &Uuid) -> Result<Request>;
-    async fn remove_by_request_id(&self, agent_request_id: &RequestId) -> Option<Request>;
+    async fn remove_by_request_id(&self, agent_request_id: &RawJsonRpcId) -> Option<Request>;
     async fn get(&self, request_id: &Uuid) -> Option<Request>;
     async fn add(
         &self,
         session_id: String,
-        agent_request_id: RequestId,
+        agent_request_id: RawJsonRpcId,
         responder: Responder,
     ) -> Uuid;
 }
@@ -82,7 +82,7 @@ impl RequestHandler for Requests {
     async fn add(
         &self,
         session_id: String,
-        agent_request_id: RequestId,
+        agent_request_id: RawJsonRpcId,
         responder: Responder,
     ) -> Uuid {
         let mut pending = self.pending.lock().await;
@@ -135,7 +135,7 @@ impl RequestHandler for Requests {
             .ok_or_else(|| Error::InvalidInput(format!("No request found for {}", request_id)))
     }
 
-    async fn remove_by_request_id(&self, agent_request_id: &RequestId) -> Option<Request> {
+    async fn remove_by_request_id(&self, agent_request_id: &RawJsonRpcId) -> Option<Request> {
         let mut pending = self.pending.lock().await;
         let request = pending
             .extract_if(|_, request| request.request_id() == *agent_request_id)

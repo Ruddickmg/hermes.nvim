@@ -1,5 +1,5 @@
 use crate::helpers::{MockRequestHandler, mock_connection_manager, mock_handler, mock_runtime};
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     AuthMethodTerminal, AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse,
     ForkSessionResponse, ListSessionsResponse, ResumeSessionResponse,
 };
@@ -68,7 +68,7 @@ fn custom_command_executed_succeeds() -> nvim_oxi::Result<()> {
     let raw = serde_json::value::RawValue::from_string("{}".to_string())
         .map(std::sync::Arc::from)
         .expect("RawValue creation should succeed");
-    let response = agent_client_protocol::schema::v1::ExtResponse::new(raw);
+    let response = agent_client_protocol::v1::schema::ExtResponse::new(raw);
     let result = smol::block_on(handler.custom_command_executed(response));
     assert!(result.is_ok(), "custom_command_executed should succeed");
     Ok(())
@@ -182,10 +182,10 @@ fn session_closed_removes_prompt() -> nvim_oxi::Result<()> {
 #[nvim_oxi::test]
 fn session_notification_session_info_update_succeeds() -> nvim_oxi::Result<()> {
     let handler = mock_handler();
-    let info = agent_client_protocol::schema::v1::SessionInfoUpdate::new();
-    let notification = agent_client_protocol::schema::v1::SessionNotification::new(
+    let info = agent_client_protocol::v1::schema::SessionInfoUpdate::new();
+    let notification = agent_client_protocol::v1::schema::SessionNotification::new(
         "test-session",
-        agent_client_protocol::schema::v1::SessionUpdate::SessionInfoUpdate(info),
+        agent_client_protocol::v1::schema::SessionUpdate::SessionInfoUpdate(info),
     );
     let result = smol::block_on(handler.session_notification(notification));
     assert_eq!(

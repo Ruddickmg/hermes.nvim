@@ -255,7 +255,7 @@ use std::collections::HashMap;
 
 // Requests struct stays on main thread, uses Rc (not Arc)
 pub struct Requests {
-    responders: Rc<RefCell<HashMap<RequestId, Responder>>>,
+    responders: Rc<RefCell<HashMap<RawJsonRpcId, Responder>>>,
 }
 ```
 

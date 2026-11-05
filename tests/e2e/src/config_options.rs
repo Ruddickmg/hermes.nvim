@@ -7,7 +7,7 @@ use crate::{
         test_helpers::connect_to_mock_agent,
     },
 };
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     InitializeResponse, NewSessionResponse, SessionConfigKind, SessionConfigOption,
     SetSessionConfigOptionResponse,
 };
@@ -219,7 +219,7 @@ fn test_set_config_option_sends_boolean_value_for_boolean_option() -> Result<(),
 
     assert_eq!(
         sent.value,
-        agent_client_protocol::schema::v1::SessionConfigOptionValue::boolean(true)
+        agent_client_protocol::v1::schema::SessionConfigOptionValue::boolean(true)
     );
 
     Ok(())

@@ -13,7 +13,7 @@ use crate::{
         test_helpers::connect_to_mock_agent,
     },
 };
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     CompleteElicitationNotification, CreateElicitationRequest, ElicitationFormMode, ElicitationId,
     ElicitationSchema, ElicitationScope, ElicitationSessionScope, ElicitationUrlMode,
     InitializeResponse, NewSessionResponse, PromptResponse, SessionId,

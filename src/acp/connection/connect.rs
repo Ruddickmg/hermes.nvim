@@ -7,7 +7,7 @@ use crate::{
         handler::build_client,
     },
 };
-use agent_client_protocol::{self as acp, ConnectionTo};
+use agent_client_protocol::{self as acp, v1::ConnectionTo};
 use async_channel::Receiver;
 use std::sync::Arc;
 use tracing::{debug, error, instrument, trace};

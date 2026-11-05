@@ -7,7 +7,7 @@ use crate::{
     acp::session_info::SessionDetails,
     nvim::{configuration::ClientConfig, state::agent::AgentInfo},
 };
-use agent_client_protocol::schema::v1::{InitializeResponse, NewSessionResponse};
+use agent_client_protocol::v1::schema::{InitializeResponse, NewSessionResponse};
 use tracing::{debug, instrument};
 
 pub mod agent;
@@ -113,7 +113,7 @@ impl Default for PluginState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol::schema::v1::{
+    use agent_client_protocol::v1::schema::{
         NewSessionResponse, SessionConfigOption, SessionConfigOptionCategory,
         SessionConfigSelectOption, SessionMode, SessionModeState,
     };

@@ -3,7 +3,7 @@
 //! These tests demonstrate how to use the MockAgent for testing
 //! without requiring external agents (opencode, copilot) to be installed.
 
-use agent_client_protocol::schema::v1::{InitializeResponse, NewSessionResponse};
+use agent_client_protocol::v1::schema::{InitializeResponse, NewSessionResponse};
 use hermes::{
     api::{ConnectionArgs, CreateSessionArgs, DisconnectArgs, PromptArgs, PromptContent},
     nvim::{autocommands::Commands, hermes},

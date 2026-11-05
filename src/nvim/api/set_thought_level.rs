@@ -29,10 +29,10 @@ impl Api {
             .ok_or_else(|| Error::Connection("No connection found".to_string()))?;
         let result = connection
             .set_config_option(
-                agent_client_protocol::schema::v1::SetSessionConfigOptionRequest::new(
+                agent_client_protocol::v1::schema::SetSessionConfigOptionRequest::new(
                     session_id,
                     "thought_level".to_string(),
-                    agent_client_protocol::schema::v1::SessionConfigOptionValue::value_id(level),
+                    agent_client_protocol::v1::schema::SessionConfigOptionValue::value_id(level),
                 ),
             )
             .await;

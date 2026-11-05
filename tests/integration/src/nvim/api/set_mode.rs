@@ -71,7 +71,7 @@ fn set_mode_returns_unsupported_when_session_has_no_mode_info() -> nvim_oxi::Res
     // Populate session_info with a session that has no modes
     {
         let mut state = block_on(plugin_state.lock());
-        let session = agent_client_protocol::schema::v1::NewSessionResponse::new("test-session");
+        let session = agent_client_protocol::v1::schema::NewSessionResponse::new("test-session");
         state.set_session_info(&session);
     }
 

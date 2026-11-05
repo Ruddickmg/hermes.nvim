@@ -1,14 +1,18 @@
 use std::sync::Arc;
 
+use agent_client_protocol::RawJsonRpcId;
 use agent_client_protocol::{
-    self as acp, Client, ConnectionTo, Responder, on_receive_notification, on_receive_request,
-    schema::v1::{
-        CompleteElicitationNotification, CreateElicitationRequest, CreateElicitationResponse,
-        CreateTerminalRequest, CreateTerminalResponse, ReadTextFileRequest, ReadTextFileResponse,
-        ReleaseTerminalRequest, ReleaseTerminalResponse, RequestPermissionRequest,
-        RequestPermissionResponse, SessionNotification, TerminalOutputRequest,
-        TerminalOutputResponse, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
-        WriteTextFileRequest, WriteTextFileResponse,
+    self as acp, Client, on_receive_notification, on_receive_request,
+    v1::{
+        ConnectionTo, Responder,
+        schema::{
+            CompleteElicitationNotification, CreateElicitationRequest, CreateElicitationResponse,
+            CreateTerminalRequest, CreateTerminalResponse, ReadTextFileRequest,
+            ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
+            RequestPermissionRequest, RequestPermissionResponse, SessionNotification,
+            TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
+            WaitForTerminalExitResponse, WriteTextFileRequest, WriteTextFileResponse,
+        },
     },
 };
 use tracing::error;
@@ -20,7 +24,7 @@ macro_rules! spawn_request_handler {
         let handler = $handler.clone();
         move |request: $request, responder: Responder<$response>, cx: ConnectionTo<acp::Agent>| {
             let handler = handler.clone();
-            let request_id = responder.id().clone();
+            let request_id: RawJsonRpcId = responder.id().clone().into();
             let cancellation = responder.cancellation();
             async move {
                 cx.spawn(async move {
@@ -42,13 +46,13 @@ macro_rules! spawn_request_handler {
 
 pub fn build_client(
     handler: Arc<Handler>,
-) -> acp::Builder<
+) -> acp::v1::Builder<
     Client,
     impl acp::HandleDispatchFrom<acp::Agent>,
     impl acp::RunWithConnectionTo<acp::Agent>,
 > {
     Client
-        .builder()
+        .v1()
         .name("hermes")
         .on_receive_request(
             spawn_request_handler!(

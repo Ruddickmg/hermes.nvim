@@ -32,14 +32,14 @@ fn test_logout_function() -> Result<(), nvim_oxi::Error> {
     let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
 
     let wait_for_init = autocommand::listen_for_autocommand::<
-        agent_client_protocol::schema::v1::InitializeResponse,
+        agent_client_protocol::v1::schema::InitializeResponse,
     >(Commands::ConnectionInitialized);
 
     connect_to_mock_agent(&connect, &mock_handle)?;
     let _ = wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
     let wait_for_logout = autocommand::listen_for_autocommand::<
-        agent_client_protocol::schema::v1::LogoutResponse,
+        agent_client_protocol::v1::schema::LogoutResponse,
     >(Commands::LoggedOut);
 
     // Logout should succeed
@@ -77,14 +77,14 @@ fn test_logout_single() -> Result<(), nvim_oxi::Error> {
     let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
 
     let wait_for_init = autocommand::listen_for_autocommand::<
-        agent_client_protocol::schema::v1::InitializeResponse,
+        agent_client_protocol::v1::schema::InitializeResponse,
     >(Commands::ConnectionInitialized);
 
     connect_to_mock_agent(&connect, &mock_handle)?;
     let _ = wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
     let wait_for_logout = autocommand::listen_for_autocommand::<
-        agent_client_protocol::schema::v1::LogoutResponse,
+        agent_client_protocol::v1::schema::LogoutResponse,
     >(Commands::LoggedOut);
 
     // Logout single agent by name
@@ -122,14 +122,14 @@ fn test_logout_multiple() -> Result<(), nvim_oxi::Error> {
     let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
 
     let wait_for_init = autocommand::listen_for_autocommand::<
-        agent_client_protocol::schema::v1::InitializeResponse,
+        agent_client_protocol::v1::schema::InitializeResponse,
     >(Commands::ConnectionInitialized);
 
     connect_to_mock_agent(&connect, &mock_handle)?;
     let _ = wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
     let wait_for_logout = autocommand::listen_for_autocommand::<
-        agent_client_protocol::schema::v1::LogoutResponse,
+        agent_client_protocol::v1::schema::LogoutResponse,
     >(Commands::LoggedOut);
 
     // Logout multiple agents including the connected one

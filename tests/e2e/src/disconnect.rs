@@ -31,7 +31,7 @@ fn test_disconnect_all() -> Result<(), nvim_oxi::Error> {
 
     // Wait for initialization before disconnecting
     let wait_for_init = autocommand::listen_for_autocommand::<
-        agent_client_protocol::schema::v1::InitializeResponse,
+        agent_client_protocol::v1::schema::InitializeResponse,
     >(Commands::ConnectionInitialized);
     let _ = wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
@@ -68,7 +68,7 @@ fn test_disconnect_single() -> Result<(), nvim_oxi::Error> {
 
     // Wait for initialization before disconnecting
     let wait_for_init = autocommand::listen_for_autocommand::<
-        agent_client_protocol::schema::v1::InitializeResponse,
+        agent_client_protocol::v1::schema::InitializeResponse,
     >(Commands::ConnectionInitialized);
     let _ = wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 
@@ -107,7 +107,7 @@ fn test_disconnect_multiple() -> Result<(), nvim_oxi::Error> {
 
     // Wait for initialization before disconnecting
     let wait_for_init = autocommand::listen_for_autocommand::<
-        agent_client_protocol::schema::v1::InitializeResponse,
+        agent_client_protocol::v1::schema::InitializeResponse,
     >(Commands::ConnectionInitialized);
     let _ = wait_for_init(Duration::from_secs(TIMEOUT_IN_SECONDS))?;
 

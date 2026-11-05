@@ -103,10 +103,10 @@ impl Api {
             .ok_or_else(|| AcpError::Connection("No connection found".to_string()))?;
         let result = connection
             .set_config_option(
-                agent_client_protocol::schema::v1::SetSessionConfigOptionRequest::new(
+                agent_client_protocol::v1::schema::SetSessionConfigOptionRequest::new(
                     session_id,
                     config.id,
-                    agent_client_protocol::schema::v1::SessionConfigOptionValue::value_id(
+                    agent_client_protocol::v1::schema::SessionConfigOptionValue::value_id(
                         config.value,
                     ),
                 ),

@@ -8,7 +8,7 @@ use crate::nvim::configuration::{DistributionsConfig, Permissions};
 use crate::utilities::autocmd::autocmd_listeners_attached;
 use crate::{Handler, acp::error::Error};
 use agent_client_protocol::schema::ProtocolVersion;
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     AuthCapabilities, BooleanConfigOptionCapabilities, ClientCapabilities,
     ClientSessionCapabilities, CompactionCapabilities, ElicitationCapabilities,
     ElicitationFormCapabilities, ElicitationUrlCapabilities, FileSystemCapabilities,

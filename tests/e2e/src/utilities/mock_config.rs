@@ -1,19 +1,19 @@
 //! Configuration for MockAgent
 
+use agent_client_protocol::RawJsonRpcId;
 use agent_client_protocol::schema::ProtocolVersion;
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     AgentCapabilities, AuthenticateResponse, CloseSessionResponse, CompactionSummaryChunk,
     CompactionUpdate, CompleteElicitationNotification, CreateElicitationRequest,
     CreateTerminalRequest, DeleteSessionResponse, ExtResponse, Implementation, InitializeRequest,
     InitializeResponse, ListSessionsResponse, LoadSessionResponse, McpCapabilities,
     NewSessionResponse, Notice, PermissionOption, PermissionOptionId, PermissionOptionKind,
-    PromptCapabilities, ReadTextFileRequest, ReleaseTerminalRequest, RequestId,
-    RequestPermissionRequest, ResumeSessionResponse, SessionAdditionalDirectoriesCapabilities,
-    SessionCapabilities, SessionCloseCapabilities, SessionDeleteCapabilities,
-    SessionForkCapabilities, SessionId, SessionInfo, SessionListCapabilities,
-    SessionResumeCapabilities, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
-    SetSessionModeResponse, TerminalOutputRequest, ToolCallId, ToolCallUpdate,
-    ToolCallUpdateFields, WaitForTerminalExitRequest, WriteTextFileRequest,
+    PromptCapabilities, ReadTextFileRequest, ReleaseTerminalRequest, RequestPermissionRequest,
+    ResumeSessionResponse, SessionAdditionalDirectoriesCapabilities, SessionCapabilities,
+    SessionCloseCapabilities, SessionDeleteCapabilities, SessionForkCapabilities, SessionId,
+    SessionInfo, SessionListCapabilities, SessionResumeCapabilities, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, SetSessionModeResponse, TerminalOutputRequest, ToolCallId,
+    ToolCallUpdate, ToolCallUpdateFields, WaitForTerminalExitRequest, WriteTextFileRequest,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -74,9 +74,9 @@ pub struct MockConfig {
     /// Delete session response to return when a DeleteSessionRequest is received
     pub delete_session_response: Option<DeleteSessionResponse>,
     /// Request id the agent used for the most recent outgoing read request (None = none sent)
-    pub last_read_file_request_id: Option<RequestId>,
+    pub last_read_file_request_id: Option<RawJsonRpcId>,
     /// Request id carried by the most recent `$/cancel_request` notification (None = none received)
-    pub cancel_request_id: Option<RequestId>,
+    pub cancel_request_id: Option<RawJsonRpcId>,
     /// When true the agent cancels its own outgoing read request instead of
     /// waiting for a response (false = don't cancel)
     pub cancel_read_file_request: bool,
@@ -378,7 +378,7 @@ pub fn create_test_create_terminal_request(
 /// Create a default terminal output request for testing
 pub fn create_test_terminal_output_request(
     session_id: impl Into<SessionId>,
-    terminal_id: impl Into<agent_client_protocol::schema::v1::TerminalId>,
+    terminal_id: impl Into<agent_client_protocol::v1::schema::TerminalId>,
 ) -> TerminalOutputRequest {
     TerminalOutputRequest::new(session_id, terminal_id)
 }
@@ -386,7 +386,7 @@ pub fn create_test_terminal_output_request(
 /// Create a default wait for terminal exit request for testing
 pub fn create_test_wait_for_terminal_exit_request(
     session_id: impl Into<SessionId>,
-    terminal_id: impl Into<agent_client_protocol::schema::v1::TerminalId>,
+    terminal_id: impl Into<agent_client_protocol::v1::schema::TerminalId>,
 ) -> WaitForTerminalExitRequest {
     WaitForTerminalExitRequest::new(session_id, terminal_id)
 }

@@ -7,7 +7,7 @@ use crate::{
         test_helpers::connect_to_mock_agent,
     },
 };
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     InitializeResponse, NewSessionResponse, SessionConfigOption, SessionConfigOptionCategory,
     SessionConfigSelectOption, SessionMode, SessionModeState,
 };
@@ -184,7 +184,7 @@ fn test_modes_returns_grouped_options() -> Result<(), nvim_oxi::Error> {
     let agent = MockAgent::new();
     {
         let mut config = agent.config().lock().unwrap();
-        let group = agent_client_protocol::schema::v1::SessionConfigSelectGroup::new(
+        let group = agent_client_protocol::v1::schema::SessionConfigSelectGroup::new(
             "my-group",
             "My Group",
             vec![SessionConfigSelectOption::new("chat", "Chat")],
@@ -192,8 +192,8 @@ fn test_modes_returns_grouped_options() -> Result<(), nvim_oxi::Error> {
         let option = SessionConfigOption::new(
             "mode",
             "Mode",
-            agent_client_protocol::schema::v1::SessionConfigKind::Select(
-                agent_client_protocol::schema::v1::SessionConfigSelect::new("chat", vec![group]),
+            agent_client_protocol::v1::schema::SessionConfigKind::Select(
+                agent_client_protocol::v1::schema::SessionConfigSelect::new("chat", vec![group]),
             ),
         )
         .category(SessionConfigOptionCategory::Mode);

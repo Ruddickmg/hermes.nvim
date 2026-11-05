@@ -1,7 +1,8 @@
 //! Integration tests for RequestHandler trait and Requests implementation
 use crate::helpers::ui::wait_for;
-use agent_client_protocol::schema::v1::{
-    CreateTerminalResponse, KillTerminalResponse, ReleaseTerminalResponse, RequestId,
+use agent_client_protocol::RawJsonRpcId;
+use agent_client_protocol::v1::schema::{
+    CreateTerminalResponse, KillTerminalResponse, ReleaseTerminalResponse,
     RequestPermissionOutcome, RequestPermissionRequest, SessionId, TerminalId,
     TerminalOutputResponse, ToolCallId, ToolCallUpdate, ToolCallUpdateFields, WriteTextFileRequest,
     WriteTextFileResponse,
@@ -51,7 +52,7 @@ fn test_handle_response_success() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
 
     let response_obj = nvim_oxi::Object::from("selected-option-id");
     let result = block_on(requests.handle_response(&request_id, response_obj));
@@ -71,7 +72,7 @@ fn test_handle_response_outcome_contains_option_id() -> nvim_oxi::Result<()> {
     let (sender, receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
 
     let response_obj = nvim_oxi::Object::from("selected-option-id");
     block_on(requests.handle_response(&request_id, response_obj))
@@ -115,7 +116,7 @@ fn test_cancel_session_requests_returns_ok() -> nvim_oxi::Result<()> {
 
     block_on(requests.add(
         session_id.clone(),
-        RequestId::Null,
+        RawJsonRpcId::Null,
         Responder::PermissionResponse(sender),
     ));
 
@@ -152,12 +153,12 @@ fn test_cancel_session_requests_only_affects_target_session() -> nvim_oxi::Resul
 
     block_on(requests.add(
         session_id.clone(),
-        RequestId::Null,
+        RawJsonRpcId::Null,
         Responder::PermissionResponse(target_sender),
     ));
     block_on(requests.add(
         other_session_id.clone(),
-        RequestId::Null,
+        RawJsonRpcId::Null,
         Responder::PermissionResponse(other_sender),
     ));
 
@@ -190,12 +191,12 @@ fn test_other_session_not_cancelled() -> nvim_oxi::Result<()> {
 
     block_on(requests.add(
         session_id.clone(),
-        RequestId::Null,
+        RawJsonRpcId::Null,
         Responder::PermissionResponse(target_sender),
     ));
     block_on(requests.add(
         other_session_id.clone(),
-        RequestId::Null,
+        RawJsonRpcId::Null,
         Responder::PermissionResponse(other_sender),
     ));
 
@@ -218,7 +219,8 @@ fn test_remove_returns_stored_request() -> nvim_oxi::Result<()> {
     );
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
-    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
+    let request_id =
+        block_on(requests.add("test-session".to_string(), RawJsonRpcId::Null, responder));
 
     let removed = block_on(requests.remove(&request_id))
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
@@ -236,7 +238,8 @@ fn test_remove_removes_from_pending() -> nvim_oxi::Result<()> {
     );
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
-    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
+    let request_id =
+        block_on(requests.add("test-session".to_string(), RawJsonRpcId::Null, responder));
 
     block_on(requests.remove(&request_id))
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
@@ -274,7 +277,7 @@ fn test_request_id_returns_agent_request_id() -> nvim_oxi::Result<()> {
     );
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
-    let agent_request_id = RequestId::Number(42);
+    let agent_request_id = RawJsonRpcId::Number(42);
     let request_id = block_on(requests.add(
         "test-session".to_string(),
         agent_request_id.clone(),
@@ -297,7 +300,8 @@ fn test_details_returns_request_session_id() -> nvim_oxi::Result<()> {
     );
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
-    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
+    let request_id =
+        block_on(requests.add("test-session".to_string(), RawJsonRpcId::Null, responder));
 
     let removed = block_on(requests.remove(&request_id))
         .map_err(|e| nvim_oxi::api::Error::Other(e.to_string()))?;
@@ -315,7 +319,7 @@ fn test_remove_by_request_id_returns_stored_request() -> nvim_oxi::Result<()> {
     );
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
-    let agent_request_id = RequestId::Number(42);
+    let agent_request_id = RawJsonRpcId::Number(42);
     let request_id = block_on(requests.add(
         "test-session".to_string(),
         agent_request_id.clone(),
@@ -337,7 +341,7 @@ fn test_remove_by_request_id_missing_returns_none() -> nvim_oxi::Result<()> {
         )?,
     );
 
-    let removed = block_on(requests.remove_by_request_id(&RequestId::Number(1)));
+    let removed = block_on(requests.remove_by_request_id(&RawJsonRpcId::Number(1)));
 
     assert!(
         removed.is_none(),
@@ -356,23 +360,23 @@ fn test_remove_by_request_id_only_removes_matching() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     block_on(requests.add(
         "target-session".to_string(),
-        RequestId::Number(1),
+        RawJsonRpcId::Number(1),
         Responder::PermissionResponse(sender),
     ));
     let (other_sender, _other_receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let other_request_id = block_on(requests.add(
         "other-session".to_string(),
-        RequestId::Number(2),
+        RawJsonRpcId::Number(2),
         Responder::PermissionResponse(other_sender),
     ));
 
-    block_on(requests.remove_by_request_id(&RequestId::Number(1)))
+    block_on(requests.remove_by_request_id(&RawJsonRpcId::Number(1)))
         .expect("Should find the pending request by agent id");
 
     let remaining =
         block_on(requests.get(&other_request_id)).expect("Unrelated request should remain pending");
 
-    assert_eq!(remaining.request_id(), RequestId::Number(2));
+    assert_eq!(remaining.request_id(), RawJsonRpcId::Number(2));
     Ok(())
 }
 
@@ -387,7 +391,7 @@ fn test_get_returns_some_for_existing() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
     let retrieved = block_on(requests.get(&request_id));
 
     assert!(retrieved.is_some(), "Should find existing request");
@@ -420,7 +424,7 @@ fn test_handle_response_removes_request_from_pending() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
 
     // Handle the response
     let response_obj = nvim_oxi::Object::from("selected-option-id");
@@ -451,7 +455,7 @@ fn test_request_exists_before_response_handled() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
 
     // Verify request exists before response (separate test from cleanup test)
     assert!(
@@ -480,7 +484,8 @@ fn test_write_file_request_cleanup_via_handle_response() -> nvim_oxi::Result<()>
     );
     let responder = Responder::WriteFileResponse(sender, write_request);
 
-    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
+    let request_id =
+        block_on(requests.add("test-session".to_string(), RawJsonRpcId::Null, responder));
 
     // Verify request exists
     assert!(block_on(requests.get(&request_id)).is_some());
@@ -509,7 +514,8 @@ fn test_write_file_handle_response_succeeds() -> nvim_oxi::Result<()> {
     );
     let responder = Responder::WriteFileResponse(sender, write_request);
 
-    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
+    let request_id =
+        block_on(requests.add("test-session".to_string(), RawJsonRpcId::Null, responder));
 
     // Use handle_response to trigger cleanup (goes through respond() -> finish())
     // NOTE: default_response() doesn't call finish(), so we use handle_response for this test
@@ -543,7 +549,8 @@ fn test_write_file_request_cleaned_up_after_response() -> nvim_oxi::Result<()> {
     );
     let responder = Responder::WriteFileResponse(sender, write_request);
 
-    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
+    let request_id =
+        block_on(requests.add("test-session".to_string(), RawJsonRpcId::Null, responder));
 
     // Use handle_response to trigger cleanup
     let response_obj = nvim_oxi::Object::from(0i64);
@@ -578,7 +585,7 @@ fn test_multiple_requests_exist_after_adding() -> nvim_oxi::Result<()> {
         let session_id = format!("test-session-{}", i);
         let (sender, receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
         let responder = Responder::PermissionResponse(sender);
-        let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+        let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
         request_ids.push(request_id);
         receivers.push(receiver);
     }
@@ -610,7 +617,7 @@ fn test_multiple_requests_all_handled_successfully() -> nvim_oxi::Result<()> {
             let session_id = format!("test-session-{}", i);
             let (sender, receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
             let responder = Responder::PermissionResponse(sender);
-            let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+            let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
             request_ids.push(request_id);
             receiver
         })
@@ -644,7 +651,7 @@ fn test_multiple_requests_all_cleaned_up() -> nvim_oxi::Result<()> {
             let session_id = format!("test-session-{}", i);
             let (sender, receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
             let responder = Responder::PermissionResponse(sender);
-            let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+            let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
             request_ids.push(request_id);
             receiver
         })
@@ -688,7 +695,7 @@ fn test_first_response_to_request_succeeds() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
 
     // First response succeeds
     let response_obj = nvim_oxi::Object::from("selected-option-id");
@@ -709,7 +716,7 @@ fn test_second_response_to_cleaned_up_request_fails() -> nvim_oxi::Result<()> {
     let (sender, receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
 
     // First response succeeds
     let response_obj = nvim_oxi::Object::from("selected-option-id");
@@ -747,7 +754,7 @@ fn test_request_respond_with_permission_response_sends_outcome() -> nvim_oxi::Re
     let (sender, receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
     let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     // Respond with an option ID
@@ -777,7 +784,7 @@ fn test_request_respond_with_permission_empty_string_sends_cancelled() -> nvim_o
     let (sender, receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
     let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     // Respond with empty string (cancels the request)
@@ -806,7 +813,7 @@ fn test_request_cancel_sends_cancelled_outcome() -> nvim_oxi::Result<()> {
     let (sender, receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
     let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     // Cancel the request
@@ -841,7 +848,7 @@ fn test_request_cancel_on_non_permission_request_returns_ok() -> nvim_oxi::Resul
     );
     let responder = Responder::WriteFileResponse(sender, write_request);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
     let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     // Cancel on non-permission request should succeed (no-op)
@@ -864,7 +871,7 @@ fn test_request_is_permission_request_true_for_permission() -> nvim_oxi::Result<
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
     let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     assert!(
@@ -893,7 +900,7 @@ fn test_request_is_permission_request_false_for_write_file() -> nvim_oxi::Result
     );
     let responder = Responder::WriteFileResponse(sender, write_request);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
     let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     assert!(
@@ -914,13 +921,13 @@ fn test_request_terminal_true_for_terminal_create() -> nvim_oxi::Result<()> {
     );
     let session_id = String::from("test-session");
     let (sender, _receiver) = oneshot_channel::<Result<CreateTerminalResponse>>(1);
-    let create_request = agent_client_protocol::schema::v1::CreateTerminalRequest::new(
+    let create_request = agent_client_protocol::v1::schema::CreateTerminalRequest::new(
         SessionId::from("test-session"),
         "echo".to_string(),
     );
     let responder = Responder::TerminalCreate(sender, create_request);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
     let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     assert!(
@@ -941,7 +948,7 @@ fn test_request_terminal_false_for_permission() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
     let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     assert!(
@@ -962,7 +969,7 @@ fn test_request_is_session_true_for_matching() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = block_on(requests.add(session_id.clone(), RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id.clone(), RawJsonRpcId::Null, responder));
     let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     assert!(request.is_session(session_id), "Should match session");
@@ -980,7 +987,7 @@ fn test_request_is_session_false_for_non_matching() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
     let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     assert!(
@@ -1001,13 +1008,13 @@ fn test_terminal_output_respond_sends_response() -> nvim_oxi::Result<()> {
     );
     let session_id = String::from("test-session");
     let (sender, receiver) = oneshot_channel::<Result<TerminalOutputResponse>>(1);
-    let output_request = agent_client_protocol::schema::v1::TerminalOutputRequest::new(
+    let output_request = agent_client_protocol::v1::schema::TerminalOutputRequest::new(
         SessionId::from("test-session"),
         TerminalId::from("test-terminal"),
     );
     let responder = Responder::TerminalOutput(sender, output_request);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
     let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     let response_obj = nvim_oxi::Object::from("terminal output");
@@ -1031,13 +1038,13 @@ fn test_terminal_exit_respond_sends_response() -> nvim_oxi::Result<()> {
     );
     let session_id = String::from("test-session");
     let (sender, receiver) = oneshot_channel::<Result<(Option<u32>, Option<String>)>>(1);
-    let exit_request = agent_client_protocol::schema::v1::WaitForTerminalExitRequest::new(
+    let exit_request = agent_client_protocol::v1::schema::WaitForTerminalExitRequest::new(
         SessionId::from("test-session"),
         TerminalId::from("test-terminal"),
     );
     let responder = Responder::TerminalExit(sender, exit_request);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
     let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     let response_obj = nvim_oxi::Object::from("success");
@@ -1060,13 +1067,13 @@ fn test_terminal_release_respond_sends_response() -> nvim_oxi::Result<()> {
     );
     let session_id = String::from("test-session");
     let (sender, receiver) = oneshot_channel::<Result<ReleaseTerminalResponse>>(1);
-    let release_request = agent_client_protocol::schema::v1::ReleaseTerminalRequest::new(
+    let release_request = agent_client_protocol::v1::schema::ReleaseTerminalRequest::new(
         SessionId::from("test-session"),
         TerminalId::from("test-terminal"),
     );
     let responder = Responder::TerminalRelease(sender, release_request);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
     let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     let response_obj = nvim_oxi::Object::from(0i64);
@@ -1091,13 +1098,13 @@ fn test_terminal_kill_respond_sends_response() -> nvim_oxi::Result<()> {
     );
     let session_id = String::from("test-session");
     let (sender, receiver) = oneshot_channel::<Result<KillTerminalResponse>>(1);
-    let kill_request = agent_client_protocol::schema::v1::KillTerminalRequest::new(
+    let kill_request = agent_client_protocol::v1::schema::KillTerminalRequest::new(
         SessionId::from("test-session"),
         TerminalId::from("test-terminal"),
     );
     let responder = Responder::TerminalKill(sender, kill_request);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
     let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     let response_obj = nvim_oxi::Object::from(0i64);
@@ -1122,7 +1129,7 @@ fn test_respond_twice_on_same_request_fails() -> nvim_oxi::Result<()> {
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
     let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     // First respond succeeds
@@ -1149,7 +1156,7 @@ fn test_cancel_twice_on_same_permission_request_fails() -> nvim_oxi::Result<()> 
     let (sender, _receiver) = oneshot_channel::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
 
-    let request_id = block_on(requests.add(session_id, RequestId::Null, responder));
+    let request_id = block_on(requests.add(session_id, RawJsonRpcId::Null, responder));
     let request = block_on(requests.get(&request_id)).expect("Request should exist");
 
     // First cancel succeeds

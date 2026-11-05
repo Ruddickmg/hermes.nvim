@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::RawJsonRpcId;
+use agent_client_protocol::v1::schema::{
     AuthenticateResponse, CloseSessionResponse, DeleteSessionResponse, ExtResponse,
     ForkSessionResponse, InitializeResponse, ListSessionsResponse, LoadSessionResponse,
-    LogoutResponse, NewSessionResponse, PromptResponse, RequestId, ResumeSessionResponse,
-    SessionConfigKind, SessionConfigOption, SessionConfigOptionCategory,
-    SetSessionConfigOptionResponse, SetSessionModeResponse,
+    LogoutResponse, NewSessionResponse, PromptResponse, ResumeSessionResponse, SessionConfigKind,
+    SessionConfigOption, SessionConfigOptionCategory, SetSessionConfigOptionResponse,
+    SetSessionModeResponse,
 };
 use async_channel::bounded;
 use serde::Serialize;
@@ -107,7 +108,7 @@ impl Handler {
         let (sender, receiver) = bounded::<bool>(1);
         self.execute_autocommand_request(
             Uuid::new_v4().to_string(),
-            RequestId::Null,
+            RawJsonRpcId::Null,
             Commands::TerminalAuthentication,
             response,
             Responder::TerminalAuthentication(sender),

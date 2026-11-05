@@ -5,7 +5,7 @@ use crate::{
     utilities::{autocommand, mock_agent::MockAgent, test_helpers::connect_to_mock_agent},
 };
 use agent_client_protocol::schema::ProtocolVersion;
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     AgentCapabilities, CloseSessionResponse, DeleteSessionResponse, InitializeResponse,
     ListSessionsResponse, LoadSessionResponse, NewSessionResponse, PromptResponse,
     ResumeSessionResponse, SessionCapabilities, SessionConfigOption, SessionConfigOptionCategory,
@@ -543,7 +543,7 @@ fn test_load_session_then_set_mode_uses_legacy_path() -> Result<(), nvim_oxi::Er
     let wait_for_loaded_session =
         autocommand::listen_for_autocommand::<LoadSessionResponse>(Commands::SessionLoaded);
     let wait_for_mode_updated = autocommand::listen_for_autocommand::<
-        agent_client_protocol::schema::v1::SetSessionModeResponse,
+        agent_client_protocol::v1::schema::SetSessionModeResponse,
     >(Commands::ModeUpdated);
 
     // Configure mock agent with legacy modes and set_mode response
@@ -554,7 +554,7 @@ fn test_load_session_then_set_mode_uses_legacy_path() -> Result<(), nvim_oxi::Er
         let modes = SessionModeState::new("chat", vec![mode]);
         config.load_session_response = Some(LoadSessionResponse::default().modes(modes));
         config.set_session_mode_response =
-            Some(agent_client_protocol::schema::v1::SetSessionModeResponse::new());
+            Some(agent_client_protocol::v1::schema::SetSessionModeResponse::new());
     }
     let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
 
@@ -611,7 +611,7 @@ fn test_load_session_then_set_mode_uses_config_path() -> Result<(), nvim_oxi::Er
     let wait_for_loaded_session =
         autocommand::listen_for_autocommand::<LoadSessionResponse>(Commands::SessionLoaded);
     let wait_for_config_updated = autocommand::listen_for_autocommand::<
-        agent_client_protocol::schema::v1::SetSessionConfigOptionResponse,
+        agent_client_protocol::v1::schema::SetSessionConfigOptionResponse,
     >(Commands::ConfigurationUpdated);
 
     // Configure mock agent with config options and set_config_option response
@@ -628,7 +628,7 @@ fn test_load_session_then_set_mode_uses_config_path() -> Result<(), nvim_oxi::Er
         config.load_session_response =
             Some(LoadSessionResponse::default().config_options(vec![option]));
         config.set_session_config_option_response =
-            Some(agent_client_protocol::schema::v1::SetSessionConfigOptionResponse::new(vec![]));
+            Some(agent_client_protocol::v1::schema::SetSessionConfigOptionResponse::new(vec![]));
     }
     let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
 

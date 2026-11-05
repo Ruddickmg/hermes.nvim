@@ -12,8 +12,9 @@ use crate::{
         test_helpers::connect_to_mock_agent,
     },
 };
-use agent_client_protocol::schema::v1::{
-    InitializeResponse, NewSessionResponse, ReadTextFileRequest, RequestId, SessionId,
+use agent_client_protocol::RawJsonRpcId;
+use agent_client_protocol::v1::schema::{
+    InitializeResponse, NewSessionResponse, ReadTextFileRequest, SessionId,
 };
 use hermes::nvim::requests::RequestDetails;
 use hermes::{
@@ -47,8 +48,8 @@ fn make_err(msg: &str) -> nvim_oxi::Error {
 struct ClientInitiatedCancel {
     read_file: ReadTextFileData,
     cancelled: RequestDetails,
-    received: Option<RequestId>,
-    expected: Option<RequestId>,
+    received: Option<RawJsonRpcId>,
+    expected: Option<RawJsonRpcId>,
 }
 
 /// Drive the full client-initiated cancellation flow.
@@ -160,7 +161,7 @@ fn test_cancel_pending_read_request_sends_cancel_notification() -> Result<(), nv
 /// Result of cancelling with an id that resolves to no pending request.
 struct UnresolvedCancel {
     /// `$/cancel_request` request id the mock agent received, if any.
-    received: Option<RequestId>,
+    received: Option<RawJsonRpcId>,
 }
 
 /// Connect to the mock agent and call `cancel` with `id`, which is neither a

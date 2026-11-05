@@ -3,9 +3,8 @@
 //! Each test verifies exactly ONE behavior with exactly ONE assertion.
 //! Setup code and .expect() calls don't count as assertions.
 use crate::helpers::ui::wait_for;
-use agent_client_protocol::schema::v1::{
-    ReadTextFileRequest, ReadTextFileResponse, RequestId, SessionId,
-};
+use agent_client_protocol::RawJsonRpcId;
+use agent_client_protocol::v1::schema::{ReadTextFileRequest, ReadTextFileResponse, SessionId};
 use assert_fs::NamedTempFile;
 use assert_fs::prelude::*;
 use async_channel::bounded as oneshot_channel;
@@ -70,7 +69,8 @@ fn setup_read_request(
     let (sender, receiver) =
         oneshot_channel::<agent_client_protocol::Result<ReadTextFileResponse>>(1);
     let responder = Responder::ReadFileResponse(sender, create_read_request(path, start, limit));
-    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
+    let request_id =
+        block_on(requests.add("test-session".to_string(), RawJsonRpcId::Null, responder));
     (requests, request_id, receiver)
 }
 
@@ -478,7 +478,8 @@ fn read_file_missing_file_returns_error() -> nvim_oxi::Result<()> {
         sender,
         create_read_request(PathBuf::from("/nonexistent/file.txt").as_path(), None, None),
     );
-    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
+    let request_id =
+        block_on(requests.add("test-session".to_string(), RawJsonRpcId::Null, responder));
 
     block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
@@ -498,7 +499,8 @@ fn read_file_missing_file_cleanup_works() -> nvim_oxi::Result<()> {
         sender,
         create_read_request(PathBuf::from("/nonexistent/file.txt").as_path(), None, None),
     );
-    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
+    let request_id =
+        block_on(requests.add("test-session".to_string(), RawJsonRpcId::Null, responder));
 
     block_on(requests.default_response(&request_id, serde_json::Value::Null)).ok();
 
@@ -590,7 +592,8 @@ fn read_file_respond_path_sends_custom_content() -> nvim_oxi::Result<()> {
     );
     let (sender, receiver) = oneshot_channel::<Result<ReadTextFileResponse, _>>(1);
     let responder = Responder::ReadFileResponse(sender, create_read_request(&path, None, None));
-    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
+    let request_id =
+        block_on(requests.add("test-session".to_string(), RawJsonRpcId::Null, responder));
 
     let custom_content = "Custom content from user";
     let response_obj = nvim_oxi::Object::from(custom_content);
@@ -614,7 +617,8 @@ fn read_file_respond_path_cleanup_works() -> nvim_oxi::Result<()> {
     );
     let (sender, _receiver) = async_channel::bounded::<Result<ReadTextFileResponse, _>>(1);
     let responder = Responder::ReadFileResponse(sender, create_read_request(&path, None, None));
-    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
+    let request_id =
+        block_on(requests.add("test-session".to_string(), RawJsonRpcId::Null, responder));
 
     let response_obj = nvim_oxi::Object::from("test content");
     block_on(requests.handle_response(&request_id, response_obj))

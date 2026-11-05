@@ -1,4 +1,4 @@
-use agent_client_protocol::schema::v1::ListSessionsRequest;
+use agent_client_protocol::v1::schema::ListSessionsRequest;
 use nvim_oxi::{
     Dictionary, Object,
     conversion::{Error, FromObject},

@@ -7,9 +7,10 @@
 
 use crate::helpers::mock_runtime;
 use crate::helpers::ui::{wait_for_floating_window, wait_for_some};
-use agent_client_protocol::schema::v1::{
-    PermissionOption, PermissionOptionId, PermissionOptionKind, RequestId,
-    RequestPermissionRequest, SessionId, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
+use agent_client_protocol::RawJsonRpcId;
+use agent_client_protocol::v1::schema::{
+    PermissionOption, PermissionOptionId, PermissionOptionKind, RequestPermissionRequest,
+    SessionId, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
 };
 use async_lock::Mutex;
 use hermes::nvim::requests::Responder;
@@ -122,7 +123,7 @@ fn show_permission_ui_options_can_be_selected() -> nvim_oxi::Result<()> {
 /// Test that Request::is_permission_request() correctly identifies non-permission requests
 #[nvim_oxi::test]
 fn test_non_permission_request_not_permission() -> nvim_oxi::Result<()> {
-    use agent_client_protocol::schema::v1::{SessionId, WriteTextFileRequest};
+    use agent_client_protocol::v1::schema::{SessionId, WriteTextFileRequest};
     use hermes::nvim::requests::{RequestHandler, Requests};
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -134,14 +135,15 @@ fn test_non_permission_request_not_permission() -> nvim_oxi::Result<()> {
             nvim_oxi::api::Error::Other(format!("Failed to create Requests: {}", e))
         })?);
     let (sender, _receiver) =
-        async_channel::bounded::<agent_client_protocol::schema::v1::WriteTextFileResponse>(1);
+        async_channel::bounded::<agent_client_protocol::v1::schema::WriteTextFileResponse>(1);
     let write_request = WriteTextFileRequest::new(
         SessionId::from("test-session"),
         PathBuf::from("/tmp/test.txt"),
         "test content",
     );
     let responder = Responder::WriteFileResponse(sender, write_request);
-    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
+    let request_id =
+        block_on(requests.add("test-session".to_string(), RawJsonRpcId::Null, responder));
 
     // Get the request and check if it's a permission request
     let request = block_on(requests.get(&request_id)).expect("Request should exist");

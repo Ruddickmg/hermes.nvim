@@ -14,7 +14,7 @@ name = "mock-agent-stdio"
 path = "src/bin/mock_agent_stdio.rs"
 
 [dependencies]
-agent-client-protocol = { version = "3.3.0", features = [
+agent-client-protocol = { version = "5.0.0", features = [
     "unstable_session_fork",
     "unstable_mcp_over_acp",
     "stdio",

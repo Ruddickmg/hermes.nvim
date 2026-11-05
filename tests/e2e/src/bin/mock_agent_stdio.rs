@@ -14,7 +14,7 @@
 //!   remaining argv (e.g. `terminal --device-code`).
 //! - anything else (default): advertise an agent auth method.
 
-use agent_client_protocol::schema::v1::{AuthMethod, AuthMethodAgent, AuthMethodTerminal};
+use agent_client_protocol::v1::schema::{AuthMethod, AuthMethodAgent, AuthMethodTerminal};
 use hermes_e2e::utilities::mock_agent::MockAgent;
 
 fn main() {

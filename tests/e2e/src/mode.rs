@@ -5,7 +5,7 @@ use crate::{
         test_helpers::connect_to_mock_agent,
     },
 };
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     InitializeResponse, NewSessionResponse, SessionConfigOption, SessionConfigOptionCategory,
     SessionConfigSelectOption, SessionMode, SessionModeState,
 };
@@ -102,7 +102,7 @@ fn test_set_mode_with_legacy_modes() -> Result<(), nvim_oxi::Error> {
         let modes = SessionModeState::new("chat", vec![mode]);
         config.new_session_response = NewSessionResponse::new(generate_session_id()).modes(modes);
         config.set_session_mode_response =
-            Some(agent_client_protocol::schema::v1::SetSessionModeResponse::new());
+            Some(agent_client_protocol::v1::schema::SetSessionModeResponse::new());
     }
     let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
 
@@ -158,7 +158,7 @@ fn test_set_mode_with_config_options() -> Result<(), nvim_oxi::Error> {
         config.new_session_response =
             NewSessionResponse::new(generate_session_id()).config_options(vec![option]);
         config.set_session_config_option_response =
-            Some(agent_client_protocol::schema::v1::SetSessionConfigOptionResponse::new(vec![]));
+            Some(agent_client_protocol::v1::schema::SetSessionConfigOptionResponse::new(vec![]));
     }
     let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
 

@@ -12,7 +12,7 @@ use crate::{
         test_helpers::connect_to_mock_agent,
     },
 };
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     InitializeResponse, NewSessionResponse, PromptResponse, ReleaseTerminalRequest, SessionId,
     StopReason, TerminalId,
 };

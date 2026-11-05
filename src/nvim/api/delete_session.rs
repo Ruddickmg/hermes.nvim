@@ -6,7 +6,7 @@ use nvim_oxi::{
 };
 use tracing::error;
 
-use agent_client_protocol::schema::v1::{CancelNotification, DeleteSessionRequest, SessionId};
+use agent_client_protocol::v1::schema::{CancelNotification, DeleteSessionRequest, SessionId};
 
 use crate::{
     acp::{self, error::Error},

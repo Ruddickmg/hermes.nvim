@@ -66,7 +66,7 @@ fn thought_levels_returns_unsupported_when_session_has_no_thought_level_info()
 
     {
         let mut state = block_on(plugin_state.lock());
-        let session = agent_client_protocol::schema::v1::NewSessionResponse::new("test-session");
+        let session = agent_client_protocol::v1::schema::NewSessionResponse::new("test-session");
         state.set_session_info(&session);
     }
 
@@ -90,19 +90,19 @@ fn thought_levels_returns_ok_for_config_options() -> nvim_oxi::Result<()> {
 
     {
         let mut state = block_on(plugin_state.lock());
-        let option = agent_client_protocol::schema::v1::SessionConfigOption::select(
+        let option = agent_client_protocol::v1::schema::SessionConfigOption::select(
             "thought_level",
             "Thought Level",
             "low",
             vec![
-                agent_client_protocol::schema::v1::SessionConfigSelectOption::new("low", "Low"),
-                agent_client_protocol::schema::v1::SessionConfigSelectOption::new(
+                agent_client_protocol::v1::schema::SessionConfigSelectOption::new("low", "Low"),
+                agent_client_protocol::v1::schema::SessionConfigSelectOption::new(
                     "medium", "Medium",
                 ),
             ],
         )
-        .category(agent_client_protocol::schema::v1::SessionConfigOptionCategory::ThoughtLevel);
-        let session = agent_client_protocol::schema::v1::NewSessionResponse::new("test-session")
+        .category(agent_client_protocol::v1::schema::SessionConfigOptionCategory::ThoughtLevel);
+        let session = agent_client_protocol::v1::schema::NewSessionResponse::new("test-session")
             .config_options(vec![option]);
         state.set_session_info(&session);
     }
@@ -149,7 +149,7 @@ fn set_thought_level_returns_unsupported_when_session_has_no_thought_level_info(
 
     {
         let mut state = block_on(plugin_state.lock());
-        let session = agent_client_protocol::schema::v1::NewSessionResponse::new("test-session");
+        let session = agent_client_protocol::v1::schema::NewSessionResponse::new("test-session");
         state.set_session_info(&session);
     }
 

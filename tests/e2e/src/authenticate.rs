@@ -7,7 +7,7 @@
 //! produces. The respond tests drive the TerminalAuthentication event through
 //! `hermes.respond()` and assert on whether Authenticated fires.
 
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     AuthMethod, AuthMethodAgent, AuthMethodId, AuthenticateResponse, InitializeResponse,
 };
 use hermes::{

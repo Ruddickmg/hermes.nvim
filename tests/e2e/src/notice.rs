@@ -9,7 +9,7 @@ use crate::{
         test_helpers::connect_to_mock_agent,
     },
 };
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     InitializeResponse, NewSessionResponse, NoticeCapabilities, NoticeSeverity, SessionUpdate,
 };
 use hermes::{
@@ -160,7 +160,7 @@ fn test_notice_capability_not_advertised_without_listener() -> Result<(), nvim_o
 /// payload intact.
 #[nvim_oxi::test]
 fn test_notice_fires_autocommand() -> Result<(), nvim_oxi::Error> {
-    let expected = agent_client_protocol::schema::v1::Notice::new(NoticeSeverity::Info, "Heads up");
+    let expected = agent_client_protocol::v1::schema::Notice::new(NoticeSeverity::Info, "Heads up");
 
     let notification = run_notice_prompt(|config| config.set_notice(expected.clone()))?;
 

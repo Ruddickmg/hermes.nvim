@@ -7,7 +7,7 @@ use crate::{
         test_helpers::connect_to_mock_agent,
     },
 };
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     InitializeResponse, NewSessionResponse, SessionConfigOption, SessionConfigOptionCategory,
     SessionConfigSelectOption,
 };
@@ -165,7 +165,7 @@ fn test_thought_level_updated_fires_after_set() -> Result<(), nvim_oxi::Error> {
         )
         .category(SessionConfigOptionCategory::ThoughtLevel);
         config.set_session_config_option_response = Some(
-            agent_client_protocol::schema::v1::SetSessionConfigOptionResponse::new(vec![
+            agent_client_protocol::v1::schema::SetSessionConfigOptionResponse::new(vec![
                 response_option,
             ]),
         );

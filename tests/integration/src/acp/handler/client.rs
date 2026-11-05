@@ -2,7 +2,7 @@
 use crate::helpers::{mock_runtime, MockRequestHandler};
 use agent_client_protocol::{
     Error,
-    schema::v1::{ReadTextFileRequest, WriteTextFileRequest},
+    v1::schema::{ReadTextFileRequest, WriteTextFileRequest},
 };
 use hermes::acp::handler::Handler;
 use hermes::nvim::state::PluginState;
@@ -89,7 +89,7 @@ fn test_create_terminal_permissions_allowed() -> nvim_oxi::Result<()> {
     let handler = Handler::new(state.clone(), mock_runtime(), Rc::new(MockRequestHandler::new()))
         .expect("Handler creation should succeed");
 
-    let req = agent_client_protocol::schema::v1::CreateTerminalRequest::new("session_id", "echo");
+    let req = agent_client_protocol::v1::schema::CreateTerminalRequest::new("session_id", "echo");
     let res = smol::block_on(handler.create_terminal(req));
     assert!(
         res.is_ok(),
@@ -107,7 +107,7 @@ fn test_create_terminal_permissions_denied() -> nvim_oxi::Result<()> {
     let handler = Handler::new(state.clone(), mock_runtime(), Rc::new(MockRequestHandler::new()))
         .expect("Handler creation should succeed");
 
-    let req = agent_client_protocol::schema::v1::CreateTerminalRequest::new("session_id", "echo");
+    let req = agent_client_protocol::v1::schema::CreateTerminalRequest::new("session_id", "echo");
     let res = smol::block_on(handler.create_terminal(req));
     assert_eq!(
         res.unwrap_err(),
@@ -125,7 +125,7 @@ fn test_terminal_output_permissions_allowed() -> nvim_oxi::Result<()> {
     let handler = Handler::new(state.clone(), mock_runtime(), Rc::new(MockRequestHandler::new()))
         .expect("Handler creation should succeed");
 
-    let req = agent_client_protocol::schema::v1::TerminalOutputRequest::new("session_id", "term-1");
+    let req = agent_client_protocol::v1::schema::TerminalOutputRequest::new("session_id", "term-1");
     let res = smol::block_on(handler.terminal_output(req));
     assert!(
         res.is_ok(),
@@ -143,7 +143,7 @@ fn test_terminal_output_permissions_denied() -> nvim_oxi::Result<()> {
     let handler = Handler::new(state.clone(), mock_runtime(), Rc::new(MockRequestHandler::new()))
         .expect("Handler creation should succeed");
 
-    let req = agent_client_protocol::schema::v1::TerminalOutputRequest::new("session_id", "term-1");
+    let req = agent_client_protocol::v1::schema::TerminalOutputRequest::new("session_id", "term-1");
     let res = smol::block_on(handler.terminal_output(req));
     assert_eq!(
         res.unwrap_err(),
@@ -161,7 +161,7 @@ fn test_wait_for_terminal_exit_permissions_allowed() -> nvim_oxi::Result<()> {
     let handler = Handler::new(state.clone(), mock_runtime(), Rc::new(MockRequestHandler::new()))
         .expect("Handler creation should succeed");
 
-    let req = agent_client_protocol::schema::v1::WaitForTerminalExitRequest::new("session_id", "term-1");
+    let req = agent_client_protocol::v1::schema::WaitForTerminalExitRequest::new("session_id", "term-1");
     let res = smol::block_on(handler.wait_for_terminal_exit(req));
     assert!(
         res.is_ok(),
@@ -179,7 +179,7 @@ fn test_wait_for_terminal_exit_permissions_denied() -> nvim_oxi::Result<()> {
     let handler = Handler::new(state.clone(), mock_runtime(), Rc::new(MockRequestHandler::new()))
         .expect("Handler creation should succeed");
 
-    let req = agent_client_protocol::schema::v1::WaitForTerminalExitRequest::new("session_id", "term-1");
+    let req = agent_client_protocol::v1::schema::WaitForTerminalExitRequest::new("session_id", "term-1");
     let res = smol::block_on(handler.wait_for_terminal_exit(req));
     assert_eq!(
         res.unwrap_err(),
@@ -197,7 +197,7 @@ fn test_release_terminal_permissions_allowed() -> nvim_oxi::Result<()> {
     let handler = Handler::new(state.clone(), mock_runtime(), Rc::new(MockRequestHandler::new()))
         .expect("Handler creation should succeed");
 
-    let req = agent_client_protocol::schema::v1::ReleaseTerminalRequest::new("session_id", "term-1");
+    let req = agent_client_protocol::v1::schema::ReleaseTerminalRequest::new("session_id", "term-1");
     let res = smol::block_on(handler.release_terminal(req));
     assert!(
         res.is_ok(),
@@ -215,7 +215,7 @@ fn test_release_terminal_permissions_denied() -> nvim_oxi::Result<()> {
     let handler = Handler::new(state.clone(), mock_runtime(), Rc::new(MockRequestHandler::new()))
         .expect("Handler creation should succeed");
 
-    let req = agent_client_protocol::schema::v1::ReleaseTerminalRequest::new("session_id", "term-1");
+    let req = agent_client_protocol::v1::schema::ReleaseTerminalRequest::new("session_id", "term-1");
     let res = smol::block_on(handler.release_terminal(req));
     assert_eq!(
         res.unwrap_err(),

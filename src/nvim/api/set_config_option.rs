@@ -1,4 +1,4 @@
-use agent_client_protocol::schema::v1::SessionConfigOptionValue;
+use agent_client_protocol::v1::schema::SessionConfigOptionValue;
 use nvim_oxi::{
     Dictionary, Object, ObjectKind,
     conversion::{Error as ConversionError, FromObject},
@@ -145,7 +145,7 @@ impl Api {
             .ok_or_else(|| AcpError::Connection("No connection found".to_string()))?;
         let result = connection
             .set_config_option(
-                agent_client_protocol::schema::v1::SetSessionConfigOptionRequest::new(
+                agent_client_protocol::v1::schema::SetSessionConfigOptionRequest::new(
                     session_id,
                     config.id,
                     SessionConfigOptionValue::from(config.value),
@@ -160,7 +160,7 @@ impl Api {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol::schema::v1::SessionConfigKind;
+    use agent_client_protocol::v1::schema::SessionConfigKind;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -267,11 +267,11 @@ mod tests {
     /// so Lua receives `{ id, name, type = "boolean", currentValue }`.
     #[test]
     fn boolean_option_serializes_with_flattened_type_tag() {
-        let option = agent_client_protocol::schema::v1::SessionConfigOption::new(
+        let option = agent_client_protocol::v1::schema::SessionConfigOption::new(
             "brave_mode",
             "Brave Mode",
             SessionConfigKind::Boolean(
-                agent_client_protocol::schema::v1::SessionConfigBoolean::new(true),
+                agent_client_protocol::v1::schema::SessionConfigBoolean::new(true),
             ),
         );
         let json = serde_json::to_value(&option).expect("serialization should succeed");
@@ -281,11 +281,11 @@ mod tests {
 
     #[test]
     fn boolean_option_serializes_current_value_as_bool() {
-        let option = agent_client_protocol::schema::v1::SessionConfigOption::new(
+        let option = agent_client_protocol::v1::schema::SessionConfigOption::new(
             "brave_mode",
             "Brave Mode",
             SessionConfigKind::Boolean(
-                agent_client_protocol::schema::v1::SessionConfigBoolean::new(false),
+                agent_client_protocol::v1::schema::SessionConfigBoolean::new(false),
             ),
         );
         let json = serde_json::to_value(&option).expect("serialization should succeed");
