@@ -9,7 +9,7 @@
 use agent_client_protocol::{
     self as acp, Agent, ByteStreams, ConnectionTo, Lines, Responder, Stdio,
     on_receive_notification, on_receive_request,
-    schema::v1::{
+    v1::schema::{
         AuthenticateRequest, AuthenticateResponse, CancelNotification, CancelRequestNotification,
         CloseSessionRequest, CloseSessionResponse, ContentBlock, ContentChunk,
         DeleteSessionRequest, DeleteSessionResponse, InitializeRequest, InitializeResponse,

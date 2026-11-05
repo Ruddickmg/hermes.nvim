@@ -12,7 +12,7 @@ use crate::{
     acp::{Result, error::Error},
     api::authenticate::TerminalAuthRequest,
 };
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     AuthenticateRequest, CancelNotification, CloseSessionRequest, DeleteSessionRequest,
     ForkSessionRequest, InitializeRequest, ListSessionsRequest, LoadSessionRequest, LogoutRequest,
     NewSessionRequest, PromptRequest, RequestId, ResumeSessionRequest,
@@ -278,7 +278,7 @@ mod tests {
 
     use super::*;
     use agent_client_protocol::schema::ProtocolVersion;
-    use agent_client_protocol::schema::v1::{InitializeRequest, RequestId, SessionId};
+    use agent_client_protocol::v1::schema::{InitializeRequest, RequestId, SessionId};
     use pretty_assertions::assert_eq;
 
     /// Creates a mock thread handle that immediately returns Ok for testing
@@ -342,7 +342,7 @@ mod tests {
 
     #[test]
     fn test_connection_create_session() {
-        use agent_client_protocol::schema::v1::NewSessionRequest;
+        use agent_client_protocol::v1::schema::NewSessionRequest;
         let executor = mock_runtime();
         let (sender, receiver) = async_channel::bounded(1);
         let connection = Arc::new(mock_connection(sender));
@@ -365,7 +365,7 @@ mod tests {
 
     #[test]
     fn test_connection_terminal_authentication() {
-        use agent_client_protocol::schema::v1::AuthMethodTerminal;
+        use agent_client_protocol::v1::schema::AuthMethodTerminal;
         let executor = mock_runtime();
         let (sender, receiver) = async_channel::bounded(1);
         let connection = Arc::new(mock_connection(sender));
@@ -401,7 +401,7 @@ mod tests {
 
     #[test]
     fn test_connection_delete_session() {
-        use agent_client_protocol::schema::v1::DeleteSessionRequest;
+        use agent_client_protocol::v1::schema::DeleteSessionRequest;
         let executor = mock_runtime();
         let (sender, receiver) = async_channel::bounded(1);
         let connection = Arc::new(mock_connection(sender));

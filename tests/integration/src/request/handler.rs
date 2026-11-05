@@ -1,6 +1,6 @@
 //! Integration tests for RequestHandler trait and Requests implementation
 use crate::helpers::ui::wait_for;
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     CreateTerminalResponse, KillTerminalResponse, ReleaseTerminalResponse, RequestId,
     RequestPermissionOutcome, RequestPermissionRequest, SessionId, TerminalId,
     TerminalOutputResponse, ToolCallId, ToolCallUpdate, ToolCallUpdateFields, WriteTextFileRequest,
@@ -914,7 +914,7 @@ fn test_request_terminal_true_for_terminal_create() -> nvim_oxi::Result<()> {
     );
     let session_id = String::from("test-session");
     let (sender, _receiver) = oneshot_channel::<Result<CreateTerminalResponse>>(1);
-    let create_request = agent_client_protocol::schema::v1::CreateTerminalRequest::new(
+    let create_request = agent_client_protocol::v1::schema::CreateTerminalRequest::new(
         SessionId::from("test-session"),
         "echo".to_string(),
     );
@@ -1001,7 +1001,7 @@ fn test_terminal_output_respond_sends_response() -> nvim_oxi::Result<()> {
     );
     let session_id = String::from("test-session");
     let (sender, receiver) = oneshot_channel::<Result<TerminalOutputResponse>>(1);
-    let output_request = agent_client_protocol::schema::v1::TerminalOutputRequest::new(
+    let output_request = agent_client_protocol::v1::schema::TerminalOutputRequest::new(
         SessionId::from("test-session"),
         TerminalId::from("test-terminal"),
     );
@@ -1031,7 +1031,7 @@ fn test_terminal_exit_respond_sends_response() -> nvim_oxi::Result<()> {
     );
     let session_id = String::from("test-session");
     let (sender, receiver) = oneshot_channel::<Result<(Option<u32>, Option<String>)>>(1);
-    let exit_request = agent_client_protocol::schema::v1::WaitForTerminalExitRequest::new(
+    let exit_request = agent_client_protocol::v1::schema::WaitForTerminalExitRequest::new(
         SessionId::from("test-session"),
         TerminalId::from("test-terminal"),
     );
@@ -1060,7 +1060,7 @@ fn test_terminal_release_respond_sends_response() -> nvim_oxi::Result<()> {
     );
     let session_id = String::from("test-session");
     let (sender, receiver) = oneshot_channel::<Result<ReleaseTerminalResponse>>(1);
-    let release_request = agent_client_protocol::schema::v1::ReleaseTerminalRequest::new(
+    let release_request = agent_client_protocol::v1::schema::ReleaseTerminalRequest::new(
         SessionId::from("test-session"),
         TerminalId::from("test-terminal"),
     );
@@ -1091,7 +1091,7 @@ fn test_terminal_kill_respond_sends_response() -> nvim_oxi::Result<()> {
     );
     let session_id = String::from("test-session");
     let (sender, receiver) = oneshot_channel::<Result<KillTerminalResponse>>(1);
-    let kill_request = agent_client_protocol::schema::v1::KillTerminalRequest::new(
+    let kill_request = agent_client_protocol::v1::schema::KillTerminalRequest::new(
         SessionId::from("test-session"),
         TerminalId::from("test-terminal"),
     );

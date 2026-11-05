@@ -2,7 +2,7 @@ pub mod builder;
 pub mod client;
 pub mod response;
 
-use agent_client_protocol::schema::v1::RequestId;
+use agent_client_protocol::v1::schema::RequestId;
 pub use builder::build_client;
 
 use crate::{
@@ -185,7 +185,7 @@ impl Handler {
     pub async fn set_agent_info(
         &self,
         agent: Assistant,
-        info: agent_client_protocol::schema::v1::InitializeResponse,
+        info: agent_client_protocol::v1::schema::InitializeResponse,
     ) {
         let mut config = self.state.lock().await;
         config.set_agent_info(agent.clone(), info.clone());

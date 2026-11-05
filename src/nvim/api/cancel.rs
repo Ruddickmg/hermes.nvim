@@ -3,7 +3,7 @@ use crate::{
     api::Api,
     nvim::requests::RequestHandler,
 };
-use agent_client_protocol::schema::v1::CancelNotification;
+use agent_client_protocol::v1::schema::CancelNotification;
 use futures::future::try_join;
 
 impl Api {

@@ -1,13 +1,13 @@
 #[cfg(test)]
 use std::collections::BTreeMap;
 
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     CreateElicitationRequest, CreateElicitationResponse, ElicitationAcceptAction,
     ElicitationAction, ElicitationContentValue, ElicitationMode, ElicitationPropertySchema,
     MultiSelectItems, StringPropertySchema,
 };
 #[cfg(test)]
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     EnumOption, OtherMultiSelectItems, StringMultiSelectItems, TitledMultiSelectItems,
 };
 use nvim_oxi::conversion::FromObject;

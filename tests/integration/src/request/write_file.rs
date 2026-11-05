@@ -1,6 +1,6 @@
 //! Integration tests for Responder::WriteFileResponse via Request
 use crate::helpers::ui::wait_for;
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     RequestId, SessionId, WriteTextFileRequest, WriteTextFileResponse,
 };
 use assert_fs::prelude::*;

@@ -1,5 +1,5 @@
 use crate::helpers::{mock_connection_manager, mock_runtime};
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     NewSessionResponse, SessionConfigOption, SessionConfigOptionCategory, SessionConfigSelectOption,
 };
 use async_lock::Mutex;

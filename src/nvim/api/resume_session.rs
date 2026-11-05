@@ -15,7 +15,7 @@ use crate::{
 pub struct ResumeSessionConfig {
     pub cwd: Option<PathBuf>,
     pub additional_directories: Option<Vec<PathBuf>>,
-    pub mcp_servers: Vec<agent_client_protocol::schema::v1::McpServer>,
+    pub mcp_servers: Vec<agent_client_protocol::v1::schema::McpServer>,
 }
 
 impl FromObject for ResumeSessionConfig {
@@ -48,7 +48,7 @@ impl FromObject for ResumeSessionConfig {
                 }
             });
 
-        let mcp_servers: Vec<agent_client_protocol::schema::v1::McpServer> = dict
+        let mcp_servers: Vec<agent_client_protocol::v1::schema::McpServer> = dict
             .get("mcp_servers")
             .and_then(parse_mcp_servers)
             .unwrap_or_default();
@@ -115,8 +115,8 @@ impl Api {
             return Ok(());
         }
 
-        let mut request = agent_client_protocol::schema::v1::ResumeSessionRequest::new(
-            agent_client_protocol::schema::v1::SessionId::from(session_id),
+        let mut request = agent_client_protocol::v1::schema::ResumeSessionRequest::new(
+            agent_client_protocol::v1::schema::SessionId::from(session_id),
             config.cwd.unwrap_or(project_root),
         );
         if agent_info.can_use_additional_directories() {

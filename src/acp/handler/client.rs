@@ -4,7 +4,7 @@ use crate::{
 };
 use agent_client_protocol::{
     Error, Result,
-    schema::v1::{
+    v1::schema::{
         CompleteElicitationNotification, CreateElicitationRequest, CreateElicitationResponse,
         CreateTerminalRequest, CreateTerminalResponse, ElicitationMode, ElicitationScope,
         ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
@@ -36,7 +36,7 @@ impl Handler {
             return Err(Error::method_not_found());
         }
         let (sender, receiver) =
-            bounded::<agent_client_protocol::schema::v1::RequestPermissionOutcome>(1);
+            bounded::<agent_client_protocol::v1::schema::RequestPermissionOutcome>(1);
         info!("Requesting permission for: {:?}", args);
 
         self.execute_autocommand_request(

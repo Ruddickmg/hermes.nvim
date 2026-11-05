@@ -8,7 +8,7 @@ use crate::helpers::{MockRequestHandler, mock_connection_manager, mock_runtime};
 use agent_client_protocol::{
     Error,
     schema::ProtocolVersion,
-    schema::v1::{
+    v1::schema::{
         AgentCapabilities, CompactionStatus, CompactionSummaryChunk, CompactionUpdate,
         CompleteElicitationNotification, ContentBlock, ContentChunk, ElicitationId,
         InitializeResponse, LoadSessionResponse, NewSessionResponse, Notice, NoticeSeverity,
@@ -180,7 +180,7 @@ fn test_set_agent_info_updates_agent_information() -> nvim_oxi::Result<()> {
     .expect("Handler creation should succeed");
 
     let agent = hermes::acp::connection::Assistant::from("test-agent");
-    let info = agent_client_protocol::schema::v1::InitializeResponse::new(
+    let info = agent_client_protocol::v1::schema::InitializeResponse::new(
         agent_client_protocol::schema::ProtocolVersion::LATEST,
     );
 
@@ -487,7 +487,7 @@ fn test_elicitation_complete_permissions_allowed() -> nvim_oxi::Result<()> {
 fn test_execute_autocommand_request_sends_with_responder() -> nvim_oxi::Result<()> {
     // Test execute_autocommand_request with a responder - covers lines 207-208
     // This sends an autocommand with response_data, triggering the full flow
-    use agent_client_protocol::schema::v1::WriteTextFileResponse;
+    use agent_client_protocol::v1::schema::WriteTextFileResponse;
     use hermes::nvim::requests::Responder;
     use std::sync::Arc;
 
@@ -503,8 +503,8 @@ fn test_execute_autocommand_request_sends_with_responder() -> nvim_oxi::Result<(
     let (sender, _receiver) = async_channel::bounded::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
-        agent_client_protocol::schema::v1::WriteTextFileRequest::new(
-            agent_client_protocol::schema::v1::SessionId::from("test-session"),
+        agent_client_protocol::v1::schema::WriteTextFileRequest::new(
+            agent_client_protocol::v1::schema::SessionId::from("test-session"),
             std::path::Path::new("/tmp/test.txt"),
             "test content",
         ),
@@ -513,7 +513,7 @@ fn test_execute_autocommand_request_sends_with_responder() -> nvim_oxi::Result<(
     // This should succeed - covers lines 207-208
     let result = smol::block_on(handler.execute_autocommand_request(
         "test-session".to_string(),
-        agent_client_protocol::schema::v1::RequestId::Null,
+        agent_client_protocol::v1::schema::RequestId::Null,
         "TestCommand",
         serde_json::json!({"test": "data"}),
         responder,
@@ -529,7 +529,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
     // Test lines 71-78: "No listener but has request" error handling path
     // This triggers when no autocommand listener is attached but a request is provided
     // AND when default_response fails (to trigger the error! at lines 74-77)
-    use agent_client_protocol::schema::v1::WriteTextFileResponse;
+    use agent_client_protocol::v1::schema::WriteTextFileResponse;
     use hermes::nvim::requests::{RequestHandler, Responder};
     use std::sync::Arc;
     use uuid::Uuid;
@@ -566,7 +566,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
         async fn add(
             &self,
             _session_id: String,
-            _agent_request_id: agent_client_protocol::schema::v1::RequestId,
+            _agent_request_id: agent_client_protocol::v1::schema::RequestId,
             _responder: Responder,
         ) -> Uuid {
             Uuid::new_v4()
@@ -588,7 +588,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
 
         async fn remove_by_request_id(
             &self,
-            _agent_request_id: &agent_client_protocol::schema::v1::RequestId,
+            _agent_request_id: &agent_client_protocol::v1::schema::RequestId,
         ) -> Option<hermes::nvim::requests::Request> {
             None
         }
@@ -608,8 +608,8 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
     let (sender, _receiver) = async_channel::bounded::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
-        agent_client_protocol::schema::v1::WriteTextFileRequest::new(
-            agent_client_protocol::schema::v1::SessionId::from("test-session"),
+        agent_client_protocol::v1::schema::WriteTextFileRequest::new(
+            agent_client_protocol::v1::schema::SessionId::from("test-session"),
             std::path::Path::new("/tmp/test.txt"),
             "test content",
         ),
@@ -619,7 +619,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
     // With the failing mock, default_response will fail, triggering the error! at 74-77
     let result = smol::block_on(handler.execute_autocommand_request(
         "test-session".to_string(),
-        agent_client_protocol::schema::v1::RequestId::Null,
+        agent_client_protocol::v1::schema::RequestId::Null,
         "TestErrorCommand", // No listener for this command
         serde_json::json!({"data": "value"}),
         responder,
@@ -635,7 +635,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
 #[nvim_oxi::test]
 fn test_no_listener_with_request_logs_default_response_error() -> nvim_oxi::Result<()> {
     // Test error logging at lines 74-77 when default_response fails
-    use agent_client_protocol::schema::v1::WriteTextFileResponse;
+    use agent_client_protocol::v1::schema::WriteTextFileResponse;
     use hermes::nvim::requests::{RequestHandler, Responder};
     use std::sync::Arc;
     use uuid::Uuid;
@@ -670,7 +670,7 @@ fn test_no_listener_with_request_logs_default_response_error() -> nvim_oxi::Resu
         async fn add(
             &self,
             _session_id: String,
-            _agent_request_id: agent_client_protocol::schema::v1::RequestId,
+            _agent_request_id: agent_client_protocol::v1::schema::RequestId,
             _responder: Responder,
         ) -> Uuid {
             Uuid::new_v4()
@@ -692,7 +692,7 @@ fn test_no_listener_with_request_logs_default_response_error() -> nvim_oxi::Resu
 
         async fn remove_by_request_id(
             &self,
-            _agent_request_id: &agent_client_protocol::schema::v1::RequestId,
+            _agent_request_id: &agent_client_protocol::v1::schema::RequestId,
         ) -> Option<hermes::nvim::requests::Request> {
             None
         }
@@ -710,8 +710,8 @@ fn test_no_listener_with_request_logs_default_response_error() -> nvim_oxi::Resu
     let (sender, _receiver) = async_channel::bounded::<WriteTextFileResponse>(1);
     let responder = Responder::WriteFileResponse(
         sender,
-        agent_client_protocol::schema::v1::WriteTextFileRequest::new(
-            agent_client_protocol::schema::v1::SessionId::from("test-session"),
+        agent_client_protocol::v1::schema::WriteTextFileRequest::new(
+            agent_client_protocol::v1::schema::SessionId::from("test-session"),
             std::path::Path::new("/tmp/test.txt"),
             "test content",
         ),
@@ -719,7 +719,7 @@ fn test_no_listener_with_request_logs_default_response_error() -> nvim_oxi::Resu
 
     let _result = smol::block_on(handler.execute_autocommand_request(
         "test-session".to_string(),
-        agent_client_protocol::schema::v1::RequestId::Null,
+        agent_client_protocol::v1::schema::RequestId::Null,
         "TestErrorCommand",
         serde_json::json!({"data": "value"}),
         responder,
@@ -1944,7 +1944,7 @@ fn handler_callback_sends_default_response_when_no_listener() -> nvim_oxi::Resul
     // Dummy sender – the mock default_response returns Ok without sending,
     // but the callback branch itself is what we want to exercise for coverage.
     let (sender, _receiver) =
-        async_channel::bounded::<agent_client_protocol::schema::v1::RequestPermissionOutcome>(1);
+        async_channel::bounded::<agent_client_protocol::v1::schema::RequestPermissionOutcome>(1);
 
     let executor = smol::LocalExecutor::new();
     smol::block_on(executor.run(async {
@@ -1955,7 +1955,7 @@ fn handler_callback_sends_default_response_when_no_listener() -> nvim_oxi::Resul
                 serde_json::json!({}),
                 Responder::PermissionResponse(sender),
                 "test-session".to_string(),
-                agent_client_protocol::schema::v1::RequestId::Null,
+                agent_client_protocol::v1::schema::RequestId::Null,
             ))
             .await
             .expect("Send should succeed");
@@ -2028,7 +2028,7 @@ fn handler_callback_logs_error_when_cancel_has_no_matching_request() -> nvim_oxi
         handler
             .channel
             .send(NvimHandleArgs::Cancel(
-                agent_client_protocol::schema::v1::RequestId::Number(1),
+                agent_client_protocol::v1::schema::RequestId::Number(1),
             ))
             .await
             .expect("Send should succeed");

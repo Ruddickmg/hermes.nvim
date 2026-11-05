@@ -119,7 +119,7 @@ fn terminal_info_stop_fails_on_non_running_terminal() -> nvim_oxi::Result<()> {
 /// Integration test: Verifies FromRequest with cwd sets correct path
 #[nvim_oxi::test]
 fn terminal_info_from_request_applies_cwd_path() -> nvim_oxi::Result<()> {
-    use agent_client_protocol::schema::v1::{CreateTerminalRequest, SessionId};
+    use agent_client_protocol::v1::schema::{CreateTerminalRequest, SessionId};
     use std::path::PathBuf;
 
     let mut request =
@@ -140,7 +140,7 @@ fn terminal_info_from_request_applies_cwd_path() -> nvim_oxi::Result<()> {
 /// Integration test: Verifies FromRequest with env sets correct variables
 #[nvim_oxi::test]
 fn terminal_info_from_request_applies_environment_variables() -> nvim_oxi::Result<()> {
-    use agent_client_protocol::schema::v1::{CreateTerminalRequest, EnvVariable, SessionId};
+    use agent_client_protocol::v1::schema::{CreateTerminalRequest, EnvVariable, SessionId};
 
     let mut request =
         CreateTerminalRequest::new(SessionId::from("test-session"), "test".to_string());
@@ -181,7 +181,7 @@ fn terminal_info_working_directory_builder_sets_path() -> nvim_oxi::Result<()> {
 /// Integration test: Verifies environment builder sets correct variables
 #[nvim_oxi::test]
 fn terminal_info_environment_builder_sets_variables() -> nvim_oxi::Result<()> {
-    use agent_client_protocol::schema::v1::EnvVariable;
+    use agent_client_protocol::v1::schema::EnvVariable;
 
     let terminal = TerminalInfo::new(None)
         .environment(vec![EnvVariable::new("FOO".to_string(), "bar".to_string())]);

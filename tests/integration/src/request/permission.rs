@@ -3,7 +3,7 @@
 //! NOTE: Most tests in this file are disabled because vim.ui.select() blocks execution
 //! in the test environment, waiting for user interaction. The functions work correctly
 //! in real usage. Only the error handling test (invalid_json_data_returns_error) remains enabled.
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     PermissionOption, PermissionOptionId, PermissionOptionKind, RequestId,
     RequestPermissionOutcome, RequestPermissionRequest, SessionId, ToolCallId, ToolCallUpdate,
     ToolCallUpdateFields,

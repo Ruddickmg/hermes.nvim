@@ -1,7 +1,7 @@
 //! Integration tests for Responder::CreateTerminal
 //!
 //! Each test verifies exactly ONE behavior with exactly ONE assertion.
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     CreateTerminalRequest, CreateTerminalResponse, RequestId, SessionId,
 };
 use async_channel::bounded as oneshot_channel;

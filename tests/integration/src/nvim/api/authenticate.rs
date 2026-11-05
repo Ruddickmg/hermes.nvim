@@ -5,7 +5,7 @@
 
 use crate::helpers::{mock_connection_manager, mock_runtime};
 use agent_client_protocol::schema::ProtocolVersion;
-use agent_client_protocol::schema::v1::{AuthMethod, AuthMethodTerminal, InitializeResponse};
+use agent_client_protocol::v1::schema::{AuthMethod, AuthMethodTerminal, InitializeResponse};
 use async_lock::Mutex;
 use hermes::{
     Handler, PluginState, acp::connection::Assistant, api::Api, nvim::requests::Requests,

@@ -7,7 +7,7 @@ use crate::{
     nvim::terminal::{TerminalInfo, TerminalManager},
     utilities::{NvimMessenger, NvimRuntime},
 };
-use agent_client_protocol::schema::v1::RequestId;
+use agent_client_protocol::v1::schema::RequestId;
 use async_lock::Mutex;
 use async_trait::async_trait;
 use std::{collections::HashMap, sync::Arc};

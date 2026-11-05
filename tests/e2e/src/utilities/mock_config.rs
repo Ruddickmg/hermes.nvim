@@ -1,7 +1,7 @@
 //! Configuration for MockAgent
 
 use agent_client_protocol::schema::ProtocolVersion;
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     AgentCapabilities, AuthenticateResponse, CloseSessionResponse, CompactionSummaryChunk,
     CompactionUpdate, CompleteElicitationNotification, CreateElicitationRequest,
     CreateTerminalRequest, DeleteSessionResponse, ExtResponse, Implementation, InitializeRequest,
@@ -378,7 +378,7 @@ pub fn create_test_create_terminal_request(
 /// Create a default terminal output request for testing
 pub fn create_test_terminal_output_request(
     session_id: impl Into<SessionId>,
-    terminal_id: impl Into<agent_client_protocol::schema::v1::TerminalId>,
+    terminal_id: impl Into<agent_client_protocol::v1::schema::TerminalId>,
 ) -> TerminalOutputRequest {
     TerminalOutputRequest::new(session_id, terminal_id)
 }
@@ -386,7 +386,7 @@ pub fn create_test_terminal_output_request(
 /// Create a default wait for terminal exit request for testing
 pub fn create_test_wait_for_terminal_exit_request(
     session_id: impl Into<SessionId>,
-    terminal_id: impl Into<agent_client_protocol::schema::v1::TerminalId>,
+    terminal_id: impl Into<agent_client_protocol::v1::schema::TerminalId>,
 ) -> WaitForTerminalExitRequest {
     WaitForTerminalExitRequest::new(session_id, terminal_id)
 }

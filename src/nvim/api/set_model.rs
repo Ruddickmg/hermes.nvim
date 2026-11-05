@@ -1,4 +1,4 @@
-use agent_client_protocol::schema::v1::SetSessionConfigOptionRequest;
+use agent_client_protocol::v1::schema::SetSessionConfigOptionRequest;
 
 use crate::{
     acp::{Result, error::Error},
@@ -20,7 +20,7 @@ impl Api {
             .set_config_option(SetSessionConfigOptionRequest::new(
                 session_id,
                 "model".to_string(),
-                agent_client_protocol::schema::v1::SessionConfigOptionValue::value_id(model_id),
+                agent_client_protocol::v1::schema::SessionConfigOptionValue::value_id(model_id),
             ))
             .await;
         drop(connection_manager);

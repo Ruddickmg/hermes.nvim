@@ -3,7 +3,7 @@
 //! Verifies that agents defined via `setup({ agents = { ... } })` are used when
 //! connecting by id without explicit per-connect connection options.
 
-use agent_client_protocol::schema::v1::InitializeResponse;
+use agent_client_protocol::v1::schema::InitializeResponse;
 use hermes::{
     api::{ConnectionArgs, DisconnectArgs},
     nvim::{autocommands::Commands, hermes},

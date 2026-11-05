@@ -1,4 +1,4 @@
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     AudioContent, BlobResourceContents, ContentBlock, ContentChunk, EmbeddedResource,
     EmbeddedResourceResource, ImageContent, MessageId, PromptRequest, ResourceLink,
     SessionNotification, SessionUpdate, TextContent, TextResourceContents,

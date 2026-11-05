@@ -1,4 +1,4 @@
-use agent_client_protocol::schema::v1::McpServer;
+use agent_client_protocol::v1::schema::McpServer;
 use nvim_oxi::{
     Dictionary, Object,
     conversion::{Error, FromObject},
@@ -193,14 +193,14 @@ impl Api {
 
         let request = match session {
             CreateSessionArgs::Default => {
-                agent_client_protocol::schema::v1::NewSessionRequest::new(project_root)
+                agent_client_protocol::v1::schema::NewSessionRequest::new(project_root)
             }
             CreateSessionArgs::Configuration {
                 cwd,
                 additional_directories,
                 mcp_servers,
             } => {
-                let mut req = agent_client_protocol::schema::v1::NewSessionRequest::new(
+                let mut req = agent_client_protocol::v1::schema::NewSessionRequest::new(
                     cwd.unwrap_or(project_root),
                 );
                 if agent_info.can_use_additional_directories() {
@@ -236,7 +236,7 @@ impl Api {
 #[cfg(test)]
 mod session_args_tests {
     use crate::api::mcp_servers::McpServerType;
-    use agent_client_protocol::schema::v1::McpServer;
+    use agent_client_protocol::v1::schema::McpServer;
     use nvim_oxi::{Dictionary, Object, conversion::FromObject};
     use pretty_assertions::assert_eq;
     use proptest::prelude::*;

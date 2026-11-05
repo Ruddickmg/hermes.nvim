@@ -1,4 +1,4 @@
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     NewSessionResponse, SessionConfigKind, SessionConfigOption, SessionConfigOptionCategory,
     SessionConfigSelectOptions,
 };
@@ -335,7 +335,7 @@ impl SessionDetails {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol::schema::v1::{
+    use agent_client_protocol::v1::schema::{
         NewSessionResponse, SessionConfigOption, SessionConfigOptionCategory,
         SessionConfigSelectGroup, SessionConfigSelectOption, SessionMode, SessionModeState,
     };
@@ -500,8 +500,8 @@ mod tests {
         let option = SessionConfigOption::new(
             "mode",
             "Mode",
-            agent_client_protocol::schema::v1::SessionConfigKind::Select(
-                agent_client_protocol::schema::v1::SessionConfigSelect::new(
+            agent_client_protocol::v1::schema::SessionConfigKind::Select(
+                agent_client_protocol::v1::schema::SessionConfigSelect::new(
                     "chat",
                     vec![group1, group2],
                 ),
@@ -526,8 +526,8 @@ mod tests {
         let option = SessionConfigOption::new(
             "mode",
             "Mode",
-            agent_client_protocol::schema::v1::SessionConfigKind::Select(
-                agent_client_protocol::schema::v1::SessionConfigSelect::new("chat", vec![group]),
+            agent_client_protocol::v1::schema::SessionConfigKind::Select(
+                agent_client_protocol::v1::schema::SessionConfigSelect::new("chat", vec![group]),
             ),
         )
         .category(SessionConfigOptionCategory::Mode);
@@ -552,8 +552,8 @@ mod tests {
         let option = SessionConfigOption::new(
             "mode",
             "Mode",
-            agent_client_protocol::schema::v1::SessionConfigKind::Select(
-                agent_client_protocol::schema::v1::SessionConfigSelect::new("code", vec![group]),
+            agent_client_protocol::v1::schema::SessionConfigKind::Select(
+                agent_client_protocol::v1::schema::SessionConfigSelect::new("code", vec![group]),
             ),
         )
         .category(SessionConfigOptionCategory::Mode);
@@ -607,8 +607,8 @@ mod tests {
         let option = SessionConfigOption::new(
             "mode",
             "Mode",
-            agent_client_protocol::schema::v1::SessionConfigKind::Select(
-                agent_client_protocol::schema::v1::SessionConfigSelect::new("chat", vec![group]),
+            agent_client_protocol::v1::schema::SessionConfigKind::Select(
+                agent_client_protocol::v1::schema::SessionConfigSelect::new("chat", vec![group]),
             ),
         )
         .category(SessionConfigOptionCategory::Mode);
@@ -765,8 +765,8 @@ mod tests {
         let option = SessionConfigOption::new(
             "mc-1",
             "MC One",
-            agent_client_protocol::schema::v1::SessionConfigKind::Select(
-                agent_client_protocol::schema::v1::SessionConfigSelect::new("val1", vec![group]),
+            agent_client_protocol::v1::schema::SessionConfigKind::Select(
+                agent_client_protocol::v1::schema::SessionConfigSelect::new("val1", vec![group]),
             ),
         )
         .category(SessionConfigOptionCategory::ModelConfig);

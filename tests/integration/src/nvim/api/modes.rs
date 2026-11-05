@@ -63,7 +63,7 @@ fn modes_returns_unsupported_when_session_has_no_mode_info() -> nvim_oxi::Result
 
     {
         let mut state = block_on(plugin_state.lock());
-        let session = agent_client_protocol::schema::v1::NewSessionResponse::new("test-session");
+        let session = agent_client_protocol::v1::schema::NewSessionResponse::new("test-session");
         state.set_session_info(&session);
     }
 
@@ -87,10 +87,10 @@ fn modes_returns_ok_for_legacy_session() -> nvim_oxi::Result<()> {
 
     {
         let mut state = block_on(plugin_state.lock());
-        let mode = agent_client_protocol::schema::v1::SessionMode::new("chat", "Chat");
-        let modes = agent_client_protocol::schema::v1::SessionModeState::new("chat", vec![mode]);
+        let mode = agent_client_protocol::v1::schema::SessionMode::new("chat", "Chat");
+        let modes = agent_client_protocol::v1::schema::SessionModeState::new("chat", vec![mode]);
         let session =
-            agent_client_protocol::schema::v1::NewSessionResponse::new("test-session").modes(modes);
+            agent_client_protocol::v1::schema::NewSessionResponse::new("test-session").modes(modes);
         state.set_session_info(&session);
     }
 

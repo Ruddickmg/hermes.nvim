@@ -1,5 +1,5 @@
 //! Mock implementation of RequestHandler trait for testing
-use agent_client_protocol::schema::v1::RequestId;
+use agent_client_protocol::v1::schema::RequestId;
 use async_trait::async_trait;
 use hermes::nvim::requests::{Request, RequestHandler, Responder};
 use uuid::Uuid;

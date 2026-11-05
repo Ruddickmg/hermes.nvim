@@ -79,13 +79,13 @@ fn delete_session_returns_error_when_no_connection() -> nvim_oxi::Result<()> {
     );
 
     let agent = hermes::acp::connection::Assistant::from("test-agent");
-    let info = agent_client_protocol::schema::v1::InitializeResponse::new(
+    let info = agent_client_protocol::v1::schema::InitializeResponse::new(
         agent_client_protocol::schema::ProtocolVersion::V1,
     )
     .agent_capabilities(
-        agent_client_protocol::schema::v1::AgentCapabilities::new().session_capabilities(
-            agent_client_protocol::schema::v1::SessionCapabilities::new().delete(Some(
-                agent_client_protocol::schema::v1::SessionDeleteCapabilities::new(),
+        agent_client_protocol::v1::schema::AgentCapabilities::new().session_capabilities(
+            agent_client_protocol::v1::schema::SessionCapabilities::new().delete(Some(
+                agent_client_protocol::v1::schema::SessionDeleteCapabilities::new(),
             )),
         ),
     );
@@ -134,13 +134,13 @@ fn delete_session_multiple_returns_error_when_no_connection() -> nvim_oxi::Resul
     );
 
     let agent = hermes::acp::connection::Assistant::from("test-agent");
-    let info = agent_client_protocol::schema::v1::InitializeResponse::new(
+    let info = agent_client_protocol::v1::schema::InitializeResponse::new(
         agent_client_protocol::schema::ProtocolVersion::V1,
     )
     .agent_capabilities(
-        agent_client_protocol::schema::v1::AgentCapabilities::new().session_capabilities(
-            agent_client_protocol::schema::v1::SessionCapabilities::new().delete(Some(
-                agent_client_protocol::schema::v1::SessionDeleteCapabilities::new(),
+        agent_client_protocol::v1::schema::AgentCapabilities::new().session_capabilities(
+            agent_client_protocol::v1::schema::SessionCapabilities::new().delete(Some(
+                agent_client_protocol::v1::schema::SessionDeleteCapabilities::new(),
             )),
         ),
     );

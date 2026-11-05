@@ -1,4 +1,4 @@
-use agent_client_protocol::schema::v1::{AuthMethod, AuthMethodTerminal, AuthenticateRequest};
+use agent_client_protocol::v1::schema::{AuthMethod, AuthMethodTerminal, AuthenticateRequest};
 use serde::Serialize;
 
 use crate::{

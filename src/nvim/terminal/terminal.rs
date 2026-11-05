@@ -5,7 +5,7 @@ use crate::{
         create_hidden_buffer, delete_buffer_force, set_buf_option, start_job_in_buffer, stop_job,
     },
 };
-use agent_client_protocol::schema::v1::EnvVariable;
+use agent_client_protocol::v1::schema::EnvVariable;
 use async_channel::Sender;
 use nvim_oxi::{Dictionary, Function};
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
@@ -29,8 +29,8 @@ pub struct TerminalInfo {
     pub configuration: Dictionary,
 }
 
-impl From<agent_client_protocol::schema::v1::CreateTerminalRequest> for TerminalInfo {
-    fn from(request: agent_client_protocol::schema::v1::CreateTerminalRequest) -> Self {
+impl From<agent_client_protocol::v1::schema::CreateTerminalRequest> for TerminalInfo {
+    fn from(request: agent_client_protocol::v1::schema::CreateTerminalRequest) -> Self {
         let mut info = TerminalInfo::new(request.output_byte_limit).environment(request.env);
         if let Some(cwd) = request.cwd {
             info = info.working_directory(cwd);
@@ -188,7 +188,7 @@ pub trait Terminal {
     fn stop(&self) -> Result<()>;
     fn report_exit_to(&self, sender: OneshotSender<Result<ExitStatus>>) -> Result<()>;
     fn id(&self) -> Uuid;
-    fn from_request(data: agent_client_protocol::schema::v1::CreateTerminalRequest) -> Self;
+    fn from_request(data: agent_client_protocol::v1::schema::CreateTerminalRequest) -> Self;
     fn delete(&mut self) -> Result<()>;
     fn buffer(&self) -> Option<nvim_oxi::api::Buffer>;
 
@@ -209,7 +209,7 @@ pub trait Terminal {
 }
 
 impl Terminal for TerminalInfo {
-    fn from_request(data: agent_client_protocol::schema::v1::CreateTerminalRequest) -> Self {
+    fn from_request(data: agent_client_protocol::v1::schema::CreateTerminalRequest) -> Self {
         Self::from(data)
     }
 

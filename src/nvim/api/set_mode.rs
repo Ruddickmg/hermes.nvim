@@ -31,7 +31,7 @@ impl Api {
             let result = if is_legacy {
                 connection
                     .set_mode(
-                        agent_client_protocol::schema::v1::SetSessionModeRequest::new(
+                        agent_client_protocol::v1::schema::SetSessionModeRequest::new(
                             session_id, mode_id,
                         ),
                     )
@@ -39,10 +39,10 @@ impl Api {
             } else {
                 connection
                     .set_config_option(
-                        agent_client_protocol::schema::v1::SetSessionConfigOptionRequest::new(
+                        agent_client_protocol::v1::schema::SetSessionConfigOptionRequest::new(
                             session_id,
                             config_type.clone(),
-                            agent_client_protocol::schema::v1::SessionConfigOptionValue::value_id(
+                            agent_client_protocol::v1::schema::SessionConfigOptionValue::value_id(
                                 mode_id,
                             ),
                         ),

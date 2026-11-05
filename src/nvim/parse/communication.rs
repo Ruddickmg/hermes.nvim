@@ -1,4 +1,4 @@
-use agent_client_protocol::{Error as AcpError, Result, schema::v1::ContentBlock};
+use agent_client_protocol::{Error as AcpError, Result, v1::schema::ContentBlock};
 
 pub fn communication(content: ContentBlock) -> Result<String> {
     match content {
@@ -14,7 +14,7 @@ pub fn communication(content: ContentBlock) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_client_protocol::schema::v1::{
+    use agent_client_protocol::v1::schema::{
         AudioContent, ContentBlock, EmbeddedResource, EmbeddedResourceResource, ImageContent,
         ResourceLink, TextContent, TextResourceContents,
     };

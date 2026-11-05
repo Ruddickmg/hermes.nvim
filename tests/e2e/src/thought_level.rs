@@ -5,7 +5,7 @@ use crate::{
         test_helpers::connect_to_mock_agent,
     },
 };
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     InitializeResponse, NewSessionResponse, SessionConfigOption, SessionConfigOptionCategory,
     SessionConfigSelectOption,
 };
@@ -100,7 +100,7 @@ fn test_set_thought_level_with_config_options() -> Result<(), nvim_oxi::Error> {
         config.new_session_response =
             NewSessionResponse::new(generate_session_id()).config_options(vec![option]);
         config.set_session_config_option_response =
-            Some(agent_client_protocol::schema::v1::SetSessionConfigOptionResponse::new(vec![]));
+            Some(agent_client_protocol::v1::schema::SetSessionConfigOptionResponse::new(vec![]));
     }
     let mock_handle = MockAgent::start(agent).expect("Failed to start mock agent");
 

@@ -1,5 +1,5 @@
 //! Integration tests for elicitation request handling via Request
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     CreateElicitationRequest, CreateElicitationResponse, ElicitationAcceptAction,
     ElicitationAction, ElicitationContentValue, ElicitationFormMode, ElicitationPropertySchema,
     ElicitationSchema, ElicitationScope, ElicitationSessionScope, OtherElicitationPropertySchema,

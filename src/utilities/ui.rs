@@ -1,4 +1,4 @@
-use agent_client_protocol::schema::v1::PermissionOption;
+use agent_client_protocol::v1::schema::PermissionOption;
 
 use crate::acp::{Result, error::Error};
 

@@ -12,7 +12,7 @@ use crate::{
         test_helpers::connect_to_mock_agent,
     },
 };
-use agent_client_protocol::schema::v1::{
+use agent_client_protocol::v1::schema::{
     InitializeResponse, NewSessionResponse, ReadTextFileRequest, RequestId, SessionId,
 };
 use hermes::nvim::requests::RequestDetails;
