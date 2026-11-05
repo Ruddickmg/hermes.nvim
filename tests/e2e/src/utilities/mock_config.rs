@@ -1,5 +1,6 @@
 //! Configuration for MockAgent
 
+use agent_client_protocol::RawJsonRpcId;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::v1::schema::{
     AgentCapabilities, AuthenticateResponse, CloseSessionResponse, CompactionSummaryChunk,
@@ -7,13 +8,12 @@ use agent_client_protocol::v1::schema::{
     CreateTerminalRequest, DeleteSessionResponse, ExtResponse, Implementation, InitializeRequest,
     InitializeResponse, ListSessionsResponse, LoadSessionResponse, McpCapabilities,
     NewSessionResponse, Notice, PermissionOption, PermissionOptionId, PermissionOptionKind,
-    PromptCapabilities, ReadTextFileRequest, ReleaseTerminalRequest, RequestId,
-    RequestPermissionRequest, ResumeSessionResponse, SessionAdditionalDirectoriesCapabilities,
-    SessionCapabilities, SessionCloseCapabilities, SessionDeleteCapabilities,
-    SessionForkCapabilities, SessionId, SessionInfo, SessionListCapabilities,
-    SessionResumeCapabilities, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
-    SetSessionModeResponse, TerminalOutputRequest, ToolCallId, ToolCallUpdate,
-    ToolCallUpdateFields, WaitForTerminalExitRequest, WriteTextFileRequest,
+    PromptCapabilities, ReadTextFileRequest, ReleaseTerminalRequest, RequestPermissionRequest,
+    ResumeSessionResponse, SessionAdditionalDirectoriesCapabilities, SessionCapabilities,
+    SessionCloseCapabilities, SessionDeleteCapabilities, SessionForkCapabilities, SessionId,
+    SessionInfo, SessionListCapabilities, SessionResumeCapabilities, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, SetSessionModeResponse, TerminalOutputRequest, ToolCallId,
+    ToolCallUpdate, ToolCallUpdateFields, WaitForTerminalExitRequest, WriteTextFileRequest,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -74,9 +74,9 @@ pub struct MockConfig {
     /// Delete session response to return when a DeleteSessionRequest is received
     pub delete_session_response: Option<DeleteSessionResponse>,
     /// Request id the agent used for the most recent outgoing read request (None = none sent)
-    pub last_read_file_request_id: Option<RequestId>,
+    pub last_read_file_request_id: Option<RawJsonRpcId>,
     /// Request id carried by the most recent `$/cancel_request` notification (None = none received)
-    pub cancel_request_id: Option<RequestId>,
+    pub cancel_request_id: Option<RawJsonRpcId>,
     /// When true the agent cancels its own outgoing read request instead of
     /// waiting for a response (false = don't cancel)
     pub cancel_read_file_request: bool,

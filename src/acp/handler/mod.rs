@@ -2,7 +2,7 @@ pub mod builder;
 pub mod client;
 pub mod response;
 
-use agent_client_protocol::v1::schema::RequestId;
+use agent_client_protocol::RawJsonRpcId;
 pub use builder::build_client;
 
 use crate::{
@@ -32,8 +32,8 @@ use tracing::{debug, error, instrument, warn};
 #[derive(Clone)]
 pub enum NvimHandleArgs {
     Event(String, serde_json::Value),
-    Request(String, serde_json::Value, Responder, String, RequestId),
-    Cancel(RequestId),
+    Request(String, serde_json::Value, Responder, String, RawJsonRpcId),
+    Cancel(RawJsonRpcId),
 }
 
 pub struct Handler {
@@ -251,7 +251,7 @@ impl Handler {
     pub async fn execute_autocommand_request<C: ToString + Debug, S: Serialize + Debug>(
         &self,
         session_id: String,
-        request_id: RequestId,
+        request_id: RawJsonRpcId,
         command: C,
         data: S,
         responder: Responder,
@@ -271,7 +271,7 @@ impl Handler {
     }
 
     #[instrument(level = "trace", skip(self))]
-    pub async fn cancel_request(&self, request_id: &RequestId) -> Result<()> {
+    pub async fn cancel_request(&self, request_id: &RawJsonRpcId) -> Result<()> {
         self.channel
             .send(NvimHandleArgs::Cancel(request_id.clone()))
             .await?;

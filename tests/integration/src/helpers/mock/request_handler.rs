@@ -1,5 +1,5 @@
 //! Mock implementation of RequestHandler trait for testing
-use agent_client_protocol::v1::schema::RequestId;
+use agent_client_protocol::RawJsonRpcId;
 use async_trait::async_trait;
 use hermes::nvim::requests::{Request, RequestHandler, Responder};
 use uuid::Uuid;
@@ -44,7 +44,7 @@ impl RequestHandler for MockRequestHandler {
     async fn add(
         &self,
         _session_id: String,
-        _agent_request_id: RequestId,
+        _agent_request_id: RawJsonRpcId,
         _responder: Responder,
     ) -> Uuid {
         Uuid::new_v4()
@@ -61,7 +61,7 @@ impl RequestHandler for MockRequestHandler {
         None
     }
 
-    async fn remove_by_request_id(&self, _agent_request_id: &RequestId) -> Option<Request> {
+    async fn remove_by_request_id(&self, _agent_request_id: &RawJsonRpcId) -> Option<Request> {
         None
     }
 }

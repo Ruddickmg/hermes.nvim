@@ -3,10 +3,10 @@
 //! NOTE: Most tests in this file are disabled because vim.ui.select() blocks execution
 //! in the test environment, waiting for user interaction. The functions work correctly
 //! in real usage. Only the error handling test (invalid_json_data_returns_error) remains enabled.
+use agent_client_protocol::RawJsonRpcId;
 use agent_client_protocol::v1::schema::{
-    PermissionOption, PermissionOptionId, PermissionOptionKind, RequestId,
-    RequestPermissionOutcome, RequestPermissionRequest, SessionId, ToolCallId, ToolCallUpdate,
-    ToolCallUpdateFields,
+    PermissionOption, PermissionOptionId, PermissionOptionKind, RequestPermissionOutcome,
+    RequestPermissionRequest, SessionId, ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
 };
 use async_lock::Mutex;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
@@ -63,7 +63,8 @@ fn invalid_json_data_returns_error() -> nvim_oxi::Result<()> {
         })?);
     let (sender, _receiver) = async_channel::bounded::<RequestPermissionOutcome>(1);
     let responder = Responder::PermissionResponse(sender);
-    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
+    let request_id =
+        block_on(requests.add("test-session".to_string(), RawJsonRpcId::Null, responder));
 
     // Invalid JSON that doesn't match RequestPermissionRequest structure
     let invalid_data = serde_json::json!({

@@ -1,9 +1,10 @@
 //! Integration tests for elicitation request handling via Request
+use agent_client_protocol::RawJsonRpcId;
 use agent_client_protocol::v1::schema::{
     CreateElicitationRequest, CreateElicitationResponse, ElicitationAcceptAction,
     ElicitationAction, ElicitationContentValue, ElicitationFormMode, ElicitationPropertySchema,
     ElicitationSchema, ElicitationScope, ElicitationSessionScope, OtherElicitationPropertySchema,
-    RequestId, StringPropertySchema,
+    StringPropertySchema,
 };
 use async_lock::Mutex;
 use hermes::nvim::requests::{RequestHandler, Requests, Responder};
@@ -51,7 +52,8 @@ fn add_elicitation_request_with(
 ) {
     let (sender, receiver) = async_channel::bounded::<CreateElicitationResponse>(1);
     let responder = Responder::Elicitation(sender, request);
-    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
+    let request_id =
+        block_on(requests.add("test-session".to_string(), RawJsonRpcId::Null, responder));
     (request_id, receiver)
 }
 

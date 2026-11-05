@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use agent_client_protocol::RawJsonRpcId;
 use agent_client_protocol::{
     self as acp, Client, on_receive_notification, on_receive_request,
     v1::{
@@ -23,7 +24,7 @@ macro_rules! spawn_request_handler {
         let handler = $handler.clone();
         move |request: $request, responder: Responder<$response>, cx: ConnectionTo<acp::Agent>| {
             let handler = handler.clone();
-            let request_id = responder.id().clone();
+            let request_id: RawJsonRpcId = responder.id().clone().into();
             let cancellation = responder.cancellation();
             async move {
                 cx.spawn(async move {

@@ -2,16 +2,17 @@ use crate::{
     Handler, acp,
     nvim::{autocommands::Commands, parse, requests::Responder},
 };
+use agent_client_protocol::RawJsonRpcId;
 use agent_client_protocol::{
     Error, Result,
     v1::schema::{
         CompleteElicitationNotification, CreateElicitationRequest, CreateElicitationResponse,
         CreateTerminalRequest, CreateTerminalResponse, ElicitationMode, ElicitationScope,
         ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
-        RequestId, RequestPermissionRequest, RequestPermissionResponse, SessionId,
-        SessionNotification, SessionUpdate, TerminalExitStatus, TerminalOutputRequest,
-        TerminalOutputResponse, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
-        WriteTextFileRequest, WriteTextFileResponse,
+        RequestPermissionRequest, RequestPermissionResponse, SessionId, SessionNotification,
+        SessionUpdate, TerminalExitStatus, TerminalOutputRequest, TerminalOutputResponse,
+        WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
+        WriteTextFileResponse,
     },
 };
 use async_channel::bounded;
@@ -30,7 +31,7 @@ impl Handler {
     pub async fn request_permission(
         &self,
         args: RequestPermissionRequest,
-        request_id: RequestId,
+        request_id: RawJsonRpcId,
     ) -> Result<RequestPermissionResponse> {
         if !self.can_request_permissions().await {
             return Err(Error::method_not_found());
@@ -60,7 +61,7 @@ impl Handler {
     pub async fn create_elicitation(
         &self,
         args: CreateElicitationRequest,
-        request_id: RequestId,
+        request_id: RawJsonRpcId,
     ) -> Result<CreateElicitationResponse> {
         let (session_id, command) = match &args.mode {
             ElicitationMode::Form(mode) => {
@@ -215,7 +216,7 @@ impl Handler {
     pub async fn write_text_file(
         &self,
         args: WriteTextFileRequest,
-        request_id: RequestId,
+        request_id: RawJsonRpcId,
     ) -> Result<WriteTextFileResponse> {
         if !self.can_write().await {
             return Err(Error::method_not_found());
@@ -238,7 +239,7 @@ impl Handler {
     pub async fn read_text_file(
         &self,
         args: ReadTextFileRequest,
-        request_id: RequestId,
+        request_id: RawJsonRpcId,
     ) -> Result<ReadTextFileResponse> {
         if !self.can_read().await {
             return Err(Error::method_not_found());
@@ -261,7 +262,7 @@ impl Handler {
     pub async fn create_terminal(
         &self,
         args: CreateTerminalRequest,
-        request_id: RequestId,
+        request_id: RawJsonRpcId,
     ) -> Result<CreateTerminalResponse> {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
@@ -288,7 +289,7 @@ impl Handler {
     pub async fn terminal_output(
         &self,
         args: TerminalOutputRequest,
-        request_id: RequestId,
+        request_id: RawJsonRpcId,
     ) -> Result<TerminalOutputResponse> {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
@@ -315,7 +316,7 @@ impl Handler {
     pub async fn wait_for_terminal_exit(
         &self,
         args: WaitForTerminalExitRequest,
-        request_id: RequestId,
+        request_id: RawJsonRpcId,
     ) -> Result<WaitForTerminalExitResponse> {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());
@@ -355,7 +356,7 @@ impl Handler {
     pub async fn release_terminal(
         &self,
         args: ReleaseTerminalRequest,
-        request_id: RequestId,
+        request_id: RawJsonRpcId,
     ) -> Result<ReleaseTerminalResponse> {
         if !self.can_access_terminal().await {
             return Err(Error::method_not_found());

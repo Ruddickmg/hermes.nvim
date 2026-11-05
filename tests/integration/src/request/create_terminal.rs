@@ -1,9 +1,5 @@
-//! Integration tests for Responder::CreateTerminal
-//!
-//! Each test verifies exactly ONE behavior with exactly ONE assertion.
-use agent_client_protocol::v1::schema::{
-    CreateTerminalRequest, CreateTerminalResponse, RequestId, SessionId,
-};
+use agent_client_protocol::RawJsonRpcId;
+use agent_client_protocol::v1::schema::{CreateTerminalRequest, CreateTerminalResponse, SessionId};
 use async_channel::bounded as oneshot_channel;
 use async_lock::Mutex;
 use hermes::acp::Result;
@@ -44,7 +40,8 @@ fn setup_terminal_request(
         Arc::new(Requests::new(runtime, Arc::new(Mutex::new(PluginState::default()))).unwrap());
     let (sender, receiver) = oneshot_channel::<Result<CreateTerminalResponse>>(1);
     let responder = Responder::TerminalCreate(sender, create_terminal_request(command, args));
-    let request_id = block_on(requests.add("test-session".to_string(), RequestId::Null, responder));
+    let request_id =
+        block_on(requests.add("test-session".to_string(), RawJsonRpcId::Null, responder));
     (requests, request_id, receiver)
 }
 

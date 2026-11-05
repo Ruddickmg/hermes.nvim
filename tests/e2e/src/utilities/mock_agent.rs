@@ -7,8 +7,7 @@
 // on the cloned `ConnectionTo<Client>`.
 
 use agent_client_protocol::{
-    self as acp, Agent, ByteStreams, ConnectionTo, Lines, Responder, Stdio,
-    on_receive_notification, on_receive_request,
+    self as acp, Agent, ByteStreams, Lines, Stdio, on_receive_notification, on_receive_request,
     v1::schema::{
         AuthenticateRequest, AuthenticateResponse, CancelNotification, CancelRequestNotification,
         CloseSessionRequest, CloseSessionResponse, ContentBlock, ContentChunk,
@@ -20,6 +19,7 @@ use agent_client_protocol::{
         SetSessionModeRequest, SetSessionModeResponse, StopReason, TerminalOutputRequest,
         TextContent, WaitForTerminalExitRequest,
     },
+    v1::{ConnectionTo, Responder},
 };
 use async_channel::bounded;
 use async_io::{Async, Timer};
@@ -423,9 +423,11 @@ fn build_mock_agent_builder(
     Agent,
     impl acp::HandleDispatchFrom<acp::Client>,
     impl acp::RunWithConnectionTo<acp::Client>,
+    acp::NullClose,
+    acp::V1,
 > {
     Agent
-        .builder()
+        .v1()
         .name("mock-agent")
         .on_receive_request(
             {
@@ -536,7 +538,7 @@ fn build_mock_agent_builder(
                     let config = config.clone();
                     async move {
                         config.lock().unwrap().cancel_request_id =
-                            Some(notification.request_id.clone());
+                            Some(notification.request_id.clone().into());
                         Ok(())
                     }
                 }
@@ -833,7 +835,7 @@ async fn handle_prompt(
             let sent = cx.send_request(read_req);
             let (should_cancel, signal) = {
                 let mut config = config.lock().unwrap();
-                config.last_read_file_request_id = Some(sent.id().clone());
+                config.last_read_file_request_id = Some(sent.id().clone().into());
                 (
                     config.cancel_read_file_request,
                     config.cancel_read_file_signal.clone(),

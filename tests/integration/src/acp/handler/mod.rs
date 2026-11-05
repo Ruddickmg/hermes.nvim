@@ -5,6 +5,7 @@
 pub mod response;
 
 use crate::helpers::{MockRequestHandler, mock_connection_manager, mock_runtime};
+use agent_client_protocol::RawJsonRpcId;
 use agent_client_protocol::{
     Error,
     schema::ProtocolVersion,
@@ -513,7 +514,7 @@ fn test_execute_autocommand_request_sends_with_responder() -> nvim_oxi::Result<(
     // This should succeed - covers lines 207-208
     let result = smol::block_on(handler.execute_autocommand_request(
         "test-session".to_string(),
-        agent_client_protocol::v1::schema::RequestId::Null,
+        RawJsonRpcId::Null,
         "TestCommand",
         serde_json::json!({"test": "data"}),
         responder,
@@ -566,7 +567,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
         async fn add(
             &self,
             _session_id: String,
-            _agent_request_id: agent_client_protocol::v1::schema::RequestId,
+            _agent_request_id: RawJsonRpcId,
             _responder: Responder,
         ) -> Uuid {
             Uuid::new_v4()
@@ -588,7 +589,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
 
         async fn remove_by_request_id(
             &self,
-            _agent_request_id: &agent_client_protocol::v1::schema::RequestId,
+            _agent_request_id: &RawJsonRpcId,
         ) -> Option<hermes::nvim::requests::Request> {
             None
         }
@@ -619,7 +620,7 @@ fn test_no_listener_with_request_triggers_default_response_error_path() -> nvim_
     // With the failing mock, default_response will fail, triggering the error! at 74-77
     let result = smol::block_on(handler.execute_autocommand_request(
         "test-session".to_string(),
-        agent_client_protocol::v1::schema::RequestId::Null,
+        RawJsonRpcId::Null,
         "TestErrorCommand", // No listener for this command
         serde_json::json!({"data": "value"}),
         responder,
@@ -670,7 +671,7 @@ fn test_no_listener_with_request_logs_default_response_error() -> nvim_oxi::Resu
         async fn add(
             &self,
             _session_id: String,
-            _agent_request_id: agent_client_protocol::v1::schema::RequestId,
+            _agent_request_id: RawJsonRpcId,
             _responder: Responder,
         ) -> Uuid {
             Uuid::new_v4()
@@ -692,7 +693,7 @@ fn test_no_listener_with_request_logs_default_response_error() -> nvim_oxi::Resu
 
         async fn remove_by_request_id(
             &self,
-            _agent_request_id: &agent_client_protocol::v1::schema::RequestId,
+            _agent_request_id: &RawJsonRpcId,
         ) -> Option<hermes::nvim::requests::Request> {
             None
         }
@@ -719,7 +720,7 @@ fn test_no_listener_with_request_logs_default_response_error() -> nvim_oxi::Resu
 
     let _result = smol::block_on(handler.execute_autocommand_request(
         "test-session".to_string(),
-        agent_client_protocol::v1::schema::RequestId::Null,
+        RawJsonRpcId::Null,
         "TestErrorCommand",
         serde_json::json!({"data": "value"}),
         responder,
@@ -1955,7 +1956,7 @@ fn handler_callback_sends_default_response_when_no_listener() -> nvim_oxi::Resul
                 serde_json::json!({}),
                 Responder::PermissionResponse(sender),
                 "test-session".to_string(),
-                agent_client_protocol::v1::schema::RequestId::Null,
+                RawJsonRpcId::Null,
             ))
             .await
             .expect("Send should succeed");
@@ -2027,9 +2028,7 @@ fn handler_callback_logs_error_when_cancel_has_no_matching_request() -> nvim_oxi
     smol::block_on(executor.run(async {
         handler
             .channel
-            .send(NvimHandleArgs::Cancel(
-                agent_client_protocol::v1::schema::RequestId::Number(1),
-            ))
+            .send(NvimHandleArgs::Cancel(RawJsonRpcId::Number(1)))
             .await
             .expect("Send should succeed");
     }));

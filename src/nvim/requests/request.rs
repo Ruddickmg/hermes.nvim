@@ -1,8 +1,9 @@
+use agent_client_protocol::RawJsonRpcId;
 use agent_client_protocol::v1::schema::{
     CreateElicitationRequest, CreateElicitationResponse, CreateTerminalRequest,
     CreateTerminalResponse, ElicitationAction, KillTerminalRequest, KillTerminalResponse,
     ReadTextFileRequest, ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
-    RequestId, RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
+    RequestPermissionOutcome, RequestPermissionRequest, SelectedPermissionOutcome,
     TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
     WriteTextFileRequest, WriteTextFileResponse,
 };
@@ -90,7 +91,7 @@ pub struct Request {
     id: Uuid,
     nvim_runtime: NvimRuntime,
     session_id: String,
-    request_id: RequestId,
+    request_id: RawJsonRpcId,
     responder: Arc<Mutex<Option<Responder>>>,
     remove: NvimMessenger<Uuid>,
     pub(super) state: Arc<Mutex<PluginState>>,
@@ -114,14 +115,14 @@ impl Request {
             session_id: self.session_id(),
         }
     }
-    pub fn request_id(&self) -> RequestId {
+    pub fn request_id(&self) -> RawJsonRpcId {
         self.request_id.clone()
     }
     pub fn session_id(&self) -> String {
         self.session_id.clone()
     }
     pub fn new(
-        request_id: RequestId,
+        request_id: RawJsonRpcId,
         session_id: String,
         remove: NvimMessenger<Uuid>,
         responder: Responder,
